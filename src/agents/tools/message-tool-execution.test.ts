@@ -608,7 +608,7 @@ describe("message tool terminal source actions", () => {
         terminalState: resolveEmbeddedRunAttemptTerminalState({ attempt, assistant }),
         settledTurnFinalizationAvailable: true,
       });
-      expect(finalization === null).toBe(completes);
+      expect(finalization).toBeNull();
     }
   });
 });

@@ -264,6 +264,7 @@ export type EmbeddedAgentRunResult = {
     mediaUrls?: string[];
     replyToId?: string;
     isError?: boolean;
+    isStatusNotice?: boolean;
     isReasoning?: boolean;
     /** Marks pre-tool commentary (💬) — a display lane, suppressed unless the channel opts in. */
     isCommentary?: boolean;
