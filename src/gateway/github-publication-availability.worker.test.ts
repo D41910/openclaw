@@ -120,6 +120,7 @@ vi.mock("../agents/github-tool-identity.js", () => ({
   prepareGitHubPublicationOptionsIdentity: mocks.identity,
   matchesPreparedGitHubPublicationIdentity: () => true,
   resolveConfiguredGitHubToolIdentity: () => undefined,
+  onManagedGitHubProfileChanged: () => () => {},
 }));
 // mock-isolation: Exclude OAuth credentials and network activity from this reader fixture.
 vi.mock("./github-oauth-lifecycle.js", () => ({
@@ -381,3 +382,43 @@ it.each(["branch replacement", "turn cancellation and release"])(
     }
   },
 );
+
+it("retains the native session outside its async scope and rejects a replacement writer", async () => {
+  const selected = { ...session, sessionKey: "agent:main:dashboard:incognito-retained-writer" };
+  await deleteRegistryWorktree(process.env, worktree.id);
+  await insertRegistryWorktree(process.env, { ...worktree, ownerId: selected.sessionKey });
+  const authority = { assertCurrent() {} };
+  const actor = await captureOpenClawAgentDatabaseExecution({
+    kind: "ephemeral",
+    agentId: "main",
+    env: process.env,
+    authority,
+  });
+  assert(actor);
+  await actor.sessions.create(authority, {
+    sessionKey: selected.sessionKey,
+    entry: { ...mocks.session().entry, activeWriterRunId: "writer", updatedAt: Date.now() },
+  });
+  let prepared: Awaited<ReturnType<typeof prepareGitHubPublicationWorkspaceOwner>> | undefined;
+  try {
+    prepared = await withIncognitoSessionBinding({ actor }, () =>
+      prepareGitHubPublicationWorkspaceOwner(selected, {
+        sessionTarget: { ...selected, storePath: actor.path, expectedWriterRunId: "writer" },
+      }),
+    );
+    mocks.session.mockImplementation(() => {
+      throw new Error("Must not read the routed store");
+    });
+    expect((await prepared.read()).loaded.entry.activeWriterRunId).toBe("writer");
+    await withIncognitoSessionBinding({ actor }, () =>
+      patchSessionEntryCore(
+        { agentId: "main", sessionKey: selected.sessionKey, storePath: actor.path },
+        () => ({ activeWriterRunId: "replacement" }),
+      ),
+    );
+    expect(() => prepared!.current()).toThrow();
+  } finally {
+    prepared?.release();
+    await actor.close();
+  }
+});
