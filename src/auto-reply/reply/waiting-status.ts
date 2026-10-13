@@ -11,7 +11,8 @@ import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-paylo
 import type { ReplyPayload } from "../types.js";
 import type { PendingContinuationSettlement } from "./get-reply.types.js";
 import { resolveReplyOperationAbortReason } from "./reply-operation-abort.js";
-import { replyRunRegistry, type ReplyOperation } from "./reply-run-registry.js";
+import type { ReplyOperation } from "./reply-run-registry.contracts.js";
+import { replyRunState } from "./reply-run-registry.state.js";
 
 export function buildWaitingStatusPayload(params: {
   completion: ReplyCompletion;
@@ -111,7 +112,7 @@ export async function prepareWaitingStatusContinuation(params: {
     assertSubagentRegistryWriteSourceCurrent(stateContext);
     // Abort can still owe cleanup; replacement cannot inherit this cohort.
     if (
-      replyRunRegistry.get(operationKey) !== params.operation ||
+      replyRunState.activeRunsByKey.get(operationKey) !== params.operation ||
       params.operation.key !== operationKey ||
       params.operation.sessionId !== operationSessionId
     ) {

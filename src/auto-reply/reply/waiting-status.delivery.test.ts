@@ -280,12 +280,15 @@ it.each([undefined, " ", "NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_R
     const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
     context.opts = { onPendingContinuation };
 
-    expect(await prepare("ordinary", context)).toEqual([]);
+    const payloads = await prepare("ordinary", context);
+    expect(payloads.map((payload) => payload.text)).toEqual(
+      yieldAcknowledgment?.trim() ? [yieldAcknowledgment.trim()] : [],
+    );
     const settlement = expectDefined(
       onPendingContinuation.mock.calls[0]?.[0],
-      "silent continuation settlement",
+      "continuation settlement",
     );
-    await settlement.settle("silent");
+    await settlement.settle(yieldAcknowledgment?.trim() ? "delivered" : "silent");
     expect(settleRequester).toHaveBeenCalledOnce();
     expect(settleRequester.mock.calls[0]?.[0].requesterYielded).toBe(true);
   },
