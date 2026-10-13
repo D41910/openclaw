@@ -607,6 +607,7 @@ suite.define(() => {
             await menuTrigger.press("Enter");
             const assignTo = page.getByRole("menuitem", { name: "Assign to…", exact: true });
             await assignTo.hover();
+            await expectBrowser(sessionMenuSubmenu(assignTo)).toBeVisible();
             await gateway.waitForRequest("users.list");
             const expectCurrentOwner = async (phase: string) => {
               await captureProof(page, `header-directory-${phase}`);

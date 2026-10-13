@@ -1,6 +1,7 @@
 import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { waitForSolid } from "../../../test-helpers/solid-settle.ts";
 import { ChatSessionSharing, type ChatSessionSharingProps } from "./chat-session-sharing.solid.tsx";
 
 function renderSharing(props: Partial<ChatSessionSharingProps>) {
@@ -58,17 +59,18 @@ function render(props: ChatSessionSharingProps, root: HTMLElement) {
   flush();
 }
 
-function openMenu(root: HTMLElement) {
+async function openMenu(root: HTMLElement) {
   const panel = root.querySelector<HTMLElement>(".chat-pane__sharing-panel");
-  if (panel && !panel.matches(":popover-open")) {
-    root.querySelector<HTMLButtonElement>(".chat-pane__sharing-trigger")?.click();
-    flush();
+  const trigger = root.querySelector<HTMLButtonElement>(".chat-pane__sharing-trigger");
+  if (panel && trigger && !trigger.disabled && !panel.matches(":popover-open")) {
+    trigger.click();
+    await waitForSolid(() => expect(panel.matches(":popover-open")).toBe(true));
   }
   return panel;
 }
 
 async function select(root: HTMLElement, value: string) {
-  openMenu(root);
+  await openMenu(root);
   const item = root.querySelector<HTMLButtonElement>(`[data-value="${value}"]`);
   if (!item) {
     throw new Error(`Expected sharing item: ${value}`);
@@ -78,18 +80,18 @@ async function select(root: HTMLElement, value: string) {
   flush();
 }
 
-function mount(props: ChatSessionSharingProps, open = true) {
+async function mount(props: ChatSessionSharingProps, open = true) {
   container = document.createElement("div");
   document.body.append(container);
   render(props, container);
   if (open) {
-    openMenu(container);
+    await openMenu(container);
   }
   return container;
 }
 
 describe("chat session sharing menu", () => {
-  it("reads people only on opening and retains the latest member rows across reopening", () => {
+  it("reads people only on opening and retains the latest member rows across reopening", async () => {
     const onOpen = vi.fn();
     const sharing = (count: number) =>
       renderSharing({
@@ -109,12 +111,12 @@ describe("chat session sharing menu", () => {
           },
         },
       });
-    const root = mount(sharing(100), false);
+    const root = await mount(sharing(100), false);
     expect(root.querySelector(".chat-pane__sharing-trigger")).not.toBeNull();
     expect(onOpen).not.toHaveBeenCalled();
     render(sharing(101), root);
     expect(onOpen).not.toHaveBeenCalled();
-    const panel = openMenu(root)!;
+    const panel = (await openMenu(root))!;
     expect(panel.matches(":popover-open")).toBe(true);
     expect(onOpen).toHaveBeenCalledOnce();
     expect(root.querySelectorAll(".chat-pane__sharing-member")).toHaveLength(101);
@@ -122,13 +124,13 @@ describe("chat session sharing menu", () => {
     panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     flush();
     expect(panel.matches(":popover-open")).toBe(false);
-    openMenu(root);
+    await openMenu(root);
     expect(root.querySelector('[data-value="member:person-100"]')).toBe(member);
   });
 
   it.each(["draft"] as const)(
     "keeps a world-readable %s session visibly public after its menu closes",
-    (visibility) => {
+    async (visibility) => {
       const session = {
         key: "agent:main:current",
         sessionId: "session-current",
@@ -155,7 +157,7 @@ describe("chat session sharing menu", () => {
           },
           onPublicShareChange: vi.fn(),
         });
-      const root = mount(renderIndicator(true));
+      const root = await mount(renderIndicator(true));
 
       const panel = root.querySelector<HTMLElement>(".chat-pane__sharing-panel")!;
       panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -174,7 +176,7 @@ describe("chat session sharing menu", () => {
     const onPublicShareChange = vi.fn();
     const onCopyPublicLink = vi.fn();
     const onVisibilityChange = vi.fn();
-    const root = mount(
+    const root = await mount(
       renderSharing({
         session: {
           key: "agent:main:current",
@@ -213,7 +215,7 @@ describe("chat session sharing menu", () => {
     "refuses public mutations for %s controls",
     async (blocked) => {
       const onPublicShareChange = vi.fn();
-      const root = mount(
+      const root = await mount(
         renderSharing({
           session: {
             key: "agent:main:current",
@@ -254,7 +256,7 @@ describe("chat session sharing menu", () => {
     const onVisibilityChange = vi.fn();
     const onMemberChange = vi.fn();
     const navigate = vi.fn();
-    const root = mount(
+    const root = await mount(
       renderSharing({
         session: sharingSession({ visibility: "read-only" }),
         state: {
@@ -292,7 +294,9 @@ describe("chat session sharing menu", () => {
     expect(root.querySelector(".chat-pane__sharing-owner-title")?.textContent?.trim()).toBe(
       "Owner",
     );
-    expect(root.querySelector(".chat-pane__sharing-owner")?.textContent?.trim()).toBe("Owner");
+    expect(
+      root.querySelector(".chat-pane__sharing-owner .session-menu__text")?.textContent?.trim(),
+    ).toBe("Owner");
     expect(
       root.querySelector(".chat-pane__sharing-owner openclaw-session-owner-chip"),
     ).not.toBeNull();
@@ -311,8 +315,8 @@ describe("chat session sharing menu", () => {
     expect(onMemberChange).toHaveBeenCalledWith("alice", true);
   });
 
-  it("renders member presentation from identity.type, not from ID spelling", () => {
-    const root = mount(
+  it("renders member presentation from identity.type, not from ID spelling", async () => {
+    const root = await mount(
       renderSharing({
         session: sharingSession({}),
         state: {
@@ -357,8 +361,8 @@ describe("chat session sharing menu", () => {
     }
   });
 
-  it("keeps the linked owner beside the draft marker for a non-manager", () => {
-    const root = mount(
+  it("keeps the linked owner beside the draft marker for a non-manager", async () => {
+    const root = await mount(
       renderSharing({
         session: {
           key: "agent:main:main",
@@ -399,7 +403,7 @@ describe("chat session sharing menu", () => {
     const onOpen = vi.fn();
     const onVisibilityChange = vi.fn();
     const onMemberChange = vi.fn();
-    const root = mount(
+    const root = await mount(
       renderSharing({
         session: sharingSession({}),
         state: {
@@ -458,9 +462,9 @@ describe("chat session sharing menu", () => {
     expect(onMemberChange).not.toHaveBeenCalled();
   });
 
-  it("disables opening when sharing reads are unavailable", () => {
+  it("disables opening when sharing reads are unavailable", async () => {
     const onOpen = vi.fn();
-    const root = mount(
+    const root = await mount(
       renderSharing({
         session: sharingSession({}),
         state: undefined,
@@ -481,7 +485,7 @@ describe("chat session sharing menu", () => {
   it("keeps visibility controls usable without member-list support", async () => {
     const onOpen = vi.fn();
     const onVisibilityChange = vi.fn();
-    const root = mount(
+    const root = await mount(
       renderSharing({
         session: sharingSession({}),
         state: undefined,
@@ -507,8 +511,8 @@ describe("chat session sharing menu", () => {
 
   it.each([{ name: "visibility-only", membersAvailable: false }])(
     "shows rejected sharing changes for $name Gateways",
-    ({ membersAvailable }) => {
-      const root = mount(
+    async ({ membersAvailable }) => {
+      const root = await mount(
         renderSharing({
           session: sharingSession({}),
           state: { loading: false, error: "Visibility update rejected" },

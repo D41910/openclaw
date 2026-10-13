@@ -293,7 +293,22 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
               actions.loadOwners();
               setRevision((value) => value + 1);
             }}
-            onEscape={(event) => actions.handleKeydown(event, view.appearance)}
+            onEscape={(event) => {
+              if (actions.handleKeydown(event, view.appearance)) {
+                return true;
+              }
+              // Shared Menu owns child dismissal and clearing a nonempty search.
+              if (
+                [...(menu?.overlay.children ?? [])].some((child) => child.open) ||
+                (event.target instanceof HTMLInputElement &&
+                  event.target.hasAttribute("data-search") &&
+                  event.target.value)
+              ) {
+                return false;
+              }
+              close();
+              return true;
+            }}
             onOpenChange={(open) => {
               if (open) {
                 closeNotified = false;

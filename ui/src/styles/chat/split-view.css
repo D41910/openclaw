@@ -501,6 +501,10 @@
   stroke-width: 1.6px;
 }
 
+.chat-header-session-menu {
+  display: flex;
+}
+
 .chat-header-session-menu__trigger > .oc-menu-item__label {
   display: flex;
   align-items: center;
