@@ -1,14 +1,20 @@
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { expect, it, onTestFinished } from "vitest";
 import { getReplyPayloadMetadata } from "../auto-reply/reply-payload.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { setRuntimeConfigSnapshot } from "../config/runtime-snapshot.js";
 import type { SessionEntry } from "../config/sessions.js";
+import type { SessionTranscriptRuntimeTarget } from "../config/sessions/session-accessor.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { markMcpLoopbackToolCallStarted } from "../gateway/mcp-http.loopback-runtime.js";
 import type { RunExit } from "../process/supervisor/types.js";
+import { readAssistantDisplayContent } from "../shared/assistant-display-content.js";
 import { supervisorSpawnMock, type createManagedRun } from "./cli-runner.test-support.js";
 import type { PreparedCliRunContext, RunCliAgentParams } from "./cli-runner/types.js";
 import { applyCliSessionBindingResult, getCliSessionBinding } from "./cli-session.js";
 import type { EmbeddedAgentRunResult } from "./embedded-agent-runner/types.js";
 import { FailoverError, hasModelFallbackStop } from "./failover-error.js";
+import { createMessageTool } from "./tools/message-tool-execution.js";
 
 /** Register required-reply cases inside the reliability suite's existing process fixture. */
 export function registerCliReplyCompletionTests({
@@ -17,6 +23,9 @@ export function registerCliReplyCompletionTests({
   makeManagedRun,
   admitContext,
   run,
+  createSessionFixture,
+  sessionParams,
+  readTranscriptMessages,
 }: {
   createContext: (params: Partial<RunCliAgentParams>) => PreparedCliRunContext;
   completeToolCall: (
@@ -26,6 +35,15 @@ export function registerCliReplyCompletionTests({
   makeManagedRun: (overrides?: Partial<RunExit>) => ReturnType<typeof createManagedRun>;
   admitContext: (context: PreparedCliRunContext) => Promise<{ close: () => void }>;
   run: (context: PreparedCliRunContext) => Promise<EmbeddedAgentRunResult>;
+  createSessionFixture: (params: { sessionKey: string }) => {
+    dir: string;
+    sessionTarget: SessionTranscriptRuntimeTarget;
+  };
+  sessionParams: (
+    sessionTarget: SessionTranscriptRuntimeTarget,
+    workspaceDir: string,
+  ) => Partial<RunCliAgentParams>;
+  readTranscriptMessages: (sessionTarget: SessionTranscriptRuntimeTarget) => Promise<unknown[]>;
 }) {
   it.each(["abort", "timeout", "session-expired", "fork-abort"] as const)(
     "does not replay delivery and resumes valid history after %s",
@@ -312,6 +330,92 @@ export function registerCliReplyCompletionTests({
     expect(result.meta.executionTrace?.attempts?.[0]?.result).toBe("error");
     expect(supervisorSpawnMock).toHaveBeenCalledOnce();
   });
+
+  it.each([false, true])(
+    "succeeds after a real WebChat internal-source send followed by NO_REPLY with inferred reply expectation (inter-session=%s)",
+    async (interSession) => {
+      const sessionKey = "agent:main:webchat:dm:cli-internal-source";
+      const { dir, sessionTarget } = createSessionFixture({ sessionKey });
+      const config: OpenClawConfig = {
+        agents: { entries: { main: { workspace: dir } } },
+      };
+      setRuntimeConfigSnapshot(config);
+      const context = createContext({
+        sessionKey,
+        runId: "cli-internal-source",
+        ...sessionParams(sessionTarget, dir),
+        config,
+        messageChannel: "webchat",
+        messageProvider: "webchat",
+        sourceReplyDeliveryMode: "automatic",
+        inputProvenance: interSession
+          ? {
+              kind: "inter_session",
+              sourceSessionKey: "agent:main:main",
+              sourceTool: "sessions_send",
+            }
+          : undefined,
+      });
+      context.backendResolved.config.output = "jsonl";
+      const tool = createMessageTool({
+        config,
+        preparedMessageToolCatalog: { version: 0, channels: [], getChannel: () => undefined },
+        currentChannelProvider: "webchat",
+        sourceReplyDeliveryMode: "automatic",
+        inputProvenance: context.params.inputProvenance,
+        agentSessionKey: sessionKey,
+        runSessionKey: sessionKey,
+        sessionId: sessionTarget.sessionId,
+        agentId: "main",
+        runId: context.params.runId,
+        getScopedChannelsCommandSecretTargets: () => ({ targetIds: new Set<string>() }),
+        resolveCommandSecretRefsViaGateway: async ({ config: resolvedConfig }) => ({
+          resolvedConfig,
+          diagnostics: [],
+          targetStatesByPath: {},
+          hadUnresolvedTargets: false,
+        }),
+      });
+      const text = "The answer delivered to the WebChat transcript.";
+      supervisorSpawnMock.mockImplementationOnce(async (input) => {
+        const args = { action: "send", message: text, final: true };
+        const toolResult = await tool.execute("cli-internal-source-send", args);
+        expect(toolResult.details).toMatchObject({
+          deliveryStatus: "sent",
+          sourceReplySink: "internal-ui",
+          sourceReplyTranscriptOwner: true,
+        });
+        completeToolCall(
+          {
+            captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
+            toolName: "message",
+            args,
+          },
+          toolResult,
+        );
+        input.onStdout?.(
+          `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
+        );
+        return makeManagedRun();
+      });
+
+      const result = await run(context);
+
+      const assistantMessages = (await readTranscriptMessages(sessionTarget)).filter(
+        (message) => isRecord(message) && message.role === "assistant",
+      );
+      expect(assistantMessages.map(readAssistantDisplayContent)).toEqual([
+        [{ type: "text", text }],
+      ]);
+      expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+      expect(result.meta.error).toBeUndefined();
+      expect(result.meta.executionTrace?.attempts?.map((attempt) => attempt.result)).toEqual([
+        "success",
+      ]);
+      expect(result.payloads).toEqual([{ text }]);
+      expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
+    },
+  );
 
   it.each([false, true])(
     "requires a real child result even when continuation custody is %s",

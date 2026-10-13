@@ -42,7 +42,6 @@ import type { getProcessSupervisor } from "../process/supervisor/index.js";
 import type { RunExit } from "../process/supervisor/types.js";
 import { createUserTurnTranscriptRecorder } from "../sessions/user-turn-transcript.js";
 import { createTestUserTurnTranscriptTarget } from "../sessions/user-turn-transcript.test-support.js";
-import { readAssistantDisplayContent } from "../shared/assistant-display-content.js";
 import { captureEnv, setTestEnvValue } from "../test-utils/env.js";
 import { useSessionStoreTempDirs } from "../test-utils/session-state-cleanup.js";
 import * as sleepModule from "../utils/sleep.js";
@@ -72,7 +71,6 @@ import { isIntermediateAssistantTranscriptMessage } from "./embedded-agent-runne
 import { runAgentHarnessBeforeMessageWriteHook } from "./harness/hook-helpers.js";
 import { MAX_AGENT_HOOK_HISTORY_MESSAGES } from "./harness/hook-history.js";
 import { SessionManager } from "./sessions/session-manager.js";
-import { createMessageTool } from "./tools/message-tool-execution.js";
 
 const MAX_CLI_SESSION_HISTORY_MESSAGES = MAX_AGENT_HOOK_HISTORY_MESSAGES;
 const runPreparedCliAgent = wrapPreparedCliRunWithTestAdmission(runPreparedCliAgentCore);
@@ -673,94 +671,10 @@ describe("runCliAgent reliability", () => {
     makeManagedRun,
     admitContext: admitPreparedContext,
     run: runPreparedCliAgent,
+    createSessionFixture,
+    sessionParams,
+    readTranscriptMessages,
   });
-
-  it.each([false, true])(
-    "succeeds after a real WebChat internal-source send followed by NO_REPLY with inferred reply expectation (inter-session=%s)",
-    async (interSession) => {
-      const sessionKey = "agent:main:webchat:dm:cli-internal-source";
-      const { dir, sessionTarget } = createSessionFixture({ sessionKey });
-      const config: OpenClawConfig = {
-        agents: { entries: { main: { workspace: dir } } },
-      };
-      setRuntimeConfigSnapshot(config);
-      const context = capturedContext(
-        { sessionKey, runId: "cli-internal-source" },
-        {
-          ...sessionParams(sessionTarget, dir),
-          config,
-          messageChannel: "webchat",
-          messageProvider: "webchat",
-          sourceReplyDeliveryMode: "automatic",
-          inputProvenance: interSession
-            ? {
-                kind: "inter_session",
-                sourceSessionKey: "agent:main:main",
-                sourceTool: "sessions_send",
-              }
-            : undefined,
-        },
-      );
-      context.backendResolved.config.output = "jsonl";
-      const tool = createMessageTool({
-        config,
-        preparedMessageToolCatalog: { version: 0, channels: [], getChannel: () => undefined },
-        currentChannelProvider: "webchat",
-        sourceReplyDeliveryMode: "automatic",
-        inputProvenance: context.params.inputProvenance,
-        agentSessionKey: sessionKey,
-        runSessionKey: sessionKey,
-        sessionId: sessionTarget.sessionId,
-        agentId: "main",
-        runId: context.params.runId,
-        getScopedChannelsCommandSecretTargets: () => ({ targetIds: new Set<string>() }),
-        resolveCommandSecretRefsViaGateway: async ({ config: resolvedConfig }) => ({
-          resolvedConfig,
-          diagnostics: [],
-          targetStatesByPath: {},
-          hadUnresolvedTargets: false,
-        }),
-      });
-      const text = "The answer delivered to the WebChat transcript.";
-      supervisorSpawnMock.mockImplementationOnce(async (input) => {
-        const args = { action: "send", message: text, final: true };
-        const toolResult = await tool.execute("cli-internal-source-send", args);
-        expect(toolResult.details).toMatchObject({
-          deliveryStatus: "sent",
-          sourceReplySink: "internal-ui",
-          sourceReplyTranscriptOwner: true,
-        });
-        completeCapturedToolCall(
-          {
-            captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
-            toolName: "message",
-            args,
-          },
-          toolResult,
-        );
-        input.onStdout?.(
-          `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
-        );
-        return makeManagedRun();
-      });
-
-      const result = await runPreparedCliAgent(context);
-
-      const assistantMessages = (await readTranscriptMessages(sessionTarget)).filter(
-        (message) => requireRecord(message, "transcript message").role === "assistant",
-      );
-      expect(assistantMessages.map(readAssistantDisplayContent)).toEqual([
-        [{ type: "text", text }],
-      ]);
-      expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-      expect(result.meta.error).toBeUndefined();
-      expect(result.meta.executionTrace?.attempts?.map((attempt) => attempt.result)).toEqual([
-        "success",
-      ]);
-      expect(result.payloads).toEqual([{ text }]);
-      expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
-    },
-  );
 
   it("projects explicit outbound MCP media without retaining echoed image bytes", async () => {
     const echoedBase64 = "private-echoed-base64";
