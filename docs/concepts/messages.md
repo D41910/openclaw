@@ -196,7 +196,11 @@ still apply, and the current-prompt capability expires with its admitted turn.
 
 The silent token `NO_REPLY` (case-insensitive, so `no_reply` also matches) is reserved for sessions connected to external message channels. A token-only final is an intentional silent ending, including after a cross-chat send, a reaction, group chatter, or a deliberate yield. This also applies when the admitted turn normally requires a reply. Subagents, private completions, the Control UI, and other internal sessions still must return a result or continue unfinished work.
 
+A truncated response or an unfinished tool turn is not a successful silent ending, even if its partial text is `NO_REPLY`. A result already delivered to the current WebChat transcript satisfies the result requirement; a later `NO_REPLY` does not invalidate that delivered answer.
+
 `NO_REPLY` discards anything written this turn that was not sent, so send confirmations before ending silently. It does not retract delivered messages or cancel pending work. A final such as `NO_REPLY` followed by a newline and ordinary text delivers that text; it is not a silent ending. Pending tool media, such as generated TTS audio, still delivers after the silent text is removed.
+
+Punctuation and JSON do not turn ordinary text into a silent token: `NO_REPLY.` and `{"action":"NO_REPLY"}` are delivered as text, including through queued replies.
 
 Conversation policy still controls admission and default reply expectations:
 
@@ -211,6 +215,8 @@ Generic internal runner failures stay quiet for optional turns that have not sho
 An empty final is not intentional silence. OpenClaw keeps its bounded recovery path without repeating completed actions. If recovery still returns no answer, the run fails. An admitted user request receives at most one short system notice: "No answer was returned. Ask again if you still need one." The notice is not saved as a fabricated assistant answer. Heartbeat, cron, and other background or internal failures remain recorded without posting a missing-answer notice to chat. Existing classified failure guidance and alert paths still apply; a silent recovery cannot turn a provider failure into success. Confirmed delivery or still-owned delivery prevents duplicate recovery; see [Reply shaping](/concepts/agent-loop#reply-shaping).
 
 Pending media work without an authored acknowledgment retains its existing waiting status so supported channels can keep the live progress card until the media arrives. An explicit `NO_REPLY` still ends silently without canceling that work. Failed delegated tasks use the same short missing-answer copy; their existing delivery and requester-history mirroring are unchanged.
+
+Pending WebChat and Control UI work retains authored yield acknowledgments and the existing media waiting status while a result is still owed.
 
 ## Related
 

@@ -30,7 +30,7 @@ export function buildWaitingStatusPayload(params: {
       ? "I’m continuing this work and will send the result when it is ready."
       : undefined);
   if (
-    params.completion.expectation !== "required" ||
+    params.completion.expectation === "optional" ||
     params.completion.outcome !== "pending" ||
     (!params.yielded && !params.continuationPending) ||
     params.hasVisibleMessageDelivery ||

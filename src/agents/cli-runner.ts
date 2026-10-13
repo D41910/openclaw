@@ -372,7 +372,8 @@ async function runPreparedCliAgentOwned(
     if (
       !output.terminalInterruption &&
       ((resolveReplyExpectation(params) === "result-required" &&
-        isSilentReplyTokenOnly(output.text)) ||
+        isSilentReplyTokenOnly(output.text) &&
+        sourceReplyMirror.payloads.length === 0) ||
         (!output.text.trim() &&
           !params.controlOperation &&
           resolveSourceReplyDelivery(output) === "missing" &&

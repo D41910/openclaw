@@ -1,6 +1,7 @@
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import type { TSchema } from "typebox";
-import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
+import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
+import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { hasReplyPayloadContent } from "../../interactive/payload.js";
 import type { PluginMetadataSnapshot } from "../../plugins/plugin-metadata-snapshot.types.js";
@@ -89,7 +90,7 @@ export function buildAgentRuntimeDeliveryPlan(
   return {
     isSilentPayload(payload): boolean {
       return (
-        isSilentReplyPayloadText(payload.text, SILENT_REPLY_TOKEN) &&
+        isSilentReplyTokenOnly(payload.text, SILENT_REPLY_TOKEN) &&
         !hasReplyPayloadContent({ ...payload, text: undefined }, { trimText: true })
       );
     },

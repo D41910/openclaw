@@ -187,17 +187,18 @@ describe("AgentRuntimePlan", () => {
     expect(plan.auth.authProfileProviderForAuth).toBe("openai");
     expect(plan.auth.harnessAuthProvider).toBe("openai");
     expect(plan.auth.forwardedAuthProfileId).toBe("openai:work");
-    expect(plan.delivery.isSilentPayload({ text: "NO_REPLY\n\nNO_REPLY" })).toBe(true);
-    expect(plan.delivery.isSilentPayload({ text: '{"action":"NO_REPLY"}' })).toBe(true);
+    expect(plan.delivery.isSilentPayload({ text: "NO_REPLY" })).toBe(true);
+    expect(plan.delivery.isSilentPayload({ text: "NO_REPLY\n\nNO_REPLY" })).toBe(false);
+    expect(plan.delivery.isSilentPayload({ text: '{"action":"NO_REPLY"}' })).toBe(false);
     expect(
       plan.delivery.isSilentPayload({
-        text: '{"action":"NO_REPLY"}',
+        text: "NO_REPLY",
         mediaUrl: "file:///tmp/image.png",
       }),
     ).toBe(false);
     expect(
       plan.delivery.isSilentPayload({
-        text: '{"action":"NO_REPLY"}',
+        text: "NO_REPLY",
         presentation: {
           blocks: [{ type: "buttons", buttons: [{ label: "Open", value: "open" }] }],
         },

@@ -465,10 +465,11 @@ export function buildCliRunResult(params: {
   const runParams = context.params;
   const text = output.text?.trim();
   const rawText = output.rawText?.trim();
+  const replyExpectation = resolveReplyExpectation(runParams);
   const explicitSilence =
     !output.terminalInterruption &&
     ((runParams.controlOperation !== undefined && !text) ||
-      (isSilentReplyTokenOnly(text) && resolveReplyExpectation(runParams) !== "result-required"));
+      (isSilentReplyTokenOnly(text) && replyExpectation !== "result-required"));
   const sourceReplyMirror = resolveCliSourceReplyMirror({
     evidence: output,
     runParams,
@@ -580,7 +581,10 @@ export function buildCliRunResult(params: {
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
       terminalReply: buildAgentRunTerminalReplySnapshot({
         visibleText: finalAssistantVisibleText,
-        rawText: rawText ?? text,
+        rawText:
+          replyExpectation === "result-required" && sourceReplyMirror.payloads.length > 0
+            ? finalAssistantVisibleText
+            : (rawText ?? text),
         terminalReplyKind: explicitSilence ? "silent-empty" : undefined,
       }),
       systemPromptReport: context.systemPromptReport,

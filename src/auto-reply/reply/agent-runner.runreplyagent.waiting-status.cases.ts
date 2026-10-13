@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assert, expect, it, onTestFinished, vi, type Mock } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
+import { buildAgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.js";
 import type { RunEmbeddedAgentInternalParams } from "../../agents/embedded-agent-runner/run/internal-params.js";
 import type { EmbeddedAgentRunResult } from "../../agents/embedded-agent-runner/types.js";
 import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
@@ -16,6 +17,7 @@ import {
 } from "../../agents/subagents/registry/subagent-registry.test-helpers.js";
 import type { MediaGenerationTaskHandle } from "../../agents/tools/media-generate-background-completion.js";
 import { createMediaGenerationTaskLifecycle } from "../../agents/tools/media-generate-background-shared.js";
+import { captureRuntimeConfigAsyncReader } from "../../config/config.js";
 import { createOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-payload.js";
 import type { ReplyPayload } from "../types.js";
@@ -28,6 +30,8 @@ type WaitingStatusFixture = {
     opts?: InternalGetReplyOptions;
     currentInboundEventKind?: "room_event";
     runtimePolicySessionKey?: string;
+    sessionCtx?: { Provider: string; Surface: string };
+    runOverrides?: { messageProvider: string };
   }) => {
     run: () => Promise<ReplyPayload | ReplyPayload[] | undefined>;
   };
@@ -73,6 +77,106 @@ export function registerWaitingStatusCases({
   createMinimalRun,
   runEmbeddedAgentMock,
 }: WaitingStatusFixture): void {
+  it("retains an authored sessions_yield acknowledgment for a WebChat turn", async () => {
+    await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
+      payloads: [],
+      meta: {
+        durationMs: 0,
+        yielded: true,
+        yieldAcknowledgment: "Research started; results will follow.",
+      },
+    });
+    await captureRuntimeConfigAsyncReader()();
+    const onPendingContinuation = vi.fn();
+    const { run } = createMinimalRun({
+      opts: { onPendingContinuation },
+      sessionCtx: { Provider: "webchat", Surface: "webchat" },
+      runOverrides: { messageProvider: "webchat" },
+    });
+
+    const result = await run();
+
+    expect(result).toMatchObject({
+      text: "Research started; results will follow.",
+      replyToId: "msg",
+    });
+    assert(result && !Array.isArray(result));
+    expect(getReplyPayloadMetadata(result)).toMatchObject({
+      continuationStatus: true,
+      deliverDespiteSourceReplySuppression: true,
+      progressContinuation: { adopt: expect.any(Function) },
+    });
+    expect(onPendingContinuation).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { label: "a WebChat turn", surface: "webchat", silent: false },
+    { label: "an explicit external NO_REPLY turn", surface: "whatsapp", silent: true },
+  ])("retains pending media ownership for $label", async ({ surface, silent }) => {
+    onTestFinished(resetGeneratedMediaTaskActivityForTests);
+    let handle: MediaGenerationTaskHandle | undefined;
+    runEmbeddedAgentMock.mockImplementationOnce(async (params: RunEmbeddedAgentInternalParams) => {
+      assert(params.preparedRunAdmission);
+      assert(params.sessionKey);
+      await params.preparedRunAdmission.admit("embedded");
+      handle = admitMediaHandle({
+        taskId: "webchat-waiting-image",
+        runId: `tool:image_generate:${randomUUID()}`,
+        requesterSessionKey: params.sandboxSessionKey ?? params.sessionKey,
+        requesterAgentId: params.agentId,
+        taskLabel: "waiting image",
+      });
+      return {
+        payloads: silent ? [{ text: "NO_REPLY" }] : [],
+        meta: {
+          durationMs: 0,
+          continuationPending: true,
+          ...(silent
+            ? { terminalReply: buildAgentRunTerminalReplySnapshot({ rawText: "NO_REPLY" }) }
+            : {}),
+        },
+      };
+    });
+    const { run } = createMinimalRun({
+      sessionCtx: { Provider: surface, Surface: surface },
+      runOverrides: { messageProvider: surface },
+    });
+
+    const result = await run();
+
+    assert(handle);
+    expect(
+      hasPendingGeneratedMediaTaskForSessionKey(
+        handle.requesterSessionKey,
+        handle.requesterAgentId,
+      ),
+    ).toBe(true);
+    if (silent) {
+      expect(result).toBeUndefined();
+      return;
+    }
+    expect(result).toMatchObject({
+      text: "I’m continuing this work and will send the result when it is ready.",
+    });
+    assert(result && !Array.isArray(result));
+    const draft = { push: vi.fn(), retire: vi.fn() };
+    expect(getReplyPayloadMetadata(result)?.progressContinuation?.adopt(draft)).toBe(true);
+    expect(draft.push).toHaveBeenCalledExactlyOnceWith({
+      itemId: handle.runId,
+      kind: "subagent",
+      title: "Image generation",
+      phase: "update",
+      status: "running",
+    });
+    createMediaGenerationTaskLifecycle("image").completeTaskRun({
+      handle,
+      provider: "fixture",
+      model: "fixture",
+      count: 1,
+    });
+    expect(draft.retire).toHaveBeenCalledOnce();
+  });
+
   it.each([
     {
       label: "implicit continuation",

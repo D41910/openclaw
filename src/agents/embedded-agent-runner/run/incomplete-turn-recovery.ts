@@ -133,7 +133,7 @@ function shouldSkipNonVisibleTurnRetry(params: {
   );
 }
 
-/** Explicit authored silence is independent of prior external effects and delivery custody. */
+/** A final stop may author silence independently of prior external effects and delivery custody. */
 export function shouldTreatEmptyAssistantReplyAsSilent(params: {
   allowEmptyAssistantReplyAsSilent?: boolean;
   terminalReplyExpectation?: ReplyExpectation;
@@ -153,8 +153,7 @@ export function shouldTreatEmptyAssistantReplyAsSilent(params: {
     !params.timedOut &&
     params.attempt.terminal.kind !== "failed" &&
     assistant.silent &&
-    assistant.assistant?.stopReason !== "error" &&
-    assistant.assistant?.stopReason !== "aborted"
+    assistant.assistant?.stopReason === "stop"
   );
 }
 
