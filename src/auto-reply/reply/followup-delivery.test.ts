@@ -7,6 +7,7 @@ import type { AgentTurnExecutionResult, SettledAgentTurn } from "./agent-runner-
 import { deliverFollowupDecision, resolveFollowupDeliveryDecision } from "./followup-delivery.js";
 import type { AdmittedFollowupTurn } from "./followup-turn-admission.js";
 import type { FollowupRun } from "./queue/types.js";
+import { createMockReplyOperation } from "./test-helpers.js";
 
 const deliveryState = vi.hoisted(() => ({
   followupRoute: undefined as { route: "dispatcher" | "origin" | "drop" } | undefined,
@@ -64,7 +65,7 @@ function createTurn(overrides: Partial<AdmittedFollowupTurn> = {}): AdmittedFoll
         blockReplyBreak: "message_end",
       },
     },
-    operation: {} as AdmittedFollowupTurn["operation"],
+    operation: createMockReplyOperation().replyOperation,
     config: {},
     session: {
       kind: "session",
@@ -245,16 +246,11 @@ describe("resolveFollowupDeliveryDecision", () => {
           execution,
           accounting: createAccounting(privatePartial ? [{ text: "Private partial output." }] : []),
         }),
-      ).toMatchObject({
-        kind: "deliver",
-        payloads: [
-          {
-            text:
-              yieldAcknowledgment ??
-              "I’m continuing this work and will send the result when it is ready.",
-          },
-        ],
-      });
+      ).toMatchObject(
+        yieldAcknowledgment
+          ? { kind: "deliver", payloads: [{ text: yieldAcknowledgment }] }
+          : { kind: "suppress", reason: "silent" },
+      );
     },
   );
 
@@ -265,6 +261,7 @@ describe("resolveFollowupDeliveryDecision", () => {
       turn.queued.run.terminalReplyExpectation = expectation;
       const execution = createSettledExecution();
       execution.outcome.result.meta.finalAssistantRawText = "NO_REPLY";
+      execution.outcome.result.meta.terminalReply = { disposition: "silent" };
 
       const decision = await resolveFollowupDeliveryDecision({
         turn,
@@ -273,17 +270,121 @@ describe("resolveFollowupDeliveryDecision", () => {
         opts: { isHeartbeat: true },
       });
 
-      if (expectation === "optional") {
-        expect(decision).toEqual({ kind: "suppress", reason: "silent" });
-      } else {
-        expect(decision).toMatchObject({
-          kind: "deliver",
-          payloads: [{ isError: true, text: expect.any(String) }],
+      expect(decision).toEqual({ kind: "suppress", reason: "silent" });
+    },
+  );
+
+  it.each(["required", "optional", "result-required"] as const)(
+    "discards queued earlier answers after a %s silent final",
+    async (expectation) => {
+      const turn = createTurn();
+      turn.queued.run.terminalReplyExpectation = expectation;
+      turn.queued.strandedReplyRetry = true;
+      const execution = createSettledExecution();
+      execution.outcome.result.meta = {
+        durationMs: 0,
+        finalAssistantRawText: "NO_REPLY",
+        yielded: true,
+        yieldAcknowledgment: "An unsent confirmation",
+        terminalReply: { disposition: "silent" },
+      };
+      const decision = await resolveFollowupDeliveryDecision({
+        turn,
+        execution,
+        accounting: createAccounting([{ text: "Earlier answer" }]),
+      });
+      expect(decision).toMatchObject({ kind: "suppress", reason: "silent" });
+      expect(turn.operation.fail).toHaveBeenCalledTimes(expectation === "result-required" ? 1 : 0);
+    },
+  );
+
+  it.each(["required", "optional"] as const)(
+    "reports an empty queued %s result",
+    async (expectation) => {
+      const turn = createTurn();
+      turn.queued.run.terminalReplyExpectation = expectation;
+      expect(
+        await resolveFollowupDeliveryDecision({
+          turn,
+          execution: createSettledExecution(),
+          accounting: createAccounting(),
+        }),
+      ).toMatchObject({
+        kind: "deliver",
+        payloads: [{ text: "No answer was returned.", isError: true, isStatusNotice: true }],
+      });
+    },
+  );
+
+  it("delivers mixed queued NO_REPLY and answer text unchanged", async () => {
+    const text = "NO_REPLY\nHere is the answer.";
+    expect(
+      await resolveFollowupDeliveryDecision({
+        turn: createTurn(),
+        execution: createSettledExecution(text),
+        accounting: createAccounting([{ text }]),
+      }),
+    ).toMatchObject({ kind: "deliver", payloads: [{ text: "Here is the answer." }] });
+  });
+
+  it.each(["automatic", "message_tool_only"] as const)(
+    "keeps pending tool audio after queued NO_REPLY in %s mode",
+    async (sourceReplyDeliveryMode) => {
+      const turn = createTurn();
+      turn.queued.run.sourceReplyDeliveryMode = sourceReplyDeliveryMode;
+      const execution = createSettledExecution();
+      execution.outcome.result.meta = {
+        durationMs: 0,
+        finalAssistantRawText: "NO_REPLY",
+        terminalReply: { disposition: "silent" },
+      };
+      const media = setReplyPayloadMetadata(
+        {
+          text: "Unsent caption",
+          mediaUrl: "https://example.invalid/pending.opus",
+          audioAsVoice: true,
+        },
+        { assistantTranscriptOwned: true, deliverDespiteSourceReplySuppression: true },
+      );
+      const decision = await resolveFollowupDeliveryDecision({
+        turn,
+        execution,
+        accounting: createAccounting([{ text: "Unsent confirmation" }, media]),
+      });
+      expect(decision).toMatchObject({
+        kind: "deliver",
+        payloads: [{ mediaUrl: "https://example.invalid/pending.opus", audioAsVoice: true }],
+      });
+      if (decision.kind === "deliver") {
+        expect(decision.payloads).toHaveLength(1);
+        expect(decision.payloads[0]?.text).toBeUndefined();
+        expect(getReplyPayloadMetadata(decision.payloads[0])).toMatchObject({
+          assistantTranscriptOwned: true,
+          deliverDespiteSourceReplySuppression: true,
         });
-        if (decision.kind === "deliver") {
-          expect(decision.payloads[0]?.text).not.toContain("NO_REPLY");
-        }
       }
+    },
+  );
+
+  it.each(["hook", "approval"] as const)(
+    "preserves %s output even when a silent terminal marker is present",
+    async (source) => {
+      const execution = createSettledExecution();
+      execution.outcome.result.meta = {
+        durationMs: 0,
+        terminalReply: { disposition: "silent" },
+        ...(source === "hook"
+          ? { error: { kind: "hook_block", message: "Blocked by policy." } as const }
+          : {}),
+      };
+      execution.outcome.result.didSendDeterministicApprovalPrompt = source === "approval";
+      const payload = { text: "Approval or policy notice", isStatusNotice: true };
+      const decision = await resolveFollowupDeliveryDecision({
+        turn: createTurn(),
+        execution,
+        accounting: createAccounting([payload]),
+      });
+      expect(decision).toMatchObject({ kind: "deliver", payloads: [payload] });
     },
   );
 
@@ -524,9 +625,15 @@ describe("resolveFollowupDeliveryDecision", () => {
         turn.queued.run.sourceReplyDeliveryMode = "message_tool_only";
       }
       const failure = { text: internal ? "internal failure" : "terminal failure", isError: true };
+      const execution = createSettledExecution(final);
+      execution.outcome = {
+        ...execution.outcome,
+        status: "failed",
+        terminalFailurePayload: failure,
+      };
       const decision = await resolveFollowupDeliveryDecision({
         turn,
-        execution: createSettledExecution(final),
+        execution,
         accounting: createAccounting(final ? [{ text: "private partial" }] : [], {
           terminalFailurePayload: failure,
         }),
@@ -630,9 +737,7 @@ describe("resolveFollowupDeliveryDecision", () => {
         expectFallback
           ? {
               kind: "deliver",
-              payloads: [
-                { text: expect.stringContaining("did not produce a visible reply"), isError: true },
-              ],
+              payloads: [{ text: "No answer was returned.", isError: true, isStatusNotice: true }],
             }
           : { kind: "suppress", reason: "silent" },
       );
@@ -666,9 +771,7 @@ describe("resolveFollowupDeliveryDecision", () => {
 
       expect(decision).toMatchObject({
         kind: "deliver",
-        payloads: [
-          { text: expect.stringContaining("did not produce a visible reply"), isError: true },
-        ],
+        payloads: [{ text: "No answer was returned.", isError: true, isStatusNotice: true }],
       });
       if (decision.kind === "deliver") {
         expect(

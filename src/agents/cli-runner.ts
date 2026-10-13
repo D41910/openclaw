@@ -1,4 +1,4 @@
-import { isSilentReplyPayloadText } from "../auto-reply/tokens.js";
+import { isSilentReplyTokenOnly } from "../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { runWithCliHistoryWriter } from "../config/sessions/cli-history-boundary.js";
 import { prepareCronRootSessionGeneration } from "../config/sessions/session-delivery-generation.js";
 import { buildGenericCliContextEngineHostSupport } from "../context-engine/host-compat.js";
@@ -370,15 +370,17 @@ async function runPreparedCliAgentOwned(
       ? (sourceReplyMirror.visibleText ?? "")
       : output.text.trim();
     if (
-      (!output.text.trim() || isSilentReplyPayloadText(output.text)) &&
-      resolveSourceReplyDelivery(output) === "missing" &&
-      !output.toolMediaUrls?.length &&
-      !output.yielded &&
-      !hasCompletionMessageSessionSpawn(output.acceptedSessionSpawns) &&
       !output.terminalInterruption &&
-      resolveReplyExpectation(params) === "required" &&
-      // Strict isolated completion owns valid-empty output after reasoning is removed.
-      !(isolatedCompletion && params.outputTextPolicy === "strict-visible")
+      ((resolveReplyExpectation(params) === "result-required" &&
+        isSilentReplyTokenOnly(output.text)) ||
+        (!output.text.trim() &&
+          !params.controlOperation &&
+          resolveSourceReplyDelivery(output) === "missing" &&
+          !output.toolMediaUrls?.length &&
+          !output.yielded &&
+          !hasCompletionMessageSessionSpawn(output.acceptedSessionSpawns) &&
+          // Strict isolated completion owns valid-empty output after reasoning is removed.
+          !(isolatedCompletion && params.outputTextPolicy === "strict-visible")))
     ) {
       const process = output.diagnostics?.process;
       if (process) {

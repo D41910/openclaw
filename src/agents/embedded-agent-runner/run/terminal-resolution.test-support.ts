@@ -42,6 +42,7 @@ export function makeTerminalInput(overrides: TerminalInputOverrides = {}): Termi
     sessionId: "session:terminal-resolution",
     sessionKey: "agent:main:terminal-resolution",
     runId: "run:terminal-resolution",
+    messageChannel: "telegram",
     agentDir: "/tmp/openclaw-terminal-resolution",
     workspaceDir: "/tmp/openclaw-terminal-resolution",
     prompt: "Finish the current turn.",

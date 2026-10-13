@@ -22,9 +22,10 @@ import {
   getReplyPayloadMetadata,
   setReplyPayloadMetadata,
 } from "../reply-payload.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import { registerDispatcher } from "./dispatcher-registry.js";
+import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 import {
   normalizeReplyPayloadOutcome,
   type NormalizeReplyOutcome,
@@ -518,7 +519,7 @@ export function createReplyDispatcher(
     deliveryOutcomeTrackers.delete(payload);
     const fallback = undeliveredFallbacks.get(payload);
     undeliveredFallbacks.delete(payload);
-    const originalWasExactSilent = isSilentReplyText(payload.text, SILENT_REPLY_TOKEN);
+    const originalWasExactSilent = isSilentReplyTokenOnly(payload.text, SILENT_REPLY_TOKEN);
     const normalizedPrimary =
       getReplyPayloadMetadata(payload)?.replyDispatcherNormalizationOwner === dispatcher
         ? ({ kind: "deliver", payload } as const)

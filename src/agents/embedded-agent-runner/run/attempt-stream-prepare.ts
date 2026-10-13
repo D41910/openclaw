@@ -1,6 +1,6 @@
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
+import { isSilentReplyTokenOnly } from "../../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import type { ReplyToolAuthorityPreparation } from "../../../auto-reply/reply/reply-run-registry.contracts.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { captureAgentRunLifecycleGeneration } from "../../../infra/agent-events.js";
 import { validateAgentRunDelegatedAuthority } from "../../../infra/agent-run-registry.js";
 import {
@@ -146,7 +146,7 @@ function prepareStream(
   const completionCheck =
     attempt.operation !== "settled-tool-finalization" &&
     !attempt.silentExpected &&
-    resolveReplyExpectation(attempt) === "required"
+    resolveReplyExpectation(attempt) !== "optional"
       ? attempt.completionCheck
       : undefined;
   const onBeforeTerminalDelivery: Parameters<
@@ -184,7 +184,8 @@ function prepareStream(
             state.timedOut ||
             hasCompletedClientToolCall ||
             state.yieldDetected ||
-            (attempt.silentExpected && isSilentReplyText(lastAssistantMessage, SILENT_REPLY_TOKEN))
+            (resolveReplyExpectation(attempt) !== "result-required" &&
+              isSilentReplyTokenOnly(lastAssistantMessage))
           ) {
             return;
           }

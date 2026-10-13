@@ -4,7 +4,8 @@ import {
 } from "@openclaw/normalization-core/number-coercion";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { createTypingKeepaliveLoop } from "../../channels/typing-lifecycle.js";
-import { isSilentReplyPrefixText, isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
+import { isSilentReplyPrefixText, SILENT_REPLY_TOKEN } from "../tokens.js";
+import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 
 const DEFAULT_TYPING_INTERVAL_SECONDS = 6;
 const DEFAULT_TYPING_TTL_MS = 2 * 60_000;
@@ -176,7 +177,8 @@ export function createTypingController(params: {
     }
     if (
       silentToken &&
-      (isSilentReplyText(trimmed, silentToken) || isSilentReplyPrefixText(trimmed, silentToken))
+      (isSilentReplyTokenOnly(trimmed, silentToken) ||
+        isSilentReplyPrefixText(trimmed, silentToken))
     ) {
       return;
     }

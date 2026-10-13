@@ -9,10 +9,11 @@ import {
   isReplyPayloadTerminalContent,
   setReplyPayloadMetadata,
 } from "../reply-payload.js";
-import { isSilentReplyPayloadText, isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { BlockReplyContext, ReplyPayload, ReplyThreadingPolicy } from "../types.js";
 import { deliverBlockReply } from "./block-reply-delivery.js";
 import type { BlockReplyPipeline } from "./block-reply-pipeline.js";
+import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 import { parseReplyDirectives } from "./reply-directives.js";
 import {
   ReplyDispatchDeliveryError,
@@ -157,8 +158,8 @@ export function createBlockReplyDeliveryHandler(params: {
     const { text, skip } = params.normalizeStreamingText(payload);
     const isSilent =
       getReplyPayloadMetadata(payload)?.silentReply === true ||
-      isSilentReplyText(payload.text, SILENT_REPLY_TOKEN) ||
-      (skip && isSilentReplyPayloadText(text, SILENT_REPLY_TOKEN));
+      isSilentReplyTokenOnly(payload.text, SILENT_REPLY_TOKEN) ||
+      (skip && isSilentReplyTokenOnly(text, SILENT_REPLY_TOKEN));
     if (
       skip &&
       !hasOutboundReplyContent({ ...payload, text: undefined }) &&

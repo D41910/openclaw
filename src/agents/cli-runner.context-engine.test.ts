@@ -236,6 +236,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
 
     expect(beforeReplyMock).not.toHaveBeenCalled();
     expect(result.meta.agentMeta?.sessionId).toBe("existing-external-cli-session");
+    expect(result.meta.terminalReply).toEqual({ disposition: "silent" });
     expect(executeMock).toHaveBeenCalledWith(context, "existing-external-cli-session", undefined);
     expect(hookRunnerMock).not.toHaveBeenCalled();
     expect(hookHistoryMock).not.toHaveBeenCalled();

@@ -8,11 +8,7 @@ import {
   isReplyPayloadTerminalContent,
   type ReplyPayload,
 } from "../../auto-reply/reply-payload.js";
-import {
-  isSilentReplyPayloadText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-} from "../../auto-reply/tokens.js";
+import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { resolveAssistantMessagePhase } from "../../shared/chat-message-content.js";
 import { hasAnyNonEmptyString as hasNonEmptyStringArray } from "../delivery-evidence-values.js";
 
@@ -58,17 +54,9 @@ function hasVisibleAttachmentReference(value: unknown): boolean {
   return urls.size > 0;
 }
 
-/** Applies the shared exact or payload-aware silent-reply contract. */
-export function isSilentAgentReplyText(
-  value: unknown,
-  mode: "exact" | "payload" = "exact",
-): boolean {
-  if (typeof value !== "string") {
-    return false;
-  }
-  return mode === "payload"
-    ? isSilentReplyPayloadText(value, SILENT_REPLY_TOKEN)
-    : isSilentReplyText(value, SILENT_REPLY_TOKEN);
+/** Applies the exact structural terminal-silence contract. */
+export function isSilentAgentReplyText(value: unknown): boolean {
+  return typeof value === "string" && isSilentReplyTokenOnly(value);
 }
 
 export function hasVisibleAgentPayload(
@@ -92,8 +80,7 @@ export function hasVisibleAgentPayload(
       }
       const visibleText =
         hasNonEmptyString(record.text) &&
-        (options.includeSilentReplyPayloads !== false ||
-          !isSilentAgentReplyText(record.text, "payload"));
+        (options.includeSilentReplyPayloads !== false || !isSilentAgentReplyText(record.text));
       return Boolean(
         visibleText ||
         hasNonEmptyString(record.mediaUrl) ||
@@ -128,7 +115,7 @@ export function hasIntentionalSilentAgentPayload(result: { payloads?: unknown })
       return false;
     }
     return (
-      isSilentAgentReplyText(record.text, "payload") &&
+      isSilentAgentReplyText(record.text) &&
       !hasVisibleAgentPayload({ payloads: [{ ...record, text: undefined }] })
     );
   });
@@ -214,5 +201,5 @@ export function isTerminalSilentAssistantMessage(message: unknown): boolean {
       textParts.push(record.text.trim());
     }
   }
-  return isSilentAgentReplyText(textParts.join("\n"), "payload");
+  return isSilentAgentReplyText(textParts.join("\n"));
 }

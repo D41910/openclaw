@@ -140,7 +140,12 @@ export async function completeReplyAgentRun(input: {
   // durable delivery retries. Hidden reasoning, message-tool-only replies,
   // and sendPolicy-denied replies must not become heartbeat-replayable text.
   const isStrandedReplyRetryRun = followupRun.strandedReplyRetry === true;
-  if (sessionKey && storePath && (finalPayloads.length > 0 || isStrandedReplyRetryRun)) {
+  if (
+    sessionKey &&
+    storePath &&
+    runResult.meta?.terminalReply?.disposition !== "silent" &&
+    (finalPayloads.length > 0 || isStrandedReplyRetryRun)
+  ) {
     const sourceReplyPolicy = resolveSourceReplyPolicy({
       cfg,
       sessionCtx,

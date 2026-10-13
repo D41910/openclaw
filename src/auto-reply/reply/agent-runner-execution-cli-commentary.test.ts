@@ -339,7 +339,7 @@ describe("executeAgentTurn: CLI durable commentary", () => {
     [false, true].flatMap((completed) =>
       [
         { text: "NO_REPLY", silent: true },
-        { text: '{"action":"NO_REPLY"}', silent: true },
+        { text: '{"action":"NO_REPLY"}', silent: false },
         { text: "An ordinary caption.", silent: false },
       ].map(({ text, silent }) => ({ text, silent, completed })),
     ),

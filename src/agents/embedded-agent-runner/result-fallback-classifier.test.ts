@@ -431,6 +431,19 @@ describe("classifyEmbeddedAgentRunResultForModelFallback", () => {
     expect(result).toBeNull();
   });
 
+  it.each(['{"action":"NO_REPLY"}', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
+    "does not waive missing output for non-token-only raw text: %s",
+    (text) => {
+      expect(
+        classifyEmbeddedAgentRunResultForModelFallback({
+          provider: "openai",
+          model: "gpt-5.5",
+          result: { payloads: [], meta: { durationMs: 42, finalAssistantRawText: text } },
+        }),
+      ).toMatchObject({ code: "empty_result", reason: "format" });
+    },
+  );
+
   it("does not retry unclassified non-GPT error payloads", () => {
     const result = classifyEmbeddedAgentRunResultForModelFallback({
       provider: "custom",

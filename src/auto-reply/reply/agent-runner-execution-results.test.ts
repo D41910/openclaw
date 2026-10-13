@@ -1,12 +1,14 @@
 import { assert, describe, expect, it, vi } from "vitest";
 import { HEARTBEAT_EXTERNAL_RUN_FAILURE_TEXT } from "../../agents/failover/user-copy.js";
-import { getReplyPayloadMetadata } from "../reply-payload.js";
+import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
 import type { GetReplyOptions } from "../types.js";
 import {
   createAgentTurnExecutionDefaults,
   setupAgentRunnerExecutionTestState,
   getExecuteAgentTurnForTest,
+  getRawExecuteAgentTurnForTest,
+  createMockReplyOperation,
   createMockTypingSignaler,
   createFollowupRun,
   initialFallbackAttemptOptions,
@@ -21,7 +23,9 @@ import type {
   FallbackRunnerParams,
   EmbeddedAgentParams,
 } from "./agent-runner-execution.test-support.js";
-
+import { accountAgentTurn } from "./agent-runner-result-accounting.js";
+import { resolveFollowupDeliveryDecision } from "./followup-delivery.js";
+import type { AdmittedFollowupTurn } from "./followup-turn-admission.js";
 const state = await setupAgentRunnerExecutionTestState();
 
 describe("executeAgentTurn: result and tool delivery", () => {
@@ -56,6 +60,78 @@ describe("executeAgentTurn: result and tool delivery", () => {
           ).toBe(true);
         }
       }
+    },
+  );
+
+  it.each(["automatic", "message_tool_only"] as const)(
+    "preserves one core missing-answer notice through queued %s execution and delivery",
+    async (sourceReplyDeliveryMode) => {
+      const followupRun = createFollowupRun();
+      followupRun.originatingChannel = "whatsapp";
+      followupRun.originatingTo = "user";
+      followupRun.run.sourceReplyDeliveryMode = sourceReplyDeliveryMode;
+      followupRun.run.terminalReplyExpectation = "required";
+      const notice = setReplyPayloadMetadata(
+        { text: "No answer was returned.", isError: true, isStatusNotice: true },
+        { assistantTranscriptOwned: true },
+      );
+      state.runEmbeddedAgentMock.mockResolvedValueOnce({
+        payloads: [notice],
+        meta: { error: { kind: "incomplete_turn", message: "No answer was returned." } },
+      });
+      const params = createMinimalRunAgentTurnParams({ followupRun });
+      const execute = await getRawExecuteAgentTurnForTest();
+      const execution = await execute(params);
+      assert(execution.outcome.kind === "settled");
+      expect(execution.outcome.status).toBe("failed");
+      expect(execution.outcome.result.payloads).toEqual([]);
+      expect(execution.outcome.terminalFailurePayload).toBe(notice);
+
+      const accounting = await accountAgentTurn({
+        activeSessionEntry: undefined,
+        activeSessionStore: undefined,
+        blockReplyPipeline: null,
+        cfg: followupRun.run.config,
+        defaultModel: followupRun.run.model,
+        followupRun,
+        isHeartbeat: false,
+        pendingToolTasks: params.pendingToolTasks,
+        preflightCompactionApplied: false,
+        resolvedVerboseLevel: "off",
+        execution: execution.outcome,
+        runId: execution.runId,
+        runStartedAt: 0,
+        sessionCtx: params.sessionCtx,
+        sessionKey: undefined,
+        storePath: undefined,
+        shouldInjectGroupIntro: false,
+      });
+      const turn: AdmittedFollowupTurn = {
+        runId: execution.runId,
+        queued: followupRun,
+        operation: createMockReplyOperation().replyOperation,
+        config: followupRun.run.config,
+        session: {
+          kind: "detached",
+          current: () => undefined,
+          publish: () => {},
+          adopt: () => {},
+        },
+        sendPolicy: "allow",
+        preflightCompactionApplied: false,
+      };
+      const decision = await resolveFollowupDeliveryDecision({ turn, execution, accounting });
+      assert(decision.kind === "deliver");
+      expect(decision.payloads).toHaveLength(1);
+      expect(decision.payloads[0]).toMatchObject({
+        text: "No answer was returned.",
+        isError: true,
+        isStatusNotice: true,
+      });
+      expect(getReplyPayloadMetadata(decision.payloads[0])).toMatchObject({
+        assistantTranscriptOwned: true,
+        deliverDespiteSourceReplySuppression: true,
+      });
     },
   );
 
@@ -286,7 +362,7 @@ describe("executeAgentTurn: result and tool delivery", () => {
     expect(result.kind).toBe("success");
   });
 
-  it("strips a glued leading NO_REPLY token from streamed tool results", async () => {
+  it("preserves a glued leading NO_REPLY mention in streamed tool results", async () => {
     const onToolResult = vi.fn();
     state.runEmbeddedAgentMock.mockImplementationOnce(async (params: EmbeddedAgentParams) => {
       await params.onToolResult?.({ text: "NO_REPLYThe user is saying hello" });
@@ -314,8 +390,8 @@ describe("executeAgentTurn: result and tool delivery", () => {
     await Promise.all(pendingToolTasks);
 
     expect(result.kind).toBe("success");
-    expect(typingSignals.signalTextDelta).toHaveBeenCalledWith("The user is saying hello");
-    expect(onToolResult).toHaveBeenCalledWith({ text: "The user is saying hello" });
+    expect(typingSignals.signalTextDelta).toHaveBeenCalledWith("NO_REPLYThe user is saying hello");
+    expect(onToolResult).toHaveBeenCalledWith({ text: "NO_REPLYThe user is saying hello" });
   });
 
   it.each([

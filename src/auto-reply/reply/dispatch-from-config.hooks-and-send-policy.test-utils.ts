@@ -1,7 +1,10 @@
 // Imported by a dispatch-from-config entrypoint to keep its mocked suite in one Vitest module graph.
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PROVIDER_CONVERSATION_STATE_ERROR_USER_MESSAGE } from "../../agents/failover/user-copy.js";
-import { resolveReplyCompletion } from "../../agents/reply-completion.js";
+import {
+  MISSING_REPLY_NOTICE_TEXT,
+  resolveReplyCompletion,
+} from "../../agents/reply-completion.js";
 import { readAgentRunTerminalOutcome } from "../../channels/turn/agent-run-terminal-outcome.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { WorkerSessionPlacementRecord } from "../../gateway/worker-environments/placement-record.js";
@@ -10,10 +13,7 @@ import type { PluginSubagentRequesterContext } from "../../plugins/runtime/subag
 import { setReplyPayloadMetadata } from "../reply-payload.js";
 import type { MsgContext } from "../templating.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
-import {
-  buildNoVisibleReplyFallbackText,
-  QUEUE_CAP_REJECTION_TEXT,
-} from "./dispatch-from-config.payloads.js";
+import { QUEUE_CAP_REJECTION_TEXT } from "./dispatch-from-config.payloads.js";
 import {
   createDispatcher,
   diagnosticMocks,
@@ -46,7 +46,7 @@ import { createReplyDispatcher } from "./reply-dispatcher.js";
 import { resolveReplyOperationRunState } from "./reply-operation-run-state.js";
 import { buildTestCtx } from "./test-ctx.js";
 
-const NO_VISIBLE_REPLY_FALLBACK_TEXT = buildNoVisibleReplyFallbackText();
+const NO_VISIBLE_REPLY_FALLBACK_TEXT = MISSING_REPLY_NOTICE_TEXT;
 
 function sendPolicySessionEntry(sendPolicy: "allow" | "deny") {
   return { sessionId: "s1", updatedAt: 0, sendPolicy };
@@ -459,7 +459,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
       } satisfies OpenClawConfig,
       required: true,
     },
-  ])("preserves $name for an unmentioned group request", async ({ cfg, required }) => {
+  ])("reports empty admitted output for $name", async ({ cfg }) => {
     setNoAbort();
     const dispatcher = createDispatcher();
     const replyResolver = vi.fn(async () => undefined);
@@ -478,17 +478,13 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
       replyResolver,
     });
 
-    if (required) {
-      expect(dispatcher.sendFinalReply).toHaveBeenCalledExactlyOnceWith({
-        text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
-      });
-      expect(result.noVisibleReplyFallbackDelivered).toBe(true);
-      expect(result.deliberateSilentTerminalReply).toBeUndefined();
-    } else {
-      expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
-      expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
-      expect(result.deliberateSilentTerminalReply).toBe(true);
-    }
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledExactlyOnceWith({
+      text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
+    });
+    expect(result.noVisibleReplyFallbackDelivered).toBe(true);
+    expect(result.deliberateSilentTerminalReply).toBeUndefined();
   });
 
   it.each([
@@ -528,14 +524,14 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
 
     expect(replyResolver).toHaveBeenCalledOnce();
     expect(deliver).toHaveBeenCalledExactlyOnceWith(
-      { text: NO_VISIBLE_REPLY_FALLBACK_TEXT },
+      { text: NO_VISIBLE_REPLY_FALLBACK_TEXT, isError: true, isStatusNotice: true },
       { kind: "final" },
     );
     expect(result.noVisibleReplyFallbackDelivered).toBe(true);
     expect(result.deliberateSilentTerminalReply).toBeUndefined();
   });
 
-  it.each(["optional", "blocked"] as const)(
+  it.each(["required", "optional", "blocked"] as const)(
     "preserves the public silence projection for an authoritative %s completion",
     async (completion) => {
       setNoAbort();
@@ -555,8 +551,10 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
                   runState.replyCompletion?.expectation ?? "required",
                   "blocked",
                 )
-              : resolveReplyCompletion("optional", "empty");
-          return undefined;
+              : resolveReplyCompletion(completion, "silent");
+          return completion === "blocked"
+            ? undefined
+            : [{ text: "Earlier answer" }, { text: "Unsent confirmation" }];
         },
       });
 
@@ -564,8 +562,69 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
       expect(result.deliberateSilentTerminalReply).toBe(true);
       expect(result.noVisibleReplyFallbackEligible).toBeUndefined();
       expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
+      expect(result.observedReplyDelivery).toBeUndefined();
     },
   );
+
+  it.each(["heartbeat", "internal event"] as const)(
+    "does not add a missing-answer backstop after an empty %s",
+    async (kind) => {
+      setNoAbort();
+      const dispatcher = createDispatcher();
+      const result = await dispatchReplyFromConfig({
+        ctx: buildTestCtx({
+          Provider: "telegram",
+          Surface: "telegram",
+          ChatType: "direct",
+          ...(kind === "internal event"
+            ? {
+                InputProvenance: { kind: "internal_system", sourceTool: "background-test" },
+                InternalTurnSource: "event",
+              }
+            : {}),
+        }),
+        cfg: emptyConfig,
+        dispatcher,
+        replyOptions: { isHeartbeat: kind === "heartbeat" },
+        replyResolver: async (_ctx, opts) => {
+          const runState = resolveReplyOperationRunState(opts);
+          if (!runState) {
+            throw new Error("expected reply operation run state");
+          }
+          runState.replyCompletion = resolveReplyCompletion("optional", "empty");
+          opts?.onAgentRunTerminalOutcome?.("failed");
+          return undefined;
+        },
+      });
+      expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
+      expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
+      expect(readAgentRunTerminalOutcome(result)).toBe("failed");
+    },
+  );
+
+  it("does not send a second missing-answer notice after the system error settles", async () => {
+    setNoAbort();
+    const deliver = vi.fn(async () => {});
+    const dispatcher = createReplyDispatcher({ deliver });
+    const result = await dispatchReplyFromConfig({
+      ctx: buildTestCtx({ ChatType: "direct" }),
+      cfg: emptyConfig,
+      dispatcher,
+      replyResolver: async () => ({
+        text: MISSING_REPLY_NOTICE_TEXT,
+        isError: true,
+        isStatusNotice: true,
+      }),
+    });
+    dispatcher.markComplete();
+    await dispatcher.waitForIdle();
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(
+      { text: MISSING_REPLY_NOTICE_TEXT, isError: true, isStatusNotice: true },
+      { kind: "final" },
+    );
+    expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
+    expect(result.noVisibleReplyFallbackEligible).toBeUndefined();
+  });
 
   it("does not infer terminal silence from a sibling NO_REPLY payload", async () => {
     setNoAbort();
@@ -682,6 +741,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
 
     expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result).toEqual({
       queuedFinal: true,
@@ -692,14 +753,14 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
   });
 
   it.each([
-    ["caller-run", undefined, false, "caller-run"],
-    [undefined, "generated-run", false, "generated-run"],
-    ["caller-run", "observed-run", true, "observed-run"],
-    [undefined, undefined, true, undefined],
-    ["<@everyone>", undefined, true, undefined],
+    ["caller-run", undefined, false],
+    [undefined, "generated-run", false],
+    ["caller-run", "observed-run", true],
+    [undefined, undefined, true],
+    ["<@everyone>", undefined, true],
   ] as const)(
-    "keeps fallback correlation non-error (supplied=%s, observed=%s, routed=%s)",
-    async (runId, generatedRunId, routed, reference) => {
+    "keeps the missing-answer notice independent of run identity (supplied=%s, observed=%s, routed=%s)",
+    async (runId, generatedRunId, routed) => {
       setNoAbort();
       const dispatcher = createDispatcher();
       const onAgentRunStart = vi.fn();
@@ -725,9 +786,9 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
         replyOptions,
       });
       const payload = {
-        text: reference
-          ? `${NO_VISIBLE_REPLY_FALLBACK_TEXT} Reference: ${reference}.`
-          : NO_VISIBLE_REPLY_FALLBACK_TEXT,
+        text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+        isError: true,
+        isStatusNotice: true,
       };
       if (routed) {
         expect(firstRouteReplyCall().payload).toEqual(payload);
@@ -795,6 +856,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
 
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
     expect(result.noVisibleReplyFallbackEligible).toBeUndefined();
@@ -825,6 +888,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
 
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
     expect(result.noVisibleReplyFallbackEligible).toBeUndefined();
@@ -853,6 +918,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
 
     expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result.noVisibleReplyFallbackDelivered).toBe(true);
   });
@@ -1107,6 +1174,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     // admission as its visibility fact and no misleading fallback is sent.
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
   });
@@ -1136,6 +1205,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     });
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();
   });
@@ -1188,6 +1259,8 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
 
     expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({
       text: NO_VISIBLE_REPLY_FALLBACK_TEXT,
+      isError: true,
+      isStatusNotice: true,
     });
     expect(result.queuedFinal).toBe(false);
     expect(result.noVisibleReplyFallbackDelivered).toBeUndefined();

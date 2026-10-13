@@ -1,5 +1,5 @@
 import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
-import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
+import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
@@ -24,7 +24,11 @@ import { resolveAuthProfileFailureReason } from "../embedded-agent-runner/run/au
 import { buildEmbeddedRunPayloads } from "../embedded-agent-runner/run/payloads.js";
 import { mergeAttemptToolMediaPayloads } from "../embedded-agent-runner/run/tool-media-payloads.js";
 import { isFailoverError } from "../failover-error.js";
-import { resolveReplyExpectation } from "../reply-completion.js";
+import {
+  createMissingReplyNotice,
+  resolveReplyExpectation,
+  shouldDeliverMissingReplyNotice,
+} from "../reply-completion.js";
 import { recordAgentCleanupFailure } from "../run-cleanup-timeout.js";
 import { CliAuthProfilePreparationError } from "./auth-profile-preparation-error.js";
 import { runCliCleanup } from "./cleanup.js";
@@ -396,8 +400,9 @@ export function buildCliDeliveredFailure(params: {
   const visiblePayloads =
     payloads.length > 0
       ? payloads
-      : resolveExplicitFinalSourceReplyDeliveryEvidence(evidence) === false
-        ? [{ text: "The reply stopped after sending progress. Please try again.", isError: true }]
+      : resolveExplicitFinalSourceReplyDeliveryEvidence(evidence) === false &&
+          shouldDeliverMissingReplyNotice(runParams)
+        ? [createMissingReplyNotice()]
         : undefined;
   return {
     ...(visiblePayloads ? { payloads: visiblePayloads } : {}),
@@ -405,6 +410,7 @@ export function buildCliDeliveredFailure(params: {
       durationMs: Date.now() - context.started,
       systemPromptReport: context.systemPromptReport,
       stopReason: "error",
+      error: { kind: "incomplete_turn", message, fallbackSafe: false },
       ...buildCliExecutionMetadata(context, { result: "error", reason: message }),
       completion: {
         finishReason: "error",
@@ -458,6 +464,10 @@ export function buildCliRunResult(params: {
   const runParams = context.params;
   const text = output.text?.trim();
   const rawText = output.rawText?.trim();
+  const explicitSilence =
+    !output.terminalInterruption &&
+    ((runParams.controlOperation !== undefined && !text) ||
+      (isSilentReplyTokenOnly(text) && resolveReplyExpectation(runParams) !== "result-required"));
   const sourceReplyMirror = resolveCliSourceReplyMirror({
     evidence: output,
     runParams,
@@ -486,9 +496,7 @@ export function buildCliRunResult(params: {
                   )
                 : { text: partText },
             )
-          : resolveReplyExpectation(runParams) === "optional"
-            ? [{ text: SILENT_REPLY_TOKEN }]
-            : undefined;
+          : undefined;
   const payloadsWithToolMedia = mergeAttemptToolMediaPayloads({
     payloads,
     toolMediaUrls: output.toolMediaUrls,
@@ -569,6 +577,7 @@ export function buildCliRunResult(params: {
       ...(output.finalPromptText ? { finalPromptText: output.finalPromptText } : {}),
       ...(finalAssistantVisibleText ? { finalAssistantVisibleText } : {}),
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
+      ...(explicitSilence ? { terminalReply: { disposition: "silent" as const } } : {}),
       systemPromptReport: context.systemPromptReport,
       ...(terminalInterruption
         ? {

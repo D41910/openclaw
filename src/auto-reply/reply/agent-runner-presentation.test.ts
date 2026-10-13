@@ -53,7 +53,7 @@ function createPresentation(
 describe("agent runner streaming presentation", () => {
   it.each([
     { name: "cleaned silent token", caption: "NO_REPLY", silent: true },
-    { name: "cleaned silent envelope", caption: '{"action":"NO_REPLY"}', silent: true },
+    { name: "JSON action caption", caption: '{"action":"NO_REPLY"}', silent: false },
     { name: "ordinary code-literal caption", caption: "Use `NO_REPLY` literally.", silent: false },
   ])("preserves $name policy across attachment normalization", async ({ caption, silent }) => {
     const retainedMedia = "https://example.invalid/retained.png";
@@ -86,9 +86,7 @@ describe("agent runner streaming presentation", () => {
         mediaUrls: ["https://example.invalid/failed.png", retainedMedia],
       });
       expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual([
-        silent
-          ? ""
-          : "Use `NO_REPLY` literally.\n⚠️ Example: Delivery failed. Try sending this file again.",
+        silent ? "" : `${caption}\n⚠️ Example: Delivery failed. Try sending this file again.`,
       ]);
       expect(
         delivered.mock.calls.map(
@@ -101,7 +99,7 @@ describe("agent runner streaming presentation", () => {
   });
 
   it.each(["NO_REPLY", '{"action":"NO_REPLY"}'])(
-    "suppresses cleaned silent blocks before coalesced prepared delivery: %s",
+    "only suppresses token-only blocks before coalesced prepared delivery: %s",
     async (silentText) => {
       const { createSubscribedSessionHarness } =
         await import("../../agents/embedded-agent-subscribe.e2e-harness.js");
@@ -189,7 +187,9 @@ describe("agent runner streaming presentation", () => {
         await dispatcher.waitForIdle();
 
         expect(blocks).toEqual(["First.", `[tool calls omitted]\n${silentText}`, "Last."]);
-        expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual(["First.\n\nLast."]);
+        expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual([
+          silentText === "NO_REPLY" ? "First.\n\nLast." : `First.\n\n${silentText}\n\nLast.`,
+        ]);
       } finally {
         subscription.unsubscribe();
         pipeline.stop();

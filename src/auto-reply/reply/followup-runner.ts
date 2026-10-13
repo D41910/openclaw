@@ -66,7 +66,7 @@ function resolveFollowupCompletion(
         outcome.kind === "rejected"
           ? outcome.payload.text
           : outcome.kind === "settled" && outcome.status === "failed"
-            ? outcome.terminalFailurePayload.text
+            ? (outcome.terminalFailurePayload?.text ?? meta?.error?.message)
             : meta?.error?.message,
     },
   });
@@ -248,6 +248,12 @@ export function createFollowupRunner(
           return resolved;
         },
       );
+      if (completion.kind === "completed" && operation.result?.kind === "failed") {
+        completion = {
+          kind: "failed",
+          error: formatErrorMessage(operation.result.cause ?? "Follow-up returned no answer."),
+        };
+      }
       if (decision.kind === "deliver") {
         for (const payload of decision.payloads) {
           progressContinuation = getReplyPayloadMetadata(payload)?.progressContinuation;

@@ -31,6 +31,7 @@ import {
 import { hasVisibleAgentPayload } from "../../embedded-agent-runner/message-visibility.js";
 import { hasVisibleCompletionResult } from "../../internal-event-contract.js";
 import { collectAgentInternalEventMedia, type AgentInternalEvent } from "../../internal-events.js";
+import { createMissingReplyNotice, MISSING_REPLY_NOTICE_TEXT } from "../../reply-completion.js";
 import { createAgentRunDirectAbortError } from "../../run-termination.js";
 import {
   hasAnnounceSendEvidence,
@@ -163,9 +164,6 @@ export async function runAnnounceAgentCall(params: {
   }
 }
 
-const FAILED_COMPLETION_NOTICE =
-  "A delegated task failed before it could report a result. Please retry the task.";
-
 export function isGatewayAgentRunPending(response: unknown): boolean {
   return isNonTerminalAgentRunStatus(asOptionalObjectRecord(response)?.status);
 }
@@ -287,7 +285,7 @@ function collectDirectCompletionContent(params: {
   contentKind: "completed_result" | "failed_notice";
 }): DirectCompletionContent | undefined {
   if (params.contentKind === "failed_notice") {
-    return { content: FAILED_COMPLETION_NOTICE, mediaUrls: [] };
+    return { content: MISSING_REPLY_NOTICE_TEXT, mediaUrls: [] };
   }
   const collect = (payloads: readonly unknown[]): DirectCompletionContent | undefined => {
     const textParts: string[] = [];
@@ -441,6 +439,11 @@ export async function deliverCompletionDirect(params: {
       agentId,
       conversationType: "direct",
       content: content ?? "",
+      ...(params.contentKind === "failed_notice"
+        ? {
+            payloads: [createMissingReplyNotice()],
+          }
+        : {}),
       ...(mediaUrls.length > 0 ? { mediaUrls } : {}),
       ...(audioAsVoice ? { asVoice: true } : {}),
       idempotencyKey,
@@ -461,11 +464,15 @@ export async function deliverCompletionDirect(params: {
           // Bookkeeping failure cannot make a fully sent result retryable.
         });
       },
-      mirror: {
-        sessionKey: params.requesterSessionKey,
-        agentId,
-        idempotencyKey,
-      },
+      ...(params.contentKind === "failed_notice"
+        ? {}
+        : {
+            mirror: {
+              sessionKey: params.requesterSessionKey,
+              agentId,
+              idempotencyKey,
+            },
+          }),
     });
     if (committedDelivery) {
       return committedDelivery;

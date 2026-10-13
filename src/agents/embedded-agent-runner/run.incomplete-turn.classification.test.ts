@@ -187,9 +187,9 @@ describe("incomplete-turn payload resolution", () => {
       lastAssistant: undefined,
       toolMetas: [{ toolName: "bash", meta: "workspace" }],
     };
-    expect(warning(attempt)).toContain("couldn't generate a response");
+    expect(warning(attempt)).toBe("No answer was returned.");
     expect(warning(attempt, { aborted: true, externalAbort: true })).toBeNull();
-    expect(warning(attempt, { aborted: true })).toContain("couldn't generate a response");
+    expect(warning(attempt, { aborted: true })).toBe("No answer was returned.");
   });
 
   it("allows a same-prompt retry only for replay-safe missing assistant turns", () => {
@@ -220,7 +220,7 @@ describe("incomplete-turn payload resolution", () => {
         lastAssistant: assistant({ content: thinking() }),
       },
       1,
-      "couldn't generate a response",
+      "No answer was returned.",
     ],
     [
       "empty token-limited answer",

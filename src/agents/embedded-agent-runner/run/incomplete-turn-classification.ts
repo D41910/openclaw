@@ -1,6 +1,7 @@
 import { asPositiveFiniteNumber } from "@openclaw/normalization-core/number-coercion";
 import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/string-coerce";
 import { getReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
+import { isSilentReplyTokenOnly } from "../../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import type { AssistantMessage } from "../../../llm/types.js";
 import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
@@ -233,11 +234,10 @@ export function classifyAssistantTurn(params: {
   >;
 }) {
   const assistant = resolveCurrentAttemptAssistant(params.attempt);
-  const output = parseReplyDirectives(
-    assistant
-      ? resolveRawAssistantAnswerText(assistant)
-      : joinAssistantTexts(params.attempt.assistantTexts),
-  );
+  const rawAnswerText = assistant
+    ? resolveRawAssistantAnswerText(assistant)
+    : joinAssistantTexts(params.attempt.assistantTexts);
+  const output = parseReplyDirectives(rawAnswerText);
   const visibleText = output.text.trim();
   const reasoningOnly = Boolean(
     assistant && assessLastAssistantMessage(assistant) === "incomplete-text",
@@ -254,7 +254,9 @@ export function classifyAssistantTurn(params: {
   return {
     assistant,
     visibleText,
-    silent: output.isSilent,
+    silent:
+      isSilentReplyTokenOnly(rawAnswerText) &&
+      !assistant?.content.some((block) => block.type === "toolCall"),
     reasoningOnly,
     emptyResponse: nonVisibleEligibleForSilentReply && !reasoningOnly,
     nonVisibleEligibleForSilentReply,

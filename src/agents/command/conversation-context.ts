@@ -9,11 +9,10 @@ import { prepareReplyConversation } from "../../auto-reply/reply/prompt-session-
 import { resolveSessionStableReplyMode } from "../../auto-reply/reply/session-stable-reply-mode.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
-import { resolveSilentReplySettings } from "../../config/silent-reply.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { buildDeliveryFormatPrompt } from "../../infra/outbound/delivery-format-prompt.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../../routing/session-key.js";
-import { isSyntheticSourceReplyTurn } from "../reply-completion.js";
+import { isSyntheticSourceReplyTurn, resolveCommandReplyExpectation } from "../reply-completion.js";
 import type { AgentCommandOpts, AgentRunContext } from "./types.js";
 
 /** Reuse conversation guidance without borrowing the originating sender's authority. */
@@ -66,13 +65,16 @@ export async function prepareCommandConversationContext(params: {
         sessionAgentId,
         sessionKey,
       }),
-      silentReplyPolicy: resolveSilentReplySettings({
-        cfg,
-        sessionKey,
-        surface: ctx.Surface ?? ctx.Provider,
-        conversationType: shared ? "group" : "direct",
-      }).policy,
-      silentToken: SILENT_REPLY_TOKEN,
+      silentToken:
+        resolveCommandReplyExpectation({
+          cfg,
+          opts,
+          sessionEntry,
+          sessionKey,
+          messageChannel: runContext.messageChannel,
+        }) !== "result-required"
+          ? SILENT_REPLY_TOKEN
+          : undefined,
     });
     if (sourceContext) {
       // Metadata describes the conversation; delivery preflight owns formatting.

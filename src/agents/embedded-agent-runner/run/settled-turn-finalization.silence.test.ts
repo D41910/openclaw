@@ -51,6 +51,7 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
     },
     { name: "unconfirmed receipt", expectation: "required", delivery: "unknown", phased: false },
     { name: "optional helper", expectation: "optional", delivery: "missing", phased: false },
+    { name: "private result", expectation: "result-required", delivery: "missing", phased: false },
   ] as const)(
     "settles $name followed by NO_REPLY without replaying tools",
     async ({ expectation, delivery, phased }) => {
@@ -137,8 +138,7 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
 
       const result = await prepareTerminalWithSettledTurnFinalization(input);
 
-      const pendingDuringRecovery = delivery === "pending-during-recovery";
-      if (expectation === "required" && (delivery === "missing" || pendingDuringRecovery)) {
+      if (expectation === "result-required") {
         expect(backendMocks.runSettledFinalization).toHaveBeenCalledOnce();
         const [preparedAttempt] = backendMocks.runSettledFinalization.mock.calls[0] ?? [];
         expect(preparedAttempt).toMatchObject({
@@ -148,12 +148,10 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
           suppressNextUserMessagePersistence: true,
         });
         expect(result.finalizationOutcome).toBe("answered");
-        expect(result.prepared.payloadsWithToolMedia).toEqual(
-          pendingDuringRecovery ? [] : [expect.objectContaining({ text: finalText })],
-        );
-        expect(result.prepared.replyDeliveryState).toBe(
-          pendingDuringRecovery ? "pending" : "missing",
-        );
+        expect(result.prepared.payloadsWithToolMedia).toEqual([
+          expect.objectContaining({ text: finalText }),
+        ]);
+        expect(result.prepared.replyDeliveryState).toBe("missing");
       } else {
         expect(backendMocks.runSettledFinalization).not.toHaveBeenCalled();
         expect(result.finalizationOutcome).toBe("not-attempted");

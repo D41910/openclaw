@@ -80,20 +80,20 @@ describe("sanitizePendingFinalDeliveryText", () => {
 
   it("drops silent reply sentinel payloads", () => {
     expect(sanitizePendingFinalDeliveryText(" NO_REPLY ")).toBe("");
-    expect(sanitizePendingFinalDeliveryText('"NO_REPLY"')).toBe("");
-    expect(sanitizePendingFinalDeliveryText('{"action":"NO_REPLY"}')).toBe("");
+    expect(sanitizePendingFinalDeliveryText('"NO_REPLY"')).toBe('"NO_REPLY"');
+    expect(sanitizePendingFinalDeliveryText('{"action":"NO_REPLY"}')).toBe('{"action":"NO_REPLY"}');
   });
 
-  it("strips mixed silent reply sentinels like normal delivery", () => {
-    expect(sanitizePendingFinalDeliveryText("NO_REPLYThe user is saying hello")).toBe(
-      "The user is saying hello",
-    );
-    expect(sanitizePendingFinalDeliveryText("HEARTBEAT_OK NO_REPLY")).toBe("HEARTBEAT_OK");
-  });
+  it.each(["NO_REPLYThe user is saying hello", "HEARTBEAT_OK NO_REPLY"])(
+    "preserves mixed silent tokens in recovery text: %s",
+    (text) => {
+      expect(sanitizePendingFinalDeliveryText(text)).toBe(text);
+    },
+  );
 
-  it("strips newline-separated leading silent tokens from recovery text", () => {
-    expect(sanitizePendingFinalDeliveryText("NO_REPLY\n\nThe user is saying hello")).toBe(
-      "The user is saying hello",
+  it("removes one leading control line before preserving the recovery answer", () => {
+    expect(sanitizePendingFinalDeliveryText("NO_REPLY\nAnswer.\n    Code.")).toBe(
+      "Answer.\n    Code.",
     );
   });
 });

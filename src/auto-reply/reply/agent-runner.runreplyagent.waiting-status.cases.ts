@@ -82,7 +82,15 @@ export function registerWaitingStatusCases({
       label: "explicit acknowledgment",
       meta: { yielded: true, yieldAcknowledgment: "Research started; results will follow." },
     },
-  ])("delivers one waiting status for $label", async ({ meta }) => {
+    {
+      label: "silent yield with an unsent acknowledgment",
+      meta: {
+        yielded: true,
+        yieldAcknowledgment: "Unsent confirmation",
+        terminalReply: { disposition: "silent" as const },
+      },
+    },
+  ])("only delivers an authored waiting status for $label", async ({ meta }) => {
     await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
       payloads: [],
       meta: { durationMs: 0, ...meta },
@@ -91,19 +99,17 @@ export function registerWaitingStatusCases({
     const { run } = createMinimalRun({ opts: { onPendingContinuation } });
 
     const result = await run();
-    expect(result).toMatchObject({
-      text:
-        meta.yieldAcknowledgment ??
-        "I’m continuing this work and will send the result when it is ready.",
-      replyToId: "msg",
-    });
     expect(onPendingContinuation).toHaveBeenCalledOnce();
-    assert(result && !Array.isArray(result));
-    const metadata = getReplyPayloadMetadata(result);
-    expect(metadata).toMatchObject({
-      continuationStatus: true,
-      deliverDespiteSourceReplySuppression: true,
-    });
+    if ("yieldAcknowledgment" in meta && !("terminalReply" in meta)) {
+      expect(result).toMatchObject({ text: meta.yieldAcknowledgment, replyToId: "msg" });
+      assert(result && !Array.isArray(result));
+      expect(getReplyPayloadMetadata(result)).toMatchObject({
+        continuationStatus: true,
+        deliverDespiteSourceReplySuppression: true,
+      });
+    } else {
+      expect(result).toBeUndefined();
+    }
   });
 
   it.each([
@@ -146,7 +152,11 @@ export function registerWaitingStatusCases({
           });
           return {
             payloads: [],
-            meta: { durationMs: 0, continuationPending: true },
+            meta: {
+              durationMs: 0,
+              continuationPending: true,
+              yieldAcknowledgment: "Generating your image.",
+            },
             acceptedSessionSpawns,
           };
         },
@@ -159,7 +169,7 @@ export function registerWaitingStatusCases({
 
       const result = await run();
       expect(result).toMatchObject({
-        text: "I’m continuing this work and will send the result when it is ready.",
+        text: "Generating your image.",
       });
       // Delivering the status must not require a child that never owns the reply.
       await onPendingContinuation.mock.calls[0]?.[0]?.settle(true);
@@ -322,7 +332,7 @@ export function registerWaitingStatusCases({
   );
 
   it.each([
-    { label: "default status" },
+    { label: "no acknowledgment", warning: true },
     { label: "explicit status", acknowledgment: "Research started; results will follow." },
     {
       label: "room event",
@@ -345,10 +355,7 @@ export function registerWaitingStatusCases({
     });
 
     await expect(run()).resolves.toMatchObject({
-      text: testCase.warning
-        ? "⚠️ Bash failed"
-        : (testCase.acknowledgment ??
-          "I’m continuing this work and will send the result when it is ready."),
+      text: testCase.warning ? "⚠️ Bash failed" : testCase.acknowledgment,
       ...(testCase.warning ? { isError: true } : {}),
       replyToId: "msg",
     });

@@ -3,13 +3,11 @@ import {
   parseInlineDirectives,
   stripInlineDirectiveTagsForDelivery,
 } from "../../utils/directive-tags.js";
+import { isSilentReplyPrefixText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
-  isSilentReplyPrefixText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-  startsWithSilentToken,
-  stripLeadingSilentToken,
-} from "../tokens.js";
+  isSilentReplyTokenOnly,
+  stripMixedSilentReplyTokens,
+} from "./mixed-silent-reply-tokens.js";
 import type { ReplyDirectiveParseResult } from "./reply-directives.js";
 
 type ConsumeOptions = {
@@ -104,11 +102,12 @@ export function createStreamingDirectiveAccumulator() {
     let text = parsed && (parsed.hasReplyTag || parsed.hasAudioTag) ? parsed.text : combined;
     const silentToken = options?.silentToken ?? SILENT_REPLY_TOKEN;
     const isSilent =
-      isSilentReplyText(text, silentToken) || isSilentReplyPrefixText(text, silentToken);
+      isSilentReplyTokenOnly(text, silentToken) ||
+      (!options?.final && isSilentReplyPrefixText(text, silentToken));
     if (isSilent) {
       text = "";
-    } else if (startsWithSilentToken(text, silentToken)) {
-      text = stripLeadingSilentToken(text, silentToken);
+    } else {
+      text = stripMixedSilentReplyTokens(text, silentToken) ?? text;
     }
     if (hadPendingTail && heldSeparator && text.startsWith("[")) {
       text = heldSeparator + text;

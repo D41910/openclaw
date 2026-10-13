@@ -7,6 +7,7 @@ import {
   clearActiveEmbeddedRun,
   setActiveEmbeddedRun,
 } from "../../agents/embedded-agent-runner/runs.js";
+import { resolveReplyCompletion } from "../../agents/reply-completion.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { PluginHookReplyDispatchEvent } from "../../plugins/hook-types.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
@@ -27,6 +28,7 @@ import { runGroupThread } from "../group-thread.js";
 import { setReplyPayloadMetadata } from "../reply-payload.js";
 import type { MsgContext } from "../templating.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
+import { buildMissingReplyPayload } from "./agent-runner-failure-reply.js";
 import { markCommandSessionMetadataChanged } from "./command-session-metadata.js";
 import {
   createDispatcher,
@@ -663,9 +665,27 @@ describe("dispatchReplyFromConfig", () => {
   });
 
   it.each([
-    ["embedded", { assistantMessageIndex: 7 }],
-    ["runtime-owned", { assistantTranscriptOwned: true }],
-  ])("does not mirror %s finals with a runtime transcript owner", async (_name, metadata) => {
+    [
+      "embedded",
+      () =>
+        setReplyPayloadMetadata({ text: "Persisted runtime reply" }, { assistantMessageIndex: 7 }),
+    ],
+    [
+      "runtime-owned",
+      () =>
+        setReplyPayloadMetadata(
+          { text: "Persisted runtime reply" },
+          { assistantTranscriptOwned: true },
+        ),
+    ],
+    [
+      "missing-answer notice",
+      () =>
+        expectDefined(
+          buildMissingReplyPayload({ completion: resolveReplyCompletion("required", "empty") }),
+        ),
+    ],
+  ])("does not mirror %s finals with a runtime transcript owner", async (_name, payload) => {
     setNoAbort();
     const dispatcher = createDispatcher();
     transcriptMocks.appendAssistantMessageToSessionTranscript.mockClear();
@@ -680,8 +700,7 @@ describe("dispatchReplyFromConfig", () => {
       }),
       cfg: emptyConfig,
       dispatcher,
-      replyResolver: async () =>
-        setReplyPayloadMetadata({ text: "Persisted runtime reply" }, metadata),
+      replyResolver: async () => payload(),
     });
     await settleReplyDispatcher({ dispatcher });
 

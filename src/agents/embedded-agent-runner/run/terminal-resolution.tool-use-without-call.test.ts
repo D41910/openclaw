@@ -77,7 +77,7 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
     }
     expect(exhausted.result.meta.error).toMatchObject({ kind: "incomplete_turn" });
     expect(exhausted.result.payloads).toEqual([
-      { text: "⚠️ Agent couldn't generate a response. Please try again.", isError: true },
+      { text: "No answer was returned.", isError: true, isStatusNotice: true },
     ]);
   });
 });

@@ -2171,8 +2171,16 @@ describe("CLI attempt execution", () => {
         expectMockArgFields(
           selectedRunner,
           {
-            terminalReplyExpectation: allowSilence ? "optional" : "required",
-            silentReplyPromptMode: allowSilence ? undefined : "none",
+            terminalReplyExpectation:
+              privateCompletion || sessionKey.includes(":subagent:") || messageChannel === "webchat"
+                ? "result-required"
+                : allowSilence
+                  ? "optional"
+                  : "required",
+            silentReplyPromptMode:
+              privateCompletion || sessionKey.includes(":subagent:") || messageChannel === "webchat"
+                ? "none"
+                : undefined,
           },
           selectedRunner.mock.calls.length - 1,
         );
@@ -2277,7 +2285,7 @@ describe("CLI attempt execution", () => {
     });
 
     expect(embeddedArg.suppressLiveStreamOutput).toBe(false);
-    expect(embeddedArg.terminalReplyExpectation).toBe("required");
+    expect(embeddedArg.terminalReplyExpectation).toBe("result-required");
     expect(embeddedArg.cronCreatorAuthorityCapability).toBe(capability);
     const callback = embeddedArg.onExecutionStarted;
     if (typeof callback !== "function") {

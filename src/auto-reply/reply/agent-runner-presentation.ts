@@ -5,17 +5,13 @@ import { logVerbose } from "../../globals.js";
 import { createStructuredOutboundPayloadPlan } from "../../infra/outbound/payloads.js";
 import type { PartialReplyPayload } from "../get-reply-options.types.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
-import {
-  HEARTBEAT_TOKEN,
-  isSilentReplyPayloadText,
-  isSilentReplyPrefixText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-  startsWithSilentToken,
-  stripLeadingSilentToken,
-} from "../tokens.js";
+import { HEARTBEAT_TOKEN, isSilentReplyPrefixText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { BlockReplyContext, GetReplyOptions, ReplyPayload } from "../types.js";
 import type { AgentTurnParams } from "./agent-runner-execution.types.js";
+import {
+  isSilentReplyTokenOnly,
+  stripMixedSilentReplyTokens,
+} from "./mixed-silent-reply-tokens.js";
 import { createBlockReplyDeliveryHandler, type DirectBlockDelivery } from "./reply-delivery.js";
 import type { ReplyMediaContext } from "./reply-media-paths.js";
 import { hasCommittedReplyOperationOutcome } from "./reply-run-registry.js";
@@ -59,14 +55,13 @@ export function createAgentTurnPresentation(params: {
       text = stripped.text;
     }
     if (
-      isSilentReplyText(text, SILENT_REPLY_TOKEN) ||
-      isSilentReplyPrefixText(text, SILENT_REPLY_TOKEN) ||
+      isSilentReplyTokenOnly(text, SILENT_REPLY_TOKEN) ||
       isSilentReplyPrefixText(text, HEARTBEAT_TOKEN)
     ) {
       return { skip: true };
     }
-    if (text && startsWithSilentToken(text, SILENT_REPLY_TOKEN)) {
-      text = stripLeadingSilentToken(text, SILENT_REPLY_TOKEN);
+    if (text) {
+      text = stripMixedSilentReplyTokens(text, SILENT_REPLY_TOKEN) ?? text;
     }
     if (!text) {
       return reply.hasMedia ? { text: undefined, skip: false } : { skip: true };
@@ -81,7 +76,7 @@ export function createAgentTurnPresentation(params: {
     const preview = payload.text?.trim();
     const unwrapped = preview?.replace(/^\p{P}+/u, "").trimStart();
     return unwrapped === SILENT_REPLY_TOKEN[0] ||
-      (unwrapped !== preview && isSilentReplyPrefixText(unwrapped, SILENT_REPLY_TOKEN))
+      isSilentReplyPrefixText(unwrapped, SILENT_REPLY_TOKEN)
       ? { skip: true }
       : classifyReplyText(payload);
   };
@@ -99,7 +94,7 @@ export function createAgentTurnPresentation(params: {
       ? renderUserFacingText(text, { errorContext: true, conversationContext, streaming: true })
       : sanitizeUserFacingText(text, { conversationContext, streaming: true });
     return sanitized.trim()
-      ? { text: sanitized, skip: isSilentReplyPayloadText(sanitized, SILENT_REPLY_TOKEN) }
+      ? { text: sanitized, skip: isSilentReplyTokenOnly(sanitized, SILENT_REPLY_TOKEN) }
       : { skip: true };
   };
 

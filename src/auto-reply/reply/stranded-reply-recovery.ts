@@ -6,7 +6,9 @@ import {
   isReplyPayloadTerminalContent,
   markReplyPayloadForSourceSuppressionDelivery,
 } from "../reply-payload.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
+import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 import {
   classifyPrivateMessageToolFinal,
   shouldClassifyPrivateMessageToolFinal,
@@ -43,6 +45,7 @@ export function resolveStrandedReplyRecovery(params: {
 }): StrandedReplyRecovery {
   // Host-owned payloads can still be awaiting transport when completion bookkeeping runs.
   if (
+    isSilentReplyTokenOnly(params.finalText, SILENT_REPLY_TOKEN) ||
     !shouldClassifyPrivateMessageToolFinal(params) ||
     params.payloads.some(
       (payload) =>

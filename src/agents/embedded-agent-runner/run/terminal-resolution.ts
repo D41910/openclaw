@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { isCompactionReplayCheckpoint } from "@openclaw/ai/transports";
-import { setReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
+import {
+  retainSilentFinalPayloads,
+  setReplyPayloadMetadata,
+} from "../../../auto-reply/reply-payload.js";
 import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { freezeDiagnosticTraceContext } from "../../../infra/diagnostic-trace-context.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
@@ -12,10 +15,14 @@ import {
   projectAgentRunAttemptTerminal,
 } from "../../agent-run-terminal-outcome.js";
 import type { AuthProfileFailureReason, AuthProfileStore } from "../../auth-profiles.js";
-import { AGENT_LANE_SUBAGENT } from "../../lanes.js";
 import type { ResolvedProviderAuth } from "../../model-auth.js";
-import { resolveReplyExpectation } from "../../reply-completion.js";
-import type { ReplyDeliveryState } from "../../reply-completion.js";
+import {
+  createMissingReplyNotice,
+  MISSING_REPLY_NOTICE_TEXT,
+  resolveReplyExpectation,
+  shouldDeliverMissingReplyNotice,
+  type ReplyDeliveryState,
+} from "../../reply-completion.js";
 import { resolveSourceReplyDelivery } from "../delivery-evidence.js";
 import { log } from "../logger.js";
 import type { EmbeddedRunReplayState } from "../replay-state.js";
@@ -32,7 +39,10 @@ import {
 } from "./auth-profile-success.js";
 import type { EmbeddedRunContextRecoveryState } from "./context-recovery-state.js";
 import { resolveFinalAssistantVisibleText } from "./helpers.js";
-import { countSettledTurnDeliveryPayloads } from "./incomplete-turn-classification.js";
+import {
+  classifyAssistantTurn,
+  countSettledTurnDeliveryPayloads,
+} from "./incomplete-turn-classification.js";
 import {
   DEFAULT_EMPTY_RESPONSE_RETRY_LIMIT,
   DEFAULT_REASONING_ONLY_RETRY_LIMIT,
@@ -151,7 +161,7 @@ export function resolveSettledTurnFinalizationRequest(input: {
     modelId: input.activeErrorContext.model,
     modelApi: input.modelApi,
     executionContract: input.executionContract,
-    allowEmptyStopContinuation: resolveReplyExpectation(input.runParams) === "required",
+    allowEmptyStopContinuation: true,
     payloadCount,
     hasTerminalToolPresentation: input.hasTerminalToolPresentation,
     aborted: terminalAborted,
@@ -203,12 +213,7 @@ export async function resolveEmbeddedRunTerminal(input: {
   attemptAuthProfileStore: AuthProfileStore;
   apiKeyInfo: ResolvedProviderAuth | null;
   agentHarnessId: string;
-  settledTurnFinalizationOutcome:
-    | "not-attempted"
-    | "answered"
-    | "completed-empty"
-    | "failed"
-    | "silent-fallback";
+  settledTurnFinalizationOutcome: "not-attempted" | "answered" | "failed";
   pluginHarnessOwnsTransport: boolean;
   pluginHarnessOwnsAuthBootstrap: boolean;
   traceAttempts: TraceAttempt[];
@@ -252,16 +257,16 @@ export async function resolveEmbeddedRunTerminal(input: {
   // its settled side effects cascade into any ordinary retry family.
   const settledTurnFinalizationAttempted = input.settledTurnFinalizationOutcome !== "not-attempted";
   const emptyAssistantReplyIsSilent = shouldTreatEmptyAssistantReplyAsSilent({
-    // The host intentionally suppressed its cron placeholder, not a required model answer.
-    terminalReplyExpectation:
-      input.settledTurnFinalizationOutcome === "silent-fallback"
-        ? "optional"
-        : resolveReplyExpectation(runParams),
+    terminalReplyExpectation: resolveReplyExpectation(runParams),
     ...terminalFacts,
   });
+  const authoredSilenceRequiresResult =
+    resolveReplyExpectation(runParams) === "result-required" &&
+    classifyAssistantTurn(terminalFacts).silent;
   const replyRecoverySuppressed =
-    emptyAssistantReplyIsSilent ||
-    resolveSourceReplyDelivery(attempt, input.prepared.replyDeliveryState) !== "missing";
+    !authoredSilenceRequiresResult &&
+    (emptyAssistantReplyIsSilent ||
+      resolveSourceReplyDelivery(attempt, input.prepared.replyDeliveryState) !== "missing");
   const retryInput = {
     provider: input.activeErrorContext.provider,
     modelId: input.activeErrorContext.model,
@@ -322,19 +327,22 @@ export async function resolveEmbeddedRunTerminal(input: {
     );
     return { action: "retry" };
   }
-  const completedEmptyFinalization = input.settledTurnFinalizationOutcome === "completed-empty";
   const terminalAssistantError = isTerminalAssistantError(input.attemptAssistant);
-  const incompleteTurnText =
-    replyRecoverySuppressed ||
-    (completedEmptyFinalization && resolveReplyExpectation(runParams) === "optional")
-      ? null
-      : resolveIncompleteTurnPayloadText({
-          ...terminalFacts,
-          externalAbort: externalAbort || signalOwnedInterruption,
-          hadPotentialSideEffects: input.replayState.hadPotentialSideEffects,
-          hasIntentionalTerminalCompletion: intentionalTerminalCompletion,
-          terminalAuthFailure: input,
-        });
+  const incompleteTurnText = replyRecoverySuppressed
+    ? null
+    : (resolveIncompleteTurnPayloadText({
+        ...terminalFacts,
+        externalAbort: externalAbort || signalOwnedInterruption,
+        hadPotentialSideEffects: input.replayState.hadPotentialSideEffects,
+        hasIntentionalTerminalCompletion: intentionalTerminalCompletion,
+        terminalAuthFailure: input,
+      }) ??
+      ((authoredSilenceRequiresResult || settledTurnFinalizationAttempted) &&
+      payloadCount === 0 &&
+      !terminalInterrupted &&
+      !attempt.lastToolError
+        ? MISSING_REPLY_NOTICE_TEXT
+        : null));
   const incompleteTurnFallbackSafe = Boolean(
     incompleteTurnText &&
     !terminalInterrupted &&
@@ -375,7 +383,7 @@ export async function resolveEmbeddedRunTerminal(input: {
   sessionPromptState.clearCompactionContinuation();
 
   if (reasoningOnlyRetriesExhausted && !input.prepared.finalAssistantVisibleText) {
-    const incompletePayloadText = "⚠️ Agent couldn't generate a response. Please try again.";
+    const incompletePayloadText = MISSING_REPLY_NOTICE_TEXT;
     log.warn(
       `reasoning-only retries exhausted: ${modelLogContext} attempts=${retryState.reasoningOnlyAttempts}/${DEFAULT_REASONING_ONLY_RETRY_LIMIT} — surfacing incomplete-turn error`,
     );
@@ -476,7 +484,7 @@ async function completeEmbeddedRun(
             projectAgentRunAttemptTerminal(input.attempt.terminal).promptError ??
               input.terminalState.outcome.error ??
               input.incompleteTurnText ??
-              "Agent couldn't generate a response.",
+              MISSING_REPLY_NOTICE_TEXT,
           ),
           fallbackSafe: input.incompleteTurnFallbackSafe ?? false,
           terminalPresentation: input.terminalToolPresentation !== undefined,
@@ -565,11 +573,6 @@ async function completeEmbeddedRun(
       attempt: input.attempt,
       run: input.runParams,
     });
-  // A subagent's blank success is delivery evidence; nonblank classified silence stays silent.
-  // The lifecycle owner needs that distinction to close only intentional non-delivery.
-  const keepEmptyReplySilent =
-    input.runParams.lane !== AGENT_LANE_SUBAGENT ||
-    Boolean(input.prepared.finalAssistantRawText?.trim());
   // Label only partial assistant prose: terminal tool output already completes
   // the reply, and a silent cron result must not gain a visible notice.
   const hasPartialAssistantText =
@@ -580,20 +583,29 @@ async function completeEmbeddedRun(
   // Existing visible payloads already avoid the silent-park symptom. The diagnostic
   // fills only an otherwise empty yielded turn and must not duplicate visible output.
   // A length stop delivers partial text, so it is labeled instead of dropped. (#76477)
-  const terminalPayloads =
-    input.incompleteTurnText !== undefined
+  const isMissingReplyNotice =
+    input.incompleteTurnText?.startsWith(MISSING_REPLY_NOTICE_TEXT) === true;
+  const suppressMissingReplyNotice =
+    isMissingReplyNotice && !shouldDeliverMissingReplyNotice(input.runParams);
+  const incompleteText =
+    input.terminalToolPresentation && input.incompleteTurnText !== undefined
+      ? input.terminalToolPresentation.concat("\n\n", input.incompleteTurnText)
+      : input.incompleteTurnText;
+  const terminalPayloads = suppressMissingReplyNotice
+    ? retainSilentFinalPayloads(input.payloadsForTerminalPath ?? [])
+    : incompleteText !== undefined
       ? [
-          {
-            text: input.terminalToolPresentation
-              ? input.terminalToolPresentation.concat("\n\n", input.incompleteTurnText)
-              : input.incompleteTurnText,
-            isError: true,
-          },
+          isMissingReplyNotice
+            ? createMissingReplyNotice(incompleteText)
+            : { text: incompleteText, isError: true },
         ]
       : error
         ? input.payloadsForTerminalPath
         : input.emptyAssistantReplyIsSilent
-          ? [{ text: SILENT_REPLY_TOKEN }]
+          ? [
+              ...retainSilentFinalPayloads(input.payloadsForTerminalPath ?? []),
+              { text: SILENT_REPLY_TOKEN },
+            ]
           : input.payloadsForTerminalPath?.length
             ? isTruncatedPartialReply
               ? [
@@ -626,6 +638,9 @@ async function completeEmbeddedRun(
         livenessState,
         stopReason,
         agentHarnessResultClassification: input.attempt.agentHarnessResultClassification,
+        ...(input.emptyAssistantReplyIsSilent
+          ? { terminalReply: { disposition: "silent" as const } }
+          : {}),
         ...(error
           ? { error }
           : {
@@ -634,7 +649,7 @@ async function completeEmbeddedRun(
                 ? { yieldAcknowledgment: input.attempt.yieldAcknowledgment }
                 : {}),
               ...(acceptedSessionSpawnContinuation ? { continuationPending: true as const } : {}),
-              ...(input.emptyAssistantReplyIsSilent && keepEmptyReplySilent
+              ...(input.emptyAssistantReplyIsSilent
                 ? { terminalReplyKind: "silent-empty" as const }
                 : {}),
               ...(input.intentionalTerminalCompletion

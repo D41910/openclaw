@@ -21,6 +21,7 @@ import { renderAssistantRequestFailureCopy } from "../../failover/assistant-requ
 import { resolveReplyFailoverFacts } from "../../failover/request-error-facts.js";
 import { renderAuthProfileFailoverCopy } from "../../failover/user-copy.js";
 import { buildProviderAuthRecoveryHint } from "../../provider-auth-recovery-hint.js";
+import { MISSING_REPLY_NOTICE_TEXT } from "../../reply-completion.js";
 import type { AgentMessage } from "../../runtime/index.js";
 import {
   hasCommittedMessagingToolDeliveryEvidence,
@@ -175,7 +176,7 @@ export function resolveIncompleteTurnPayloadText(params: {
         }))
       : undefined);
   if (params.hadPotentialSideEffects || params.attempt.replayMetadata.hadPotentialSideEffects) {
-    return `${promptFailureText ?? "⚠️ Agent couldn't generate a response."} Note: some tool actions may have already been executed — please verify before retrying.`;
+    return `${promptFailureText ?? MISSING_REPLY_NOTICE_TEXT} Note: some tool actions may have already been executed — please verify before retrying.`;
   }
   if (preflightFailureText !== undefined) {
     return preflightFailureText;
@@ -202,7 +203,7 @@ export function resolveIncompleteTurnPayloadText(params: {
     promptFailureText ??
     (stopReason === "length"
       ? "⚠️ The model reached its output token limit before generating an answer. Please try again."
-      : "⚠️ Agent couldn't generate a response. Please try again.")
+      : MISSING_REPLY_NOTICE_TEXT)
   );
 }
 

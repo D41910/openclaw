@@ -114,6 +114,9 @@ describe("runReplyAgent private message_tool_only final warning (#85714)", () =>
         stopReason: params.stopReason,
         yielded: params.pendingContinuation,
         finalAssistantRawText: params.finalAssistantRawText,
+        ...(params.finalAssistantRawText?.trim() === "NO_REPLY"
+          ? { terminalReply: { disposition: "silent" as const } }
+          : {}),
       },
       messagingToolSentTargets: params.messagingToolSentTargets,
       messagingToolSourceReplyPayloads: params.messagingToolSourceReplyPayloads,
@@ -397,13 +400,9 @@ describe("runReplyAgent private message_tool_only final warning (#85714)", () =>
       });
       const payloads = normalizeReplyPayloads(result);
       const failures = payloads.filter((payload) => payload.isError === true);
-      if (terminalReplyExpectation === "required") {
-        expect(failures).toEqual([expect.objectContaining({ text: expect.any(String) })]);
-        expect(onDeliberateSilentTerminalReply).not.toHaveBeenCalled();
-      } else {
-        expect(failures).toEqual([]);
-        expect(onDeliberateSilentTerminalReply).toHaveBeenCalledOnce();
-      }
+      expect(failures).toEqual([]);
+      expect(payloads).toEqual([]);
+      expect(onDeliberateSilentTerminalReply).toHaveBeenCalledOnce();
       expect(warnPrivateFinalSpy).not.toHaveBeenCalled();
       expect(vi.mocked(enqueueFollowupRun)).not.toHaveBeenCalled();
     },

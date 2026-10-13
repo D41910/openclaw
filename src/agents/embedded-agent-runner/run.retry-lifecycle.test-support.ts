@@ -39,7 +39,7 @@ describe("direct embedded retry lifecycle", () => {
       ["reasoning", "empty", "whitespace", "zero-width"].map((output) => ({ compact, output })),
     ),
   )(
-    "publishes an incomplete-turn failure for $output output (compaction=$compact)",
+    "records private $output failure without a chat notice (compaction=$compact)",
     async ({ compact, output }) => {
       useOpenAIPlatformAuthFixture();
       const { buildEmbeddedRunPayloads } =
@@ -88,10 +88,11 @@ describe("direct embedded retry lifecycle", () => {
         provider: "openai",
         model: "gpt-5.6-sol",
         agentHarnessRuntimeOverride: "openclaw",
+        terminalReplyExpectation: "result-required",
         onAgentEvent,
       });
-      const notice = "⚠️ Agent couldn't generate a response. Please try again.";
-      expect(result.payloads).toEqual([{ text: notice, isError: true }]);
+      const notice = "No answer was returned.";
+      expect(result.payloads).toBeUndefined();
       expect(result.meta).toMatchObject({
         aborted: false,
         stopReason: "error",

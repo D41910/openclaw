@@ -4,7 +4,11 @@ import { MALFORMED_TOOL_CALL_ARGUMENTS_ERROR_CODE } from "../../../llm/types.js"
 import { isTerminalAssistantError } from "../../../llm/utils/retry.js";
 import { hasAcceptedSessionSpawn } from "../../accepted-session-spawn.js";
 import { isPreDispatchToolCallRejectionMessage } from "../../failover/message-patterns.js";
-import { resolveReplyCompletion, resolveReplyExpectation } from "../../reply-completion.js";
+import {
+  resolveReplyCompletion,
+  resolveReplyExpectation,
+  type ReplyExpectation,
+} from "../../reply-completion.js";
 import { TOOL_FAILURE_INSTRUCTION } from "../../tool-outcome-instructions.js";
 import { resolveSourceReplyDelivery } from "../delivery-evidence.js";
 import { isZeroUsageEmptyStopAssistantTurn } from "../empty-assistant-turn.js";
@@ -129,27 +133,28 @@ function shouldSkipNonVisibleTurnRetry(params: {
   );
 }
 
-/** Allows configured silent handling for replay-safe empty, reasoning-only, or explicit silent turns. */
+/** Explicit authored silence is independent of prior external effects and delivery custody. */
 export function shouldTreatEmptyAssistantReplyAsSilent(params: {
   allowEmptyAssistantReplyAsSilent?: boolean;
-  onlyExplicitSilentReply?: boolean;
-  terminalReplyExpectation?: "required" | "optional";
+  terminalReplyExpectation?: ReplyExpectation;
   payloadCount: number;
   aborted: boolean;
   timedOut: boolean;
   attempt: IncompleteTurnAttempt;
 }): boolean {
+  const assistant = classifyAssistantTurn(params);
   const completion = resolveReplyCompletion(
     resolveReplyExpectation(params),
-    params.payloadCount === 0 ? "empty" : "ready",
+    assistant.silent ? "silent" : params.payloadCount === 0 ? "empty" : "ready",
   );
-  const assistant = classifyAssistantTurn(params);
   return (
     completion.outcome === "silent" &&
-    !shouldSkipNonVisibleTurnRetry({ ...params, tolerateSideEffects: true }) &&
-    resolveSourceReplyDelivery(params.attempt) === "missing" &&
-    (!params.onlyExplicitSilentReply || assistant.silent) &&
-    assistant.nonVisibleEligibleForSilentReply
+    !params.aborted &&
+    !params.timedOut &&
+    params.attempt.terminal.kind !== "failed" &&
+    assistant.silent &&
+    assistant.assistant?.stopReason !== "error" &&
+    assistant.assistant?.stopReason !== "aborted"
   );
 }
 

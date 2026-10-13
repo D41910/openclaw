@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { extractAgentRunText } from "../agent-run-result.js";
 import {
   collectAmbiguousAutomaticMediaUrls,
   collectAutomaticDeliveredMediaUrls,
@@ -319,6 +320,24 @@ describe("agent reply visibility", () => {
       }),
     ).toBe(false);
   });
+
+  it.each(['{"action":"NO_REPLY"}', "NO_REPLY.", "NO_REPLY NO_REPLY", "NO_REPLY The answer."])(
+    "keeps non-token-only text visible: %s",
+    (text) => {
+      const result = { payloads: [{ text }] };
+      expect(hasVisibleAgentPayload(result, { includeSilentReplyPayloads: false })).toBe(true);
+      expect(hasIntentionalSilentAgentPayload(result)).toBe(false);
+      expect(extractAgentRunText(result)).toBe(text);
+      expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
+      expect(
+        isTerminalSilentAssistantMessage({
+          role: "assistant",
+          stopReason: "stop",
+          content: [{ type: "text", text }],
+        }),
+      ).toBe(false);
+    },
+  );
 
   it("classifies terminal silent transcript messages and meaningful tails", () => {
     expect(

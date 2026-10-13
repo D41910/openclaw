@@ -4,15 +4,12 @@ import readline from "node:readline";
 import { safeParseJsonRecord } from "@openclaw/normalization-core/json-coercion";
 import { asOptionalRecord, isRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
-import { messageToolOwnsVisibleReply } from "../../auto-reply/source-reply-delivery-mode.js";
 import {
-  isSilentReplyPrefixText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-  startsWithSilentToken,
-  stripLeadingSilentToken,
-} from "../../auto-reply/tokens.js";
-import { normalizeChatType } from "../../channels/chat-type.js";
+  isSilentReplyTokenOnly,
+  stripMixedSilentReplyTokens,
+} from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
+import { messageToolOwnsVisibleReply } from "../../auto-reply/source-reply-delivery-mode.js";
+import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import {
   isToolCallBlock,
   resolveToolUseId,
@@ -27,56 +24,20 @@ import {
   captureIncognitoSessionSource,
 } from "../../config/sessions/session-incognito-binding.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
-import { resolveSilentReplySettings } from "../../config/silent-reply.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   type ClaudeCliFallbackSeed,
   readClaudeCliFallbackSeed,
 } from "../../gateway/cli-session-history.claude.js";
-import { isSubagentSessionKey } from "../../routing/session-key.js";
-import type { InputProvenance } from "../../sessions/input-provenance.js";
-import { isDeliverableMessageChannel } from "../../utils/message-channel.js";
 import { sleep } from "../../utils/sleep.js";
 import { buildAgentRunTerminalReplySnapshot } from "../agent-run-terminal-reply.js";
 import type { AgentRunTerminalReplySnapshot } from "../agent-run-terminal-reply.types.js";
 import type { ExecApprovalContinuationPromptRange } from "../bash-tools.exec-approval-output.js";
 import { isClaudeToolResultBlockType, isClaudeToolUseBlockType } from "../cli-output-records.js";
 import { cliBackendLog } from "../cli-runner/log.js";
-import { AGENT_LANE_SUBAGENT } from "../lanes.js";
-import type { ReplyExpectation } from "../reply-completion.js";
 import { resolveClaudeCliProjectDirForWorkspace } from "./claude-cli-project-dir.js";
 import type { AgentCommandOpts } from "./types.js";
 
 const CLAUDE_CLI_TRANSCRIPT_MAX_RECORDS = 500;
-
-export function resolveCommandReplyExpectation(params: {
-  cfg: OpenClawConfig;
-  sessionKey?: string;
-  sessionEntry?: Pick<SessionEntry, "chatType">;
-  messageChannel?: string;
-  opts: { lane?: string; privateCompletion?: true; inputProvenance?: InputProvenance };
-}): ReplyExpectation | undefined {
-  if (
-    params.opts.privateCompletion ||
-    params.opts.lane === AGENT_LANE_SUBAGENT ||
-    isSubagentSessionKey(params.sessionKey) ||
-    !isDeliverableMessageChannel(params.messageChannel ?? "")
-  ) {
-    return "required";
-  }
-  if (params.opts.inputProvenance?.kind !== "inter_session") {
-    return undefined;
-  }
-  const chatType = normalizeChatType(params.sessionEntry?.chatType);
-  return resolveSilentReplySettings({
-    cfg: params.cfg,
-    sessionKey: params.sessionKey,
-    surface: params.messageChannel,
-    conversationType: chatType === "channel" ? "group" : chatType,
-  }).policy === "allow"
-    ? "optional"
-    : "required";
-}
 
 function normalizeClaudeCliSessionId(sessionId: string | undefined): string | undefined {
   const trimmed = sessionId?.trim();
@@ -433,7 +394,7 @@ export async function buildClaudeCliFallbackContextPrelude(params: {
   return sections.join("\n");
 }
 
-/** Creates an accumulator that strips ACP silent-reply prefixes while streaming. */
+/** Buffers a possible control token until ACP output identifies silence or ordinary text. */
 export function createAcpVisibleTextAccumulator() {
   let visibleText = "";
   let rawText = "";
@@ -441,17 +402,16 @@ export function createAcpVisibleTextAccumulator() {
     if (!base) {
       return chunk;
     }
-    if (
-      isSilentReplyText(base, SILENT_REPLY_TOKEN) &&
-      !chunk.startsWith(base) &&
-      /^[\p{L}\p{N}]/u.test(chunk)
-    ) {
-      return chunk;
-    }
     if (chunk.startsWith(base) && chunk.length > base.length) {
       return chunk;
     }
     return `${base}${chunk}`;
+  };
+  const flushBufferedText = (): string => {
+    if (!visibleText && !isSilentReplyTokenOnly(rawText)) {
+      visibleText = stripMixedSilentReplyTokens(rawText) ?? rawText;
+    }
+    return visibleText;
   };
 
   return {
@@ -465,14 +425,12 @@ export function createAcpVisibleTextAccumulator() {
         rawText = leadCandidate;
         const trimmedLeadCandidate = leadCandidate.trim();
         if (
-          isSilentReplyText(trimmedLeadCandidate, SILENT_REPLY_TOKEN) ||
-          isSilentReplyPrefixText(trimmedLeadCandidate, SILENT_REPLY_TOKEN)
+          isSilentReplyTokenOnly(trimmedLeadCandidate) ||
+          SILENT_REPLY_TOKEN.startsWith(trimmedLeadCandidate.toUpperCase())
         ) {
           return null;
         }
-        const text = startsWithSilentToken(trimmedLeadCandidate, SILENT_REPLY_TOKEN)
-          ? stripLeadingSilentToken(leadCandidate, SILENT_REPLY_TOKEN)
-          : leadCandidate;
+        const text = stripMixedSilentReplyTokens(leadCandidate) ?? leadCandidate;
         if (!text) {
           return null;
         }
@@ -489,14 +447,14 @@ export function createAcpVisibleTextAccumulator() {
       return { text: visibleText, delta };
     },
     finalize(): string {
-      return visibleText.trim();
+      return flushBufferedText().trim();
     },
     finalizeRaw(): string {
-      return visibleText;
+      return flushBufferedText();
     },
     finalizeReplySnapshot(): AgentRunTerminalReplySnapshot {
       return buildAgentRunTerminalReplySnapshot({
-        visibleText,
+        visibleText: flushBufferedText(),
         rawText: visibleText ? "" : rawText,
       });
     },

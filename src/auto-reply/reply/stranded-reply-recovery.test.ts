@@ -71,6 +71,21 @@ describe("resolveStrandedReplyRecovery", () => {
   const substantiveFinal =
     "This reply is substantive enough to look user-facing. It contains a second sentence so the private-final policy treats it as stranded output.";
 
+  it.each([false, true])("never recovers explicit silence (retry=%s)", (strandedReplyRetry) => {
+    expect(
+      resolveStrandedReplyRecovery({
+        base: createMockFollowupRun({ prompt: "question", strandedReplyRetry }),
+        payloads: [],
+        finalText: " NO_REPLY ",
+        sourceReplyDeliveryMode: "message_tool_only",
+        sendPolicyDenied: false,
+        successfulSourceReplyDelivery: false,
+        isHeartbeat: false,
+        isRoomEvent: false,
+      }),
+    ).toEqual({ kind: "none" });
+  });
+
   it.each([
     { payload: { text: "The recovered answer is ready." }, expected: "none" },
     {

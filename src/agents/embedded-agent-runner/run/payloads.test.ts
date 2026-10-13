@@ -651,6 +651,15 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expect(payloads[0]?.text).toBeUndefined();
   });
 
+  it.each([
+    "NO_REPLY The requested result.",
+    '{"action":"NO_REPLY"}',
+    "NO_REPLY.",
+    "NO_REPLY NO_REPLY",
+  ])("preserves non-token-only assistant text: %s", (text) => {
+    expect(buildPayloads({ assistantTexts: [text] })).toEqual([{ text }]);
+  });
+
   it("preserves media directives when stored assistant text was reduced to visible text only", () => {
     const payloads = buildPayloads({
       assistantTexts: ["Attached image"],

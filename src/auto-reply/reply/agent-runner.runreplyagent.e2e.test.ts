@@ -96,6 +96,8 @@ import { createMockTypingController } from "./test-helpers.js";
 type AgentRunParams = {
   sessionId?: string;
   sessionFile?: string;
+  provider?: string;
+  model?: string;
   onPartialReply?: (payload: { text?: string }) => Promise<boolean | void> | boolean | void;
   onAssistantMessageStart?: () => Promise<void> | void;
   onReasoningStream?: (payload: { text?: string }) => Promise<void> | void;
@@ -467,6 +469,7 @@ function createMinimalRun(params?: {
     typing,
     opts,
     run: async () => {
+      setRuntimeConfigSnapshot(followupRun.run.config);
       if (activeOperation && activeAuthority) {
         await activeOperation.bindToolAuthoritySnapshotAsync(activeAuthority);
       }
@@ -1577,9 +1580,13 @@ describe("runReplyAgent heartbeat followup guard", () => {
 
   it("kicks queued followups without handing them a heartbeat runner", async () => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({ payloads: [], meta: {} });
-    const { run } = createMinimalRun({ opts: { isHeartbeat: true } });
+    const runState: ReplyOperationRunState = {};
+    const { run } = createMinimalRun({
+      opts: { isHeartbeat: true, [REPLY_OPERATION_RUN_STATE]: runState },
+    });
 
     await expect(run()).resolves.toBeUndefined();
+    expect(resolveReplyOperationAgentTurn(runState)).toBe("failed");
 
     expect(state.runEmbeddedAgentMock).toHaveBeenCalledOnce();
     expect(vi.mocked(kickFollowupDrainIfIdle)).toHaveBeenCalledExactlyOnceWith("main");
@@ -3727,7 +3734,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
       {
         partials: ["NO_REPLYThe user is saying hello"],
         finalText: "NO_REPLYThe user is saying hello",
-        expectedForwarded: ["The user is saying hello"],
+        expectedForwarded: ["NO_REPLYThe user is saying hello"],
         shouldType: true,
       },
     ] as const;
@@ -4587,7 +4594,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     }
   });
 
-  it("keeps successful empty internal fallback silent without changing visible fallback state", async () => {
+  it("records failed empty internal fallback without changing visible fallback state", async () => {
     const sessionEntry = makeSessionEntry({
       modelProvider: "openai",
       model: "gpt-5.5",
@@ -4622,7 +4629,9 @@ describe("runReplyAgent typing (heartbeat)", () => {
       };
     });
 
+    const runState: ReplyOperationRunState = {};
     const { run } = createMinimalRun({
+      opts: { [REPLY_OPERATION_RUN_STATE]: runState },
       sessionEntry,
       sessionStore,
       sessionKey: "main",
@@ -4638,6 +4647,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     const res = await run();
 
     expect(res).toBeUndefined();
+    expect(resolveReplyOperationAgentTurn(runState)).toBe("failed");
     expect(sessionEntry.modelProvider).toBe("openai");
     expect(sessionEntry.model).toBe("gpt-5.5");
     expect(sessionEntry.providerOverride).toBeUndefined();
@@ -5066,7 +5076,11 @@ describe("runReplyAgent typing (heartbeat)", () => {
   it("preserves fallback silence for an explicitly optional turn", async () => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
       payloads: [{ text: "NO_REPLY" }],
-      meta: {},
+      meta: {
+        finalAssistantRawText: "NO_REPLY",
+        finalAssistantVisibleText: "NO_REPLY",
+        terminalReply: { disposition: "silent" },
+      },
     });
     const fallbackSpy = vi
       .spyOn(modelFallbackModule, "runWithModelFallback")
@@ -5149,10 +5163,16 @@ describe("runReplyAgent typing (heartbeat)", () => {
     const sessionStore = { main: sessionEntry };
     let callCount = 0;
 
-    state.runEmbeddedAgentMock.mockResolvedValue({
+    state.runEmbeddedAgentMock.mockImplementation(async (params: AgentRunParams) => ({
       payloads: [{ text: "final" }],
-      meta: {},
-    });
+      meta: {
+        agentMeta: {
+          sessionId: expectDefined(params.sessionId, "attempt session"),
+          provider: expectDefined(params.provider, "attempt provider"),
+          model: expectDefined(params.model, "attempt model"),
+        },
+      },
+    }));
     const fallbackSpy = vi
       .spyOn(modelFallbackModule, "runWithModelFallback")
       .mockImplementation(async (params: TestModelFallbackRunnerParams) => {
@@ -5219,10 +5239,16 @@ describe("runReplyAgent typing (heartbeat)", () => {
       const { sessionEntry, sessionStore, storePath } = await makeSessionFixture();
       let callCount = 0;
 
-      state.runEmbeddedAgentMock.mockResolvedValue({
+      state.runEmbeddedAgentMock.mockImplementation(async (params: AgentRunParams) => ({
         payloads: [{ text: "final" }],
-        meta: {},
-      });
+        meta: {
+          agentMeta: {
+            sessionId: expectDefined(params.sessionId, "attempt session"),
+            provider: expectDefined(params.provider, "attempt provider"),
+            model: expectDefined(params.model, "attempt model"),
+          },
+        },
+      }));
       const fallbackSpy = vi
         .spyOn(modelFallbackModule, "runWithModelFallback")
         .mockImplementation(async (params: TestModelFallbackRunnerParams) => {
@@ -5527,10 +5553,16 @@ describe("runReplyAgent typing (heartbeat)", () => {
     const sessionStore = { main: sessionEntry };
     let callCount = 0;
 
-    state.runEmbeddedAgentMock.mockResolvedValue({
+    state.runEmbeddedAgentMock.mockImplementation(async (params: AgentRunParams) => ({
       payloads: [{ text: "final" }],
-      meta: {},
-    });
+      meta: {
+        agentMeta: {
+          sessionId: expectDefined(params.sessionId, "attempt session"),
+          provider: expectDefined(params.provider, "attempt provider"),
+          model: expectDefined(params.model, "attempt model"),
+        },
+      },
+    }));
     const fallbackSpy = vi
       .spyOn(modelFallbackModule, "runWithModelFallback")
       .mockImplementation(async (params: TestModelFallbackRunnerParams) => {

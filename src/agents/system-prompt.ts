@@ -880,6 +880,7 @@ export function buildAgentSystemPrompt(params: {
         "## Silent Replies",
         `Nothing to say: entire reply exactly ${SILENT_REPLY_TOKEN}`,
         `Never append to real response or wrap in Markdown/code.`,
+        `${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
         "",
       ],
     // Approval UI and owner identity vary by turn, so keep both below the stable prefix.

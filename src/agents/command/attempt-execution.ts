@@ -66,6 +66,7 @@ import {
 import { isCliProvider } from "../model-selection.js";
 import { resolveOpenAIRuntimeProvider } from "../openai-routing.js";
 import type { PreparedModelRuntimePluginGeneration } from "../prepared-model-runtime.types.js";
+import { resolveCommandReplyExpectation } from "../reply-completion.js";
 import { hasVerifiedRequesterCompletionHandoff } from "../requester-tool-policy.js";
 import { buildAgentRuntimeAuthPlan } from "../runtime-plan/auth.js";
 import type { AgentMessage } from "../runtime/index.js";
@@ -87,7 +88,6 @@ import {
   resolveCompletionToolPolicy,
   isClaudeCliProvider,
   claudeCliSessionTranscriptHasContent,
-  resolveCommandReplyExpectation,
   resolveFallbackRetryPrompt,
   rebaseExecApprovalContinuationPromptRange,
 } from "./attempt-execution.helpers.js";
@@ -464,7 +464,8 @@ export async function runAgentAttempt(
       disableTools,
       terminalReplyExpectation: replyExpectation,
       silentReplyPromptMode:
-        params.opts.silentReplyPromptMode ?? (replyExpectation === "required" ? "none" : undefined),
+        params.opts.silentReplyPromptMode ??
+        (replyExpectation === "result-required" ? "none" : undefined),
       bootstrapPromptWarningSignaturesSeen,
       bootstrapPromptWarningSignature: bootstrapPromptWarningSignaturesSeen.at(-1),
     }) satisfies Partial<RunEmbeddedAgentInternalParams>;

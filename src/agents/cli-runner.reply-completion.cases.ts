@@ -1,4 +1,5 @@
 import { expect, it, onTestFinished } from "vitest";
+import { getReplyPayloadMetadata } from "../auto-reply/reply-payload.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { SessionEntry } from "../config/sessions.js";
 import type { markMcpLoopbackToolCallStarted } from "../gateway/mcp-http.loopback-runtime.js";
@@ -129,12 +130,79 @@ export function registerCliReplyCompletionTests({
   );
 
   it.each([
-    { name: "final source reply", target: "chat123", final: true, expected: "success" },
-    { name: "source progress", target: "chat123", final: false, expected: "error" },
-    { name: "another conversation", target: "elsewhere", final: true, expected: "error" },
+    {
+      name: "final source reply",
+      target: "chat123",
+      final: true,
+      expected: "success",
+      text: SILENT_REPLY_TOKEN,
+      trigger: "user",
+      expectation: "required",
+      notice: false,
+    },
+    {
+      name: "source progress",
+      target: "chat123",
+      final: false,
+      expected: "success",
+      text: SILENT_REPLY_TOKEN,
+      trigger: "user",
+      expectation: "required",
+      notice: false,
+    },
+    {
+      name: "another conversation",
+      target: "elsewhere",
+      final: true,
+      expected: "success",
+      text: SILENT_REPLY_TOKEN,
+      trigger: "user",
+      expectation: "required",
+      notice: false,
+    },
+    {
+      name: "empty source progress",
+      target: "chat123",
+      final: false,
+      expected: "error",
+      text: "",
+      trigger: "user",
+      expectation: "required",
+      notice: true,
+    },
+    {
+      name: "empty heartbeat progress",
+      target: "chat123",
+      final: false,
+      expected: "error",
+      text: "",
+      trigger: "heartbeat",
+      expectation: "required",
+      notice: false,
+    },
+    {
+      name: "empty cron progress",
+      target: "chat123",
+      final: false,
+      expected: "error",
+      text: "",
+      trigger: "cron",
+      expectation: "required",
+      notice: false,
+    },
+    {
+      name: "empty private progress",
+      target: "chat123",
+      final: false,
+      expected: "error",
+      text: "",
+      trigger: "user",
+      expectation: "result-required",
+      notice: false,
+    },
   ] as const)(
-    "settles NO_REPLY after $name without replaying a send",
-    async ({ target, final, expected }) => {
+    "settles $name without replaying a send",
+    async ({ target, final, expected, text, trigger, expectation, notice }) => {
       supervisorSpawnMock.mockImplementationOnce(async (input) => {
         completeToolCall(
           {
@@ -151,7 +219,7 @@ export function registerCliReplyCompletionTests({
           { status: "sent" },
         );
         input.onStdout?.(
-          `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
+          `${JSON.stringify({ type: "result", session_id: "claude-session", result: text })}\n`,
         );
         return makeManagedRun();
       });
@@ -161,7 +229,8 @@ export function registerCliReplyCompletionTests({
         sourceReplyDeliveryMode: "message_tool_only",
         messageChannel: "telegram",
         currentChannelId: "chat123",
-        terminalReplyExpectation: "required",
+        terminalReplyExpectation: expectation,
+        trigger,
       });
       context.backendResolved.config.output = "jsonl";
 
@@ -169,19 +238,29 @@ export function registerCliReplyCompletionTests({
 
       expect(result.didSendViaMessagingTool).toBe(true);
       expect(result.meta.executionTrace?.attempts?.[0]?.result).toBe(expected);
-      expect(result.payloads).toEqual(
-        target === "chat123" && !final
-          ? [{ text: "The reply stopped after sending progress. Please try again.", isError: true }]
-          : undefined,
-      );
+      if (text) {
+        expect(result.meta.terminalReply).toEqual({ disposition: "silent" });
+      } else {
+        expect(result.meta.error).toMatchObject({ kind: "incomplete_turn", fallbackSafe: false });
+        if (notice) {
+          expect(result.payloads).toEqual([
+            { text: "No answer was returned.", isError: true, isStatusNotice: true },
+          ]);
+          expect(getReplyPayloadMetadata(result.payloads?.[0] ?? {})).toMatchObject({
+            assistantTranscriptOwned: true,
+          });
+        } else {
+          expect(result.payloads).toBeUndefined();
+        }
+      }
       expect(supervisorSpawnMock).toHaveBeenCalledOnce();
     },
   );
 
   it.each([
     { name: "final", final: true, interSession: false, expected: "success" },
-    { name: "progress", final: false, interSession: false, expected: "error" },
-    { name: "inter-session transcript-only", final: true, interSession: true, expected: "error" },
+    { name: "progress", final: false, interSession: false, expected: "success" },
+    { name: "inter-session transcript-only", final: true, interSession: true, expected: "success" },
   ] as const)(
     "settles NO_REPLY after a targetless WebChat $name send through the internal sink",
     async ({ final, interSession, expected }) => {
@@ -248,7 +327,7 @@ export function registerCliReplyCompletionTests({
   );
 
   it.each([false, true])(
-    "requires child continuation custody before accepting NO_REPLY (completion=%s)",
+    "requires a real child result even when continuation custody is %s",
     async (expectsCompletionMessage) => {
       const child = {
         runId: "spawned-cli-child",
@@ -269,38 +348,40 @@ export function registerCliReplyCompletionTests({
       const context = createContext({
         sessionKey: "agent:main:subagent:cli-parent",
         lane: "subagent",
-        terminalReplyExpectation: "required",
       });
 
-      const operation = run(context);
-
-      if (expectsCompletionMessage) {
-        await expect(operation).resolves.toMatchObject({ acceptedSessionSpawns: [child] });
-      } else {
-        const error = await operation.catch((caught: unknown) => caught);
-        expect(error).toMatchObject({ name: "FailoverError", reason: "empty_response" });
-        expect(hasModelFallbackStop(error)).toBe(true);
-      }
+      const error = await run(context).catch((caught: unknown) => caught);
+      expect(error).toMatchObject({ name: "FailoverError", reason: "empty_response" });
+      expect(hasModelFallbackStop(error)).toBe(true);
       expect(supervisorSpawnMock).toHaveBeenCalledOnce();
     },
   );
 
-  it.each([SILENT_REPLY_TOKEN, JSON.stringify({ action: SILENT_REPLY_TOKEN })])(
-    "rejects silent CLI output %j when a final reply is required",
-    async (text) => {
-      supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
-      const context = createContext({
-        sessionKey: "agent:main:subagent:required-cli-reply",
-        lane: "subagent",
-        terminalReplyExpectation: "required",
-        inputProvenance: { kind: "inter_session", sourceTool: "sessions_spawn" },
-      });
+  it("rejects token-only CLI silence when a private result is required", async () => {
+    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: SILENT_REPLY_TOKEN }));
+    const context = createContext({
+      sessionKey: "agent:main:subagent:required-cli-reply",
+      lane: "subagent",
+      inputProvenance: { kind: "inter_session", sourceTool: "sessions_spawn" },
+    });
 
-      await expect(run(context)).rejects.toMatchObject({
-        name: "FailoverError",
-        reason: "empty_response",
-      });
-      expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-    },
-  );
+    await expect(run(context)).rejects.toMatchObject({
+      name: "FailoverError",
+      reason: "empty_response",
+    });
+    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "NO_REPLY The requested result.",
+    JSON.stringify({ action: SILENT_REPLY_TOKEN }),
+    "NO_REPLY.",
+    "NO_REPLY NO_REPLY",
+  ])("delivers mixed-token CLI output unchanged: %s", async (text) => {
+    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
+    const result = await run(createContext({ terminalReplyExpectation: "required" }));
+    expect(result.payloads).toEqual([{ text }]);
+    expect(result.meta.terminalReply).toBeUndefined();
+    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+  });
 }

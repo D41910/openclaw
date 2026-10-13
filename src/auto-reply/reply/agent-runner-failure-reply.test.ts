@@ -13,13 +13,13 @@ import { getReplyPayloadMetadata } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
-  buildEmptyInteractiveReplyPayload,
+  buildMissingReplyPayload,
   buildExternalRunFailureReply,
   buildKnownAgentRunFailureReplyPayload,
 } from "./agent-runner-failure-reply.js";
 import { resolveSourceReplyExpectation } from "./source-reply-delivery-mode.js";
 
-describe("buildEmptyInteractiveReplyPayload", () => {
+describe("buildMissingReplyPayload", () => {
   it("surfaces missing output for a mentioned group request even when silence is allowed", () => {
     const expectation = resolveSourceReplyExpectation({
       ctx: {
@@ -31,7 +31,7 @@ describe("buildEmptyInteractiveReplyPayload", () => {
       },
       cfg: { agents: { defaults: { silentReply: { group: "allow" } } } },
     });
-    const payload = buildEmptyInteractiveReplyPayload({
+    const payload = buildMissingReplyPayload({
       completion: resolveReplyCompletion(expectation, "empty"),
     });
 
@@ -40,13 +40,26 @@ describe("buildEmptyInteractiveReplyPayload", () => {
     expect(getReplyPayloadMetadata(payload ?? {})?.deliverDespiteSourceReplySuppression).toBe(true);
   });
 
+  it.each(["required", "optional", "result-required"] as const)(
+    "reports an empty %s result as a system notice",
+    (expectation) => {
+      expect(
+        buildMissingReplyPayload({ completion: resolveReplyCompletion(expectation, "empty") }),
+      ).toMatchObject({
+        text: "No answer was returned.",
+        isError: true,
+        isStatusNotice: true,
+      });
+    },
+  );
+
   it.each([
-    resolveReplyCompletion("optional", "empty"),
+    resolveReplyCompletion("optional", "silent"),
     ...(["ready", "delivered", "pending", "blocked"] as const).map((evidence) =>
       resolveReplyCompletion("required", evidence),
     ),
   ])("does not add an error for $expectation/$outcome", (completion) => {
-    expect(buildEmptyInteractiveReplyPayload({ completion })).toBeUndefined();
+    expect(buildMissingReplyPayload({ completion })).toBeUndefined();
   });
 });
 

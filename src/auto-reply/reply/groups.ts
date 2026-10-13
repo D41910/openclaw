@@ -5,7 +5,6 @@ import { findChatChannelMeta, normalizeChatChannelId } from "../../channels/regi
 import { resolveChannelGroupRequireMention } from "../../config/group-policy.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { createLazyImportLoader } from "../../shared/lazy-promise.js";
-import type { SilentReplyPolicy } from "../../shared/silent-reply-policy.js";
 import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
 import { normalizeGroupActivation } from "../group-activation.js";
@@ -100,7 +99,6 @@ function resolveProviderLabel(rawProvider: string | undefined): string {
 export function buildGroupChatContext(params: {
   sessionCtx: TemplateContext;
   sourceReplyDeliveryMode?: SourceReplyDeliveryMode;
-  silentReplyPolicy?: SilentReplyPolicy;
   silentToken?: string;
 }): string {
   const providerLabel = resolveProviderLabel(params.sessionCtx.Provider);
@@ -139,16 +137,14 @@ export function buildGroupChatContext(params: {
   lines.push(
     "When subagent or session-spawn tools are available and a directly requested group-chat task will require several tool calls, prefer delegating bounded side investigations early so the channel gets a responsive path forward. Keep the critical path local, avoid subagents for simple one-step work, and only surface concise group-visible updates when they add value.",
   );
-  const canUseSilentReply =
-    !messageToolOnly && params.silentToken && params.silentReplyPolicy !== "disallow";
   if (messageToolOnly) {
     lines.push(
       `If no visible ${sharedChatNoun === "channel" ? "channel" : "group"} response is needed, do not call message(action=send).`,
     );
   }
-  if (canUseSilentReply) {
+  if (params.silentToken) {
     lines.push(
-      `If no text reply is needed, including after a reaction or other action, reply with exactly "${params.silentToken}" as the entire final answer, without commentary, punctuation, or formatting.`,
+      `If no text reply is needed, including after a reaction or other action, reply with exactly "${params.silentToken}" as the entire final answer, without commentary, punctuation, or formatting. ${params.silentToken} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
     );
   }
   return lines.join(" ");
@@ -158,6 +154,7 @@ export function buildGroupChatContext(params: {
 function buildDirectChatContext(params: {
   sessionCtx: TemplateContext;
   sourceReplyDeliveryMode?: SourceReplyDeliveryMode;
+  silentToken?: string;
 }): string {
   const providerLabel = resolveProviderLabel(params.sessionCtx.Provider);
   return [
@@ -170,6 +167,11 @@ function buildDirectChatContext(params: {
       : [
           "Your replies are automatically sent to this conversation unless the current-turn context says final replies stay private.",
         ]),
+    ...(params.silentToken
+      ? [
+          `If no text reply is needed, including after a reaction or other action, reply with exactly "${params.silentToken}" as the entire final answer, without commentary, punctuation, or formatting. ${params.silentToken} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
+        ]
+      : []),
   ].join(" ");
 }
 

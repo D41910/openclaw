@@ -523,10 +523,7 @@ export async function runPreparedEmbeddedLoop(
         finalizationOutcome: settledTurnFinalizationOutcome,
       } = finalizedTerminal;
       lastRunPromptUsage = finalizedTerminal.lastRunPromptUsage;
-      if (
-        settledTurnFinalizationOutcome === "answered" ||
-        settledTurnFinalizationOutcome === "completed-empty"
-      ) {
+      if (settledTurnFinalizationOutcome === "answered") {
         assistantProfileFailureReason = null;
       }
 

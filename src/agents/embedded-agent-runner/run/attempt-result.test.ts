@@ -299,6 +299,16 @@ describe("attempt result projection", () => {
     {
       label: "an actually empty optional turn",
       assistant: undefined,
+      expectedStatus: "error",
+      terminalError: "non_deliverable_terminal_turn",
+    },
+    {
+      label: "an explicitly silent optional turn",
+      assistant: makeAssistantMessageFixture({
+        content: [{ type: "text", text: "NO_REPLY" }],
+        stopReason: "stop",
+        errorMessage: undefined,
+      }),
       expectedStatus: "success",
       terminalError: undefined,
     },

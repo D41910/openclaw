@@ -14,13 +14,10 @@ import {
   setReplyPayloadMetadata,
   type ReplyPayload,
 } from "../../../auto-reply/reply-payload.js";
+import { isSilentReplyTokenOnly } from "../../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import type { ReasoningLevel, ThinkLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
-import {
-  HEARTBEAT_TOKEN,
-  isSilentReplyPayloadText,
-  SILENT_REPLY_TOKEN,
-} from "../../../auto-reply/tokens.js";
+import { HEARTBEAT_TOKEN, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
 import { hasReplyPayloadContent } from "../../../interactive/payload.js";
 import type { AssistantMessage } from "../../../llm/types.js";
@@ -464,7 +461,7 @@ export function buildEmbeddedRunPayloads(params: {
       if (hasAudioAsVoiceTag && item.mediaUrls?.length) {
         payload.audioAsVoice = true;
       }
-      if (payload.text && isSilentReplyPayloadText(payload.text, SILENT_REPLY_TOKEN)) {
+      if (payload.text && isSilentReplyTokenOnly(payload.text, SILENT_REPLY_TOKEN)) {
         payload.text = undefined;
       }
       return payload;

@@ -1,7 +1,7 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateWithMarker } from "@openclaw/normalization-core/utf16-slice";
 import { stripInternalMetadataForDisplay } from "../auto-reply/reply/display-text-sanitize.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { isSilentReplyTokenOnly } from "../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { normalizeAgentRunRouteChange } from "./agent-run-terminal-receipt.js";
 import type { AgentRunTerminalReplySnapshot } from "./agent-run-terminal-reply.types.js";
 
@@ -34,7 +34,7 @@ export function buildAgentRunTerminalReplySnapshot(params: {
 }): AgentRunTerminalReplySnapshot {
   if (
     params.terminalReplyKind === "silent-empty" ||
-    isSilentReplyText(params.rawText ?? params.visibleText, SILENT_REPLY_TOKEN)
+    isSilentReplyTokenOnly(params.rawText ?? params.visibleText)
   ) {
     return { disposition: "silent" };
   }

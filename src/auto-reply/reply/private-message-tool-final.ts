@@ -2,7 +2,7 @@
 import { estimateStringChars } from "@openclaw/normalization-core/cjk-chars";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
-import { isSilentReplyText } from "../tokens.js";
+import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 
 const privateFinalReplyLogger = createSubsystemLogger("source-reply/private-final");
 
@@ -43,7 +43,7 @@ export function classifyPrivateMessageToolFinal(
     return "none";
   }
   const trimmed = params.finalText.trim();
-  if (!trimmed || isSilentReplyText(trimmed)) {
+  if (!trimmed || isSilentReplyTokenOnly(trimmed)) {
     return "none";
   }
   // Both thresholds are substance proxies, so they must use the shared CJK-aware estimate.

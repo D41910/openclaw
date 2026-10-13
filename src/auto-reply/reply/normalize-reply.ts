@@ -9,14 +9,12 @@ import {
   hasReplyPayloadSpeechContent,
   setReplyPayloadMetadata,
 } from "../reply-payload.js";
-import {
-  HEARTBEAT_TOKEN,
-  isInternalFormattingArtifact,
-  isSilentReplyPayloadText,
-  SILENT_REPLY_TOKEN,
-} from "../tokens.js";
+import { HEARTBEAT_TOKEN, isInternalFormattingArtifact, SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
-import { stripMixedSilentReplyTokens } from "./mixed-silent-reply-tokens.js";
+import {
+  isSilentReplyTokenOnly,
+  stripMixedSilentReplyTokens,
+} from "./mixed-silent-reply-tokens.js";
 import type {
   NormalizeReplyOutcome as PayloadNormalizationOutcome,
   NormalizeReplySkipReason,
@@ -89,13 +87,13 @@ export function normalizeReplyPayloadOutcome(
   // Monitoring already applied its configured acknowledgment and error-text policy.
   if (!getReplyPayloadMetadata(payload)?.heartbeatReply) {
     const silentToken = opts.silentToken ?? SILENT_REPLY_TOKEN;
-    if (text && isSilentReplyPayloadText(text, silentToken)) {
+    if (text && isSilentReplyTokenOnly(text, silentToken)) {
       if (!hasContent("")) {
         return suppress("silent");
       }
       text = "";
     }
-    // Mixed-content silent tokens must not leak to channel delivery.
+    // A standalone leading control line does not silence the answer that follows.
     if (text) {
       const stripped = stripMixedSilentReplyTokens(text, silentToken);
       if (stripped !== null) {

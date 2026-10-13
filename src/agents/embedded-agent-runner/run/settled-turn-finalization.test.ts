@@ -2,12 +2,10 @@ import { MAX_TIMER_TIMEOUT_MS } from "@openclaw/normalization-core/number-coerci
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
 import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
-import { SessionTranscriptWriterClaimReboundError } from "../../../config/sessions/transcript-write-context.js";
 import {
   prepareSystemAgentRunAdmission,
   type AdmittedRunContext,
 } from "../../admitted-run-context.js";
-import { resolveAgentRunSessionTarget } from "../../run-session-target.js";
 import {
   buildEmbeddedRunnerAssistant,
   makeEmbeddedRunnerAttempt,
@@ -47,9 +45,6 @@ const transcriptMocks = vi.hoisted(() => ({
   appendAssistantMirrorMessageByIdentity: vi.fn(),
 }));
 
-const SETTLED_TOOL_FINALIZATION_FALLBACK_TEXT =
-  "The tool run finished, but no final summary was produced. I did not repeat any completed actions.";
-
 vi.mock("./backend.js", () => ({
   resolveRuntimeModelAttempt: backendMocks.resolveRuntimeModelAttempt,
 }));
@@ -58,23 +53,6 @@ vi.mock("../../harness/selection.js", () => ({
 }));
 vi.mock("../../../plugin-sdk/session-transcript-runtime.js", () => ({
   appendAssistantMirrorMessageByIdentity: transcriptMocks.appendAssistantMirrorMessageByIdentity,
-}));
-// This suite stubs persistence; resolve its synthetic paths without opening a
-// host database. The runner boundary suite uses the real resolver and SQLite.
-vi.mock("../../run-session-target.js", () => ({
-  resolveAgentRunSessionTarget: vi.fn(
-    async (params: {
-      agentId?: string;
-      sessionId: string;
-      sessionKey?: string;
-      sessionTarget?: EmbeddedRunAttemptParams["sessionTarget"];
-    }) => ({
-      agentId: params.sessionTarget?.agentId ?? params.agentId ?? "main",
-      sessionId: params.sessionTarget?.sessionId ?? params.sessionId,
-      sessionKey: params.sessionTarget?.sessionKey ?? params.sessionKey ?? "agent:main:settled",
-      storePath: params.sessionTarget?.storePath ?? "/synthetic/sessions.json",
-    }),
-  ),
 }));
 
 function settledFailedAttempt(): EmbeddedRunAttemptWithReceiptEvidence {
@@ -176,7 +154,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
     expect(result.prepared.payloadsWithToolMedia).toEqual([]);
   });
 
-  it("preserves truncated completions after commentary when finalization stays empty", async () => {
+  it("preserves classified stream failure after commentary when finalization stays empty", async () => {
     const commentary = "I am saving the note.";
     const base = createSettledProviderFailureAttempt({ assistantTexts: [commentary] });
     const toolAssistant = base.messagesSnapshot[1];
@@ -221,7 +199,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
         text: "LLM request timed out.",
       }),
     ]);
-    expect(result.prepared.payloadsWithToolMedia?.[0]?.isError).not.toBe(true);
+    expect(result.prepared.payloadsWithToolMedia?.[0]?.isError).toBe(true);
   });
 
   it("preserves the command failure when summary recovery stays empty", async () => {
@@ -395,7 +373,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       name: "failed tool",
       text: SILENT_REPLY_TOKEN,
       failedTool: true,
-      silent: false,
+      silent: true,
     },
   ])("honors the finalization silence contract: $name", async ({ text, failedTool, silent }) => {
     const attempt = failedTool ? settledFailedAttempt() : createSettledProviderFailureAttempt();
@@ -417,10 +395,12 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       expect(result.attempt.assistantTexts).toEqual([SILENT_REPLY_TOKEN]);
       expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
       expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
-    } else if (failedTool) {
-      expect(result.finalizationOutcome).toBe("failed");
-      expect(result.attempt).toBe(attempt);
-      expect(result.prepared.payloadsWithToolMedia?.[0]).toMatchObject({ isError: true });
+      if (failedTool) {
+        expect(result.prepared.attemptToolSummary).toMatchObject({
+          failures: 1,
+          unresolvedError: { toolName: "exec" },
+        });
+      }
     } else {
       expect(result.finalizationOutcome).toBe("failed");
       expect(result.prepared.payloadsWithToolMedia).toEqual([
@@ -460,11 +440,14 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
     expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
   });
 
-  it.each(["user", "cron"] as const)(
-    "persists and delivers a %s fallback after empty finalization",
-    async (trigger) => {
-      const expectedText =
-        trigger === "cron" ? SILENT_REPLY_TOKEN : SETTLED_TOOL_FINALIZATION_FALLBACK_TEXT;
+  it.each([
+    { trigger: "user", expectation: "required", notice: true },
+    { trigger: "cron", expectation: "optional", notice: false },
+    { trigger: "heartbeat", expectation: "optional", notice: false },
+    { trigger: "user", expectation: "result-required", notice: false },
+  ] as const)(
+    "records failed $trigger/$expectation recovery without persisting a synthetic answer",
+    async ({ trigger, expectation, notice }) => {
       const attempt = settledSuccessfulAttempt();
       const emptyAssistant = buildEmbeddedRunnerAssistant({
         content: [{ type: "text", text: "" }],
@@ -473,76 +456,18 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
         outcome: "empty",
         result: { assistant: emptyAssistant, usage: emptyAssistant.usage },
       });
-
       const input = finalizationInput(attempt);
       input.terminalBase.runParams.trigger = trigger;
       input.terminalBase.runParams.sourceReplyDeliveryMode = "automatic";
-      input.finalization.preparedAttempt.abortSignal = AbortSignal.abort(
-        new Error("original attempt timed out"),
-      );
-      input.finalization.preparedAttempt.sessionKey = "agent:main:settled";
-      input.finalization.preparedAttempt.agentId = "main";
-      input.finalization.preparedAttempt.sessionTarget = {
-        agentId: "main",
-        expectedLifecycleRevision: "revision-a",
-        expectedWriterRunId: "run-settled",
-        sessionId: "session-settled",
-        sessionKey: "agent:main:settled",
-        storePath: "/tmp/sessions.json",
-      } as never;
-      transcriptMocks.appendAssistantMirrorMessageByIdentity.mockResolvedValueOnce({
-        ok: true,
-        messageId: "fallback-message",
-      });
+      input.terminalBase.runParams.terminalReplyExpectation = expectation;
 
       const result = await prepareTerminalWithSettledTurnFinalization(input);
 
       expect(backendMocks.runSettledFinalization).toHaveBeenCalledTimes(2);
-      expect(result.finalizationOutcome).toBe(
-        trigger === "cron" ? "silent-fallback" : "completed-empty",
-      );
-      expect(result.prepared.payloadsWithToolMedia).toEqual(
-        trigger === "cron" ? [] : [expect.objectContaining({ text: expectedText })],
-      );
-      expect(result.prepared.finalAssistantRawText).toBe(expectedText);
-      if (trigger === "user") {
-        expect(
-          getReplyPayloadMetadata(result.prepared.payloadsWithToolMedia?.[0] ?? {}),
-        ).toMatchObject({
-          assistantTranscriptIdempotencyKey: "run-settled:settled-finalization-fallback",
-          assistantTranscriptOwned: true,
-          sessionWriterDeliveryAuthority: {
-            agentId: "main",
-            expectedLifecycleRevision: "revision-a",
-            expectedSessionId: "session-settled",
-            expectedWriterRunId: "run-settled",
-            sessionKey: "agent:main:settled",
-            storePath: "/tmp/sessions.json",
-          },
-        });
-      }
-      expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).toHaveBeenCalledWith({
-        agentId: "main",
-        config: undefined,
-        expectedLifecycleRevision: "revision-a",
-        expectedWriterRunId: "run-settled",
-        idempotencyKey: "run-settled:settled-finalization-fallback",
-        signal: input.finalization.abortSignal,
-        sessionId: "session-settled",
-        sessionKey: "agent:main:settled",
-        storePath: "/tmp/sessions.json",
-        text: expectedText,
-      });
-      expect(result.attempt).toMatchObject({
-        assistantTexts: [expectedText],
-        assistantTranscriptOwned: true,
-        assistantTranscriptIdempotencyKey: "run-settled:settled-finalization-fallback",
-        replayMetadata: { hadPotentialSideEffects: false, replaySafe: true },
-        toolMetas: attempt.toolMetas,
-      });
-      expect(result.prepared.agentMeta).toMatchObject({
-        assistantTurns: 3,
-      });
+      expect(result.finalizationOutcome).toBe("failed");
+      expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
+      expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
+      expect(result.attempt.assistantTexts).toEqual([""]);
       const terminalInput = makeTerminalInput({
         ...result.prepared,
         attempt: result.attempt,
@@ -556,13 +481,24 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       expect(terminalInput.sessionPromptState.activateInternalPrompt).not.toHaveBeenCalled();
       expect(terminal.action).toBe("complete");
       if (terminal.action !== "complete") {
-        throw new Error("expected completed fallback");
+        throw new Error("expected failed completion");
       }
-      expect(terminal.result.meta.error).toBeUndefined();
-      expect(terminal.result.payloads).toEqual([expect.objectContaining({ text: expectedText })]);
-      expect(terminal.result.meta.terminalReplyKind).toBe(
-        trigger === "cron" ? "silent-empty" : undefined,
-      );
+      expect(terminal.result.meta.error).toMatchObject({ kind: "incomplete_turn" });
+      if (notice) {
+        expect(terminal.result.payloads).toEqual([
+          {
+            text: "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.",
+            isError: true,
+            isStatusNotice: true,
+          },
+        ]);
+        expect(getReplyPayloadMetadata(terminal.result.payloads?.[0] ?? {})).toMatchObject({
+          assistantTranscriptOwned: true,
+        });
+      } else {
+        expect(terminal.result.payloads).toBeUndefined();
+      }
+      expect(terminal.result.meta.terminalReplyKind).toBeUndefined();
     },
   );
 
@@ -634,155 +570,4 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
     },
   );
-
-  it("preserves cancellation while fallback transcript persistence is pending", async () => {
-    const attempt = settledSuccessfulAttempt();
-    const input = finalizationInput(attempt);
-    const controller = new AbortController();
-    input.finalization.abortSignal = controller.signal;
-    input.finalization.preparedAttempt.sessionKey = "agent:main:settled";
-    input.finalization.preparedAttempt.agentId = "main";
-    input.finalization.preparedAttempt.sessionTarget = {
-      agentId: "main",
-      sessionId: "session-settled",
-      sessionKey: "agent:main:settled",
-      storePath: "/tmp/sessions.json",
-    } as never;
-    const emptyAssistant = buildEmbeddedRunnerAssistant({
-      content: [{ type: "text", text: "" }],
-    });
-    backendMocks.runSettledFinalization.mockResolvedValue({
-      outcome: "empty",
-      result: { assistant: emptyAssistant, usage: emptyAssistant.usage },
-    });
-
-    let markAppendStarted!: () => void;
-    const appendStarted = new Promise<void>((resolve) => {
-      markAppendStarted = resolve;
-    });
-    let releaseAppend!: () => void;
-    const appendRelease = new Promise<void>((resolve) => {
-      releaseAppend = resolve;
-    });
-    transcriptMocks.appendAssistantMirrorMessageByIdentity.mockImplementationOnce(
-      async (params: { signal?: AbortSignal }) => {
-        markAppendStarted();
-        await appendRelease;
-        return params.signal?.aborted
-          ? { ok: false, reason: "cancelled", code: "blocked" }
-          : { ok: true, messageId: "fallback-message" };
-      },
-    );
-
-    const resultPromise = prepareTerminalWithSettledTurnFinalization(input);
-    await appendStarted;
-    controller.abort(new Error("cancelled by user"));
-    releaseAppend();
-    const result = await resultPromise;
-
-    expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ signal: controller.signal }),
-    );
-    expect(result.finalizationOutcome).toBe("failed");
-    expect(result.attempt).toBe(attempt);
-    expect(result.prepared.payloadsWithToolMedia).not.toEqual([
-      expect.objectContaining({ text: SETTLED_TOOL_FINALIZATION_FALLBACK_TEXT }),
-    ]);
-  });
-
-  it("keeps the honest fallback when its transcript target cannot be resolved", async () => {
-    const input = finalizationInput(settledSuccessfulAttempt());
-    input.terminalBase.runParams.trigger = "user";
-    input.finalization.preparedAttempt.sessionKey = "agent:main:settled";
-    backendMocks.runSettledFinalization.mockRejectedValueOnce(new Error("summary unavailable"));
-    vi.mocked(resolveAgentRunSessionTarget).mockRejectedValueOnce(new Error("store unavailable"));
-
-    const result = await prepareTerminalWithSettledTurnFinalization(input);
-
-    expect(result.prepared.payloadsWithToolMedia).toEqual([
-      expect.objectContaining({ text: SETTLED_TOOL_FINALIZATION_FALLBACK_TEXT }),
-    ]);
-    expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
-  });
-
-  it("does not construct a fallback after its transcript writer is superseded", async () => {
-    const attempt = settledSuccessfulAttempt();
-    const input = finalizationInput(attempt);
-    input.finalization.preparedAttempt.sessionKey = "agent:main:settled";
-    input.finalization.preparedAttempt.agentId = "main";
-    input.finalization.preparedAttempt.sessionTarget = {
-      agentId: "main",
-      expectedLifecycleRevision: "revision-a",
-      expectedWriterRunId: "run-settled",
-      sessionId: "session-settled",
-      sessionKey: "agent:main:settled",
-      storePath: "/tmp/sessions.json",
-    } as never;
-    const emptyAssistant = buildEmbeddedRunnerAssistant({
-      content: [{ type: "text", text: "" }],
-    });
-    backendMocks.runSettledFinalization.mockResolvedValue({
-      outcome: "empty",
-      result: { assistant: emptyAssistant, usage: emptyAssistant.usage },
-    });
-    transcriptMocks.appendAssistantMirrorMessageByIdentity.mockRejectedValueOnce(
-      new SessionTranscriptWriterClaimReboundError(),
-    );
-
-    await expect(prepareTerminalWithSettledTurnFinalization(input)).rejects.toBeInstanceOf(
-      SessionTranscriptWriterClaimReboundError,
-    );
-    expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).toHaveBeenCalledOnce();
-  });
-
-  it("uses a fresh session's committed writer fence for fallback persistence", async () => {
-    const attempt = settledSuccessfulAttempt();
-    const input = finalizationInput(attempt);
-    input.finalization.preparedAttempt.sessionKey = "agent:main:settled";
-    input.finalization.preparedAttempt.agentId = "main";
-    input.finalization.preparedAttempt.sessionTarget = {
-      agentId: "main",
-      sessionId: "session-settled",
-      sessionKey: "agent:main:settled",
-      storePath: "/tmp/sessions.json",
-    } as never;
-    Object.assign(input.finalization, {
-      sessionWriterFence: {
-        expectedLifecycleRevision: "revision-committed",
-        expectedWriterRunId: "run-settled",
-      },
-    });
-    const emptyAssistant = buildEmbeddedRunnerAssistant({
-      content: [{ type: "text", text: "" }],
-    });
-    backendMocks.runSettledFinalization.mockResolvedValue({
-      outcome: "empty",
-      result: { assistant: emptyAssistant, usage: emptyAssistant.usage },
-    });
-    transcriptMocks.appendAssistantMirrorMessageByIdentity.mockResolvedValueOnce({
-      ok: false,
-      code: "blocked",
-      reason: "writer replaced after the initial transcript commit",
-    });
-
-    await expect(prepareTerminalWithSettledTurnFinalization(input)).rejects.toBeInstanceOf(
-      SessionTranscriptWriterClaimReboundError,
-    );
-    expect(backendMocks.runSettledFinalization).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionTarget: expect.objectContaining({
-          expectedLifecycleRevision: "revision-committed",
-          expectedWriterRunId: "run-settled",
-        }),
-      }),
-      attempt,
-      input.finalization.harness,
-    );
-    expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({
-        expectedLifecycleRevision: "revision-committed",
-        expectedWriterRunId: "run-settled",
-      }),
-    );
-  });
 });

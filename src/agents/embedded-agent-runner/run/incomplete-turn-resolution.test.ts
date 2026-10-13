@@ -64,7 +64,7 @@ describe("incomplete-turn terminal metadata", () => {
         attempt,
       }),
     ).toBe(
-      "⚠️ Agent couldn't generate a response. Note: some tool actions may have already been executed — please verify before retrying.",
+      "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.",
     );
   });
 
@@ -115,7 +115,7 @@ describe("incomplete-turn terminal metadata", () => {
         timedOut: false,
         attempt,
       }),
-    ).toContain("couldn't generate a response");
+    ).toBe("No answer was returned.");
   });
 
   it("emits a silent cron reply from the trailing current-attempt tool result", () => {
@@ -212,7 +212,7 @@ describe("tool-authored source replies", () => {
         ],
       }),
     });
-    expect(result).toContain("couldn't generate a response");
+    expect(result).toBe("No answer was returned.");
   });
 
   it("treats a final tool-authored source reply as a complete tool-use turn", () => {

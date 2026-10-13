@@ -5,6 +5,7 @@ import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
 import { createBlockReplyCoalescer } from "./block-reply-coalescer.js";
 import { matchesMentionWithExplicit } from "./mentions.js";
+import { stripMixedSilentReplyTokens } from "./mixed-silent-reply-tokens.js";
 import { normalizeReplyPayload, normalizeReplyPayloadOutcome } from "./normalize-reply.js";
 import { parseReplyDirectives } from "./reply-directives.js";
 import { createReplyDispatcherWithTyping } from "./reply-dispatcher.js";
@@ -62,8 +63,7 @@ describe("normalizeReplyPayload", () => {
 
   it("records skip reasons for silent, empty, and internal artifact payloads", () => {
     for (const [text, reason] of [
-      ['"NO_REPLY"', "silent"],
-      [`${SILENT_REPLY_TOKEN}\n\n${SILENT_REPLY_TOKEN}`, "silent"],
+      [SILENT_REPLY_TOKEN, "silent"],
       ["   ", "empty"],
       ["set-thought <channel|>", "silent"],
       ["───", "silent"],
@@ -119,19 +119,24 @@ describe("normalizeReplyPayload", () => {
     expect(secondMessaging.transformReplyPayload).toHaveBeenCalledTimes(1);
   });
 
-  it("strips NO_REPLY from mixed emoji message (#30916)", () => {
-    expect(expectNormalizedReply(normalizeReplyPayload({ text: "😄 NO_REPLY" })).text).toBe("😄");
+  it.each([
+    "😄 NO_REPLY",
+    "NO_REPLY NO_REPLY\nThe user is saying hello",
+    "NO_REPLYThe user is saying hello",
+    "An answer followed by NO_REPLY",
+    '"NO_REPLY"',
+  ])("preserves non-control token mentions: %s", (text) => {
+    expect(expectNormalizedReply(normalizeReplyPayload({ text })).text).toBe(text);
   });
 
-  it("strips newline-separated leading silent tokens", () => {
-    expect(
-      expectNormalizedReply(
-        normalizeReplyPayload({ text: "NO_REPLY NO_REPLY\nThe user is saying hello" }),
-      ).text,
-    ).toBe("The user is saying hello");
+  it("removes only a standalone leading silent control line", () => {
+    const text = "The answer.\n    Indented code stays.";
+    expect(expectNormalizedReply(normalizeReplyPayload({ text: `NO_REPLY\n${text}` })).text).toBe(
+      text,
+    );
   });
 
-  it("suppresses leaked reasoning when the final answer is NO_REPLY (#66701)", () => {
+  it("does not suppress plain reasoning prose containing NO_REPLY", () => {
     const onSkip = vi.fn();
     expect(
       normalizeReplyPayload(
@@ -140,11 +145,11 @@ describe("normalizeReplyPayload", () => {
         },
         { onSkip },
       ),
-    ).toBeNull();
-    expect(onSkip.mock.calls).toEqual([["silent"]]);
+    ).not.toBeNull();
+    expect(onSkip).not.toHaveBeenCalled();
   });
 
-  it("suppresses tagged leaked reasoning ending in silence narration (#66701)", () => {
+  it("does not classify tagged reasoning and silence narration as a token-only final", () => {
     const onSkip = vi.fn();
     expect(
       normalizeReplyPayload(
@@ -153,18 +158,18 @@ describe("normalizeReplyPayload", () => {
         },
         { onSkip },
       ),
-    ).toBeNull();
-    expect(onSkip.mock.calls).toEqual([["silent"]]);
+    ).not.toBeNull();
+    expect(onSkip).not.toHaveBeenCalled();
   });
 
-  it("strips JSON NO_REPLY action text but keeps media payload", () => {
+  it("preserves JSON NO_REPLY action text and media", () => {
     const reply = expectNormalizedReply(
       normalizeReplyPayload({
         text: '{"action":"NO_REPLY"}',
         mediaUrl: "https://example.com/img.png",
       }),
     );
-    expect(reply.text).toBe("");
+    expect(reply.text).toBe('{"action":"NO_REPLY"}');
     expect(reply.mediaUrl).toBe("https://example.com/img.png");
   });
 });
@@ -500,10 +505,10 @@ describe("createStreamingDirectiveAccumulator", () => {
     });
   });
 
-  it("strips a glued leading NO_REPLY token from streamed text", () => {
+  it("preserves a glued leading NO_REPLY mention in streamed text", () => {
     expect(
       createStreamingDirectiveAccumulator().consume("NO_REPLYThe user is saying hello")?.text,
-    ).toBe("The user is saying hello");
+    ).toBe("NO_REPLYThe user is saying hello");
   });
 
   it("keeps a complete final MEDIA line available to the final parser", () => {
@@ -515,6 +520,36 @@ describe("createStreamingDirectiveAccumulator", () => {
       text: "Here.",
       mediaUrls: ["/tmp/final.png"],
     });
+  });
+});
+
+describe("parseReplyDirectives terminal silence", () => {
+  it.each([
+    { text: " NO_REPLY ", silent: true, expected: "" },
+    { text: " no_reply ", silent: true, expected: "" },
+    { text: '"NO_REPLY"', silent: false, expected: '"NO_REPLY"' },
+    { text: "NO_REPLY NO_REPLY", silent: false, expected: "NO_REPLY NO_REPLY" },
+    { text: '{"action":"NO_REPLY"}', silent: false, expected: '{"action":"NO_REPLY"}' },
+    {
+      text: "<think>internal reasoning</think>\nNO_REPLY",
+      silent: false,
+      expected: "<think>internal reasoning</think>\nNO_REPLY",
+    },
+    { text: "NO_REPLY\nHere is the answer.", silent: false, expected: "Here is the answer." },
+  ])("classifies only token-only silence: $text", ({ text, silent, expected }) => {
+    expect(parseReplyDirectives(text)).toMatchObject({ isSilent: silent, text: expected });
+  });
+});
+
+describe("standalone leading silent control lines", () => {
+  it.each([
+    { input: "NO_REPLY\n  Answer.\n", expected: "  Answer.\n" },
+    { input: "no_reply\r\nAnswer.\nNO_REPLY", expected: "Answer.\nNO_REPLY" },
+    { input: "NO_REPLY\nNO_REPLY\nAnswer.", expected: "NO_REPLY\nAnswer." },
+    { input: "NO_REPLYAnswer.", expected: null },
+    { input: "Answer. NO_REPLY", expected: null },
+  ])("preserves the suffix without broad token stripping: $input", ({ input, expected }) => {
+    expect(stripMixedSilentReplyTokens(input)).toBe(expected);
   });
 });
 

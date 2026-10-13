@@ -13,6 +13,7 @@ import {
   renderUserFacingText,
 } from "../../agents/embedded-agent-helpers/user-facing-text.js";
 import { classifyCompactionReason } from "../../agents/embedded-agent-runner/compact-reasons.js";
+import type { EmbeddedAgentRunResult } from "../../agents/embedded-agent-runner/types.js";
 import {
   findCliTerminalStopError,
   findCliTimeoutError,
@@ -43,7 +44,14 @@ import {
 import { isAgentHarnessPreflightError } from "../../agents/harness/errors.js";
 import { isProviderAuthError } from "../../agents/model-auth-runtime-shared.js";
 import { buildProviderAuthRecoveryHint } from "../../agents/provider-auth-recovery-hint.js";
-import type { ReplyCompletion, ReplyExpectation } from "../../agents/reply-completion.js";
+import {
+  createMissingReplyNotice,
+  MISSING_REPLY_NOTICE_TEXT,
+  resolveReplyExpectation,
+  shouldDeliverMissingReplyNotice,
+  type ReplyCompletion,
+  type ReplyExpectation,
+} from "../../agents/reply-completion.js";
 import {
   collectErrorGraphCandidates,
   formatErrorMessage,
@@ -60,8 +68,9 @@ import {
 } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
 import type { VerboseLevel } from "../thinking.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
+import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 
 type ReplyFailoverFacts = ReturnType<typeof resolveReplyFailoverFacts>;
 
@@ -381,7 +390,7 @@ export function buildExternalRunFailureReply(
 
 export function markAgentRunFailureReplyPayload<T extends ReplyPayload>(payload: T): T {
   const marked = markReplyPayloadForSourceSuppressionDelivery(payload);
-  if (!isSilentReplyText(marked.text, SILENT_REPLY_TOKEN)) {
+  if (!isSilentReplyTokenOnly(marked.text, SILENT_REPLY_TOKEN)) {
     marked.isError = true;
   }
   return marked;
@@ -442,15 +451,52 @@ export function buildTerminalAgentRunFailureReplyPayload(params: {
   });
 }
 
-export function buildEmptyInteractiveReplyPayload(params: {
+/** Lifts the owned failure notice without inventing chat output for a background empty turn. */
+export async function resolveTerminalAgentRunFailurePayload(params: {
+  result: EmbeddedAgentRunResult;
+  run: Parameters<typeof shouldDeliverMissingReplyNotice>[0];
+  useHeartbeatFailureCopy?: boolean;
+  visibleReplyDelivered: () => Promise<boolean>;
+}): Promise<ReplyPayload | undefined> {
+  const suppressMissingReplyNotice =
+    params.result.meta?.error?.kind === "incomplete_turn" &&
+    params.result.meta.error.message.startsWith(MISSING_REPLY_NOTICE_TEXT) &&
+    params.useHeartbeatFailureCopy !== true &&
+    !shouldDeliverMissingReplyNotice(params.run);
+  const ownedFailureNotice = params.result.payloads?.find(
+    (payload) =>
+      payload.isError === true &&
+      payload.isStatusNotice === true &&
+      getReplyPayloadMetadata(payload)?.assistantTranscriptOwned === true,
+  );
+  if (ownedFailureNotice) {
+    params.result.payloads = params.result.payloads?.filter(
+      (payload) => payload !== ownedFailureNotice,
+    );
+    return suppressMissingReplyNotice
+      ? undefined
+      : markAgentRunFailureReplyPayload(ownedFailureNotice);
+  }
+  if (suppressMissingReplyNotice) {
+    return undefined;
+  }
+  const replyExpectation = resolveReplyExpectation(params.run);
+  return buildTerminalAgentRunFailureReplyPayload({
+    isHeartbeat: params.run.isHeartbeat,
+    useHeartbeatFailureCopy: params.useHeartbeatFailureCopy,
+    replyExpectation,
+    visibleReplyDelivered:
+      replyExpectation === "optional" ? await params.visibleReplyDelivered() : false,
+  });
+}
+
+export function buildMissingReplyPayload(params: {
   completion: ReplyCompletion;
 }): ReplyPayload | undefined {
   if (params.completion.outcome !== "missing") {
     return undefined;
   }
-  return markAgentRunFailureReplyPayload({
-    text: "I finished the turn, but it did not produce a visible reply. Please try again, or start a new session if this keeps happening.",
-  });
+  return createMissingReplyNotice();
 }
 
 export function buildKnownAgentRunFailureReplyPayload(params: {

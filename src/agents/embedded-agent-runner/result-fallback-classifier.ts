@@ -1,6 +1,6 @@
 import { asOptionalObjectRecord } from "@openclaw/normalization-core/record-coerce";
 import { getReplyPayloadMetadata } from "../../auto-reply/reply-payload.js";
-import { isSilentReplyPayloadText } from "../../auto-reply/tokens.js";
+import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { classifyFailoverReason } from "../failover/classify.js";
 import type { FailoverReason } from "../failover/signal.js";
 import { GENERIC_EXTERNAL_RUN_FAILURE_TEXT } from "../failover/user-copy.js";
@@ -58,7 +58,7 @@ export function mergeEmbeddedAgentRunResultForModelFallbackExhaustion(params: {
 
 function hasDeliberateSilentTerminalReply(result: EmbeddedAgentRunResult): boolean {
   return [result.meta.finalAssistantRawText, result.meta.finalAssistantVisibleText].some(
-    (text) => typeof text === "string" && isSilentReplyPayloadText(text),
+    (text) => typeof text === "string" && isSilentReplyTokenOnly(text),
   );
 }
 
@@ -70,7 +70,7 @@ function hasDeliverableAssistantPayload(result: {
   return (
     (typeof finalVisibleText === "string" &&
       finalVisibleText.trim().length > 0 &&
-      !isSilentReplyPayloadText(finalVisibleText)) ||
+      !isSilentReplyTokenOnly(finalVisibleText)) ||
     hasVisibleAgentPayload(result, {
       includeErrorPayloads: false,
       includeReasoningPayloads: false,

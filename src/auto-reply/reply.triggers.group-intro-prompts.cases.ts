@@ -176,7 +176,6 @@ export function registerGroupIntroPromptCases(): void {
         const extraSystemPrompt = [
           buildGroupChatContext({
             sessionCtx: testCase.message,
-            silentReplyPolicy: "allow",
             silentToken: "NO_REPLY",
           }),
           buildGroupIntro({

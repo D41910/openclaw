@@ -61,6 +61,14 @@ describe("assertSettledTurnFinalizationResult", () => {
     expect(assertSettledTurnFinalizationResult(result)).toBe(result);
   });
 
+  it.each(["NO_REPLY.", "NO_REPLY NO_REPLY", '{"action":"NO_REPLY"}'])(
+    "keeps non-token-only finalizer text %s",
+    (text) => {
+      const result = { assistant: assistantMessage([{ type: "text", text }]) };
+      expect(assertSettledTurnFinalizationResult(result)).toBe(result);
+    },
+  );
+
   it("rejects a tool call", () => {
     expect(() =>
       assertSettledTurnFinalizationResult({

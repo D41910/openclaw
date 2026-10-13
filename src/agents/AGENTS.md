@@ -27,7 +27,8 @@ Own agent assembly, run authority, focused tests. Slow, import-bound tests = arc
 
 ## Source Reply Completion
 
-- Only canonical host-owned current-source completion fact suppresses required-reply finalization after settled, complete, non-dry-run delivery. Terminal reaction: explicit `final: true` + nonempty addition to current channel/account/conversation/message. Acknowledgments, progress/removal/empty reactions, wrong targets, failures, partial delivery, no-ops, dry runs never qualify. No channel/fallback-finalizer exceptions.
+- Token-only `NO_REPLY` intentionally ends external turns silently, including required turns after cross-chat sends, reactions, or yield. `resolveCommandReplyExpectation` owns result-required internal sessions. Empty finals still recover; silence does not clear failures, prove delivery, or cancel pending work. `reply-completion.ts` owns the decision; callers consume its recorded result.
+- Delivery completion remains host-owned: settled, complete, non-dry-run current-source delivery. Terminal reaction: explicit `final: true` + nonempty addition to current channel/account/conversation/message. Acknowledgments, progress/removal/empty reactions, wrong targets, failures, partial delivery, no-ops, dry runs are not delivery proof; explicit silence does not depend on delivery proof.
 - Current-source `final: false` text send becomes completion only at settlement when last tool batch + terminal response empty or `NO_REPLY`. Work after/beside it, including asynchronous-send follow-up, keeps finalization.
 
 ## Verification

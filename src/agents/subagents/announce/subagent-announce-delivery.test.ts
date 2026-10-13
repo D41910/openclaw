@@ -29,6 +29,7 @@ import { captureOpenClawStateWorkerContext } from "../../../state/openclaw-state
 import type { OpenClawStateWorkerContext } from "../../../state/openclaw-state-worker-context.types.js";
 import {
   createChannelTestPluginBase,
+  createOutboundTestPlugin,
   createTestRegistry,
 } from "../../../test-utils/channel-plugins.js";
 import type {
@@ -403,9 +404,11 @@ function createQueueOutcomeSequenceMock(
   });
 }
 
-async function createRequesterTranscriptFixture(sessionId: string) {
+async function createRequesterTranscriptFixture(
+  sessionId: string,
+  sessionKey = "agent:main:slack:channel:C123:thread:171.222",
+) {
   const dir = tempDirs.make("openclaw-subagent-announce-transcript-");
-  const sessionKey = "agent:main:slack:channel:C123:thread:171.222";
   const storePath = path.join(dir, "agents", "main", "sessions", "sessions.json");
   const entry: SessionEntry = {
     sessionId,
@@ -1254,36 +1257,90 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     expect(content.length).toBeLessThanOrEqual(4_096);
   });
 
-  it("sends one generic direct notice when requester synthesis repeats an error child completion", async () => {
-    const status = "error";
-    const childSessionKey = `agent:worker:subagent:${status}-child`;
-    const providerFailure = "provider rejected private-model-alias with status 400";
-    const childResult = "private child output must not reach the requester";
-    const callGateway = createGatewayMock(new Error(providerFailure));
-    const sendMessage = createSendMessageMock();
+  it.each(["error", "ok"] as const)(
+    "delivers one retried %s child result without inventing an assistant answer",
+    async (status) => {
+      const fixture = await createRequesterTranscriptFixture(
+        `requester-${status}-child`,
+        deliveryRoutes.discord.key,
+      );
+      const childSessionKey = `agent:worker:subagent:${status}-child`;
+      const childResult = "The completed child result.";
+      const expectedText = status === "error" ? "No answer was returned." : childResult;
+      const sendText = vi.fn(async ({ to }: { to: string }) => ({
+        channel: "discord" as const,
+        messageId: "notice-or-result",
+        to,
+      }));
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "discord",
+            source: "test",
+            plugin: createOutboundTestPlugin({
+              id: "discord",
+              outbound: { deliveryMode: "direct", sendText },
+            }),
+          },
+        ]),
+      );
+      const sendMessage = vi.fn(runtimeSendMessage).mockRejectedValueOnce(
+        new PlatformMessageNotDispatchedError("transport unavailable", {
+          cause: new Error("transport unavailable"),
+        }),
+      );
+      const callGateway = createGatewayMock(
+        new Error(
+          status === "error"
+            ? "provider rejected requester synthesis"
+            : "incomplete terminal response code=incomplete_result",
+        ),
+      );
+      const directIdempotencyKey = `announce-${status}-retry`;
+      const deliver = () =>
+        deliverDiscordDirectMessageCompletion({
+          callGateway,
+          sendMessage,
+          runtimeConfig: { session: { store: fixture.storePath } },
+          sessionId: fixture.sessionId,
+          requesterTranscriptFixture: () => fixture,
+          sourceSessionKey: childSessionKey,
+          sourceTool: "subagent_announce",
+          directIdempotencyKey,
+          internalEvents: taskCompletionEvents({
+            childSessionKey,
+            childSessionId: `${status}-child-session-id`,
+            status,
+            result: childResult,
+          }),
+        });
 
-    const result = await deliverDiscordDirectMessageCompletion({
-      callGateway,
-      sendMessage,
-      sourceSessionKey: childSessionKey,
-      sourceTool: "subagent_announce",
-      internalEvents: taskCompletionEvents({
-        childSessionKey,
-        childSessionId: `${status}-child-session-id`,
-        status,
-        statusLabel: `${status}: ${providerFailure}`,
-        result: childResult,
-      }),
-    });
-
-    expectRecordFields(result, { delivered: true, path: "direct" });
-    expect(callGateway).toHaveBeenCalledOnce();
-    expect(sendMessage).toHaveBeenCalledOnce();
-    const content = mockCallArg(sendMessage, 0, 0).content;
-    expect(content).toBe(
-      "A delegated task failed before it could report a result. Please retry the task.",
-    );
-  });
+      expect((await deliver()).delivered).toBe(false);
+      expect(sendText).not.toHaveBeenCalled();
+      expectRecordFields(await deliver(), { delivered: true, path: "direct" });
+      expect(sendText).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ to: "dm:U123", text: expectedText }),
+      );
+      expect(sendMessage.mock.calls.map(([params]) => params.idempotencyKey)).toEqual([
+        `${directIdempotencyKey}:text-direct`,
+        `${directIdempotencyKey}:text-direct`,
+      ]);
+      if (status === "error") {
+        expect(sendMessage.mock.calls[1]?.[0].payloads).toEqual([
+          { text: expectedText, isError: true, isStatusNotice: true },
+        ]);
+      }
+      const assistantMessages = (await readRequesterTranscriptMessages(fixture)).filter(
+        (message) => message.role === "assistant",
+      );
+      if (status === "error") {
+        expect(assistantMessages).toEqual([]);
+      } else {
+        expect(assistantMessages).toHaveLength(1);
+        expect(JSON.stringify(assistantMessages[0])).toContain(childResult);
+      }
+    },
+  );
 
   it.each(["cancelled", "source owner changed"] as const)(
     "stops a failed-child notice when %s at platform dispatch",
