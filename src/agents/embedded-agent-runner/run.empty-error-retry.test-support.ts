@@ -189,7 +189,7 @@ describe("runEmbeddedAgent silent-error retry", () => {
     expect(result.payloads).toBeUndefined();
     expect(result.meta.error).toMatchObject({
       kind: "incomplete_turn",
-      message: "No answer was returned.",
+      message: "No answer was returned. Ask again if you still need one.",
       fallbackSafe: true,
     });
   });

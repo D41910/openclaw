@@ -6,6 +6,7 @@ import {
   resolveExplicitFinalSourceReplyDeliveryEvidence,
   resolveSourceReplyDelivery,
 } from "../../agents/embedded-agent-runner/delivery-evidence.js";
+import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
 import {
   MISSING_REPLY_NOTICE_TEXT,
   isSyntheticSourceReplyTurn,
@@ -157,7 +158,7 @@ export async function prepareReplyAgentPayloads(state: {
   const authoredSilence =
     successfulTerminal && runResult.meta?.terminalReply?.disposition === "silent";
   const implicitContinuation = runResult.meta?.continuationPending === true;
-  // A media-run continuation has no completion child to take over delivery; its status is the reply.
+  // Completion-message children own their continuation; detached media retains its own run owner.
   const continuationOwner =
     implicitContinuation && hasCompletionMessageSessionSpawn(runResult.acceptedSessionSpawns)
       ? {
@@ -165,6 +166,14 @@ export async function prepareReplyAgentPayloads(state: {
           operationKey: replyOperation.key,
           operationSessionId: replyOperation.sessionId,
         }
+      : undefined;
+  const mediaSessionKey = runtimePolicySessionKey ?? sessionKey ?? followupRun.run.sessionKey;
+  const mediaRequester =
+    implicitContinuation &&
+    !continuationOwner &&
+    mediaSessionKey &&
+    hasPendingGeneratedMediaTaskForSessionKey(mediaSessionKey, followupRun.run.agentId)
+      ? { sessionKey: mediaSessionKey, agentId: followupRun.run.agentId }
       : undefined;
   const pendingContinuation =
     runResult.meta?.yielded === true ||
@@ -263,6 +272,7 @@ export async function prepareReplyAgentPayloads(state: {
           yielded: runResult.meta?.yielded === true,
           continuationPending: implicitContinuation,
           yieldAcknowledgment: runResult.meta?.yieldAcknowledgment,
+          mediaRequester,
           // Child spawns are side effects, not user-visible messages. They must not
           // suppress the explicit waiting reply for the parent turn.
           hasVisibleMessageDelivery:
@@ -393,17 +403,11 @@ export async function prepareReplyAgentPayloads(state: {
     await signalTypingIfNeeded([preparedPayload], typingSignals);
     return returnWithQueuedFollowupDrain(preparedPayload);
   };
-  if (waitingStatusPayload || continuationOwner) {
-    const mediaSessionKey =
-      implicitContinuation && !continuationOwner
-        ? (runtimePolicySessionKey ?? sessionKey ?? followupRun.run.sessionKey)
-        : undefined;
+  if (waitingStatusPayload || implicitContinuation) {
     const settlement = await prepareWaitingStatusContinuation({
       payload: waitingStatusPayload,
       acceptedSessionSpawns: runResult.acceptedSessionSpawns,
-      mediaRequester: mediaSessionKey
-        ? { sessionKey: mediaSessionKey, agentId: followupRun.run.agentId }
-        : undefined,
+      mediaRequester,
       operation: replyOperation,
       owner: continuationOwner,
       requester: {
@@ -412,7 +416,7 @@ export async function prepareReplyAgentPayloads(state: {
         runId,
       },
     });
-    if (settlement) {
+    if (implicitContinuation) {
       opts?.onPendingContinuation?.(settlement);
     }
   }

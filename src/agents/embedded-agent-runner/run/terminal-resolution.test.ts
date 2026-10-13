@@ -557,7 +557,7 @@ describe("terminal resolution", () => {
       {
         text:
           "Web fetch completed.\nOrigin: https://example.com\nStatus: 200\n\n" +
-          "No answer was returned.",
+          "No answer was returned. Ask again if you still need one.",
         isError: true,
         isStatusNotice: true,
       },

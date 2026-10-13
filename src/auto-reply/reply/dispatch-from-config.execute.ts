@@ -78,7 +78,7 @@ export async function executeDispatch(state: PrepareDispatchExecutionReadyState)
   const releasePendingContinuation = async () => {
     const settlement = pendingContinuationSettlement;
     pendingContinuationSettlement = undefined;
-    await settlement?.settle(false);
+    await settlement?.settle("cancelled");
   };
   let didDeliverVisiblePartialReply = false;
   let replyResolverError: string | undefined;
@@ -496,7 +496,8 @@ export async function executeDispatch(state: PrepareDispatchExecutionReadyState)
       // Adoption retires ingress replay before the model starts. A progress ACK
       // cannot settle a later failure; use normal final delivery and its policy.
       return adopted &&
-        state.replyOperationRunState.replyCompletion?.expectation === "required" &&
+        (state.replyOperationRunState.replyCompletion?.expectation === "required" ||
+          state.replyOperationRunState.replyCompletion?.expectation === "result-required") &&
         state.replyOperationRunState.replyCompletion.outcome !== "blocked" &&
         !state.suppressDelivery &&
         !state.getObservedReplyDelivery()

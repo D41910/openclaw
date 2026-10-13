@@ -55,7 +55,7 @@ export function registerRequiredReplyCompletionCases({
     expect(onPartialReply).not.toHaveBeenCalled();
     expect(onBlockReply).not.toHaveBeenCalled();
     expect(res).toMatchObject({
-      text: "No answer was returned.",
+      text: "No answer was returned. Ask again if you still need one.",
       isError: true,
       isStatusNotice: true,
     });
@@ -137,7 +137,7 @@ export function registerRequiredReplyCompletionCases({
       const payloads = Array.isArray(result) ? result : result ? [result] : [];
       expect(payloads).toHaveLength(1);
       expect(payloads[0]).toMatchObject({
-        text: "No answer was returned.",
+        text: "No answer was returned. Ask again if you still need one.",
         isError: true,
         isStatusNotice: true,
         replyToId: messageId,
@@ -181,7 +181,7 @@ export function registerRequiredReplyCompletionCases({
 
     expect(payloadsResult).toContainEqual(
       expect.objectContaining({
-        text: "No answer was returned.",
+        text: "No answer was returned. Ask again if you still need one.",
         isError: true,
         replyToId: "msg",
       }),
@@ -198,7 +198,7 @@ export function registerRequiredReplyCompletionCases({
     const payload = Array.isArray(result) ? result[0] : result;
 
     expect(payload).toMatchObject({
-      text: "No answer was returned.",
+      text: "No answer was returned. Ask again if you still need one.",
       isError: true,
     });
     expect(getReplyPayloadMetadata(payload ?? {})?.deliverDespiteSourceReplySuppression).toBe(true);
@@ -210,12 +210,19 @@ export function registerRequiredReplyCompletionCases({
       state.runEmbeddedAgentMock.mockResolvedValueOnce({
         payloads: [
           setReplyPayloadMetadata(
-            { text: "No answer was returned.", isError: true, isStatusNotice: true },
+            {
+              text: "No answer was returned. Ask again if you still need one.",
+              isError: true,
+              isStatusNotice: true,
+            },
             { assistantTranscriptOwned: true },
           ),
         ],
         meta: {
-          error: { kind: "incomplete_turn", message: "No answer was returned." },
+          error: {
+            kind: "incomplete_turn",
+            message: "No answer was returned. Ask again if you still need one.",
+          },
           terminalReply: { disposition: "silent" },
         },
       });
@@ -227,7 +234,7 @@ export function registerRequiredReplyCompletionCases({
       const payloads = Array.isArray(result) ? result : result ? [result] : [];
       expect(payloads).toHaveLength(1);
       expect(payloads[0]).toMatchObject({
-        text: "No answer was returned.",
+        text: "No answer was returned. Ask again if you still need one.",
         isError: true,
         isStatusNotice: true,
       });
@@ -265,7 +272,7 @@ export function registerRequiredReplyCompletionCases({
     expect(onBlockReply.mock.calls[0]?.[0]).toEqual(expect.objectContaining(payload));
     expect(payloads).toContainEqual(
       expect.objectContaining({
-        text: "No answer was returned.",
+        text: "No answer was returned. Ask again if you still need one.",
         isError: true,
       }),
     );
@@ -385,11 +392,20 @@ export function registerRequiredReplyCompletionCases({
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
       payloads: [
         setReplyPayloadMetadata(
-          { text: "No answer was returned.", isError: true, isStatusNotice: true },
+          {
+            text: "No answer was returned. Ask again if you still need one.",
+            isError: true,
+            isStatusNotice: true,
+          },
           { assistantTranscriptOwned: true },
         ),
       ],
-      meta: { error: { kind: "incomplete_turn", message: "No answer was returned." } },
+      meta: {
+        error: {
+          kind: "incomplete_turn",
+          message: "No answer was returned. Ask again if you still need one.",
+        },
+      },
     });
     const { run } = createMinimalRun({
       opts: { isHeartbeat: true, onAgentRunTerminalOutcome, [REPLY_OPERATION_RUN_STATE]: runState },

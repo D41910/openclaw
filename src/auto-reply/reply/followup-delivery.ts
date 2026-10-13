@@ -1,4 +1,5 @@
 import { hasOutboundReplyContent } from "openclaw/plugin-sdk/reply-payload";
+import { hasCompletionMessageSessionSpawn } from "../../agents/accepted-session-spawn.js";
 import {
   hasCommittedSourceReplyDeliveryEvidence,
   hasCompletedSourceReplyDeliveryEvidence,
@@ -6,6 +7,7 @@ import {
   resolveExplicitFinalSourceReplyDeliveryEvidence,
   resolveSourceReplyDelivery,
 } from "../../agents/embedded-agent-runner/delivery-evidence.js";
+import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
 import {
   MISSING_REPLY_NOTICE_TEXT,
   isSyntheticSourceReplyTurn,
@@ -57,7 +59,7 @@ import {
   resolveStrandedReplyRecovery,
 } from "./stranded-reply-recovery.js";
 import { createTypingSignaler } from "./typing-mode.js";
-import { buildWaitingStatusPayload } from "./waiting-status.js";
+import { buildWaitingStatusPayload, prepareWaitingStatusContinuation } from "./waiting-status.js";
 
 type FollowupDeliveryDecision =
   | {
@@ -315,11 +317,23 @@ export async function resolveFollowupDeliveryDecision(params: {
     turn.operation.fail("run_failed", new Error(MISSING_REPLY_NOTICE_TEXT));
     opts?.onAgentRunTerminalOutcome?.("failed");
   }
+  const mediaSessionKey =
+    result.meta?.continuationPending === true &&
+    !hasCompletionMessageSessionSpawn(result.acceptedSessionSpawns)
+      ? (turn.queued.run.runtimePolicySessionKey ??
+        (turn.session.kind === "session" ? turn.session.key : turn.queued.run.sessionKey))
+      : undefined;
+  const mediaRequester =
+    mediaSessionKey &&
+    hasPendingGeneratedMediaTaskForSessionKey(mediaSessionKey, turn.queued.run.agentId)
+      ? { sessionKey: mediaSessionKey, agentId: turn.queued.run.agentId }
+      : undefined;
   const waitingStatusParams = {
     completion,
     continuationPending: result.meta?.continuationPending === true,
     yielded: result.meta?.yielded === true,
     yieldAcknowledgment: result.meta?.yieldAcknowledgment,
+    mediaRequester,
     // Child spawns are side effects, not user-visible messages. They must not
     // suppress the explicit waiting reply for the parent turn.
     hasVisibleMessageDelivery:
@@ -330,6 +344,18 @@ export async function resolveFollowupDeliveryDecision(params: {
   const waitingStatusPayload = terminalRunFailed
     ? undefined
     : buildWaitingStatusPayload(waitingStatusParams);
+  if (waitingStatusPayload && mediaRequester) {
+    await prepareWaitingStatusContinuation({
+      payload: waitingStatusPayload,
+      mediaRequester,
+      operation: turn.operation,
+      requester: {
+        sessionKey: turn.queued.run.sessionKey,
+        agentId: turn.queued.run.agentId,
+        runId: execution.runId,
+      },
+    });
+  }
   const fallbackPayload = terminalRunFailed
     ? accounting.terminalFailurePayload &&
       isInteractive &&

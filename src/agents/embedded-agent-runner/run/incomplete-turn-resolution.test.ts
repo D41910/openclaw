@@ -64,7 +64,7 @@ describe("incomplete-turn terminal metadata", () => {
         attempt,
       }),
     ).toBe(
-      "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.",
+      "No answer was returned. Ask again if you still need one. Note: some tool actions may have already been executed — please verify before retrying.",
     );
   });
 
@@ -116,7 +116,7 @@ describe("incomplete-turn terminal metadata", () => {
         attempt,
       }),
     ).toBe(
-      "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.",
+      "No answer was returned. Ask again if you still need one. Note: some tool actions may have already been executed — please verify before retrying.",
     );
   });
 
@@ -214,7 +214,7 @@ describe("tool-authored source replies", () => {
         ],
       }),
     });
-    expect(result).toBe("No answer was returned.");
+    expect(result).toBe("No answer was returned. Ask again if you still need one.");
   });
 
   it("treats a final tool-authored source reply as a complete tool-use turn", () => {

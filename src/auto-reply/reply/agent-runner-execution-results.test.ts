@@ -73,12 +73,21 @@ describe("executeAgentTurn: result and tool delivery", () => {
       followupRun.run.sourceReplyDeliveryMode = sourceReplyDeliveryMode;
       followupRun.run.terminalReplyExpectation = "required";
       const notice = setReplyPayloadMetadata(
-        { text: "No answer was returned.", isError: true, isStatusNotice: true },
+        {
+          text: "No answer was returned. Ask again if you still need one.",
+          isError: true,
+          isStatusNotice: true,
+        },
         { assistantTranscriptOwned: true },
       );
       state.runEmbeddedAgentMock.mockResolvedValueOnce({
         payloads: [notice],
-        meta: { error: { kind: "incomplete_turn", message: "No answer was returned." } },
+        meta: {
+          error: {
+            kind: "incomplete_turn",
+            message: "No answer was returned. Ask again if you still need one.",
+          },
+        },
       });
       const params = createMinimalRunAgentTurnParams({ followupRun });
       const execute = await getRawExecuteAgentTurnForTest();
@@ -125,7 +134,7 @@ describe("executeAgentTurn: result and tool delivery", () => {
       assert(decision.kind === "deliver");
       expect(decision.payloads).toHaveLength(1);
       expect(decision.payloads[0]).toMatchObject({
-        text: "No answer was returned.",
+        text: "No answer was returned. Ask again if you still need one.",
         isError: true,
         isStatusNotice: true,
       });

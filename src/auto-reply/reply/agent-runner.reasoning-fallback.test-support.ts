@@ -74,7 +74,7 @@ export function registerReasoningFallbackTests({
         }
         expect(payloads).toContainEqual(
           expect.objectContaining({
-            text: "No answer was returned.",
+            text: "No answer was returned. Ask again if you still need one.",
             isError: true,
           }),
         );

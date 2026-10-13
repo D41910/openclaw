@@ -148,7 +148,7 @@ export async function prepareTerminalWithSettledTurnFinalization(input: {
   const errorContext = input.terminalBase.activeErrorContext;
   const describeRun = () =>
     `runId=${runParams.runId} sessionId=${runParams.sessionId} provider=${errorContext.provider}/${errorContext.model}`;
-  // An empty recovery cannot replace a classified failure or settled tool error.
+  // Neither empty recovery nor intentional silence replaces a classified failure or tool error.
   const preserveOriginalTerminal =
     Boolean(initial.attempt.lastToolError) ||
     isEmbeddedRunTerminalTimeout(initial.terminalState.outcome) ||
@@ -180,6 +180,9 @@ export async function prepareTerminalWithSettledTurnFinalization(input: {
       });
       assertFinalizationActive();
       attempt = finalization.attempt;
+      mergeUsageIntoAccumulator(input.terminalBase.usageAccumulator, attempt.attemptUsage);
+      mergeAttemptRunStatsIntoAccumulator(input.terminalBase.usageAccumulator, attempt);
+      lastRunPromptUsage = attempt.attemptUsage ?? lastRunPromptUsage;
       if (
         finalization.outcome === "empty" &&
         shouldTreatEmptyAssistantReplyAsSilent({
@@ -190,11 +193,13 @@ export async function prepareTerminalWithSettledTurnFinalization(input: {
           attempt,
         })
       ) {
-        finalization.outcome = "answered";
+        // Silence ends recovery without replaying work, but is not an authored
+        // answer that can clear the original provider cause and recovery guidance.
+        if (!preserveOriginalTerminal) {
+          finalization.outcome = "answered";
+        }
+        break;
       }
-      mergeUsageIntoAccumulator(input.terminalBase.usageAccumulator, attempt.attemptUsage);
-      mergeAttemptRunStatsIntoAccumulator(input.terminalBase.usageAccumulator, attempt);
-      lastRunPromptUsage = attempt.attemptUsage ?? lastRunPromptUsage;
       if (
         finalization.outcome !== "empty" ||
         finalizationAttempt >= MAX_EMPTY_SETTLED_FINALIZATION_ATTEMPTS

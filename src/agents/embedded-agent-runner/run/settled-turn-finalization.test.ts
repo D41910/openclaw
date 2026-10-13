@@ -358,67 +358,74 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
 
   it.each([
     {
-      name: "optional authored silence",
+      name: "successful authored silence",
       text: SILENT_REPLY_TOKEN,
-      failedTool: false,
+      createAttempt: settledSuccessfulAttempt,
+      errorText: undefined,
+      silent: true,
+    },
+    {
+      name: "provider failure with authored silence",
+      text: SILENT_REPLY_TOKEN,
+      createAttempt: createSettledProviderFailureAttempt,
+      errorText: "Couldn't connect to the AI service.",
       silent: true,
     },
     {
       name: "blank output",
       text: "",
-      failedTool: false,
+      createAttempt: createSettledProviderFailureAttempt,
+      errorText: "Couldn't connect to the AI service.",
       silent: false,
     },
     {
       name: "failed tool",
       text: SILENT_REPLY_TOKEN,
-      failedTool: true,
+      createAttempt: settledFailedAttempt,
+      errorText: "Exec failed",
       silent: true,
     },
-  ])("honors the finalization silence contract: $name", async ({ text, failedTool, silent }) => {
-    const attempt = failedTool ? settledFailedAttempt() : createSettledProviderFailureAttempt();
-    const input = finalizationInput(attempt);
-    Object.assign(input.terminalBase.runParams, {
-      trigger: "heartbeat",
-      terminalReplyExpectation: "optional",
-      allowEmptyAssistantReplyAsSilent: true,
-      sourceReplyDeliveryMode: "automatic",
-    });
-    backendMocks.runSettledFinalization.mockResolvedValue({
-      outcome: "empty",
-      result: { assistant: buildEmbeddedRunnerAssistant({ content: [{ type: "text", text }] }) },
-    });
-    const result = await prepareTerminalWithSettledTurnFinalization(input);
-    expect(backendMocks.runSettledFinalization).toHaveBeenCalledTimes(silent ? 1 : 2);
-    if (silent) {
-      expect(result.finalizationOutcome).toBe("answered");
-      expect(result.attempt.assistantTexts).toEqual([SILENT_REPLY_TOKEN]);
-      expect(result.prepared.payloadsWithToolMedia ?? []).toEqual(
-        failedTool
-          ? [
-              expect.objectContaining({
-                isError: true,
-                text: expect.stringContaining("Exec failed"),
-              }),
-            ]
-          : [],
-      );
-      expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
-      if (failedTool) {
-        expect(result.prepared.attemptToolSummary).toMatchObject({
-          failures: 1,
-          unresolvedError: { toolName: "exec" },
-        });
+  ])(
+    "honors the finalization silence contract: $name",
+    async ({ text, createAttempt, errorText, silent }) => {
+      const attempt = createAttempt();
+      const input = finalizationInput(attempt);
+      Object.assign(input.terminalBase.runParams, {
+        trigger: "heartbeat",
+        terminalReplyExpectation: "optional",
+        allowEmptyAssistantReplyAsSilent: true,
+        sourceReplyDeliveryMode: "automatic",
+      });
+      backendMocks.runSettledFinalization.mockResolvedValue({
+        outcome: "empty",
+        result: { assistant: buildEmbeddedRunnerAssistant({ content: [{ type: "text", text }] }) },
+      });
+      const result = await prepareTerminalWithSettledTurnFinalization(input);
+      expect(backendMocks.runSettledFinalization).toHaveBeenCalledTimes(silent ? 1 : 2);
+      if (!errorText) {
+        expect(result.finalizationOutcome).toBe("answered");
+        expect(result.attempt.assistantTexts).toEqual([SILENT_REPLY_TOKEN]);
+        expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
+      } else {
+        expect(result.finalizationOutcome).toBe("failed");
+        expect(result.attempt).toBe(attempt);
+        expect(result.terminalState).toBe(input.initial.terminalState);
+        expect(result.prepared.payloadsWithToolMedia).toEqual([
+          expect.objectContaining({
+            isError: true,
+            text: expect.stringContaining(errorText),
+          }),
+        ]);
+        if (attempt.lastToolError) {
+          expect(result.prepared.attemptToolSummary).toMatchObject({
+            failures: 1,
+            unresolvedError: { toolName: "exec" },
+          });
+        }
       }
-    } else {
-      expect(result.finalizationOutcome).toBe("failed");
-      expect(result.prepared.payloadsWithToolMedia).toEqual([
-        expect.objectContaining({
-          text: expect.stringContaining("Couldn't connect to the AI service."),
-        }),
-      ]);
-    }
-  });
+      expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not accept optional authored silence after an original timeout", async () => {
     const attempt = createSettledProviderFailureAttempt();
@@ -496,7 +503,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       if (notice) {
         expect(terminal.result.payloads).toEqual([
           {
-            text: "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.",
+            text: "No answer was returned. Ask again if you still need one. Note: some tool actions may have already been executed — please verify before retrying.",
             isError: true,
             isStatusNotice: true,
           },

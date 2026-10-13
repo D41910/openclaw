@@ -244,7 +244,11 @@ export function registerCliReplyCompletionTests({
         expect(result.meta.error).toMatchObject({ kind: "incomplete_turn", fallbackSafe: false });
         if (notice) {
           expect(result.payloads).toEqual([
-            { text: "No answer was returned.", isError: true, isStatusNotice: true },
+            {
+              text: "No answer was returned. Ask again if you still need one.",
+              isError: true,
+              isStatusNotice: true,
+            },
           ]);
           expect(getReplyPayloadMetadata(result.payloads?.[0] ?? {})).toMatchObject({
             assistantTranscriptOwned: true,

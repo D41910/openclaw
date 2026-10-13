@@ -175,7 +175,7 @@ describe("durable pre-reply run failure", () => {
       );
       assert(resolved.action === "complete");
       const result = resolved.result;
-      const notice = "No answer was returned.";
+      const notice = "No answer was returned. Ask again if you still need one.";
       let persistence: Promise<void> | undefined;
       const h = createAgentEventTestHarness({
         lifecycleErrorRetryGraceMs: 0,

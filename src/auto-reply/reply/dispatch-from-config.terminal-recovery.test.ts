@@ -310,10 +310,11 @@ describe("dispatchReplyFromConfig visible admission recovery", () => {
     ["group", true, true, "allow", "slack", true],
     ["group", false, false, "allow", "slack", true],
     ["direct", true, false, "allow", "discord", true],
+    ["direct", false, false, "allow", "webchat", true],
   ] as const)(
     "settles an adopted %s failure (progress=%s, mentioned=%s, silence=%s, origin=%s)",
     async (chatType, progress, mentioned, silentReply, origin, expectedFinal) => {
-      const surface = "slack";
+      const surface = origin === "webchat" ? "webchat" : "slack";
       sessionStoreMocks.currentEntry = { verboseLevel: "on" };
       const resolverError = new Error("private synthetic failure detail");
       const delivered: Array<{ kind: string; payload: ReplyPayload }> = [];

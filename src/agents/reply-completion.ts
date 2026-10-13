@@ -21,7 +21,7 @@ export type ReplyDeliveryObserver = (
 ) => Promise<ReplyDeliveryState>;
 type ReplyCompletionEvidence = "ready" | "delivered" | "pending" | "blocked" | "empty" | "silent";
 
-export const MISSING_REPLY_NOTICE_TEXT = "No answer was returned.";
+export const MISSING_REPLY_NOTICE_TEXT = "No answer was returned. Ask again if you still need one.";
 
 export function createMissingReplyNotice(text = MISSING_REPLY_NOTICE_TEXT): ReplyPayload {
   return setReplyPayloadMetadata(

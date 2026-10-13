@@ -118,7 +118,7 @@ describe("incomplete-turn recovery policy", () => {
           timedOut: false,
           attempt,
         }),
-      ).toBe("No answer was returned.");
+      ).toBe("No answer was returned. Ask again if you still need one.");
     }
   });
 

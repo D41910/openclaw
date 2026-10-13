@@ -36,7 +36,8 @@ export type ReplySessionBinding = {
 };
 
 export type PendingContinuationSettlement = {
-  settle: (statusDelivered: boolean) => Promise<void>;
+  /** Silent success transfers only without an authored status; cancellation requests release. */
+  settle: (outcome: "delivered" | "silent" | "cancelled") => Promise<void>;
 };
 
 export type ReplyRunVerbosity = {
@@ -83,7 +84,7 @@ type InternalReplySessionOptions = {
   requireExplicitMessageTarget?: boolean;
   /** Retire the run's bundle MCP runtime at settlement. Set by one-shot isolated runs (isolated heartbeats) whose session ID is never reused. */
   cleanupBundleMcpOnRunEnd?: boolean;
-  /** Defers the child-completion wake until the visible waiting status is delivered. */
+  /** Defers child completion until status delivery or a successful silent handoff settles. */
   onPendingContinuation?: (settlement?: PendingContinuationSettlement) => void;
   bindSessionCreation?: SessionEventExecution["bindSessionCreation"];
   /** Follow the admitted turn's own first-store registration in its retained request facts. */

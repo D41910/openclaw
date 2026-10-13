@@ -31,7 +31,7 @@ import {
 import { hasVisibleAgentPayload } from "../../embedded-agent-runner/message-visibility.js";
 import { hasVisibleCompletionResult } from "../../internal-event-contract.js";
 import { collectAgentInternalEventMedia, type AgentInternalEvent } from "../../internal-events.js";
-import { createMissingReplyNotice, MISSING_REPLY_NOTICE_TEXT } from "../../reply-completion.js";
+import { MISSING_REPLY_NOTICE_TEXT } from "../../reply-completion.js";
 import { createAgentRunDirectAbortError } from "../../run-termination.js";
 import {
   hasAnnounceSendEvidence,
@@ -439,11 +439,6 @@ export async function deliverCompletionDirect(params: {
       agentId,
       conversationType: "direct",
       content: content ?? "",
-      ...(params.contentKind === "failed_notice"
-        ? {
-            payloads: [createMissingReplyNotice()],
-          }
-        : {}),
       ...(mediaUrls.length > 0 ? { mediaUrls } : {}),
       ...(audioAsVoice ? { asVoice: true } : {}),
       idempotencyKey,
@@ -464,15 +459,11 @@ export async function deliverCompletionDirect(params: {
           // Bookkeeping failure cannot make a fully sent result retryable.
         });
       },
-      ...(params.contentKind === "failed_notice"
-        ? {}
-        : {
-            mirror: {
-              sessionKey: params.requesterSessionKey,
-              agentId,
-              idempotencyKey,
-            },
-          }),
+      mirror: {
+        sessionKey: params.requesterSessionKey,
+        agentId,
+        idempotencyKey,
+      },
     });
     if (committedDelivery) {
       return committedDelivery;

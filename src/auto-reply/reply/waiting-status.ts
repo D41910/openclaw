@@ -21,8 +21,14 @@ export function buildWaitingStatusPayload(params: {
   yieldAcknowledgment?: string;
   yielded?: boolean;
   hasVisibleMessageDelivery: boolean;
+  mediaRequester?: { sessionKey: string; agentId?: string };
 }): ReplyPayload | undefined {
-  const acknowledgment = params.yieldAcknowledgment?.trim();
+  // Media handoff still uses the shipped status transport; child yields require authored text.
+  const acknowledgment =
+    params.yieldAcknowledgment?.trim() ||
+    (params.mediaRequester
+      ? "I’m continuing this work and will send the result when it is ready."
+      : undefined);
   if (
     params.completion.expectation !== "required" ||
     params.completion.outcome !== "pending" ||
@@ -118,7 +124,7 @@ export async function prepareWaitingStatusContinuation(params: {
   assertRequesterCurrent();
   let settlementPromise: Promise<void> | undefined;
   return {
-    settle: (statusDelivered) =>
+    settle: (outcome) =>
       (settlementPromise ??= (async () => {
         try {
           assertRequesterCurrent();
@@ -131,7 +137,9 @@ export async function prepareWaitingStatusContinuation(params: {
             requesterAgentId: params.requester.agentId,
             requesterTurnRunId: params.requester.runId,
             acceptedSessionSpawns,
-            requesterYielded: statusDelivered || !params.payload,
+            requesterYielded:
+              resolveReplyOperationAbortReason(params.operation) === undefined &&
+              (outcome === "delivered" || (outcome === "silent" && !params.payload)),
             stateContext,
             assertCurrent: assertRequesterCurrent,
           });

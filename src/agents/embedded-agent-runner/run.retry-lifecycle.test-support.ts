@@ -91,7 +91,7 @@ describe("direct embedded retry lifecycle", () => {
         terminalReplyExpectation: "result-required",
         onAgentEvent,
       });
-      const notice = "No answer was returned.";
+      const notice = "No answer was returned. Ask again if you still need one.";
       expect(result.payloads).toBeUndefined();
       expect(result.meta).toMatchObject({
         aborted: false,

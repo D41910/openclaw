@@ -77,7 +77,11 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
     }
     expect(exhausted.result.meta.error).toMatchObject({ kind: "incomplete_turn" });
     expect(exhausted.result.payloads).toEqual([
-      { text: "No answer was returned.", isError: true, isStatusNotice: true },
+      {
+        text: "No answer was returned. Ask again if you still need one.",
+        isError: true,
+        isStatusNotice: true,
+      },
     ]);
   });
 });

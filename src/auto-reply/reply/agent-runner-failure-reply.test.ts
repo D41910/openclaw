@@ -46,7 +46,7 @@ describe("buildMissingReplyPayload", () => {
       expect(
         buildMissingReplyPayload({ completion: resolveReplyCompletion(expectation, "empty") }),
       ).toMatchObject({
-        text: "No answer was returned.",
+        text: "No answer was returned. Ask again if you still need one.",
         isError: true,
         isStatusNotice: true,
       });

@@ -313,7 +313,13 @@ describe("resolveFollowupDeliveryDecision", () => {
         }),
       ).toMatchObject({
         kind: "deliver",
-        payloads: [{ text: "No answer was returned.", isError: true, isStatusNotice: true }],
+        payloads: [
+          {
+            text: "No answer was returned. Ask again if you still need one.",
+            isError: true,
+            isStatusNotice: true,
+          },
+        ],
       });
     },
   );
@@ -741,7 +747,13 @@ describe("resolveFollowupDeliveryDecision", () => {
         expectFallback
           ? {
               kind: "deliver",
-              payloads: [{ text: "No answer was returned.", isError: true, isStatusNotice: true }],
+              payloads: [
+                {
+                  text: "No answer was returned. Ask again if you still need one.",
+                  isError: true,
+                  isStatusNotice: true,
+                },
+              ],
             }
           : { kind: "suppress", reason: "silent" },
       );
@@ -775,7 +787,13 @@ describe("resolveFollowupDeliveryDecision", () => {
 
       expect(decision).toMatchObject({
         kind: "deliver",
-        payloads: [{ text: "No answer was returned.", isError: true, isStatusNotice: true }],
+        payloads: [
+          {
+            text: "No answer was returned. Ask again if you still need one.",
+            isError: true,
+            isStatusNotice: true,
+          },
+        ],
       });
       if (decision.kind === "deliver") {
         expect(

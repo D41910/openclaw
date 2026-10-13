@@ -2612,7 +2612,7 @@ export default {
     "renders a non-deliverable direct reply failure through the real Gateway and TUI",
     async ({ onTestFinished }) => {
       const fixture = await startGatewayModeTui("emptyReply", onTestFinished);
-      const failureText = "No answer was returned.";
+      const failureText = "No answer was returned. Ask again if you still need one.";
       const chatEvents: unknown[] = [];
       fixture.controlClient.onEvent = ({ event, payload }) => {
         if (event === "chat") {

@@ -188,7 +188,7 @@ describe("incomplete-turn payload resolution", () => {
       toolMetas: [{ toolName: "bash", meta: "workspace" }],
     };
     const expected =
-      "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.";
+      "No answer was returned. Ask again if you still need one. Note: some tool actions may have already been executed — please verify before retrying.";
     expect(warning(attempt)).toBe(expected);
     expect(warning(attempt, { aborted: true, externalAbort: true })).toBeNull();
     expect(warning(attempt, { aborted: true })).toBe(expected);
@@ -222,7 +222,7 @@ describe("incomplete-turn payload resolution", () => {
         lastAssistant: assistant({ content: thinking() }),
       },
       1,
-      "No answer was returned.",
+      "No answer was returned. Ask again if you still need one.",
     ],
     [
       "empty token-limited answer",
