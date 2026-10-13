@@ -393,7 +393,16 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
     if (silent) {
       expect(result.finalizationOutcome).toBe("answered");
       expect(result.attempt.assistantTexts).toEqual([SILENT_REPLY_TOKEN]);
-      expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
+      expect(result.prepared.payloadsWithToolMedia ?? []).toEqual(
+        failedTool
+          ? [
+              expect.objectContaining({
+                isError: true,
+                text: expect.stringContaining("Exec failed"),
+              }),
+            ]
+          : [],
+      );
       expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
       if (failedTool) {
         expect(result.prepared.attemptToolSummary).toMatchObject({

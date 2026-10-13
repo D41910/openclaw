@@ -1,5 +1,4 @@
 import { expect, it } from "vitest";
-import type { PluginHookReplyDispatchEvent } from "../../plugins/hook-types.js";
 import { normalizeSessionDeliveryState } from "../../utils/delivery-context.shared.js";
 import type { ReplyPayload } from "../types.js";
 import {
@@ -77,18 +76,18 @@ export function registerOriginRoutingCases() {
     expect(routeCall?.channel).toBe("telegram");
     expect(routeCall?.to).toBe("telegram:999");
     expect(routeCall?.accountId).toBe("acc-1");
-    const normalizerOptions = replyMediaPathMocks.createReplyMediaPathNormalizer.mock
-      .calls[0]?.[0] as { accountId?: unknown; messageProvider?: unknown } | undefined;
-    expect(normalizerOptions?.messageProvider).toBe("telegram");
-    expect(normalizerOptions?.accountId).toBe("acc-1");
-    const replyDispatchCall = firstMockCall(
-      hookMocks.runner.runReplyDispatch,
-      "reply dispatch",
-    ) as [PluginHookReplyDispatchEvent, unknown];
-    expect(replyDispatchCall?.[0]?.shouldRouteToOriginating).toBe(true);
-    expect(replyDispatchCall?.[0]?.originatingChannel).toBe("telegram");
-    expect(replyDispatchCall?.[0]?.originatingTo).toBe("telegram:999");
-    expect(typeof replyDispatchCall?.[1]).toBe("object");
+    expect(replyMediaPathMocks.createReplyMediaPathNormalizer.mock.calls[0]?.[0]).toMatchObject({
+      messageProvider: "telegram",
+      accountId: "acc-1",
+    });
+    expect(firstMockCall(hookMocks.runner.runReplyDispatch, "reply dispatch")).toEqual([
+      expect.objectContaining({
+        shouldRouteToOriginating: true,
+        originatingChannel: "telegram",
+        originatingTo: "telegram:999",
+      }),
+      expect.any(Object),
+    ]);
   });
 
   it("routes sessions_send internal webchat handoffs through persisted external delivery context", async () => {
@@ -142,15 +141,16 @@ export function registerOriginRoutingCases() {
       chatType: "channel",
       replyToMode: "all",
     });
-    const replyDispatchCall = firstMockCall(
-      hookMocks.runner.runReplyDispatch,
-      "reply dispatch",
-    ) as [PluginHookReplyDispatchEvent, unknown];
-    expect(replyDispatchCall?.[0]?.shouldRouteToOriginating).toBe(true);
-    expect(replyDispatchCall?.[0]?.originatingChannel).toBe("feishu");
-    expect(replyDispatchCall?.[0]?.originatingTo).toBe("user:ou_123");
-    expect(replyDispatchCall?.[0]?.originatingAccountId).toBe("work");
-    expect(replyDispatchCall?.[0]?.originatingThreadId).toBe("thread:om_123");
-    expect(replyDispatchCall?.[0]?.originatingChatType).toBe("channel");
+    expect(firstMockCall(hookMocks.runner.runReplyDispatch, "reply dispatch")).toEqual([
+      expect.objectContaining({
+        shouldRouteToOriginating: true,
+        originatingChannel: "feishu",
+        originatingTo: "user:ou_123",
+        originatingAccountId: "work",
+        originatingThreadId: "thread:om_123",
+        originatingChatType: "channel",
+      }),
+      expect.any(Object),
+    ]);
   });
 }
