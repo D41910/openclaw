@@ -184,9 +184,7 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
     const result = await prepareTerminalWithSettledTurnFinalization(input);
 
     if (history) {
-      expect(result.prepared.replyDeliveryState).toBe(
-        history === "mirror" ? "delivered" : "missing",
-      );
+      expect(result.prepared.replyDeliveryState).toBe("missing");
       expect(result.prepared.payloadsWithToolMedia).toEqual([
         expect.objectContaining({
           text: history === "mirror" ? "Earlier committed reply." : earlierText,

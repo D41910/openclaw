@@ -20,7 +20,6 @@ import type { ReplyDeliveryState } from "../../reply-completion.js";
 import { getCoreTtsAttemptResultMediaUrls } from "../../tools/tts-tool-result-provenance.js";
 import type { NormalizedUsage } from "../../usage.js";
 import {
-  hasCommittedSourceReplyDeliveryEvidence,
   hasMessagingToolDeliveryEvidence,
   resolveExplicitFinalSourceReplyDeliveryEvidence,
   resolveSourceReplyDelivery,
@@ -76,12 +75,10 @@ export function prepareEmbeddedRunTerminal(input: {
   terminalState: EmbeddedRunTerminalState;
 }) {
   const { runParams, attempt } = input;
-  const finalSourceReplyDelivered =
-    resolveExplicitFinalSourceReplyDeliveryEvidence(attempt) ??
-    (attempt.sourceReplyDelivered === true || hasCommittedSourceReplyDeliveryEvidence(attempt));
-  const replyDeliveryState = finalSourceReplyDelivered
-    ? "delivered"
-    : (input.replyDeliveryState ?? "missing");
+  const replyDeliveryState =
+    resolveExplicitFinalSourceReplyDeliveryEvidence(attempt) === false
+      ? (input.replyDeliveryState ?? "missing")
+      : resolveSourceReplyDelivery(attempt, input.replyDeliveryState);
   const sourceReplyDeliveryState = resolveSourceReplyDelivery(
     attempt,
     input.sourceReplyDeliveryState ?? replyDeliveryState,

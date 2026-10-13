@@ -404,7 +404,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       expect(backendMocks.runSettledFinalization).toHaveBeenCalledTimes(silent ? 1 : 2);
       if (!errorText) {
         expect(result.finalizationOutcome).toBe("answered");
-        expect(result.attempt.assistantTexts).toEqual([""]);
+        expect(result.attempt.assistantTexts).toEqual([]);
         expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
       } else {
         expect(result.finalizationOutcome).toBe("failed");
@@ -483,7 +483,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       expect(result.finalizationOutcome).toBe("failed");
       expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
       expect(transcriptMocks.appendAssistantMirrorMessageByIdentity).not.toHaveBeenCalled();
-      expect(result.attempt.assistantTexts).toEqual([""]);
+      expect(result.attempt.assistantTexts).toEqual([]);
       const terminalInput = makeTerminalInput({
         ...result.prepared,
         attempt: result.attempt,

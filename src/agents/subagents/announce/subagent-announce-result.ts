@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
+import { isIncognitoSessionKey } from "../../../routing/session-key.js";
 import { truncateUtf16WithEllipsis } from "../../../shared/text-truncate.js";
 import { wrapPromptDataBlock } from "../../sanitize-for-prompt.js";
 import { extractStoredAssistantText } from "../../tools/chat-history-text.js";
@@ -91,21 +92,25 @@ export async function readSubagentRunAnnounceResultUsing(
     deps.resolveSessionStorePathCore(deps.getRuntimeConfig().session?.store, { agentId });
   const sessionKey = target?.sessionKey ?? child.childSessionKey;
   return withSubagentSessionSource({ agentId, storePath, sessionKey }, async (source) => {
-    const sourcePath = source ? ("kind" in source ? source.path : source.actor.path) : storePath;
+    const sourcePath = source?.path ?? storePath;
     const sessionId =
       target?.sessionId ??
       (await deps.readSubagentSessionEntry(sourcePath, sessionKey, agentId))?.sessionId;
     const scope = { agentId, storePath: sourcePath, sessionKey };
-    const found = sessionId
-      ? await deps.findTranscriptEvent(
-          { ...scope, sessionId },
-          { kind: "visible-final", runId: child.runId },
-        )
-      : undefined;
-    const event =
-      found?.event ??
-      (await deps.findSessionTranscriptArchiveEventReadOnly({ ...scope, sessionId }, child.runId))
-        ?.event;
+    const found =
+      sessionId && (source || !isIncognitoSessionKey(sessionKey))
+        ? await deps.findTranscriptEvent(
+            { ...scope, sessionId },
+            { kind: "visible-final", runId: child.runId },
+          )
+        : undefined;
+    let event: unknown = found?.event;
+    if (!event && !isIncognitoSessionKey(sessionKey)) {
+      // Delete commits the canonical archive before its derived file is published.
+      event = (
+        await deps.findSessionTranscriptArchiveEventReadOnly({ ...scope, sessionId }, child.runId)
+      )?.event;
+    }
     if (!isCurrent()) {
       throw new SubagentAnnouncePreparationConflictError(
         "The completed child run's transcript identity changed during announcement.",

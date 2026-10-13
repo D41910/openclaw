@@ -3,15 +3,11 @@ import { normalizeOptionalString } from "@openclaw/normalization-core/string-coe
 import { GatewayClientRequestError } from "../../../packages/gateway-client/src/index.js";
 import { isExecutionIdentityCollectionEnabled } from "../../audit/audit-config.js";
 import type { InternalSessionEntry as SessionEntry } from "../../config/sessions.js";
-import {
-  applySessionEntryReplacements,
-  loadExactSessionEntry,
-} from "../../config/sessions/session-accessor.js";
+import { applySessionEntryReplacements } from "../../config/sessions/session-accessor.js";
 import { retainPreparedSessionEntryPredicate } from "../../config/sessions/session-accessor.sqlite-entry-cache-publication-state.js";
 import type { SessionEntryCurrentFacts } from "../../config/sessions/session-entry-current.types.js";
-import { isNativeSessionEntryRead } from "../../config/sessions/session-entry-read-request.js";
 import { withSessionEntriesFromStoreInWorker } from "../../config/sessions/session-entry-read-runtime.js";
-import { captureIncognitoSessionSource } from "../../config/sessions/session-incognito-binding.js";
+import { captureSessionEntryMetadataRead } from "../../config/sessions/session-entry-source-authority.js";
 import type { SessionSourceAssertion } from "../../config/sessions/session-source-authority.js";
 import { preparePhysicalSessionStorePath } from "../../config/sessions/session-store-path.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
@@ -153,6 +149,7 @@ type ResumeMainSessionParams = {
   forceRestartSafeTools?: boolean;
   forceCodeModeTools?: boolean;
   recoveryAdmission?: MainSessionRecoveryAdmission;
+  signal?: AbortSignal;
   lifecycleGeneration?: string;
   shouldContinue?: () => boolean;
   gatewayRuntime: GatewayRecoveryRuntime;
@@ -161,18 +158,13 @@ type ResumeMainSessionParams = {
 export async function resumeMainSession(
   params: ResumeMainSessionParams,
 ): Promise<MainSessionResumeResult> {
-  const source = captureIncognitoSessionSource(params);
-  const claim =
-    source && !("kind" in source)
-      ? source.actor.sessions.captureCurrent(params.sessionKey)
-      : undefined;
-  const native = !source && isNativeSessionEntryRead(params, params.agentId);
+  const source = captureSessionEntryMetadataRead(params, () => {});
   const matchesRequester = (current: SessionEntryCurrentFacts | undefined) =>
     current?.sessionId === params.entry.sessionId &&
     current.lifecycleRevision === params.entry.lifecycleRevision;
   let retained: ReturnType<typeof retainPreparedSessionEntryPredicate> | undefined;
   using _ = { [Symbol.dispose]: () => retained?.release() };
-  if (!source && !native) {
+  if (!source) {
     let databaseIdentity: string | undefined;
     await withSessionEntriesFromStoreInWorker(
       { ...params, sessionKeys: [params.sessionKey], projection: "list" },
@@ -196,18 +188,7 @@ export async function resumeMainSession(
     );
   }
   const isCurrent = () => {
-    if (source && "kind" in source) {
-      source.assertCurrent();
-      return false;
-    }
-    source?.admissionSignal?.throwIfAborted();
-    claim?.assertCurrent();
-    const current = source
-      ? source.actor.sessions.readCapability(params.sessionKey)
-      : native
-        ? loadExactSessionEntry({ ...params, readConsistency: "latest" })?.entry
-        : undefined;
-    return retained ? retained.isCurrent() : matchesRequester(current);
+    return source ? matchesRequester(source.readCurrent()) : retained?.isCurrent() === true;
   };
   return (
     (await runWithMainSessionRecoveryAdmission({
@@ -232,22 +213,13 @@ async function resumeMainSessionWithinAdmission(
     return "skipped";
   }
   const harnessCompletion = params.entry.restartRecoveryHarnessCompletion;
-  const source = captureIncognitoSessionSource(params);
-  const claim =
-    source && !("kind" in source)
-      ? source.actor.sessions.captureCurrent(params.sessionKey)
-      : undefined;
+  const source = captureSessionEntryMetadataRead(params, () => {});
   const taskRemainsOwed = () => {
     params.completionSource?.();
     if (!harnessCompletion) {
       return true;
     }
-    if (source && "kind" in source) {
-      source.assertCurrent();
-      return false;
-    }
-    claim?.assertCurrent();
-    const entry = source ? source.actor.sessions.readSteering(params.sessionKey) : params.entry;
+    const entry = source ? source.readCurrent() : params.entry;
     return Boolean(entry && getOwedHarnessCompletionTask(harnessCompletion, entry));
   };
   if (!taskRemainsOwed()) {
@@ -476,7 +448,7 @@ async function resumeMainSessionWithinAdmission(
       deliver:
         Boolean(deliveryContext) &&
         params.entry.restartRecoverySourceReplyDeliveryMode !== "message_tool_only",
-      lane: CommandLane.Main,
+      lane: CommandLane.Background,
       ...(params.entry.restartRecoverySourceReplyDeliveryMode
         ? { sourceReplyDeliveryMode: params.entry.restartRecoverySourceReplyDeliveryMode }
         : {}),
@@ -639,11 +611,10 @@ async function resumeMainSessionWithinAdmission(
     return resumeResult;
   } catch (error) {
     const explicitlyRejected = error instanceof GatewayClientRequestError && !dispatchAccepted;
-    const canRestoreAcceptedFailure = !preStartAbortAttempted || preStartAbortConfirmed;
     if (
       dispatchAccepted &&
       !executionStarted &&
-      canRestoreAcceptedFailure &&
+      (!preStartAbortAttempted || preStartAbortConfirmed) &&
       params.shouldContinue?.() !== false
     ) {
       await repairAcceptedRecovery();

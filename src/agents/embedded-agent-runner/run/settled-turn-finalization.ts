@@ -5,7 +5,6 @@ import {
   type ReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
-import { captureSessionWriterDeliveryRead } from "../../../auto-reply/reply/session-writer-delivery-authority.js";
 import type { SessionTranscriptWriterFence } from "../../../config/sessions/transcript-write-context.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
 import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
@@ -334,13 +333,7 @@ function resolveSessionWriterDeliveryAuthority(input: {
   ) {
     return undefined;
   }
-  const readCurrentSession = captureSessionWriterDeliveryRead({
-    agentId: target?.agentId ?? input.attempt.agentId,
-    sessionKey,
-    storePath: target?.storePath,
-  });
   return {
-    ...(readCurrentSession ? { readCurrentSession } : {}),
     ...(target?.agentId || input.attempt.agentId
       ? { agentId: target?.agentId ?? input.attempt.agentId }
       : {}),
