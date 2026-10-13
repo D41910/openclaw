@@ -1527,9 +1527,12 @@ describe("runReplyAgent MCP App channel action", () => {
     };
     state.materializeMcpAppChannelPresentationMock.mockReturnValue(presentation);
     state.runEmbeddedAgentMock.mockResolvedValue({
-      payloads: [{ text: "The forecast is sunny." }, { text: "NO_REPLY" }],
+      payloads: [{ text: "The forecast is sunny." }],
       latestMcpAppChannelView: { viewId: "view-latest" },
-      meta: { agentMeta: { usage: { input: 1, output: 1 } } },
+      meta: {
+        agentMeta: { usage: { input: 1, output: 1 } },
+        terminalReply: { disposition: "visible", text: "The forecast is sunny." },
+      },
     });
     const { run } = createMinimalRun({
       sessionCtx: { Provider: "telegram", OriginatingChannel: "telegram" },
@@ -1948,7 +1951,7 @@ describe("runReplyAgent heartbeat followup guard", () => {
     const reply = Array.isArray(result) ? result[0] : result;
 
     if (label === "aborted answer" || label === "rejected answer") {
-      expect(reply?.text).toBe("NO_REPLY");
+      expect(reply?.text?.trim() ?? "").toBe("");
     } else {
       expect(reply).toMatchObject({ isError: true, text: expect.any(String) });
       expect(reply?.text).not.toBe("NO_REPLY");
@@ -2030,7 +2033,7 @@ describe("runReplyAgent heartbeat followup guard", () => {
     });
     const result = await run();
 
-    expect(result).toEqual({ text: "NO_REPLY" });
+    expect(result).toEqual({});
   });
 
   it.each(["reasoning", "commentary"] as const)(
@@ -3714,31 +3717,23 @@ describe("runReplyAgent typing (heartbeat)", () => {
     }
   });
 
-  it("suppresses NO_REPLY partials but allows normal No-prefix partials", async () => {
+  it("forwards prepared partials without reclassifying literal marker text", async () => {
     const cases = [
       {
         partials: ["NO_REPLY"],
         finalText: "NO_REPLY",
-        expectedForwarded: [] as string[],
-        shouldType: false,
       },
       {
         partials: ["NO", "NO_", "NO_RE", "NO_REPLY"],
         finalText: "NO_REPLY",
-        expectedForwarded: [] as string[],
-        shouldType: false,
       },
       {
         partials: ["No", "No, that is valid"],
         finalText: "No, that is valid",
-        expectedForwarded: ["No", "No, that is valid"],
-        shouldType: true,
       },
       {
         partials: ["NO_REPLYThe user is saying hello"],
         finalText: "NO_REPLYThe user is saying hello",
-        expectedForwarded: ["NO_REPLYThe user is saying hello"],
-        shouldType: true,
       },
     ] as const;
 
@@ -3748,7 +3743,10 @@ describe("runReplyAgent typing (heartbeat)", () => {
         for (const text of testCase.partials) {
           await params.onPartialReply?.({ text });
         }
-        return { payloads: [{ text: testCase.finalText }], meta: {} };
+        return {
+          payloads: [{ text: testCase.finalText }],
+          meta: { terminalReply: { disposition: "visible", text: testCase.finalText } },
+        };
       });
 
       const { run, typing } = createMinimalRun({
@@ -3758,23 +3756,14 @@ describe("runReplyAgent typing (heartbeat)", () => {
       });
       await run();
 
-      if (testCase.expectedForwarded.length === 0) {
-        expect(onPartialReply).not.toHaveBeenCalled();
-      } else {
-        expect(onPartialReply).toHaveBeenCalledTimes(testCase.expectedForwarded.length);
-        testCase.expectedForwarded.forEach((text, index) => {
-          expect(onPartialReply).toHaveBeenNthCalledWith(index + 1, {
-            text,
-            mediaUrls: undefined,
-          });
+      expect(onPartialReply).toHaveBeenCalledTimes(testCase.partials.length);
+      testCase.partials.forEach((text, index) => {
+        expect(onPartialReply).toHaveBeenNthCalledWith(index + 1, {
+          text,
+          mediaUrls: undefined,
         });
-      }
-
-      if (testCase.shouldType) {
-        expect(typing.startTypingOnText).toHaveBeenCalled();
-      } else {
-        expect(typing.startTypingOnText).not.toHaveBeenCalled();
-      }
+      });
+      expect(typing.startTypingOnText).toHaveBeenCalled();
       expect(typing.startTypingLoop).not.toHaveBeenCalled();
     }
   });
@@ -3926,25 +3915,15 @@ describe("runReplyAgent typing (heartbeat)", () => {
     expect(payloads[0]?.text).toBe("Visible intro.\n\n\nVisible answer.");
   });
 
-  it("handles typing for normal and silent tool results", async () => {
-    const cases = [
-      {
-        toolText: "tooling",
-        shouldType: true,
-        shouldForward: true,
-      },
-      {
-        toolText: "NO_REPLY",
-        shouldType: false,
-        shouldForward: false,
-      },
-    ] as const;
-
-    for (const testCase of cases) {
+  it("forwards literal marker text in tool results", async () => {
+    for (const toolText of ["tooling", "NO_REPLY"]) {
       const onToolResult = vi.fn();
       state.runEmbeddedAgentMock.mockImplementationOnce(async (params: AgentRunParams) => {
-        await params.onToolResult?.({ text: testCase.toolText, mediaUrls: [] });
-        return { payloads: [{ text: "final" }], meta: {} };
+        await params.onToolResult?.({ text: toolText, mediaUrls: [] });
+        return {
+          payloads: [{ text: "final" }],
+          meta: { terminalReply: { disposition: "visible", text: "final" } },
+        };
       });
 
       const { run, typing } = createMinimalRun({
@@ -3953,20 +3932,8 @@ describe("runReplyAgent typing (heartbeat)", () => {
       });
       await run();
 
-      if (testCase.shouldType) {
-        expect(typing.startTypingOnText).toHaveBeenCalledWith(testCase.toolText);
-      } else {
-        expect(typing.startTypingOnText).not.toHaveBeenCalled();
-      }
-
-      if (testCase.shouldForward) {
-        expect(onToolResult).toHaveBeenCalledWith({
-          text: testCase.toolText,
-          mediaUrls: [],
-        });
-      } else {
-        expect(onToolResult).not.toHaveBeenCalled();
-      }
+      expect(typing.startTypingOnText).toHaveBeenCalledWith(toolText);
+      expect(onToolResult).toHaveBeenCalledWith({ text: toolText, mediaUrls: [] });
     }
   });
 
@@ -4434,8 +4401,11 @@ describe("runReplyAgent typing (heartbeat)", () => {
     },
   ])("replaces filtered $label after a terminal failure", async (testCase) => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [testCase.payload],
+      payloads: testCase.label === "silent token" ? [] : [testCase.payload],
       meta: {
+        terminalReply: {
+          disposition: testCase.label === "silent token" ? "silent" : "empty",
+        },
         error: {
           kind: "tool_result_mismatch",
           message: "Agent run reached a terminal error before visible reply delivery.",
@@ -4781,15 +4751,17 @@ describe("runReplyAgent typing (heartbeat)", () => {
       opts: { commentaryPayloadsEnabled: true },
       streamed: false,
     },
-  ])("surfaces a configured backend failure when fallback produces $label", async (testCase) => {
+  ])("distinguishes successful fallback silence from missing output: $label", async (testCase) => {
     const onAgentRunTerminalOutcome = vi.fn();
     state.runEmbeddedAgentMock.mockImplementationOnce(async (params: AgentRunParams) => {
       if (testCase.streamed) {
         await params.onBlockReply?.(testCase.payload);
       }
       return {
-        payloads: [testCase.payload],
-        meta: {},
+        payloads: testCase.label === "NO_REPLY" ? [] : [testCase.payload],
+        meta: {
+          terminalReply: { disposition: testCase.label === "NO_REPLY" ? "silent" : "empty" },
+        },
       };
     });
     const fallbackSpy = vi
@@ -4813,11 +4785,17 @@ describe("runReplyAgent typing (heartbeat)", () => {
       const res = await run();
       const payload = Array.isArray(res) ? res[0] : res;
 
-      expect(payload?.isError).toBe(true);
-      expect(payload?.text).toContain("configured model backend lmstudio/gemma-4-e4b-it");
-      expect(payload?.text).toContain("Fallback used openai/gpt-5.5");
-      expect(payload?.text).toContain("no visible reply");
-      expect(onAgentRunTerminalOutcome).toHaveBeenLastCalledWith("failed");
+      if (testCase.label === "NO_REPLY") {
+        expect(payload?.text?.trim() ?? "").toBe("");
+        expect(payload?.isError).not.toBe(true);
+        expect(onAgentRunTerminalOutcome).not.toHaveBeenCalledWith("failed");
+      } else {
+        expect(payload?.isError).toBe(true);
+        expect(payload?.text).toContain("configured model backend lmstudio/gemma-4-e4b-it");
+        expect(payload?.text).toContain("Fallback used openai/gpt-5.5");
+        expect(payload?.text).toContain("no visible reply");
+        expect(onAgentRunTerminalOutcome).toHaveBeenLastCalledWith("failed");
+      }
     } finally {
       fallbackSpy.mockRestore();
     }
