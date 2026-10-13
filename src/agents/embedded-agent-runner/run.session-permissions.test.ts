@@ -313,7 +313,8 @@ it("does not replace a successfully recovered final assistant after a prompt-tim
   const attempt = makeAttemptResult({
     terminal: { kind: "timeout", phase: "prompt", source: "runtime", aborted: true },
   });
-  const payloads = [{ text: "Completed answer after the timeout race." }];
+  const answer = "Completed answer after the timeout race.";
+  const payloads = [{ text: answer }];
   const setTerminalLifecycleMeta = vi.fn();
   const result = resolveEmbeddedRunTerminalTimeout({
     terminalPrepared: {
@@ -323,10 +324,10 @@ it("does not replace a successfully recovered final assistant after a prompt-tim
       replyDeliveryState: "missing",
       reportedModelRef: { provider: "openai", model: "gpt-5.4" },
       preparedTerminalReply: {
-        text: payloads[0].text,
-        terminalReply: { disposition: "visible", text: payloads[0].text },
+        text: answer,
+        terminalReply: { disposition: "visible", text: answer },
       },
-      finalAssistantVisibleText: undefined,
+      finalAssistantVisibleText: answer,
       finalAssistantRawText: undefined,
       recoveredFinalAssistantPayloadsAfterPromptTimeout: undefined,
       payloads,

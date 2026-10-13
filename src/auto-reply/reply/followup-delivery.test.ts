@@ -184,7 +184,7 @@ describe("resolveFollowupDeliveryDecision", () => {
       const decision = await resolveFollowupDeliveryDecision({
         turn,
         execution,
-        accounting: createAccounting([{ text: "NO_REPLY" }]),
+        accounting: createAccounting(),
         opts: { isHeartbeat: true },
       });
 
@@ -241,16 +241,18 @@ describe("resolveFollowupDeliveryDecision", () => {
     },
   );
 
-  it("delivers mixed queued NO_REPLY and answer text unchanged", async () => {
-    const text = "NO_REPLY\nHere is the answer.";
-    expect(
-      await resolveFollowupDeliveryDecision({
-        turn: createTurn(),
-        execution: createSettledExecution(text),
-        accounting: createAccounting([{ text }]),
-      }),
-    ).toMatchObject({ kind: "deliver", payloads: [{ text: "Here is the answer." }] });
-  });
+  it.each(["Here is the answer.", "NO_REPLY"])(
+    "delivers the prepared suffix after one leading NO_REPLY line: %s",
+    async (text) => {
+      expect(
+        await resolveFollowupDeliveryDecision({
+          turn: createTurn(),
+          execution: createSettledExecution(`NO_REPLY\n${text}`),
+          accounting: createAccounting([{ text }]),
+        }),
+      ).toMatchObject({ kind: "deliver", payloads: [{ text }] });
+    },
+  );
 
   it.each(["automatic", "message_tool_only"] as const)(
     "keeps pending tool audio after queued NO_REPLY in %s mode",
@@ -576,7 +578,8 @@ describe("resolveFollowupDeliveryDecision", () => {
   it.each([
     { evidence: "empty", failureText: "The run failed after progress.", delivered: true },
     { evidence: "empty", failureText: "Rate limit reached. Try again later.", delivered: true },
-    { evidence: "empty", failureText: "NO_REPLY", delivered: false },
+    { evidence: "empty", failureText: "NO_REPLY.", delivered: true },
+    { evidence: "empty", failureText: "NO_REPLY", delivered: true },
     { evidence: "delivered", failureText: "The run failed after progress.", delivered: false },
     { evidence: "pending", failureText: "The run failed after progress.", delivered: false },
     { evidence: "blocked", failureText: "The run failed after progress.", delivered: false },
@@ -723,14 +726,15 @@ describe("resolveFollowupDeliveryDecision", () => {
 
 describe("deliverFollowupDecision", () => {
   it.each([
-    { text: '{"action":"NO_REPLY"}', silent: true },
-    { text: "NO_REPLY.", silent: true },
-    { text: '"NO_REPLY"', silent: true },
+    { text: "NO_REPLY", silent: true },
+    { text: '{"action":"NO_REPLY"}', silent: false },
+    { text: "NO_REPLY.", silent: false },
+    { text: '"NO_REPLY"', silent: false },
+    { text: "NO_RE", silent: false },
     { text: "An ordinary answer.", silent: false },
-  ])("agrees on queued authored silence without a notice: $text", async ({ text, silent }) => {
+  ])("uses the producer terminal fact for queued text: $text", async ({ text, silent }) => {
     const turn = createTurn();
     const execution = createSettledExecution(text);
-    execution.outcome.result.meta.finalAssistantRawText = text;
     const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
     deliveryState.routeReply.mockReset();
     deliveryState.routeReply.mockResolvedValue({ ok: true, delivered: true });
@@ -739,7 +743,7 @@ describe("deliverFollowupDecision", () => {
     const decision = await resolveFollowupDeliveryDecision({
       turn,
       execution,
-      accounting: createAccounting([{ text }]),
+      accounting: createAccounting(execution.outcome.result.payloads),
     });
     await deliverFollowupDecision({
       decision,
@@ -762,10 +766,11 @@ describe("deliverFollowupDecision", () => {
   });
 
   it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
-    "does not send queued authored silence at the delivery boundary: %s",
+    "preserves prepared control-looking text at the delivery boundary: %s",
     async (text) => {
       const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
       deliveryState.routeReply.mockReset();
+      deliveryState.routeReply.mockResolvedValue({ ok: true, delivered: true });
       deliveryState.runtimeError.mockReset();
 
       const result = await deliverFollowupDecision({
@@ -776,8 +781,10 @@ describe("deliverFollowupDecision", () => {
         runFollowup: vi.fn(async () => {}),
       });
 
-      expect(result).toEqual({ kind: "completed", payloads: [] });
-      expect(deliveryState.routeReply).not.toHaveBeenCalled();
+      expect(result).toEqual({ kind: "completed", payloads: [{ text }] });
+      expect(deliveryState.routeReply).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ payload: expect.objectContaining({ text }) }),
+      );
       expect(onBlockReply).not.toHaveBeenCalled();
       expect(deliveryState.runtimeError).not.toHaveBeenCalled();
     },

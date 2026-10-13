@@ -1,12 +1,12 @@
 import { asOptionalRecord, isRecord } from "@openclaw/normalization-core/record-coerce";
-import {
-  isIntermediateAssistantTranscriptMessage,
-  isSilentAssistantTranscriptMessage,
-  readTerminalSourceReplyDeliveryMirror,
-} from "../agents/embedded-agent-runner/message-visibility.js";
+import { isIntermediateAssistantTranscriptMessage } from "../agents/embedded-agent-runner/message-visibility.js";
 import { OPENCLAW_RUNTIME_CONTEXT_CUSTOM_TYPE } from "../agents/internal-runtime-context.js";
 import { extractStoredAssistantText } from "../agents/tools/chat-history-text.js";
 import type { SessionTranscriptEventMatch } from "../config/sessions/session-history-read.types.js";
+import {
+  isSilentAssistantTranscriptMessage,
+  readTerminalSourceReplyDeliveryMirror,
+} from "../shared/chat-message-content.js";
 import { isOpenClawDeliveryMirrorAssistantMessage } from "../shared/transcript-only-openclaw-assistant.js";
 import {
   readSessionTranscriptRunId,

@@ -28,6 +28,7 @@ import {
   setQueuedEntryState,
 } from "./delivery-queue.test-helpers.js";
 
+// mock-isolation: this transport custody fixture supplies its destination plan without model resolution.
 vi.mock("../../agents/runtime-plan/build.js", () => ({
   buildAgentRuntimeDeliveryPlan: () => ({
     resolveFollowupRoute: () => undefined,

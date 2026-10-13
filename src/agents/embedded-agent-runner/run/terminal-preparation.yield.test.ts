@@ -32,7 +32,9 @@ function prepareYield(
     sourceReplyDeliveryState?: Parameters<
       typeof prepareEmbeddedRunTerminal
     >[0]["sourceReplyDeliveryState"];
-    sourceReplyDelivered?: boolean;
+    sourceReplyDelivered?: NonNullable<
+      Parameters<typeof makeEmbeddedRunnerAttempt>[0]
+    >["sourceReplyDelivered"];
     sourceReplyFinal?: boolean;
   } = {},
 ) {

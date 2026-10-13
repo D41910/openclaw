@@ -1,10 +1,12 @@
 import { flattenMarkdownToPlainText } from "@openclaw/normalization-core/markdown-plain-text";
 import { asOptionalRecord as readRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
-import { isSilentAssistantTranscriptMessage } from "../agents/embedded-agent-runner/message-visibility.js";
 import { projectAssistantDisplayContent } from "../shared/assistant-display-content.js";
 import { stripEnvelope } from "../shared/chat-envelope.js";
-import { extractAssistantPhaseText } from "../shared/chat-message-content.js";
+import {
+  extractAssistantPhaseText,
+  isSilentAssistantTranscriptMessage,
+} from "../shared/chat-message-content.js";
 import {
   stripAssistantMediaDirectivesForDisplay,
   takeAssistantManagedMediaUrlsForDisplay,

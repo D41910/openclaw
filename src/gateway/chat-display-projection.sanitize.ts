@@ -4,17 +4,15 @@ import {
   asOptionalObjectRecord as readObjectRecord,
   asOptionalRecord as readRecord,
 } from "@openclaw/normalization-core/record-coerce";
-import {
-  isSilentAssistantTranscriptMessage,
-  readTerminalSourceReplyDeliveryMirror,
-} from "../agents/embedded-agent-runner/message-visibility.js";
 import { stripMixedSilentReplyTokens } from "../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { isSilentReplyText } from "../auto-reply/tokens.js";
 import { parseInboundMediaUri, buildInboundMediaUriFromPath } from "../media/media-reference.js";
 import { STATE_CONTENTION_DIAGNOSTIC } from "../sessions/session-run-error-presentation.js";
 import {
+  isSilentAssistantTranscriptMessage,
   parseAssistantTextSignature,
   readAssistantTextBlocksForPhase,
+  readTerminalSourceReplyDeliveryMirror,
   resolveAssistantMessagePhase,
 } from "../shared/chat-message-content.js";
 import {

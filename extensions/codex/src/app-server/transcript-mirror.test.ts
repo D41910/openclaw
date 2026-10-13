@@ -1267,7 +1267,7 @@ describe("mirrorCodexAppServerTranscript", () => {
         { role: "assistant", text: "Before failed mirror." },
         { role: "assistant", text: " After failed mirror." },
         { role: "user", text: "Steer" },
-        { role: "assistant", text: "After steer." },
+        { role: "assistant", text: " After steer." },
       ]);
     });
 

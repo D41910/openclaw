@@ -3,8 +3,8 @@
  * for compaction and history pruning.
  */
 import { stripHeartbeatToken } from "../auto-reply/heartbeat.js";
+import { isSilentAssistantTranscriptMessage } from "../shared/chat-message-content.js";
 import { isToolCallBlockType } from "../shared/tool-block-contract.js";
-import { isSilentAssistantTranscriptMessage } from "./embedded-agent-runner/message-visibility.js";
 import type { AgentMessage } from "./runtime/index.js";
 
 const TOOL_RESULT_REAL_CONVERSATION_LOOKBACK = 20;

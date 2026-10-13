@@ -1,6 +1,26 @@
+import { isDeepStrictEqual } from "node:util";
 import type { PreparedSubagentRunsRead } from "../subagents/registry/subagent-registry-read-snapshot.js";
 import type { SubagentRunRecord } from "../subagents/registry/subagent-registry.types.js";
 import { createAgentsWaitTool, waitForCollectorCompletion } from "./agents-wait-tool.js";
+
+export const collectorFinals = new Map<string, string>();
+
+export async function readCollectorResult(
+  entry: SubagentRunRecord,
+  readRun?: (runId: string) => SubagentRunRecord | undefined,
+) {
+  if (!readRun) {
+    throw new Error("Collector result fixture requires a current run reader");
+  }
+  const captured = structuredClone(entry);
+  return {
+    text:
+      entry.completion?.terminalReply?.disposition === "visible"
+        ? collectorFinals.get(entry.runId)
+        : undefined,
+    isCurrent: () => isDeepStrictEqual(readRun(entry.runId), captured),
+  };
+}
 
 export function createMainSessionWaitTool() {
   return createAgentsWaitTool({
@@ -50,6 +70,9 @@ export function collectorRun(
   requesterSessionKey: string,
   completion?: SubagentRunRecord["collectorCompletion"],
 ): SubagentRunRecord {
+  if (completion) {
+    collectorFinals.set(runId, `result-${runId}`);
+  }
   return {
     runId,
     childSessionKey: `agent:worker:subagent:${runId}`,
@@ -63,7 +86,11 @@ export function collectorRun(
     collect: true,
     swarmRequesterSessionKey: requesterSessionKey,
     groupId: "group",
-    completion: { required: false, resultText: completion ? `result-${runId}` : undefined },
+    completion: {
+      required: false,
+      resultText: completion ? `result-${runId}` : undefined,
+      terminalReply: completion ? { disposition: "visible", text: `result-${runId}` } : undefined,
+    },
     collectorCompletion: completion,
   };
 }

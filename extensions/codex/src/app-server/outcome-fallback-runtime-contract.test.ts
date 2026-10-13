@@ -225,7 +225,7 @@ describe("Outcome/fallback runtime contract - Codex app-server adapter", () => {
 
     const result = projector.buildResult(buildToolTelemetry());
 
-    expect(result.assistantTexts).toEqual(["NO_REPLY"]);
+    expect(result.assistantTexts).toEqual([]);
     expect(result.lastAssistant?.content).toEqual([{ type: "text", text: "NO_REPLY" }]);
     expect(readAttemptTerminal(result).promptError).toBeNull();
     expect(classifyProjectedAttemptResult(result)).toBeNull();

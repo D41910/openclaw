@@ -52,7 +52,11 @@ describe("buildActiveSubagentRuntimeContext", () => {
         task: "original store task",
         expectsCompletionMessage: true,
         execution: { status: "terminal", endedAt: Date.now() },
-        completion: { required: true, resultText: "original store child result" },
+        completion: {
+          required: true,
+          resultText: "original store child result",
+          terminalReply: { disposition: "visible", text: "original store child result" },
+        },
         delivery: { status: "pending" },
       });
       const cfg =

@@ -188,7 +188,7 @@ it("does not attribute a returned timeout to a deduplicated single-candidate cha
       terminalPrepared: {
         replyDeliveryState: "missing",
         reportedModelRef: { provider: "runtime-provider", model: "runtime-model" },
-        finalAssistantVisibleText: undefined,
+        finalAssistantVisibleText: "",
         finalAssistantRawText: undefined,
         timedOutDuringPrompt: true,
         recoveredFinalAssistantPayloadsAfterPromptTimeout: undefined,

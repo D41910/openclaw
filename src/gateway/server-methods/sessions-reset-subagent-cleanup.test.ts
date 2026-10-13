@@ -597,7 +597,15 @@ test("reset cannot publish while a terminal completion owns an awaited capture",
   });
   const id = "completing-owner";
   await startCollector(id);
-  emitAgentEvent({ runId: id, stream: "lifecycle", data: { phase: "end", endedAt: Date.now() } });
+  emitAgentEvent({
+    runId: id,
+    stream: "lifecycle",
+    data: {
+      phase: "end",
+      endedAt: Date.now(),
+      terminalReply: { disposition: "visible", text: "Completed child result" },
+    },
+  });
   await entered.promise;
   const original = loadSessionEntry({ sessionKey: key });
   try {

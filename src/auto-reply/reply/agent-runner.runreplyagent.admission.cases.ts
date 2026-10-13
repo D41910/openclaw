@@ -174,7 +174,7 @@ export function registerReplyAdmissionCases({
       });
       const reply = await run();
       expect(runEmbeddedAgentMock).toHaveBeenCalledOnce();
-      expect(reply).toMatchObject({ text: SILENT_REPLY_TOKEN });
+      expect(reply).toBeUndefined();
       if (order === "after cleanup") {
         await persistAbort();
       }

@@ -973,7 +973,7 @@ describe("sessions_send gating", () => {
   });
 
   it.each([true, false])(
-    "uses source delivery without reading history (visible text: %s)",
+    "uses source delivery without resending (visible text: %s)",
     async (hasText) => {
       const { runSessionsSendA2AFlow } = await import("./sessions-send-tool.a2a.js");
       vi.mocked(runSessionsSendA2AFlow).mockClear();
@@ -996,7 +996,19 @@ describe("sessions_send gating", () => {
           };
         }
         if (request.method === "chat.history") {
-          return { messages: [] };
+          return {
+            messages: hasText
+              ? [
+                  {
+                    role: "assistant",
+                    phase: "final_answer",
+                    stopReason: "stop",
+                    __openclaw: { runId: "run-source-reply" },
+                    content: [{ type: "text", text: "Already delivered to the source" }],
+                  },
+                ]
+              : [],
+          };
         }
         if (request.method === "agent") {
           return { runId: "run-source-reply", acceptedAt: 123 };
@@ -1047,7 +1059,7 @@ describe("sessions_send gating", () => {
       }
       expect(
         callGatewayMock.mock.calls.some(([request]) => request.method === "chat.history"),
-      ).toBe(false);
+      ).toBe(hasText);
     },
   );
 

@@ -9,10 +9,8 @@ import {
   isReplyPayloadTerminalContent,
   type ReplyPayload,
 } from "../../auto-reply/reply-payload.js";
-import { isSilentReplyText } from "../../auto-reply/tokens.js";
-import { hasPersistedMedia } from "../../sessions/user-turn-media.js";
 import {
-  readAssistantTextBlocksForPhase,
+  isSilentAssistantTranscriptMessage,
   resolveAssistantMessagePhase,
 } from "../../shared/chat-message-content.js";
 import { hasAnyNonEmptyString as hasNonEmptyStringArray } from "../delivery-evidence-values.js";
@@ -110,22 +108,6 @@ export function getTranscriptMessageRole(message: unknown): string | undefined {
   return typeof role === "string" ? role : undefined;
 }
 
-export function readTerminalSourceReplyDeliveryMirror(
-  message: unknown,
-): { sourceTurnId: string; toolCallId?: string } | undefined {
-  const delivery = asOptionalObjectRecord(asOptionalObjectRecord(message)?.openclawDeliveryMirror);
-  if (!delivery) {
-    return undefined;
-  }
-  const sourceTurnId =
-    typeof delivery.sourceTurnId === "string" ? delivery.sourceTurnId.trim() : "";
-  if (delivery.kind !== "message-tool-source-reply" || delivery.final !== true || !sourceTurnId) {
-    return undefined;
-  }
-  const toolCallId = typeof delivery.toolCallId === "string" ? delivery.toolCallId.trim() : "";
-  return { sourceTurnId, ...(toolCallId ? { toolCallId } : {}) };
-}
-
 /** System and malformed records do not constitute a resumable transcript tail. */
 export function isMeaningfulTranscriptMessage(message: unknown): boolean {
   const role = getTranscriptMessageRole(message);
@@ -152,54 +134,6 @@ export function isIntermediateAssistantTranscriptMessage(message: unknown): bool
   // Keyed segments are durable progress items; unkeyed/current fallbacks can
   // become the final answer and must never bypass restart completion checks.
   return fallback?.source === "segment" && hasNonEmptyString(fallback.itemId);
-}
-
-/** Classifies raw assistant rows after their persisted visibility facts. */
-export function isSilentAssistantTranscriptMessage(message: unknown): boolean {
-  const record = asOptionalObjectRecord(message);
-  if (record?.role !== "assistant") {
-    return false;
-  }
-  if (record.display === false) {
-    return true;
-  }
-  if (
-    record.display === true ||
-    readTerminalSourceReplyDeliveryMirror(message) ||
-    hasPersistedMedia(message) ||
-    hasNonEmptyStringArray(asOptionalRecord(record.openclawDelivery)?.mediaUrls)
-  ) {
-    return false;
-  }
-  const inlineText = typeof record.text === "string" ? record.text : record.content;
-  if (typeof inlineText === "string") {
-    return isSilentReplyText(inlineText);
-  }
-  if (!Array.isArray(record.content)) {
-    return false;
-  }
-  const text: string[] = [];
-  for (const block of record.content) {
-    const part = asOptionalRecord(block);
-    if (
-      part?.type === "thinking" ||
-      part?.type === "reasoning" ||
-      part?.type === "redacted_thinking"
-    ) {
-      continue;
-    }
-    if (
-      !["text", "input_text", "output_text"].includes(String(part?.type)) ||
-      typeof part?.text !== "string"
-    ) {
-      return false;
-    }
-    text.push(part.text);
-  }
-  const finalBlocks = readAssistantTextBlocksForPhase(message, "final_answer");
-  return isSilentReplyText(
-    finalBlocks.length ? finalBlocks.map((block) => block.text).join("") : text.join(""),
-  );
 }
 
 /** Only a completed final assistant row can prove terminal silence. */

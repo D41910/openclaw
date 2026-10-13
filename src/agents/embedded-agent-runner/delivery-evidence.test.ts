@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isSilentAssistantTranscriptMessage } from "../../shared/chat-message-content.js";
 import { extractAgentRunText } from "../agent-run-result.js";
 import {
   collectAmbiguousAutomaticMediaUrls,
@@ -15,7 +16,6 @@ import {
 import {
   hasVisibleAgentPayload,
   isMeaningfulTranscriptMessage,
-  isSilentAssistantTranscriptMessage,
   isTerminalSilentAssistantMessage,
 } from "./message-visibility.js";
 

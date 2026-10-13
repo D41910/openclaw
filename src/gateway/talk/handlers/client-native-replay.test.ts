@@ -3,6 +3,7 @@ import path from "node:path";
 import { setImmediate as nextEventLoopTurn } from "node:timers/promises";
 import { describe, expect, it, vi } from "vitest";
 import { createExecTool } from "../../../agents/bash-tools.js";
+import type { EmbeddedAgentRunResult } from "../../../agents/embedded-agent.js";
 import { createAgentHarnessHostCapabilities } from "../../../agents/harness/host-capability.js";
 import { projectEffectiveExecPolicy } from "../../../agents/session-permission-exec-mode.js";
 import { createDeferredCore } from "../../../shared/deferred.js";
@@ -84,7 +85,7 @@ describe("registered native delegation replay", () => {
                 durationMs: 0,
                 terminalReply: { disposition: "visible", text: "Native effect completed." },
               },
-            };
+            } satisfies EmbeddedAgentRunResult;
           } finally {
             host.close();
           }

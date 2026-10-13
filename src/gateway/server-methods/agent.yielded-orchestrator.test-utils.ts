@@ -1,7 +1,9 @@
 // Imported by agent.test.ts to keep its mocked suite in one Vitest module graph.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
+import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import type { AgentWaitResult } from "../../agents/run-wait.types.js";
+import { readSubagentRunAnnounceResult } from "../../agents/subagents/announce/subagent-announce-output.js";
 import { subagentRuns } from "../../agents/subagents/registry/subagent-registry-memory.js";
 import { subscribeSubagentRunChanges } from "../../agents/subagents/registry/subagent-registry-publication.js";
 import { loadSubagentRegistryFromSqlite } from "../../agents/subagents/registry/subagent-registry-state.fixture.test-support.js";
@@ -11,6 +13,7 @@ import {
   resetSubagentRegistryForTests,
 } from "../../agents/subagents/registry/subagent-registry.test-helpers.js";
 import type { SubagentRunRecord } from "../../agents/subagents/registry/subagent-registry.types.js";
+import { appendTranscriptMessage } from "../../config/sessions/session-accessor.js";
 import { racePromiseWithAbortSignal } from "../../infra/abort-signal.js";
 import { bindInProcessSubagentResume } from "../in-process-subagent-resume.js";
 import { bindParentSubagentResume } from "../session-subagent-resume.js";
@@ -163,7 +166,8 @@ describe("gateway agent handler yielded orchestrator follow-ups", () => {
           const previousRunId = "orchestrator-before-yield";
           const runId = "orchestrator-completion-followup";
           using cleanup = observeAgentSubagentCleanup({ runId, childSessionKey });
-          const result = "All worker results are ready.";
+          const result = `${"Completed worker detail. ".repeat(200)}All worker results are ready.`;
+          const { terminalReply } = prepareAgentRunTerminalReply({ rawText: result });
           const completion = createDeferred<AgentWaitResult>();
           const announce = mocks.registryAnnounce.mockResolvedValue("delivered");
           mocks.registryCallGateway.mockReturnValue(completion.promise);
@@ -182,15 +186,31 @@ describe("gateway agent handler yielded orchestrator follow-ups", () => {
           });
           mockSpawnedChildSessionEntry(childSessionKey, root);
           mocks.agentCommand.mockImplementation(async () => {
+            await appendTranscriptMessage(
+              {
+                agentId: "main",
+                sessionKey: childSessionKey,
+                sessionId: "spawned-child-session",
+                storePath: mocks.userTurnStorePath!,
+              },
+              {
+                message: {
+                  role: "assistant",
+                  content: result,
+                  stopReason: "stop",
+                  __openclaw: { runId },
+                },
+              },
+            );
             completion.resolve({
               status: "ok",
               startedAt: Date.now(),
               endedAt: Date.now(),
-              terminalReply: { disposition: "visible", text: result },
+              terminalReply,
             });
             return {
               payloads: [{ text: result }],
-              meta: { durationMs: 1, terminalReply: { disposition: "visible", text: result } },
+              meta: { durationMs: 1, terminalReply },
             };
           });
           const context = makeContext();
@@ -290,10 +310,13 @@ describe("gateway agent handler yielded orchestrator follow-ups", () => {
               childSessionKey,
               childRunId: runId,
               requesterSessionKey,
-              roundOneReply: result,
+              terminalReply,
               outcome: expect.objectContaining({ status: "ok" }),
             }),
           );
+          const prepared = await readSubagentRunAnnounceResult(completed);
+          expect(prepared.text).toBe(result);
+          expect(prepared.isCurrent()).toBe(true);
 
           const commandCallCount = mocks.agentCommand.mock.calls.length;
           await invokeAgent(request, {

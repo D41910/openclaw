@@ -380,7 +380,7 @@ describe("deferred reply supersession", () => {
         itemLifecycle: h.subscription.getItemLifecycle(),
         toolMetas: [{ toolName: "read", toolCallId: "read", isError: false, replaySafe: true }],
       });
-      expect(h.subscription.assistantTexts).toEqual([markdown, "NO_REPLY"]);
+      expect(h.subscription.assistantTexts).toEqual([markdown]);
       expect(attempt.itemLifecycle).toMatchObject({
         startedCount: 1,
         completedCount: 1,

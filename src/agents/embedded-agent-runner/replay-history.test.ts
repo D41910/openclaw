@@ -604,7 +604,11 @@ describe("normalizeAssistantReplayContent", () => {
     "preserves ordinary assistant replay text %s",
     (text) => {
       const messages = [userMessage("first"), bedrockAssistant(text), userMessage("NO_REPLY")];
-      expect(normalizeAssistantReplayContent(messages)).toEqual(messages);
+      expect(normalizeAssistantReplayContent(messages)).toEqual([
+        messages[0],
+        { ...messages[1], content: [{ type: "text", text }] },
+        messages[2],
+      ]);
     },
   );
 

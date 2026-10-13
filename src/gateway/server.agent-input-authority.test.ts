@@ -181,6 +181,33 @@ describe("spawn input ownership transfer", () => {
         const text =
           opts.sessionKey === childKey ? "delayed child result" : "received child result";
         const { terminalReply } = prepareAgentRunTerminalReply({ rawText: text });
+        const loaded = loadSessionEntry(opts.sessionKey!, { agentId: "main" });
+        await sessionAccessor.persistSessionTranscriptTurn(
+          {
+            agentId: "main",
+            sessionKey: opts.sessionKey!,
+            sessionId: loaded.entry!.sessionId,
+            storePath: loaded.storePath,
+          },
+          {
+            cwd: "/tmp",
+            runId: opts.runId,
+            expectedSessionId: loaded.entry!.sessionId,
+            touchSessionEntry: false,
+            updateMode: "none",
+            messages: [
+              {
+                message: {
+                  role: "assistant",
+                  phase: "final_answer",
+                  stopReason: "stop",
+                  content: [{ type: "text", text }],
+                },
+                now: Date.now(),
+              },
+            ],
+          },
+        );
         emitAgentEvent({
           runId: opts.runId!,
           stream: "lifecycle",

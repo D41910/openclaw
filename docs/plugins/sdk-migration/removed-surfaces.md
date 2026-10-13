@@ -87,6 +87,13 @@ available from `openclaw/plugin-sdk/reply-runtime` for raw producer input.
 Delivery plugins must forward prepared text without reclassifying it: literal
 `NO_REPLY` can be a visible answer.
 
+`SILENT_REPLY_TOKEN` was also removed from `openclaw/plugin-sdk/reply-chunking`.
+Import it from its existing `openclaw/plugin-sdk/reply-runtime` export instead:
+
+```ts
+import { SILENT_REPLY_TOKEN } from "openclaw/plugin-sdk/reply-runtime";
+```
+
 Harness producers use `prepareAgentRunTerminalReply` from
 `openclaw/plugin-sdk/agent-harness-runtime` once on the raw final text, then
 render the returned text and publish the matching terminal fact. Do not deliver the

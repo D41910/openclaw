@@ -135,6 +135,8 @@ async function emitLifecycleAssistantReply(params: {
   const text = params.resolveText(commandParams.extraSystemPrompt);
   const message = {
     role: "assistant",
+    phase: "final_answer",
+    stopReason: "stop",
     content: [{ type: "text", text }],
     ...(params.includeTimestamp ? { timestamp: Date.now() } : {}),
   };
@@ -146,6 +148,9 @@ async function emitLifecycleAssistantReply(params: {
     },
     {
       cwd: "/tmp",
+      runId,
+      expectedSessionId: sessionId,
+      touchSessionEntry: false,
       updateMode: "none",
       messages: [{ message, now: Date.now() }],
     },
@@ -271,6 +276,9 @@ describe("sessions_send gateway loopback", () => {
 
   it("returns reply when lifecycle ends before agent.wait", async () => {
     const body = "    const first = 1;\n        const second = 2;";
+    await writeSessionStore({
+      entries: { main: { sessionId: "main", updatedAt: Date.now() } },
+    });
     const spy = agentCommandMock as unknown as Mock<
       (opts: AgentCommandGatewayIngressOpts) => Promise<void>
     >;

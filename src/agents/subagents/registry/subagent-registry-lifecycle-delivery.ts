@@ -248,6 +248,7 @@ export const captureSubagentRunResult = async (
         () =>
           params.captureSubagentCompletionReply(entry.childSessionKey, {
             waitForReply: entry.expectsCompletionMessage === true,
+            runId: entry.runId,
             outcome,
             ...(sessionTarget ? { sessionTarget } : {}),
           }),

@@ -20,6 +20,7 @@ import { hasRetryableConnectionErrorCode } from "../infra/retryable-network-erro
 import { getGatewayRestartDrainSignal } from "../process/gateway-work-admission.js";
 import { normalizeBlockedLivenessWaitStatus } from "../shared/agent-liveness.js";
 import { getAsyncWorkSignal } from "../shared/async-work-scope.js";
+import { readTerminalSourceReplyDeliveryMirror } from "../shared/chat-message-content.js";
 import {
   isOpenClawMessageToolMirrorAssistantMessage,
   isTranscriptOnlyOpenClawAssistantMessage,
@@ -28,7 +29,6 @@ import { sleep } from "../utils/sleep.js";
 import { buildAgentRunTerminalOutcomeFromWaitResult } from "./agent-run-terminal-outcome.js";
 import { normalizeAgentRunTerminalReceipt } from "./agent-run-terminal-receipt.js";
 import { normalizeAgentRunTerminalReplySnapshot } from "./agent-run-terminal-reply.js";
-import { readTerminalSourceReplyDeliveryMirror } from "./embedded-agent-runner/message-visibility.js";
 import type { AgentWaitResult } from "./run-wait.types.js";
 import { extractStoredAssistantText, stripToolMessages } from "./tools/chat-history-text.js";
 import { bindAgentToolGatewayRequest } from "./tools/in-process-gateway.js";

@@ -8,6 +8,7 @@ import { resolveSessionStorePathCore } from "../config/sessions/paths.js";
 import {
   listSessionParticipantsReadOnly,
   loadSessionEntryReadOnly,
+  persistSessionTranscriptTurn,
   replaceSessionEntry,
 } from "../config/sessions/session-accessor.js";
 import {
@@ -149,6 +150,19 @@ function mockGatewayReply(
     if (request.method === "agent") {
       return { runId: "coordination-run", status: "accepted" };
     }
+    if (request.method === "chat.history") {
+      return {
+        messages: [
+          {
+            role: "assistant",
+            runId: "coordination-run",
+            phase: "final_answer",
+            stopReason: "stop",
+            content: [{ type: "text", text: "Requested result" }],
+          },
+        ],
+      };
+    }
     return request.method === "agent.wait" ? waitResult : {};
   });
 }
@@ -204,6 +218,44 @@ async function writeEntry(sessionKey: string, entry: SessionEntry, storePath?: s
       storePath: storePath ?? resolveSessionStorePathCore(config.session?.store, { agentId }),
     },
     entry,
+  );
+}
+
+async function writeFinal(sessionKey: string, runId: string, text: string) {
+  const target = resolveGatewaySessionStoreTargetWithStore({
+    cfg: config,
+    key: sessionKey,
+    readOnly: true,
+    exactRead: true,
+  });
+  const sessionId = target.store[target.canonicalKey]?.sessionId;
+  if (!sessionId) {
+    throw new Error(`Expected a fixture session for ${sessionKey}`);
+  }
+  await persistSessionTranscriptTurn(
+    {
+      agentId: target.agentId,
+      storePath: target.storePath,
+      sessionKey: target.canonicalKey,
+      sessionId,
+    },
+    {
+      config,
+      runId,
+      expectedSessionId: sessionId,
+      touchSessionEntry: false,
+      updateMode: "none",
+      messages: [
+        {
+          message: {
+            role: "assistant",
+            phase: "final_answer",
+            stopReason: "stop",
+            content: [{ type: "text", text }],
+          },
+        },
+      ],
+    },
   );
 }
 
@@ -420,7 +472,11 @@ describe("sessions_send child coordination", () => {
         expectsCompletionMessage: true,
         createdAt: 1,
         execution: { status: "terminal", startedAt: 1, endedAt: 2, outcome: { status: "ok" } },
-        completion: { required: true, resultText: "Original result" },
+        completion: {
+          required: true,
+          resultText: "Original result",
+          terminalReply: { disposition: "visible", text: "Original result" },
+        },
         delivery: { status: "delivered" },
         cleanupCompletedAt: 3,
         requesterTurnRunId: undefined,
@@ -442,6 +498,7 @@ describe("sessions_send child coordination", () => {
         }
         if (request.method === "agent.wait" && request.params?.runId === runId) {
           await childPending;
+          await writeFinal(childSessionKey, runId, "Follow-up result");
           return {
             runId,
             status: "ok",
@@ -581,6 +638,7 @@ describe("sessions_send child coordination", () => {
         const index = runIds.indexOf(String(request.params?.runId));
         if (index >= 0) {
           await replies[index]!.promise;
+          await writeFinal(childSessionKey, runIds[index]!, "FOLLOWUP-" + (index + 1));
           return {
             status: "ok",
             startedAt: 10,
@@ -714,6 +772,7 @@ describe("sessions_send child coordination", () => {
     callGatewayMock,
     calls,
     writeEntry,
+    writeFinal,
     settleSessionWork,
     drainRootWork: () => settleRootWork(true),
   });

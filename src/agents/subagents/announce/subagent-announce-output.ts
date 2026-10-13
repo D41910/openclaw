@@ -9,9 +9,9 @@ import { findSessionTranscriptArchiveEventReadOnly } from "../../../config/sessi
 import { resolveFreshSessionTotalTokens } from "../../../config/sessions/types.js";
 import { isFastTestRuntimeEnv } from "../../../infra/env.js";
 import { formatDurationCompact } from "../../../infra/format-time/format-duration.js";
+import { isSilentAssistantTranscriptMessage } from "../../../shared/chat-message-content.js";
 import { isContractToolCallBlock } from "../../../shared/tool-block-contract.js";
 import { sleep } from "../../../utils/sleep.js";
-import { isSilentAssistantTranscriptMessage } from "../../embedded-agent-runner/message-visibility.js";
 import { extractStoredAssistantText } from "../../tools/chat-history-text.js";
 import { resolveSubagentChildAgentId } from "../registry/subagent-child-owner-match.js";
 import { subagentRuns } from "../registry/subagent-registry-memory.js";

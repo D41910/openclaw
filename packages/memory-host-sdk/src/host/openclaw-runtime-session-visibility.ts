@@ -1,1 +1,1 @@
-export { isSilentAssistantTranscriptMessage } from "../../../../src/agents/embedded-agent-runner/message-visibility.js";
+export { isSilentAssistantTranscriptMessage } from "../../../../src/shared/chat-message-content.js";

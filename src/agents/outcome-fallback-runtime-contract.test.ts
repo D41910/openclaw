@@ -6,7 +6,6 @@ import {
   OUTCOME_FALLBACK_RUNTIME_CONTRACT,
 } from "openclaw/plugin-sdk/agent-runtime-test-contracts";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { applyInputProvenanceToUserMessage } from "../sessions/input-provenance.js";
 import {
   classifyEmbeddedAgentRunResultForModelFallback,
@@ -55,12 +54,12 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
   });
 
   it.each([
-    ["optional", undefined, 1, 1],
+    ["optional", undefined, 1, 2],
     ["required", undefined, 1, 2],
     ["required", "empty", 3, 6],
     ["required", "reasoning-only", 3, 9],
   ] as const)(
-    "resolves a normal stop for %s replies with harness classification %s",
+    "recovers an empty stop for %s replies with harness classification %s",
     async (expectation, classification, expectedModels, expectedRequests) => {
       const prompt = "The result is already incorporated. No new update.";
       const provenance = { kind: "inter_session" as const, sourceTool: "sessions_send" };
@@ -120,16 +119,14 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
       expect(modelRequests).toBe(expectedRequests);
       expect(result.model).toBe(classification ? "gpt-5.6-luna" : "gpt-5.6-sol");
       expect(result.attempts).toHaveLength(classification ? 3 : 0);
-      if (expectation === "optional") {
-        expect(result.result.meta.error).toBeUndefined();
-        expect(result.result.meta.terminalReplyKind).toBe("silent-empty");
-        expect(result.result.payloads).toEqual([{ text: SILENT_REPLY_TOKEN }]);
-      } else {
-        expect(result.result.meta.error?.kind).toBe("incomplete_turn");
-        expect(result.result.payloads).toEqual([
-          { text: "⚠️ Agent couldn't generate a response. Please try again.", isError: true },
-        ]);
-      }
+      expect(result.result.meta.error?.kind).toBe("incomplete_turn");
+      expect(result.result.meta.terminalReply).toMatchObject({
+        disposition: "visible",
+        text: expect.stringContaining("Agent couldn't generate a response."),
+      });
+      expect(result.result.payloads).toEqual([
+        { text: "⚠️ Agent couldn't generate a response. Please try again.", isError: true },
+      ]);
     },
   );
 

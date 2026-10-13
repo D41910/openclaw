@@ -51,10 +51,12 @@ describe("prepared announcement results", () => {
   it("delivers a visible fact whose complete text is literally NO_REPLY", async () => {
     const child = completedChild("NO_REPLY\nNO_REPLY");
     await expect(
-      readSubagentRunAnnounceResultUsing(
-        child,
-        resultDeps(() => child),
-      ),
+      readSubagentRunAnnounceResultUsing(child, {
+        ...resultDeps(() => child),
+        findTranscriptEvent: async () => ({
+          event: { message: { role: "assistant", display: true, content: "NO_REPLY" } },
+        }),
+      }),
     ).resolves.toMatchObject({
       text: "NO_REPLY",
     });
@@ -185,8 +187,27 @@ describe("prepared announcement results", () => {
     expect(prepared.text).toBe(text);
   });
 
+  it("marks the released capped result when retention removes the complete report", async () => {
+    const text = `${"retained report ".repeat(600)}required-field: complete`;
+    const child = completedChild(text);
+    const retained = text.slice(0, 4_096);
+    child.completion!.resultText = retained;
+    const prepared = await readSubagentRunAnnounceResultUsing(
+      child,
+      resultDeps(() => child),
+    );
+    expect(prepared.text).toBe(
+      `[truncated-by-retention: complete child answer unavailable]\n${retained}`,
+    );
+    expect(prepared.text).not.toContain("required-field: complete");
+  });
+
   it.each([
-    { recordedFact: true, expected: "retained prepared result" },
+    {
+      recordedFact: true,
+      expected:
+        "[truncated-by-retention: complete child answer unavailable]\nretained prepared result",
+    },
     { recordedFact: false, expected: undefined },
   ])(
     "preserves retained-result eligibility when recordedFact=$recordedFact and the transcript is unavailable",

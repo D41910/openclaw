@@ -75,7 +75,8 @@ export async function finalizeDispatchAndAudit(state: ExecuteDispatchReadyState)
   const finalResult = heartbeatReply ? heartbeatReply.reply : replyResult;
   const explicitSilence = state.replyOperationRunState.replyCompletion?.outcome === "silent";
   const finalReplies = Array.isArray(finalResult) ? finalResult : finalResult ? [finalResult] : [];
-  const replies = explicitSilence ? retainSilentFinalPayloads(finalReplies) : finalReplies;
+  const replies =
+    explicitSilence && !heartbeatReply ? retainSilentFinalPayloads(finalReplies) : finalReplies;
   const pendingFinalDeliveryIdentity = replies
     .map((reply) => getReplyPayloadMetadata(reply)?.pendingFinalDeliveryCompletion)
     .find((completion) => completion !== undefined);

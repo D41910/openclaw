@@ -89,7 +89,7 @@ describe("agent runner streaming presentation", () => {
             text: `[tool calls omitted]\n${caption}`,
             mediaUrls: ["https://example.invalid/failed.png", retainedMedia],
           },
-          { silentReply: silent },
+          silent ? { silentReply: true } : {},
         ),
       );
       expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual([

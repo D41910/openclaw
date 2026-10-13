@@ -7,7 +7,11 @@ import { resolvePersistedSessionStoreOwnerForKey } from "../../config/sessions/s
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { createAbortError } from "../../infra/abort-signal.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
-import { resolveSubagentCompletionResultText } from "../subagents/completion/subagent-completion-result.js";
+import { readSubagentRunAnnounceResult } from "../subagents/announce/subagent-announce-output.js";
+import {
+  SubagentAnnouncePreparationConflictError,
+  type PreparedAnnounceResult,
+} from "../subagents/announce/subagent-announce-result.js";
 import { subscribeSubagentRunChanges } from "../subagents/registry/subagent-registry-publication.js";
 import { prepareSubagentRunsByRunIds } from "../subagents/registry/subagent-registry.js";
 import type { SubagentRunRecord } from "../subagents/registry/subagent-registry.types.js";
@@ -121,6 +125,7 @@ function paramsOwner(config: OpenClawConfig | undefined, sessionKey: string): st
 
 function completionResult(
   entry: SubagentRunRecord,
+  result?: string,
 ): Static<typeof CollectorCompletionSchema> | undefined {
   const completion = entry.collectorCompletion;
   if (!completion) {
@@ -129,7 +134,7 @@ function completionResult(
   return {
     runId: entry.swarmRunId ?? entry.runId,
     status: completion.status,
-    result: resolveSubagentCompletionResultText(entry) ?? "",
+    result: result ?? "",
     ...(completion.structured !== undefined ? { structured: completion.structured } : {}),
     ...(entry.execution.outcome?.status === "error"
       ? { error: entry.execution.outcome.error }
@@ -163,6 +168,7 @@ function readWaitState(
   entries: ReadonlyMap<string, SubagentRunRecord>,
   ids: readonly string[],
   owner: CollectorOwnerScope,
+  results: ReadonlyMap<string, PreparedAnnounceResult>,
 ) {
   const errors: WaitError[] = [];
   const completed: Array<{
@@ -181,7 +187,7 @@ function readWaitState(
       errors.push({ runId, error: "not_owner" });
       continue;
     }
-    const result = completionResult(entry);
+    const result = completionResult(entry, results.get(entry.runId)?.text);
     if (result) {
       completed.push({
         result,
@@ -237,18 +243,60 @@ async function waitForCollector(
       let callbackAbort: Error | undefined;
       try {
         const prepared = await prepareSubagentRunsByRunIds(params.ids);
+        const selected = prepared.consume((entries) =>
+          [...entries.values()].filter(
+            (entry) => entry.collect && entry.collectorCompletion && ownsRun(entry, params),
+          ),
+        );
+        if (!selected.ready) {
+          await yieldToEventLoop();
+          continue;
+        }
+        const results = new Map<string, PreparedAnnounceResult>();
+        const readRun = (runId: string) => {
+          const current = prepared.consume((entries) =>
+            [...entries.values()].find((entry) => entry.runId === runId),
+          );
+          return current.ready ? current.value : undefined;
+        };
+        for (const entry of selected.value) {
+          assertNotAborted();
+          results.set(entry.runId, await readSubagentRunAnnounceResult(entry, readRun));
+        }
         read = prepared.consume((entries) => {
           if (params.signal?.aborted) {
             callbackAbort = params.abortError();
             throw callbackAbort;
           }
-          return readWaitState(entries, params.ids, params);
+          if ([...results.values()].some((result) => !result.isCurrent())) {
+            throw new SubagentAnnouncePreparationConflictError(
+              "Collector result changed during wait.",
+            );
+          }
+          if (
+            [...entries.values()].some(
+              (entry) =>
+                entry.collect &&
+                entry.collectorCompletion &&
+                ownsRun(entry, params) &&
+                !results.has(entry.runId),
+            )
+          ) {
+            throw new SubagentAnnouncePreparationConflictError(
+              "Collector completed during wait result preparation.",
+            );
+          }
+          return readWaitState(entries, params.ids, params, results);
         });
       } catch (error) {
         if (params.signal?.aborted && error !== callbackAbort) {
           const aborted = params.abortError();
           aborted.cause = error;
           throw aborted;
+        }
+        if (error instanceof SubagentAnnouncePreparationConflictError) {
+          await yieldToEventLoop();
+          continue;
         }
         throw error;
       }

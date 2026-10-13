@@ -16,13 +16,16 @@ import {
 } from "../../../auto-reply/reply-payload.js";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import type { ReasoningLevel, ThinkLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
-import { HEARTBEAT_TOKEN } from "../../../auto-reply/tokens.js";
+import { HEARTBEAT_TOKEN, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
+import { applyAssistantDeliveryDirectives } from "../../../config/sessions/transcript-assistant-delivery.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
 import { hasReplyPayloadContent } from "../../../interactive/payload.js";
 import type { AssistantMessage } from "../../../llm/types.js";
 import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
+import { readAssistantTextBlocksForPhase } from "../../../shared/chat-message-content.js";
 import { sanitizeAssistantVisibleText } from "../../../shared/text/assistant-visible-text.js";
 import { trimTextPreservingCode } from "../../../shared/text/text-projection.js";
+import { extractTtsDirectiveFacts } from "../../../tts/directive-facts.js";
 import {
   prepareAgentRunTerminalReply,
   type PreparedAgentRunTerminalReply,
@@ -58,6 +61,54 @@ import {
 import { buildSourceReplyPayloadState } from "./source-reply-payloads.js";
 import { buildFailureWarning } from "./tool-error-warning.js";
 import type { EmbeddedRunAttemptResult } from "./types.js";
+
+function renderNativeAssistantReply(
+  assistant: AssistantMessage,
+  rawText: string,
+  preparedText: string,
+): string | undefined {
+  if (!Array.isArray(assistant.content) || assistant.content.length < 2) {
+    return undefined;
+  }
+  const finalBlocks = readAssistantTextBlocksForPhase(assistant, "final_answer");
+  const sourceBlocks = finalBlocks.length
+    ? finalBlocks
+    : readAssistantTextBlocksForPhase(assistant);
+  const prefixLength = rawText.length - preparedText.length;
+  // Only project native parts when they still represent the authoritative prepared source.
+  if (
+    sourceBlocks.map((block) => block.text).join("") !== rawText ||
+    (rawText !== preparedText &&
+      (prefixLength !== SILENT_REPLY_TOKEN.length + 1 ||
+        !rawText.startsWith(`${SILENT_REPLY_TOKEN}\n`) ||
+        rawText.slice(prefixLength) !== preparedText))
+  ) {
+    return undefined;
+  }
+  const rendered = {
+    ...assistant,
+    content: assistant.content.map((block) => (block.type === "text" ? { ...block } : block)),
+  };
+  if (prefixLength > 0) {
+    // Map the already-consumed raw control line onto its parts without inspecting the suffix.
+    let remainingPrefix = prefixLength;
+    for (const block of readAssistantTextBlocksForPhase(
+      rendered,
+      finalBlocks.length ? "final_answer" : undefined,
+    )) {
+      const removed = Math.min(remainingPrefix, block.text.length);
+      block.text = block.text.slice(removed);
+      remainingPrefix -= removed;
+      if (remainingPrefix === 0) {
+        break;
+      }
+    }
+  }
+  // Native part boundaries carry fence context that is lost after joining the text.
+  applyAssistantDeliveryDirectives(rendered);
+  const text = resolveRawAssistantAnswerText(rendered);
+  return extractAssistantVisibleText(rendered, (_text, final) => (final ? text : ""));
+}
 
 /**
  * Converts a completed embedded attempt into reply payloads for channels. This
@@ -356,18 +407,25 @@ export function buildEmbeddedRunPayloads(params: {
               assistantTextSources[answerIndex]?.rawText ||
               directives.text,
           });
-        const renderedText = existingPrepared
-          ? prepared.text
-          : assistantForPayload
-            ? extractAssistantVisibleText(assistantForPayload, (_text, final) =>
-                final ? prepared.text : "",
-              )
-            : sanitizeUserFacingText(sanitizeAssistantVisibleText(prepared.text), {
-                errorContext: false,
-              });
-        const cleanedText = parseReplyDirectives(renderedText).text;
-        hasIntentionalSilentFinal = prepared.terminalReply.disposition === "silent";
+        const nativeReply = assistantForPayload
+          ? renderNativeAssistantReply(assistantForPayload, fallbackRawAnswerText, prepared.text)
+          : undefined;
+        const renderedText =
+          nativeReply ??
+          (existingPrepared
+            ? prepared.text
+            : assistantForPayload
+              ? extractAssistantVisibleText(assistantForPayload, (_text, final) =>
+                  final ? prepared.text : "",
+                )
+              : sanitizeUserFacingText(sanitizeAssistantVisibleText(prepared.text), {
+                  errorContext: false,
+                }));
         const ttsFacts = shouldUseCanonicalFinalAnswer ? storedDelivery?.tts : undefined;
+        const cleanedText = parseReplyDirectives(
+          ttsFacts ? extractTtsDirectiveFacts(renderedText).cleanedText : renderedText,
+        ).text;
+        hasIntentionalSilentFinal = prepared.terminalReply.disposition === "silent";
         const delivery = shouldUseCanonicalFinalAnswer
           ? {
               audioAsVoice: storedDelivery?.audioAsVoice,

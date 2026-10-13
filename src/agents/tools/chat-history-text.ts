@@ -2,15 +2,13 @@ import { asOptionalObjectRecord } from "@openclaw/normalization-core/record-coer
 import { NESTED_TOOL_ACTIVITY_CUSTOM_TYPE } from "../../sessions/nested-tool-activity.js";
 import {
   extractAssistantPhaseText,
+  isSilentAssistantTranscriptMessage,
   readAssistantTextBlocksForPhase,
+  readTerminalSourceReplyDeliveryMirror,
 } from "../../shared/chat-message-content.js";
 import { sanitizeAssistantVisibleTextWithProfile } from "../../shared/text/assistant-visible-text.js";
 import { sanitizeUserFacingText } from "../embedded-agent-helpers/sanitize-user-facing-text.js";
 import { renderUserFacingText } from "../embedded-agent-helpers/user-facing-text.js";
-import {
-  isSilentAssistantTranscriptMessage,
-  readTerminalSourceReplyDeliveryMirror,
-} from "../embedded-agent-runner/message-visibility.js";
 
 export function stripToolMessages(messages: unknown[]): unknown[] {
   return messages.filter((msg) => {

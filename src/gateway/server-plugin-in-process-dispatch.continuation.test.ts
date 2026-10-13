@@ -211,6 +211,33 @@ describe("typed in-process agent continuation authorization", () => {
         scopes: ["operator.read", "operator.write"],
       });
       const context = createContext();
+      const readHistory = vi.fn(({ client, params, respond }: GatewayRequestHandlerOptions) => {
+        expect(client?.connect.scopes).toEqual(["operator.read"]);
+        expect(client?.authenticatedUserProfile?.profileId).toBe(
+          owner.authenticatedUserProfile!.profileId,
+        );
+        expect(params).toMatchObject({ sessionKey: "agent:main:child" });
+        respond(true, {
+          messages: [
+            {
+              role: "assistant",
+              __openclaw: { runId: "target-followup" },
+              phase: "final_answer",
+              stopReason: "stop",
+              content: [{ type: "text", text: "Target work finished" }],
+            },
+          ],
+        });
+      });
+      context.getGatewayMethodRegistry = () =>
+        createGatewayMethodRegistry([
+          {
+            name: "chat.history",
+            scope: "operator.read",
+            owner: { kind: "core", area: "sessions" },
+            handler: readHistory,
+          },
+        ]);
       let connected = true;
       let gatewayCurrent = true;
       const resolveGatewayContext = () => (gatewayCurrent ? context : undefined);
@@ -358,12 +385,15 @@ describe("typed in-process agent continuation authorization", () => {
         if (boundary !== "disconnected") {
           expect(dispatchErrors.length).toBeGreaterThan(0);
           expect(startTurn).not.toHaveBeenCalled();
+          expect(readHistory).not.toHaveBeenCalled();
           return;
         }
         expect(dispatchErrors).toEqual([]);
+        expect(readHistory).toHaveBeenCalledOnce();
         expect(startTurn).toHaveBeenCalledOnce();
         expect(startTurn.mock.calls[0]?.[0].preflight.request).toMatchObject({
           sessionKey: "agent:main:requester",
+          message: expect.stringContaining("Target work finished"),
           deliver: false,
           sourceReplyDeliveryMode: "message_tool_only",
           inputProvenance: {

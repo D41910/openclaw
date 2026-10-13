@@ -1,3 +1,5 @@
+import { stripInternalMetadataForDisplay } from "../../auto-reply/reply/display-text-sanitize.js";
+import { PENDING_FINAL_DELIVERY_CLEAR_PATCH } from "../../auto-reply/reply/pending-final-delivery-state.js";
 import type {
   InternalSessionEntry as SessionEntry,
   MainRestartRecoveryState,
@@ -526,6 +528,14 @@ export function transitionMainSessionRecovery(
         runId: command.runId,
         lifecycleGeneration: command.lifecycleGeneration,
       });
+      if (entry.pendingFinalDelivery?.kind === "replayable") {
+        const text = stripInternalMetadataForDisplay(entry.pendingFinalDelivery.text);
+        if (text.trim()) {
+          entry.pendingFinalDelivery = { ...entry.pendingFinalDelivery, text };
+        } else {
+          Object.assign(entry, PENDING_FINAL_DELIVERY_CLEAR_PATCH);
+        }
+      }
       return {
         kind: "admitted_recovery",
         admission: {

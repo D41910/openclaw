@@ -44,6 +44,7 @@ import {
   seedMainSessionStore,
   seedSessionStore,
   setHeartbeatAgentTurnStatus,
+  setHeartbeatSilentCompletion,
   type HeartbeatReplySpy,
   withTempHeartbeatSandbox,
   withTempTelegramHeartbeatSandbox,
@@ -160,14 +161,15 @@ describe("heartbeat acknowledgements", () => {
       name: "truncated NO_REPLY final",
       payload: { text: "NO_R" },
       options: { telegram: true },
-      sends: 0,
+      sends: 1,
+      sentText: "NO_R",
     },
     {
       name: "truncated NO_REPLY acknowledgement",
       payload: { text: "NO_RE" },
       options: { showOk: true },
       sends: 1,
-      sentText: "HEARTBEAT_OK",
+      sentText: "NO_RE",
     },
     {
       name: "exec summary with trailing acknowledgement",
@@ -200,15 +202,15 @@ describe("heartbeat acknowledgements", () => {
       }
       replySpy.mockImplementation(async (_ctx, opts) => {
         if (!Object.keys(payload).length) {
-          const state = resolveReplyOperationRunState(opts);
-          if (!state) {
-            throw new Error("Heartbeat invocation state missing");
-          }
-          state.replyCompletion = { expectation: "optional", outcome: "silent" };
+          setHeartbeatSilentCompletion(opts);
+          return undefined;
         }
         return payload;
       });
-      expect((await run({}, exec ? "exec-event" : undefined)).status).toBe("ran");
+      const outcome = await run({}, exec ? "exec-event" : undefined);
+      expect(outcome.status, JSON.stringify({ outcome, event: getLastHeartbeatEvent() })).toBe(
+        "ran",
+      );
       expect(send).toHaveBeenCalledTimes(sends);
       if (sentText) {
         expect(send.mock.calls[0]?.slice(0, 2)).toEqual([

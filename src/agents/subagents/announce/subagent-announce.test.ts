@@ -390,6 +390,7 @@ describe("subagent announce seam flow", () => {
         cleanup: "delete",
         outcome: { status: "error", error: "interrupted by restart" },
         roundOneReply: "frozen terminal result",
+        terminalReply: { disposition: "visible", text: "frozen terminal result" },
         suppressChildSessionEffects: reason === "explicit",
         isChildSessionEffectsAllowed: () => reason !== "host",
         prepareChildSessionEffects: async () => reason !== "currency",
@@ -410,6 +411,7 @@ describe("subagent announce seam flow", () => {
       task: "recover interrupted work",
       outcome: { status: "error", error: "interrupted by restart" },
       roundOneReply: "stale frozen terminal result",
+      terminalReply: { disposition: "visible", text: "stale frozen terminal result" },
       suppressChildSessionEffects: true,
       isCompletionDeliveryAllowed: () => false,
     });

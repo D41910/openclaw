@@ -299,7 +299,6 @@ src/agents/tool-policy-match.ts
 src/agents/tool-policy-shared.ts
 src/agents/tool-policy.ts
 src/agents/tools/automations-tool-name.ts
-src/agents/tools/sessions-send-tokens.ts
 src/agents/utility-model-setting.ts
 src/agents/utils/git.ts
 src/agents/workspace-access.ts

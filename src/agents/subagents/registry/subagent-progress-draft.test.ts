@@ -6,6 +6,7 @@ import { captureRuntimeConfigAsyncReader, getRuntimeConfig } from "../../../conf
 import { abortControlledSubagents } from "../../../gateway/server-methods/chat-abort-descendants.js";
 import { emitAgentEvent } from "../../../infra/agent-events.js";
 import { resetSystemEventsForTest } from "../../../infra/system-events.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import { clearActiveEmbeddedRun, setActiveEmbeddedRun } from "../../embedded-agent-runner/runs.js";
 import { createEmbeddedRunHandle } from "../../embedded-agent-runner/runs.test-support.js";
 import { isSubagentRegistryWriteCommand } from "../../subagent-test-fixtures.test-helpers.js";
@@ -23,7 +24,6 @@ import {
 import { subagentRuns } from "./subagent-registry-memory.js";
 import { adoptPausedSubagentRunForFollowUp } from "./subagent-registry.js";
 import { rowToSubagentRunRecord } from "./subagent-registry.store.codec.js";
-import { testing as registryTesting } from "./subagent-registry.test-helpers.js";
 import type { SubagentRunRecord } from "./subagent-registry.types.js";
 
 const fixture = useSubagentControlFixture();
@@ -99,10 +99,14 @@ function answerWakes(
     if (wakes.length === 1) {
       await onWake?.(params);
     }
+    const terminal = prepareAgentRunTerminalReply({ rawText: replies[wakes.length - 1] ?? "" });
     return {
       status: "ok",
       inputProcessingCompleted: true,
-      result: { payloads: [{ text: replies[wakes.length - 1] }], meta: {} },
+      result: {
+        payloads: terminal.text ? [{ text: terminal.text }] : [],
+        meta: { terminalReply: terminal.terminalReply },
+      },
     } as T;
   };
   setSubagentAnnounceDeliveryDepsForTest({ dispatchGatewayMethodInProcess: dispatch });
@@ -118,8 +122,7 @@ function expectNoChildResultPushed(draft: TestDraft) {
 
 it.each([
   ["a visible answer", ["The delegated work is done."]],
-  ["a silent attempt and a visible retry", ["NO_REPLY", "The delegated work is done."]],
-  ["exhausted silent attempts", ["NO_REPLY", "NO_REPLY", "NO_REPLY"]],
+  ["intentional external silence", ["NO_REPLY"]],
 ] as const)(
   "retires the card once, after the cohort's requester wake settles through %s",
   async (_name, replies) => {
@@ -133,18 +136,6 @@ it.each([
     expect(draft.retire).not.toHaveBeenCalled();
 
     await endRun("b");
-    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-    try {
-      // A yielded requester owes a visible answer, so silence retries the same wake.
-      for (const retryDelayMs of [30_000, 120_000].slice(0, replies.length - 1)) {
-        expect(draft.retire).not.toHaveBeenCalled();
-        await vi.advanceTimersByTimeAsync(retryDelayMs);
-        await registryTesting.sweepOnceForTests();
-        await fixture.settle();
-      }
-    } finally {
-      vi.useRealTimers();
-    }
     expect(wakes.map(({ retiredBefore }) => retiredBefore)).toEqual(replies.map(() => 0));
     expect(draft.retire).toHaveBeenCalledOnce();
     expect(draft.push).toHaveBeenCalledWith(

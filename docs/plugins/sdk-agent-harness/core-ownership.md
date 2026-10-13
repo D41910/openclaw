@@ -369,8 +369,8 @@ to uppercase `NO_REPLY` is silent. Preparation strips one literal leading
 Internal result-required turns need an actual completed current-source final
 result; progress mirrors do not satisfy that obligation.
 
-The sole producer entrypoint is `prepareAgentRunTerminalReply`, returning
-`{ text, terminalReply }`. It classifies `rawText ?? visibleText` before stripping
+The sole producer entrypoint is `prepareAgentRunTerminalReply({ rawText })`,
+returning `{ text, terminalReply }`. It classifies the raw text before stripping
 the leading control line. Delivery consumers do not call this function. Deliver
 `text`, which retains the full prepared bytes, rather than the bounded snapshot
 text. A recorded visible result stays visible even if its text is `NO_REPLY`.

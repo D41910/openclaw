@@ -484,7 +484,18 @@ describe("sessions tools", () => {
       }
       if (request.method === "chat.history") {
         return {
-          messages: waitObserved ? [{ role: "assistant", content: marker, timestamp: 20 }] : [],
+          messages: waitObserved
+            ? [
+                {
+                  role: "assistant",
+                  phase: "final_answer",
+                  stopReason: "stop",
+                  __openclaw: { runId: "run-source-reply" },
+                  content: marker,
+                  timestamp: 20,
+                },
+              ]
+            : [],
         };
       }
       if (request.method === "send") {
@@ -510,7 +521,7 @@ describe("sessions tools", () => {
     expect(getActiveGatewayRootWorkCount()).toBe(0);
     expect(deliveredMessages).toEqual([marker]);
     expect(callGatewayMock.mock.calls.some(([request]) => request.method === "chat.history")).toBe(
-      false,
+      true,
     );
   });
 
@@ -626,7 +637,23 @@ describe("sessions tools", () => {
           return { runId: "inline-result", status: "accepted" };
         }
         if (request.method === "agent.wait") {
-          return { status: "ok", terminalReply: { disposition: "visible", text: "initial" } };
+          return {
+            status: "ok",
+            terminalReply: { disposition: "visible", text: "bounded snapshot" },
+          };
+        }
+        if (request.method === "chat.history") {
+          return {
+            messages: [
+              {
+                role: "assistant",
+                phase: "final_answer",
+                stopReason: "stop",
+                __openclaw: { runId: "inline-result" },
+                content: [{ type: "text", text: "initial" }],
+              },
+            ],
+          };
         }
         return {};
       });

@@ -170,15 +170,15 @@ describe("normalizePendingFinalRecoveryPayloads", () => {
     ).toBeUndefined();
   });
 
-  it("omits payloads that normal delivery suppresses", () => {
+  it("preserves ordinary prose previously treated as silence", () => {
     expect(
       buildRecoverablePendingFinalDeliveryText([
         { text: "No channel reply." },
         { text: "visible final" },
       ]),
-    ).toBe("visible final");
-    expect(
-      buildRecoverablePendingFinalDeliveryText([{ text: "No channel reply." }]),
-    ).toBeUndefined();
+    ).toBe("No channel reply.\n\nvisible final");
+    expect(buildRecoverablePendingFinalDeliveryText([{ text: "No channel reply." }])).toBe(
+      "No channel reply.",
+    );
   });
 });

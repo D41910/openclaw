@@ -176,7 +176,15 @@ describe("sessions_send directed policy at the tool boundary", () => {
         }
         if (request.method === "chat.history") {
           return {
-            messages: [{ role: "assistant", content: [{ type: "text", text: replyText }] }],
+            messages: [
+              {
+                role: "assistant",
+                __openclaw: { runId },
+                phase: "final_answer",
+                stopReason: "stop",
+                content: [{ type: "text", text: replyText }],
+              },
+            ],
           };
         }
         throw new Error("Unexpected Gateway method: " + request.method);
@@ -230,7 +238,6 @@ describe("sessions_send directed policy at the tool boundary", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    expect(gatewayMethods()).not.toContain("chat.history");
   });
 
   afterAll(async () => {
@@ -414,5 +421,6 @@ describe("sessions_send directed policy at the tool boundary", () => {
     ).rejects.toThrow("visibility");
     expectNoDispatch();
     expect(gatewayMethods()).not.toContain("sessions.search");
+    expect(gatewayMethods()).not.toContain("chat.history");
   });
 });

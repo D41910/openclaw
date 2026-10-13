@@ -417,7 +417,7 @@ describe("prepareEmbeddedAttemptPromptContext", () => {
     expect(fixture.replaceSessionMessages).toHaveBeenCalledWith([rawHistory[0], rawHistory[2]]);
   });
 
-  it("updates session messages when replay normalization modifies content without changing count", async () => {
+  it("preserves ordinary reply text containing a trailing silence token without rewriting history", async () => {
     const contentModifiedHistory: AgentMessage[] = [
       { role: "user", content: [{ type: "text", text: "Historic question" }], timestamp: 10 },
       makeAgentAssistantMessage({
@@ -433,12 +433,10 @@ describe("prepareEmbeddedAttemptPromptContext", () => {
     const result = await prepareEmbeddedAttemptPromptContext(fixture.input);
 
     expect(result.prePromptMessageCount).toBe(2);
-    expect(fixture.replaceSessionMessages).toHaveBeenCalledWith([
-      contentModifiedHistory[0],
-      expect.objectContaining({
-        role: "assistant",
-        content: [{ type: "text", text: "Slides ready" }],
-      }),
+    expect(fixture.replaceSessionMessages).not.toHaveBeenCalled();
+    expect(contentModifiedHistory[1]?.content).toEqual([
+      { type: "text", text: "Slides ready" },
+      { type: "text", text: "NO_REPLY" },
     ]);
   });
 });

@@ -413,18 +413,22 @@ export function createCliEventHandlers(params: {
     ) {
       return;
     }
+    const sourceText = stripMixedSilentReplyTokens(text) ?? text;
+    const sourceDelta = sourceText.startsWith(assistantVisibleText)
+      ? sourceText.slice(assistantVisibleText.length)
+      : sourceText;
+    assistantVisibleText = sourceText;
     const preparedText = applyPluginTextReplacements(
-      stripMixedSilentReplyTokens(text) ?? text,
+      sourceText,
       context.backendResolved.textTransforms?.output,
     );
-    const preparedDelta = preparedText.startsWith(assistantVisibleText)
-      ? preparedText.slice(assistantVisibleText.length)
-      : preparedText;
-    assistantVisibleText = preparedText;
     emitLiveEvent("assistant", () => ({
       itemId: cliAssistantItemId(runParams.runId),
       text: preparedText,
-      delta: preparedDelta,
+      delta: applyPluginTextReplacements(
+        sourceDelta,
+        context.backendResolved.textTransforms?.output,
+      ),
     }));
   };
   const emitCliCompletedReply = (text: string, assistantMessageIndex: number) => {

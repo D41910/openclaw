@@ -7,6 +7,7 @@ import {
   ACTIVE_EMBEDDED_RUNS,
   ACTIVE_EMBEDDED_RUNS_BY_RUN_ID,
 } from "../../../agents/embedded-agent-runner/run-state.js";
+import type { EmbeddedAgentRunResult } from "../../../agents/embedded-agent.js";
 import { guardSessionManager } from "../../../agents/session-tool-result-guard-wrapper.js";
 import {
   createAssistant,
@@ -202,7 +203,7 @@ describe("native Talk action ownership through public plugin registration", () =
                 durationMs: 0,
                 terminalReply: { disposition: "visible", text: "Both labels are preserved." },
               },
-            };
+            } satisfies EmbeddedAgentRunResult;
           }).catch((error: unknown) => {
             providerStarted.reject(error);
             throw error;

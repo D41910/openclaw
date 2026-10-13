@@ -240,6 +240,7 @@ vi.mock("./subagent-registry-cleanup.js", async (importOriginal) => ({
   resolveDeferredCleanupDecision: () => ({ kind: "give-up", reason: "expiry" }),
 }));
 
+// mock-isolation: Keep real session writes and attachment cleanup outside lifecycle fixtures.
 vi.mock("./subagent-registry-helpers.js", () => ({
   ANNOUNCE_COMPLETION_HARD_EXPIRY_MS: 30 * 60_000,
   ANNOUNCE_EXPIRY_MS: 5 * 60_000,
@@ -3237,6 +3238,7 @@ describe("subagent registry lifecycle hardening", () => {
 
     expect(captureSubagentCompletionReply).toHaveBeenCalledWith(entry.childSessionKey, {
       waitForReply: false,
+      runId: entry.runId,
       sessionTarget: entry.execution?.transcriptTarget,
       outcome: {
         status: "ok",

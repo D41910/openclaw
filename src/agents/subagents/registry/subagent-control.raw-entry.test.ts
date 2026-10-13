@@ -278,6 +278,7 @@ it.each([
       status: "timeout";
       startedAt: number;
       endedAt: number;
+      terminalReply: { disposition: "visible"; text: string };
     }>();
     fixture.gateway.mockImplementation(async (request) => {
       if (request.method !== "agent.wait") {
@@ -293,7 +294,15 @@ it.each([
     for (const [agentId, { storePath }] of children) {
       await appendTranscriptMessage(
         { agentId, storePath, sessionKey: "global", sessionId: `${agentId}-global` },
-        { message: { role: "assistant", content: `${agentId}'s partial result` } },
+        {
+          message: {
+            role: "assistant",
+            content: `${agentId}'s partial result`,
+            phase: "final",
+            stopReason: "stop",
+            __openclaw: { runId: agentId === "main" ? "main-1" : "research-2" },
+          },
+        },
       );
     }
     const entry = getSubagentRunByRunId(runId)!;
@@ -311,11 +320,23 @@ it.each([
         updatedAt: Date.now(),
       });
     }
-    terminal.resolve({ status: "timeout", startedAt: entry.createdAt, endedAt: Date.now() });
+    terminal.resolve({
+      status: "timeout",
+      startedAt: entry.createdAt,
+      endedAt: Date.now(),
+      terminalReply: { disposition: "visible", text: `${owner}'s partial result` },
+    });
     const waitIndex = waits.mock.calls.findIndex(([waitingRunId]) => waitingRunId === runId);
     expect(waitIndex).toBeGreaterThanOrEqual(0);
     await waits.mock.results[waitIndex]!.value;
     await fixture.settle();
+    expect(fixture.capture).toHaveBeenCalledWith(
+      "global",
+      expect.objectContaining({
+        runId,
+        sessionTarget: expect.objectContaining({ agentId: owner, sessionId: `${owner}-global` }),
+      }),
+    );
     expect(getSubagentRunByRunId(runId)).toMatchObject({
       childAgentId: owner,
       execution: { status: "terminal", outcome: { status: "timeout" } },

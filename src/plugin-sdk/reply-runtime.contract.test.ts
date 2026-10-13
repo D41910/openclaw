@@ -33,6 +33,8 @@ describe("reply SDK silence surface", () => {
   it("exposes only the exact helper from reply-runtime", () => {
     type ChunkingExports = keyof typeof ReplyChunking;
     type RuntimeExports = keyof typeof ReplyRuntime;
+    expectTypeOf<"SILENT_REPLY_TOKEN">().not.toExtend<ChunkingExports>();
+    expectTypeOf<"SILENT_REPLY_TOKEN">().toExtend<RuntimeExports>();
     expectTypeOf<"isSilentReplyText">().not.toExtend<ChunkingExports>();
     expectTypeOf<"isSilentReplyPayloadText">().not.toExtend<ChunkingExports>();
     expectTypeOf<"isSilentReplyPayloadText">().not.toExtend<RuntimeExports>();

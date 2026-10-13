@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import type { ReplyPayload } from "../types.js";
 import type { SettledAgentTurn } from "./agent-runner-execution.types.js";
 import type { AdmittedFollowupTurn } from "./followup-turn-admission.js";
@@ -46,14 +47,20 @@ export function createSettledExecution(finalText = ""): {
   runId: string;
   outcome: SettledAgentTurn;
 } {
+  const prepared = prepareAgentRunTerminalReply({ rawText: finalText });
   return {
     runId: "run-1",
     outcome: {
       kind: "settled",
       status: "ok",
       result: {
-        payloads: finalText ? [{ text: finalText }] : [],
-        meta: { durationMs: 0, finalAssistantVisibleText: finalText },
+        payloads: prepared.text ? [{ text: prepared.text }] : [],
+        meta: {
+          durationMs: 0,
+          finalAssistantRawText: finalText,
+          finalAssistantVisibleText: prepared.text,
+          terminalReply: prepared.terminalReply,
+        },
       },
       resolved: { provider: "anthropic", model: "claude" },
       fallback: { exhausted: false, attempts: [] },

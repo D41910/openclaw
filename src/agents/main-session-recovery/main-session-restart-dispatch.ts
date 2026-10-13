@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { GatewayClientRequestError } from "../../../packages/gateway-client/src/index.js";
 import { isExecutionIdentityCollectionEnabled } from "../../audit/audit-config.js";
+import { stripInternalMetadataForDisplay } from "../../auto-reply/reply/display-text-sanitize.js";
 import type { InternalSessionEntry as SessionEntry } from "../../config/sessions.js";
 import { applySessionEntryReplacements } from "../../config/sessions/session-accessor.js";
 import { retainPreparedSessionEntryPredicate } from "../../config/sessions/session-accessor.sqlite-entry-cache-publication-state.js";
@@ -227,7 +228,9 @@ async function resumeMainSessionWithinAdmission(
   }
   const lifecycleGeneration = params.lifecycleGeneration ?? getAgentEventLifecycleGeneration();
   const sanitizedPendingText =
-    typeof params.pendingFinalDeliveryText === "string" ? params.pendingFinalDeliveryText : "";
+    typeof params.pendingFinalDeliveryText === "string"
+      ? stripInternalMetadataForDisplay(params.pendingFinalDeliveryText)
+      : "";
   const deliveryContext = resolveRestartRecoveryDeliveryContext({
     cfg: params.cfg,
     entry: params.entry,

@@ -59,30 +59,42 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
   let gatewayCalls: CallGatewayOptions[];
   let sessionListRows: GatewaySessionListRow[];
   let transcriptReply: string | undefined;
+  let transcriptRunId: string;
 
   beforeEach(() => {
     setActivePluginRegistry(createSessionConversationTestRegistry());
     gatewayCalls = [];
     sessionListRows = [];
-    transcriptReply = undefined;
+    transcriptReply = "Test reply";
+    transcriptRunId = "run-test";
     callGatewayMock.mockReset();
     const callGateway = async <T = Record<string, unknown>>(
       opts: CallGatewayOptions,
     ): Promise<T> => {
       if (opts.method === "agent.wait") {
-        const wait = await agentWaitMock(opts);
-        transcriptReply =
-          wait.terminalReply?.disposition === "visible" ? wait.terminalReply.text : undefined;
-        return wait;
+        const params = opts.params;
+        if (
+          !params ||
+          typeof params !== "object" ||
+          !("runId" in params) ||
+          typeof params.runId !== "string"
+        ) {
+          throw new Error("Expected a run-keyed wait request");
+        }
+        transcriptRunId = params.runId;
+        return await agentWaitMock(opts);
       }
       if (opts.method === "chat.history") {
+        gatewayCalls.push(opts);
         return {
           messages: transcriptReply
             ? [
                 {
                   role: "assistant",
                   content: [{ type: "text", text: transcriptReply }],
-                  __openclaw: { display: true },
+                  phase: "final_answer",
+                  stopReason: "stop",
+                  __openclaw: { runId: transcriptRunId },
                 },
               ]
             : [],
@@ -203,12 +215,13 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
       waits: [{ status: "timeout", pendingError: true, error: "retrying provider" }],
     },
   ])("delivers a same-session reply after $name", async ({ waits }) => {
+    transcriptReply = "Delayed channel reply";
     for (const wait of waits) {
       agentWaitMock.mockResolvedValueOnce(wait);
     }
     agentWaitMock.mockResolvedValueOnce({
       status: "ok",
-      terminalReply: { disposition: "visible", text: "Delayed channel reply" },
+      terminalReply: { disposition: "visible", text: "bounded delayed reply snapshot" },
     });
 
     await runSessionsSendA2AFlow({
@@ -298,6 +311,7 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
   });
 
   it("does not redeliver a delivered delayed source reply for a webchat requester", async () => {
+    transcriptReply = "Already delivered source reply";
     agentWaitMock.mockResolvedValueOnce({
       status: "ok",
       terminalReply: { disposition: "visible", text: "Already delivered source reply" },
@@ -315,10 +329,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
     });
 
     expect(runAgentStep).not.toHaveBeenCalled();
-    expect(gatewayCalls).toEqual([]);
+    expect(gatewayCalls.map((call) => call.method)).toEqual(["chat.history"]);
   });
 
   it("delivers an internal delayed reply once without bouncing it back to the target", async () => {
+    transcriptReply = "Already delivered source reply";
     agentWaitMock.mockResolvedValueOnce({
       status: "ok",
       terminalReply: { disposition: "visible", text: "Already delivered source reply" },

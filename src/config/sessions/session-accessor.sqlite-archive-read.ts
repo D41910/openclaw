@@ -3,10 +3,6 @@ import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
-  isSilentAssistantTranscriptMessage,
-  readTerminalSourceReplyDeliveryMirror,
-} from "../../agents/embedded-agent-runner/message-visibility.js";
-import {
   executeSqliteQuerySync,
   executeSqliteQueryTakeFirstSync,
   getNodeSqliteKysely,
@@ -21,6 +17,10 @@ import {
   isVisibleAssistantResultEventForRun,
   isVisibleTranscriptRecord,
 } from "../../sessions/transcript-visible-record.js";
+import {
+  isSilentAssistantTranscriptMessage,
+  readTerminalSourceReplyDeliveryMirror,
+} from "../../shared/chat-message-content.js";
 import { readOpenClawAgentDatabaseIdentity } from "../../state/openclaw-agent-db-identity.js";
 import { openOpenClawAgentDatabaseReadOnly } from "../../state/openclaw-agent-db-readonly-open.js";
 import { withOpenClawAgentDatabaseReadOnly } from "../../state/openclaw-agent-db-readonly.js";

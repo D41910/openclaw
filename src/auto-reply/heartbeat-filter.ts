@@ -2,8 +2,8 @@ import { expectDefined } from "@openclaw/normalization-core";
 import { safeParseJsonRecord } from "@openclaw/normalization-core/json-coercion";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeOptionalString as readString } from "@openclaw/normalization-core/string-coerce";
-import { isSilentAssistantTranscriptMessage } from "../agents/embedded-agent-runner/message-visibility.js";
 import { MESSAGE_TOOL_DELIVERY_HINTS } from "../plugin-sdk/message-tool-delivery-hints.js";
+import { isSilentAssistantTranscriptMessage } from "../shared/chat-message-content.js";
 import {
   collectToolCallIds,
   isContractToolCallBlock,

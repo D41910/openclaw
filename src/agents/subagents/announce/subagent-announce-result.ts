@@ -116,8 +116,15 @@ export async function readSubagentRunAnnounceResultUsing(
         "The completed child run's transcript identity changed during announcement.",
       );
     }
+    const text = isRecord(event) ? extractStoredAssistantText(event.message) : capturedResult;
     return {
-      text: isRecord(event) ? extractStoredAssistantText(event.message) : capturedResult,
+      text:
+        !event &&
+        capturedResult &&
+        child.completion?.terminalReply?.disposition === "visible" &&
+        child.execution.outcome?.status === "ok"
+          ? `[truncated-by-retention: complete child answer unavailable]\n${capturedResult}`
+          : text,
       isCurrent,
     };
   });

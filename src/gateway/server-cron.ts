@@ -590,6 +590,7 @@ export function buildGatewayCronService(params: {
         deliveryAttemptFence,
         job,
         text: redactCronCommandSummaryForExternalDelivery(result.summary ?? ""),
+        suppressionReason: result.replyDisposition === "silent" ? "silent" : undefined,
         diagnostics: result.diagnostics,
         runStartedAtMs: job.state.runningAtMs,
         abortSignal,
@@ -648,8 +649,8 @@ export function buildGatewayCronService(params: {
         };
       }
 
-      const preparedNotify = prepareAgentRunTerminalReply({ rawText: execution.notify }).text;
-      const notify = preparedNotify.trim() ? preparedNotify : undefined;
+      const preparedNotify = prepareAgentRunTerminalReply({ rawText: execution.notify });
+      const notify = preparedNotify.text.trim() ? preparedNotify.text : undefined;
       const base = {
         status: "ok" as const,
         notify,
@@ -662,6 +663,8 @@ export function buildGatewayCronService(params: {
         deliveryAttemptFence,
         job,
         text: job.sessionTarget === "main" ? undefined : notify,
+        suppressionReason:
+          preparedNotify.terminalReply.disposition === "silent" ? "silent" : undefined,
         runStartedAtMs: job.state.runningAtMs,
         abortSignal,
         deps: params.deps,

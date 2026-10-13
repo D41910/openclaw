@@ -24,6 +24,7 @@ import {
   normalizeInputProvenance,
 } from "../../sessions/input-provenance.js";
 import { hasPersistedMedia } from "../../sessions/user-turn-media.js";
+import { isSilentAssistantTranscriptMessage } from "../../shared/chat-message-content.js";
 import {
   isTranscriptOnlyOpenClawAssistantMessage,
   OPENCLAW_TRANSCRIPT_ARTIFACT_PROVIDER,
@@ -69,7 +70,6 @@ import {
   type UsageLike,
 } from "../usage.js";
 import { isZeroUsageEmptyStopAssistantTurn } from "./empty-assistant-turn.js";
-import { isSilentAssistantTranscriptMessage } from "./message-visibility.js";
 import {
   createProviderReplaySessionState,
   isSameModelSnapshot,

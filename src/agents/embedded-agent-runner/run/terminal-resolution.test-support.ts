@@ -130,6 +130,8 @@ export function makeTerminalInput(overrides: TerminalInputOverrides = {}): Termi
       ...base,
       ...overrides,
       ...overrides.prepared,
+      finalAssistantVisibleText:
+        overrides.prepared?.finalAssistantVisibleText ?? overrides.finalAssistantVisibleText ?? "",
     },
     runParams,
     sessionPromptState: { ...base.sessionPromptState, ...overrides.sessionPromptState },

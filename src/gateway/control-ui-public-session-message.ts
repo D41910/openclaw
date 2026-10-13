@@ -1,12 +1,14 @@
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
-import { isSilentAssistantTranscriptMessage } from "../agents/embedded-agent-runner/message-visibility.js";
 import { isHeartbeatOkResponse, isHeartbeatUserMessage } from "../auto-reply/heartbeat-filter.js";
 import { HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
 import { stripInternalMetadataForDisplay } from "../auto-reply/reply/display-text-sanitize.js";
 import { stripUserEnvelopeForDisplay } from "../auto-reply/reply/user-envelope-display.js";
 import { splitMediaOutput } from "../media/parse-output.js";
 import { INTER_SESSION_PROMPT_PREFIX_BASE } from "../sessions/input-provenance.js";
-import { extractAssistantTranscriptSourceText } from "../shared/chat-message-content.js";
+import {
+  extractAssistantTranscriptSourceText,
+  isSilentAssistantTranscriptMessage,
+} from "../shared/chat-message-content.js";
 import { sanitizeAssistantVisibleTextWithProfile } from "../shared/text/assistant-visible-text.js";
 
 /** Publication excludes private runtime input, including its attachments and tool activity. */

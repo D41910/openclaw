@@ -1939,6 +1939,7 @@ describe("buildGatewayCronService", () => {
         );
         if (expected === undefined) {
           expect(sendCronAnnouncePayloadStrictMock).not.toHaveBeenCalled();
+          expect(state.cron.getJob(job.id)?.state.deliverySuppressionReason).toBe("silent");
         } else {
           expect(sendCronAnnouncePayloadStrictMock).toHaveBeenCalledExactlyOnceWith(
             expect.objectContaining({
@@ -1948,6 +1949,7 @@ describe("buildGatewayCronService", () => {
               target: expect.objectContaining({ threadId: 456 }),
             }),
           );
+          expect(state.cron.getJob(job.id)?.state.deliverySuppressionReason).toBeUndefined();
         }
         expect(state.cron.getJob(job.id)?.state.lastRunStatus).toBe("ok");
       } finally {

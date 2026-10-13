@@ -121,6 +121,11 @@ function resolveTerminalRequest(
     requestedEndedAt,
     endedAt,
     completionOutcome,
+    // Fresh capture follows this request before retained Stop intent changes the published outcome.
+    captureOutcome: withSubagentOutcomeTiming(completionOutcome, {
+      startedAt: observedStartedAt ?? entry.execution.startedAt,
+      endedAt,
+    }),
     completionReason,
     observedStartedAt,
     terminalReply,
@@ -200,10 +205,6 @@ export async function completeSubagentRunAttempt(
         (selected.swarmRunId ? peekSwarmStructuredOutput(selected.swarmRunId) : undefined))
       : undefined;
     const terminal = resolveTerminalRequest(selected, completeParams, now, structuredOutput);
-    const captureOutcome = withSubagentOutcomeTiming(terminal.completionOutcome, {
-      startedAt: terminal.observedStartedAt ?? selected.execution.startedAt,
-      endedAt: terminal.endedAt,
-    });
     const prepared = {
       now,
       childAgentId: resolveSubagentChildSessionOwner(selected, params.getRuntimeConfig()).agentId,
@@ -219,7 +220,7 @@ export async function completeSubagentRunAttempt(
           : await captureSubagentRunResult(
               context,
               selected,
-              captureOutcome,
+              terminal.captureOutcome,
               assertCurrent,
               terminal.terminalReply,
             ),
@@ -358,7 +359,6 @@ function planTerminalCompletion(
     collectorSession?: SubagentKillSession;
   },
 ) {
-  const params = context.options;
   if (
     currentEntry.pauseReason === "sessions_yield" &&
     completeParams.reason !== SUBAGENT_ENDED_REASON_KILLED
@@ -654,7 +654,7 @@ function planTerminalCompletion(
   if (
     capture &&
     (!isDeepStrictEqual(entry.execution.transcriptTarget, capture.transcriptTarget) ||
-      !isDeepStrictEqual(executionOutcome, capture.outcome))
+      !isDeepStrictEqual(terminal.captureOutcome, capture.outcome))
   ) {
     throw new SubagentRegistryMutationRejectedError(FRESH_CAPTURE_REQUIRED);
   }
@@ -707,11 +707,11 @@ function planTerminalCompletion(
     }
   }
   if (entry.collect) {
-    updateSwarmCollectorCompletion(entry, params.getRuntimeConfig(), {
+    updateSwarmCollectorCompletion(entry, context.options.getRuntimeConfig(), {
       entry: prepared.collectorSession?.entry,
     });
   } else {
-    updateSubagentArchiveAtMs(entry, params.getRuntimeConfig());
+    updateSubagentArchiveAtMs(entry, context.options.getRuntimeConfig());
   }
   const delivery = entry.delivery;
   if (
