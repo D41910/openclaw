@@ -10,7 +10,7 @@ import {
   INTERNAL_MESSAGE_CHANNEL,
   isInternalNonDeliveryChannel,
 } from "../utils/message-channel-constants.js";
-import { isDeliverableMessageChannel } from "../utils/message-channel.js";
+import { isDeliverableMessageChannel } from "../utils/message-channel-normalize.js";
 import { AGENT_LANE_SUBAGENT } from "./lanes.js";
 import type { EmbeddedRunTrigger } from "./run-trigger.js";
 
