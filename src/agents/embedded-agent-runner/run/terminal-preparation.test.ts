@@ -1021,14 +1021,28 @@ describe("prepareEmbeddedRunTerminal run stats", () => {
     expect(prepared.reportedModelRef.model).toBe("cost-model");
   });
 
-  it("records producer source delivery without an extracted messaging target", async () => {
+  it("keeps a configured row's declared response model out of the reroute fact", async () => {
     const prepared = await prepareStats({
-      attempt: {
-        sourceReplyDelivered: true,
-        messagingToolSentTargets: [],
+      responseModel: "upstream-model",
+      config: {
+        models: {
+          providers: {
+            "cost-test-provider": {
+              models: [{ id: "cost-model", responseModelEquivalent: true }],
+            },
+          },
+        },
       },
     });
-    expect(prepared.agentMeta.terminalReceipt?.sourceReplyDelivered).toBe(true);
+
+    expect(prepared.agentMeta.terminalReceipt).toMatchObject({
+      effective: {
+        provider: "cost-test-provider",
+        model: "cost-model",
+        responseModel: "upstream-model",
+      },
+      rerouted: false,
+    });
   });
 
   it("marks a provider-only response route as rerouted", async () => {

@@ -23,7 +23,6 @@ import {
   shouldDeliverMissingReplyNotice,
   type ReplyDeliveryState,
 } from "../../reply-completion.js";
-import { resolveSourceReplyDelivery } from "../delivery-evidence.js";
 import { log } from "../logger.js";
 import type { EmbeddedRunReplayState } from "../replay-state.js";
 import type { EmbeddedAgentRunResult, TraceAttempt } from "../types.js";
@@ -124,7 +123,7 @@ export function resolveSettledTurnFinalizationRequest(input: {
   if (
     !input.settledTurnFinalizationAvailable ||
     isTerminalAssistantError(terminalAssistant) ||
-    resolveSourceReplyDelivery(input.attempt, input.replyDeliveryState) !== "missing"
+    (input.replyDeliveryState ?? "missing") !== "missing"
   ) {
     return null;
   }
@@ -153,6 +152,7 @@ export function resolveSettledTurnFinalizationRequest(input: {
     modelId: input.activeErrorContext.model,
     modelApi: input.modelApi,
     executionContract: input.executionContract,
+    replyDeliveryState: input.replyDeliveryState ?? "missing",
     allowEmptyStopContinuation: true,
     payloadCount,
     hasTerminalToolPresentation: input.hasTerminalToolPresentation,
@@ -246,13 +246,13 @@ export async function resolveEmbeddedRunTerminal(input: {
     classifyAssistantTurn(terminalFacts).silent;
   const replyRecoverySuppressed =
     !authoredSilenceRequiresResult &&
-    (emptyAssistantReplyIsSilent ||
-      resolveSourceReplyDelivery(attempt, input.prepared.replyDeliveryState) !== "missing");
+    (emptyAssistantReplyIsSilent || input.prepared.replyDeliveryState !== "missing");
   const retryInput = {
     provider: input.activeErrorContext.provider,
     modelId: input.activeErrorContext.model,
     modelApi: input.modelApi,
     executionContract: input.executionContract,
+    replyDeliveryState: input.prepared.replyDeliveryState,
     ...terminalFacts,
   };
   const replyRecoveryAllowed = !replyRecoverySuppressed && !settledTurnFinalizationAttempted;
@@ -324,7 +324,7 @@ export async function resolveEmbeddedRunTerminal(input: {
       !attempt.lastToolError
         ? MISSING_REPLY_NOTICE_TEXT
         : null));
-  const incompleteTurnFallbackSafe = Boolean(
+  const incompleteTurnReplaySafe = Boolean(
     incompleteTurnText &&
     !terminalInterrupted &&
     !promptError &&
@@ -333,7 +333,12 @@ export async function resolveEmbeddedRunTerminal(input: {
     !terminalAssistantError &&
     !input.replayState.hadPotentialSideEffects,
   );
-  const terminalToolPresentation = incompleteTurnFallbackSafe
+  // Replay safety alone is not a model-capability failure; explicit harness failures retain fallback.
+  const incompleteTurnFallbackSafe =
+    incompleteTurnReplaySafe &&
+    (input.attemptAssistant?.stopReason !== "stop" ||
+      attempt.agentHarnessResultClassification !== undefined);
+  const terminalToolPresentation = incompleteTurnReplaySafe
     ? availableTerminalToolPresentation
     : undefined;
   if (
@@ -700,10 +705,7 @@ async function completeEmbeddedRun(
           : {}),
       },
       ...copyAttemptDeliveryState(input.attempt),
-      sourceReplyDeliveryState: resolveSourceReplyDelivery(
-        input.attempt,
-        input.prepared.replyDeliveryState,
-      ),
+      sourceReplyDeliveryState: input.prepared.sourceReplyDeliveryState,
     },
   };
 }

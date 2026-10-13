@@ -320,6 +320,7 @@ export function readSessionTranscriptModelContextAsync<T>(
           true,
           undefined,
           signal,
+          "history.model-context",
         );
       }
       const context = await readSessionTranscriptModelContextInWorker(
@@ -337,9 +338,11 @@ export function readSessionTranscriptModelContextAsync<T>(
         assertCurrent,
         undefined,
         capturedAdmission,
-        capturedAdmission ? readSource : undefined,
+        capturedAdmission || capturedThrough ? readSource : undefined,
       );
     },
     signal,
+    undefined,
+    capturedThrough?.storePath,
   );
 }

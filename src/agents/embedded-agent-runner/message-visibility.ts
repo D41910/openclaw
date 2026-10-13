@@ -5,6 +5,7 @@ import {
 import { hasNonEmptyString } from "@openclaw/normalization-core/string-coerce";
 import { normalizeSingleOrTrimmedStringList } from "@openclaw/normalization-core/string-normalization";
 import {
+  hasReplyPayloadSpeechContent,
   isReplyPayloadTerminalContent,
   type ReplyPayload,
 } from "../../auto-reply/reply-payload.js";
@@ -79,6 +80,7 @@ export function hasVisibleAgentPayload(
       const visibleText = hasNonEmptyString(record.text);
       return Boolean(
         visibleText ||
+        hasReplyPayloadSpeechContent(record) ||
         hasNonEmptyString(record.mediaUrl) ||
         hasNonEmptyStringArray(record.mediaUrls) ||
         hasVisibleAttachmentReference(record.attachments) ||

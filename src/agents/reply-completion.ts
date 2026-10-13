@@ -19,6 +19,10 @@ export type ReplyDeliveryState = "delivered" | "pending" | "missing";
 export type ReplyDeliveryObserver = (
   minimumAssistantMessageIndex?: number,
 ) => Promise<ReplyDeliveryState>;
+export type ReplyDeliveryFactsObserver = (minimumAssistantMessageIndex?: number) => Promise<{
+  source: ReplyDeliveryState;
+  terminal: ReplyDeliveryState;
+}>;
 type ReplyCompletionEvidence = "ready" | "delivered" | "pending" | "blocked" | "empty" | "silent";
 
 export const MISSING_REPLY_NOTICE_TEXT = "No answer was returned. Ask again if you still need one.";

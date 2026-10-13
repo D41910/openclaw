@@ -37,6 +37,7 @@ function retryState(attempt: Attempt = {}) {
   return {
     provider: "openai",
     modelId: "gpt-5.4",
+    replyDeliveryState: "missing" as const,
     payloadCount: 0,
     aborted: false,
     timedOut: false,

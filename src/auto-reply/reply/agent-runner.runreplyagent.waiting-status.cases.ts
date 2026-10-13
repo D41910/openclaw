@@ -50,6 +50,7 @@ export async function mockAcceptedWaitingStatusRun(
     await resetSubagentRegistryForTests({ persist: false });
     await testState.cleanup();
   });
+  await captureRuntimeConfigAsyncReader()();
   runner.mockImplementationOnce(async (params: RunEmbeddedAgentInternalParams) => {
     assert(params.preparedRunAdmission);
     assert(params.sessionKey);

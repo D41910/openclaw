@@ -2,8 +2,14 @@ import { flattenMarkdownToPlainText } from "@openclaw/normalization-core/markdow
 import { asOptionalRecord as readRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
 import { isSilentAssistantTranscriptMessage } from "../agents/embedded-agent-runner/message-visibility.js";
+import { projectAssistantDisplayContent } from "../shared/assistant-display-content.js";
 import { stripEnvelope } from "../shared/chat-envelope.js";
 import { extractAssistantPhaseText } from "../shared/chat-message-content.js";
+import {
+  stripAssistantMediaDirectivesForDisplay,
+  takeAssistantManagedMediaUrlsForDisplay,
+} from "./chat-display-projection.helpers.js";
+import { prepareAssistantHistoryMessage } from "./chat-display-projection.sanitize.js";
 import type { SessionPreviewItem } from "./session-utils.types.js";
 
 const SESSION_LAST_MESSAGE_PREVIEW_DEFAULT_CHARS = 240;
@@ -47,18 +53,29 @@ export function projectSessionDisplayMessage(
   message: unknown,
   options: SessionDisplayProjectionOptions = {},
 ): SessionDisplayProjection | null {
-  const entry = readRecord(message);
+  const entry = readRecord(prepareAssistantHistoryMessage(message));
   if (!entry || (options.view !== "model-context" && entry.display === false)) {
     return null;
   }
   const role = typeof entry.role === "string" ? entry.role.toLowerCase() : "";
-  if (role !== "user" && role !== "assistant") {
+  if ((role !== "user" && role !== "assistant") || isSilentAssistantTranscriptMessage(entry)) {
     return null;
   }
+  const projectedEntry =
+    role === "assistant" && options.view !== "model-context"
+      ? projectAssistantDisplayContent({ ...entry, role })
+      : entry;
   const extracted =
-    role === "assistant" ? extractAssistantPhaseText(entry) : extractUserText(entry);
-  let text = extracted?.trim();
-  if (!text || isSilentAssistantTranscriptMessage(entry)) {
+    role === "assistant" ? extractAssistantPhaseText(projectedEntry) : extractUserText(entry);
+  let text = extracted;
+  if (text && role === "assistant" && options.view !== "model-context") {
+    text = stripAssistantMediaDirectivesForDisplay(
+      text,
+      takeAssistantManagedMediaUrlsForDisplay(projectedEntry, role).urls,
+    );
+  }
+  text = text?.trim();
+  if (!text) {
     return null;
   }
   if (role === "user") {

@@ -28,6 +28,12 @@ function prepareYield(
     trigger?: Parameters<typeof prepareEmbeddedRunTerminal>[0]["runParams"]["trigger"];
     terminalState?: EmbeddedRunTerminalState;
     lastToolError?: NonNullable<Parameters<typeof makeEmbeddedRunnerAttempt>[0]>["lastToolError"];
+    replyDeliveryState?: Parameters<typeof prepareEmbeddedRunTerminal>[0]["replyDeliveryState"];
+    sourceReplyDeliveryState?: Parameters<
+      typeof prepareEmbeddedRunTerminal
+    >[0]["sourceReplyDeliveryState"];
+    sourceReplyDelivered?: boolean;
+    sourceReplyFinal?: boolean;
   } = {},
 ) {
   const assistant = buildEmbeddedRunnerAssistant({
@@ -48,6 +54,15 @@ function prepareYield(
     codeModeEngaged: input.codeModeEngaged,
     lastToolError: input.lastToolError ?? { toolName: "exec", error: "Command exited with code 1" },
     toolMetas: [{ toolName: "exec", isError: true }],
+    sourceReplyDeliveryState: input.sourceReplyDeliveryState,
+    sourceReplyDelivered: input.sourceReplyDelivered,
+    ...(input.sourceReplyFinal !== undefined
+      ? {
+          messagingToolSourceReplyPayloads: [
+            { text: "Checking…", sourceReplyFinal: input.sourceReplyFinal },
+          ],
+        }
+      : {}),
   });
   const terminal = makeTerminalInput({
     attempt,
@@ -60,6 +75,8 @@ function prepareYield(
       admittedRunContext: createTestAdmittedRunContext("run:terminal-resolution"),
     },
     attempt,
+    replyDeliveryState: input.replyDeliveryState,
+    sourceReplyDeliveryState: input.sourceReplyDeliveryState,
     provider: "openai",
     model: "mock-1",
     activeErrorContext: { provider: "openai", model: "mock-1" },
@@ -73,6 +90,30 @@ function prepareYield(
   });
   return { attempt, terminal, prepared };
 }
+
+describe("terminal delivery facts", () => {
+  it.each(["missing", "pending", "delivered"] as const)(
+    "keeps delivered source progress separate from %s terminal delivery",
+    (replyDeliveryState) => {
+      const { prepared } = prepareYield({
+        yieldDetected: false,
+        replyDeliveryState,
+        sourceReplyDeliveryState: "delivered",
+        sourceReplyFinal: false,
+      });
+      expect(prepared.replyDeliveryState).toBe(replyDeliveryState);
+      expect(prepared.sourceReplyDeliveryState).toBe("delivered");
+      expect(prepared.agentMeta.terminalReceipt?.sourceReplyDelivered).toBe(
+        replyDeliveryState === "delivered" ? true : undefined,
+      );
+    },
+  );
+
+  it("records producer source delivery without an extracted messaging target", () => {
+    const { prepared } = prepareYield({ sourceReplyDelivered: true });
+    expect(prepared.agentMeta.terminalReceipt?.sourceReplyDelivered).toBe(true);
+  });
+});
 
 describe("yielded terminal payloads after an earlier tool failure", () => {
   it.each([

@@ -114,6 +114,7 @@ export function makeTerminalInput(overrides: TerminalInputOverrides = {}): Termi
     prepared: {
       payloads: [],
       replyDeliveryState: "missing",
+      sourceReplyDeliveryState: "missing",
       timedOutDuringPrompt: false,
       hasSuccessfulFinalAssistantAfterPromptTimeout: false,
       hasPartialAssistantTextAfterPromptTimeout: false,

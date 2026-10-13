@@ -899,6 +899,7 @@ describe("trailing source progress at runtime settlement", () => {
       finalizerInstruction: resolveSettledToolTerminalContinuationInstruction({
         executionContract: "strict-agentic",
         allowEmptyStopContinuation: true,
+        replyDeliveryState: result.sourceReplyDeliveryState ?? "missing",
         payloadCount: 0,
         aborted: false,
         timedOut: false,

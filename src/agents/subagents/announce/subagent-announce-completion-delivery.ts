@@ -383,6 +383,7 @@ export async function deliverCompletionDirect(params: {
   signal?: AbortSignal;
   agentResult?: { payloads?: unknown };
   onDeliveryResult?: (delivery: SubagentAnnounceDeliveryResult) => void | Promise<void>;
+  onDeliveryError?: (error: unknown) => void;
   isSourceSessionEffectsAllowed?: () => boolean;
 }): Promise<SubagentAnnounceDeliveryResult | undefined> {
   const completionContent = collectDirectCompletionContent({
@@ -488,6 +489,7 @@ export async function deliverCompletionDirect(params: {
       return committedDelivery;
     }
     if (hasAnnounceSendEvidence(err)) {
+      params.onDeliveryError?.(err);
       return {
         delivered: false,
         path: "direct",
@@ -503,6 +505,7 @@ export async function deliverCompletionDirect(params: {
     if (params.signal?.aborted) {
       return { delivered: false, path: "none" };
     }
+    params.onDeliveryError?.(err);
     return {
       delivered: false,
       path: "direct",

@@ -1,3 +1,4 @@
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { buildAgentRunTerminalOutcomeFromLifecycleEvent } from "../agent-run-terminal-outcome.js";
 import {
   formatAgentRunRouteChange,
@@ -63,6 +64,7 @@ export function canAdvanceContextEngineTurn(params: {
 
 export function mergeRunEntryExecutionTrace<T extends EmbeddedAgentRunResult>(params: {
   result: T;
+  config: OpenClawConfig;
   terminalStatus: EmbeddedAgentRunEntryTerminal["outcome"]["status"];
   provider: string;
   model: string;
@@ -112,7 +114,7 @@ export function mergeRunEntryExecutionTrace<T extends EmbeddedAgentRunResult>(pa
           requested,
           rerouted:
             terminalReceipt.rerouted ||
-            isProviderModelRerouted(requested, terminalReceipt.effective),
+            isProviderModelRerouted(requested, terminalReceipt.effective, params.config),
         },
       }
     : params.result.meta.agentMeta;

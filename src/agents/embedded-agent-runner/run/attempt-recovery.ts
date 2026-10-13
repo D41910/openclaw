@@ -201,6 +201,9 @@ export async function recoverEmbeddedRunAttempt(input: {
     (isResponsesOutputLimitToolCallError(recoveryAssistant) || emptyLengthNeedsContinuation),
   );
   const canContinueOutputLimit =
+    // These modes omit history; their continuation would replay the same request.
+    params.modelRun !== true &&
+    params.promptMode !== "none" &&
     !runtime.pluginHarnessOwnsTransport &&
     !terminalInterrupted &&
     !promptError &&
@@ -460,6 +463,7 @@ export async function recoverEmbeddedRunAttempt(input: {
             retryAttempt,
             maxRetries,
             delayMs,
+            retryAt: Date.now() + delayMs,
             attempt: retryAttempt + 1,
             maxAttempts: maxRetries + 1,
             reason,

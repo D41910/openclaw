@@ -20,7 +20,9 @@ import type { ReplyDeliveryState } from "../../reply-completion.js";
 import { getCoreTtsAttemptResultMediaUrls } from "../../tools/tts-tool-result-provenance.js";
 import type { NormalizedUsage } from "../../usage.js";
 import {
+  hasCommittedSourceReplyDeliveryEvidence,
   hasMessagingToolDeliveryEvidence,
+  resolveExplicitFinalSourceReplyDeliveryEvidence,
   resolveSourceReplyDelivery,
 } from "../delivery-evidence.js";
 import { resolveEmbeddedRunFailureSignal } from "../failure-signal.js";
@@ -55,6 +57,7 @@ export function prepareEmbeddedRunTerminal(input: {
   mergeToolMedia?: ReturnType<typeof createPendingToolMediaCarry>["merge"];
   runParams: RunEmbeddedAgentInternalParams;
   replyDeliveryState?: ReplyDeliveryState;
+  sourceReplyDeliveryState?: ReplyDeliveryState;
   attempt: EmbeddedRunAttemptWithReceiptEvidence;
   currentAttemptCompletedAssistant?: AssistantMessage;
   provider: string;
@@ -73,6 +76,16 @@ export function prepareEmbeddedRunTerminal(input: {
   terminalState: EmbeddedRunTerminalState;
 }) {
   const { runParams, attempt } = input;
+  const finalSourceReplyDelivered =
+    resolveExplicitFinalSourceReplyDeliveryEvidence(attempt) ??
+    (attempt.sourceReplyDelivered === true || hasCommittedSourceReplyDeliveryEvidence(attempt));
+  const replyDeliveryState = finalSourceReplyDelivered
+    ? "delivered"
+    : (input.replyDeliveryState ?? "missing");
+  const sourceReplyDeliveryState = resolveSourceReplyDelivery(
+    attempt,
+    input.sourceReplyDeliveryState ?? replyDeliveryState,
+  );
   const { timedOutDuringCompaction, timedOutDuringToolExecution } = projectAgentRunAttemptTerminal(
     attempt.terminal,
   );
@@ -198,8 +211,8 @@ export function prepareEmbeddedRunTerminal(input: {
       effective: effectiveModelRef,
       successfulToolNames: resolveSuccessfulToolNames(attempt),
       assistantTranscriptIdempotencyKey: attempt.assistantTranscriptIdempotencyKey,
-      sourceReplyDelivered: resolveSourceReplyDelivery(attempt) === "delivered" ? true : undefined,
-      rerouted: isProviderModelRerouted(requestedModelRef, effectiveModelRef),
+      sourceReplyDelivered: replyDeliveryState === "delivered" ? true : undefined,
+      rerouted: isProviderModelRerouted(requestedModelRef, effectiveModelRef, runParams.config),
     } satisfies Omit<AgentRunTerminalReceipt, "terminalDisposition">,
   });
   const cleanYield = attempt.yieldDetected && input.terminalState.outcome.status === "ok";
@@ -235,7 +248,8 @@ export function prepareEmbeddedRunTerminal(input: {
     reasoningLevel: runParams.reasoningLevel,
     thinkingLevel: runParams.thinkLevel,
     toolResultFormat: input.resolvedToolResultFormat,
-    didDeliverSourceReplyViaMessageTool: resolveSourceReplyDelivery(attempt) === "delivered",
+    didDeliverSourceReplyViaMessageTool: sourceReplyDeliveryState === "delivered",
+    sourceReplyDeliveryState,
     sourceReplyDeliveryMode: runParams.sourceReplyDeliveryMode,
     agentId: runParams.agentId,
     runId: runParams.runId,
@@ -248,25 +262,30 @@ export function prepareEmbeddedRunTerminal(input: {
       timedOutDuringPrompt && (!hasMessagingToolDeliveryEvidence(attempt) || timeoutFinal),
   }).map((payload) => applyPreparedReplyMedia(payload, attempt.preparedReplyMedia ?? []));
   const mergeToolMedia = input.mergeToolMedia ?? mergeAttemptToolMediaPayloads;
-  const payloadsWithToolMedia = mergeToolMedia(
-    {
-      payloads,
-      toolMediaUrls: attempt.toolMediaUrls,
-      // Preserve harness provenance through terminal delivery. Without it,
-      // message-tool-only routes silently drop native runtime artifacts.
-      hostOwnedToolMediaUrls: attempt.hostOwnedToolMediaUrls,
-      toolAutoDeliveryMediaUrls: getCoreTtsAttemptResultMediaUrls(
-        attempt,
-        attempt.toolMediaUrls,
-        runParams.admittedRunContext?.operationalRunInstance,
-      ),
-      toolAudioAsVoice: attempt.toolAudioAsVoice,
-      toolTrustedLocalMedia: attempt.toolTrustedLocalMedia,
-      sourceReplyDeliveryMode: runParams.sourceReplyDeliveryMode,
-    },
-    runParams.admittedRunContext?.operationalRunInstance,
-  );
+  // Pending source custody also holds terminal media; committed mirrors and earlier inputs stay.
+  const payloadsWithToolMedia =
+    sourceReplyDeliveryState === "pending"
+      ? payloads
+      : mergeToolMedia(
+          {
+            payloads,
+            toolMediaUrls: attempt.toolMediaUrls,
+            // Preserve harness provenance through terminal delivery. Without it,
+            // message-tool-only routes silently drop native runtime artifacts.
+            hostOwnedToolMediaUrls: attempt.hostOwnedToolMediaUrls,
+            toolAutoDeliveryMediaUrls: getCoreTtsAttemptResultMediaUrls(
+              attempt,
+              attempt.toolMediaUrls,
+              runParams.admittedRunContext?.operationalRunInstance,
+            ),
+            toolAudioAsVoice: attempt.toolAudioAsVoice,
+            toolTrustedLocalMedia: attempt.toolTrustedLocalMedia,
+            sourceReplyDeliveryMode: runParams.sourceReplyDeliveryMode,
+          },
+          runParams.admittedRunContext?.operationalRunInstance,
+        );
   const recoveredFinalAssistantTextAfterPromptTimeout =
+    sourceReplyDeliveryState === "missing" &&
     timedOutDuringPrompt &&
     !timeoutFinal &&
     ["completed", "end_turn", "stop"].includes(finalAssistantStopReason)
@@ -317,7 +336,8 @@ export function prepareEmbeddedRunTerminal(input: {
   });
   return {
     agentMeta,
-    replyDeliveryState: input.replyDeliveryState ?? "missing",
+    replyDeliveryState,
+    sourceReplyDeliveryState,
     reportedModelRef,
     preparedTerminalReply,
     finalAssistantVisibleText,

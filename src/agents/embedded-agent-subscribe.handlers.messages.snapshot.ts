@@ -57,7 +57,7 @@ export function extractAssistantStreamSnapshot(
   const renderText = prepareAssistantVisibleText(observedMessage, (part, final, phase, index) => {
     // Native blocks can divide a tag or fence; only complete visible parts get a separator.
     const separator =
-      rawText && !state.pendingTagFragment && !state.pendingFenceFragment ? "\n" : "";
+      protocol.sourceText && !state.pendingTagFragment && !state.pendingFenceFragment ? "\n" : "";
     const previousIndex = parts.at(-1)?.index;
     parts.push({ separator, index });
     rawText += part;

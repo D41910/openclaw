@@ -23,7 +23,7 @@ import type {
 } from "./delivery-dispatch-types.js";
 import { normalizeDirectCronDeliveryPayloads } from "./delivery-payload-normalization.js";
 import { requiresExternalCronDelivery } from "./delivery-target.js";
-import { pickSummaryFromOutput, readAutomationFailedReport } from "./helpers.js";
+import { pickSummaryFromOutput } from "./helpers.js";
 import { cleanupCronRunSessionAfterRun } from "./session-cleanup.js";
 
 const followup = createLazyImportLoader(() => import("./subagent-followup.runtime.js"));
@@ -34,7 +34,6 @@ export async function dispatchCronDelivery(
   params: DispatchCronDeliveryParams,
 ): Promise<DispatchCronDeliveryState> {
   let { summary, outputText, synthesizedText, deliveryPayloads } = params;
-  let agentReportedFailure: string | undefined;
   let diagnostics: DispatchCronDeliveryState["diagnostics"];
   const sentByTool = params.sourceDeliveryOutcome.satisfiesSourceDelivery;
   const state: CronResolvedDeliveryState = {
@@ -58,8 +57,7 @@ export async function dispatchCronDelivery(
     record("delivered");
   }
   const adoptChild = (text: string) => {
-    agentReportedFailure = readAutomationFailedReport(text);
-    synthesizedText = agentReportedFailure ?? text;
+    synthesizedText = text;
     outputText = synthesizedText;
     summary = pickSummaryFromOutput(synthesizedText) ?? summary;
     deliveryPayloads = [
@@ -72,9 +70,7 @@ export async function dispatchCronDelivery(
   const finish = async (
     disposition?: CronDeliveryDisposition,
   ): Promise<DispatchCronDeliveryState> => {
-    const failed =
-      (disposition?.kind === "error" && disposition.errorKind !== "delivery-target") ||
-      agentReportedFailure !== undefined;
+    const failed = disposition?.kind === "error" && disposition.errorKind !== "delivery-target";
     const completion = resolveAdmittedCronCompletionStatus(
       params.job,
       failed ? "error" : params.undeliveredRunStatus,
@@ -108,7 +104,6 @@ export async function dispatchCronDelivery(
       synthesizedText,
       deliveryPayloads,
       diagnostics,
-      ...(agentReportedFailure ? { agentReportedFailure } : {}),
     };
   };
   const failTarget = (error: string) => {

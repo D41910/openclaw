@@ -113,7 +113,9 @@ describe("incomplete-turn recovery policy", () => {
           terminalReplyExpectation,
         }),
       ).toBe(true);
-      expect(resolveEmptyResponseRetryInstruction(state)).toBeNull();
+      expect(
+        resolveEmptyResponseRetryInstruction({ ...state, replyDeliveryState: "missing" }),
+      ).toBeNull();
       expect(resolveIncompleteTurnPayloadText({ ...state, externalAbort: false })).toBeNull();
     },
   );
@@ -201,6 +203,7 @@ describe("incomplete-turn recovery policy", () => {
           provider,
           modelId,
           modelApi,
+          replyDeliveryState: "missing",
           payloadCount: 0,
           aborted: false,
           timedOut: false,
@@ -219,6 +222,7 @@ describe("incomplete-turn recovery policy", () => {
       resolveEmptyResponseRetryInstruction({
         provider: "openai",
         modelId: "gpt-5.4",
+        replyDeliveryState: "missing",
         payloadCount: 0,
         aborted: false,
         timedOut: false,

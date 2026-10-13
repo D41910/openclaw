@@ -12,6 +12,7 @@ import {
   updateSessionEntry,
 } from "../../config/sessions/session-accessor.js";
 import * as entryReads from "../../config/sessions/session-entry-read-runtime.js";
+import { resolveSqliteTargetFromSessionStorePath } from "../../config/sessions/session-sqlite-target.js";
 import type { InternalSessionEntry } from "../../config/sessions/types.js";
 import {
   getAgentEventLifecycleGeneration,
@@ -22,6 +23,7 @@ import {
   isAgentRunStaleLifecycleError,
   isRestartRecoveryClaimChangedError,
 } from "../../infra/agent-lifecycle-error.js";
+import { revokeSqliteDatabaseAdmissionsForPath } from "../../infra/sqlite-database-admission.js";
 import { createSqliteLifecycleAggregateError } from "../../infra/sqlite-lifecycle-errors.js";
 import * as workerAdmission from "../../infra/sqlite-worker-operation-admission.js";
 import { sqliteWorkerOwnerProbe as probe } from "../../infra/sqlite-worker-owner-probe.test-support.js";
@@ -46,6 +48,7 @@ async function withTrackedReply(
     confirmArmed: () => Promise<void>;
     replaceWithSuccessor: () => Promise<void>;
     releaseDatabase: () => Promise<void>;
+    databasePath: string;
     readEntry: () => ReturnType<typeof loadSessionEntry>;
   }) => Promise<void>,
   storage: "durable" | "native-incognito" = "durable",
@@ -121,6 +124,10 @@ async function withTrackedReply(
         },
         readEntry: () => loadSessionEntry(scope),
         releaseDatabase: () => actor.release(),
+        databasePath: resolveSqliteTargetFromSessionStorePath(scope.storePath, {
+          agentId: scope.agentId,
+          env: state.env,
+        }).path,
       });
       if (storage === "native-incognito") {
         expect(native).toBeDefined();
@@ -183,6 +190,7 @@ it.each([
         replaceWithSuccessor,
         readEntry,
         releaseDatabase,
+        databasePath,
       }) => {
         if (confirmed) {
           await confirmArmed();
@@ -195,6 +203,7 @@ it.each([
             await releaseDatabase();
             await closeOpenClawAgentDatabasesAsync();
             clearOpenClawAgentDatabaseValidationCache();
+            revokeSqliteDatabaseAdmissionsForPath(databasePath);
             let witnessed = 0;
             const admission = probe.admission(workerAdmission, (request, grant, admit) => {
               if (

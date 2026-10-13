@@ -38,6 +38,7 @@ function makeSettledContinuationParams(
     provider: "openai",
     modelId: "gpt-5.6-luna",
     modelApi: "openai-responses",
+    replyDeliveryState: "missing",
     payloadCount: 0,
     aborted: false,
     timedOut: false,
@@ -147,15 +148,24 @@ describe("runEmbeddedAgent incomplete-turn safety", () => {
     ).toBe(true);
   });
 
-  it("continues an exactly settled current-turn tool batch after an idle prompt timeout", () => {
-    const instruction = resolveSettledToolTerminalContinuationInstruction(
-      makeSettledContinuationParams(makeSettledIdleWriteAttempt(), {
-        timedOut: true,
-      }),
-    );
+  it.each([
+    { source: "missing", terminal: "missing", continues: true },
+    { source: "delivered", terminal: "missing", continues: true },
+    { source: "missing", terminal: "delivered", continues: false },
+    { source: "missing", terminal: "pending", continues: false },
+  ] as const)(
+    "uses prepared terminal $terminal rather than source $source for settled recovery",
+    ({ source, terminal, continues }) => {
+      const instruction = resolveSettledToolTerminalContinuationInstruction(
+        makeSettledContinuationParams(
+          { ...makeSettledIdleWriteAttempt(), sourceReplyDeliveryState: source },
+          { timedOut: true, replyDeliveryState: terminal },
+        ),
+      );
 
-    expect(instruction).toBe(SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION);
-  });
+      expect(instruction).toBe(continues ? SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION : null);
+    },
+  );
 
   it("tells the finalizer that tools are unavailable", () => {
     // The settled-turn finalization pass runs with disableTools: true. If the instruction
@@ -416,29 +426,38 @@ describe("runEmbeddedAgent incomplete-turn safety", () => {
       label: "progress",
       sourceReplyFinal: false,
       didDeliverSourceReplyViaMessageTool: false,
+      replyDeliveryState: "missing" as const,
       expectedFinalization: true,
     },
     {
       label: "final reply",
       sourceReplyFinal: true,
       didDeliverSourceReplyViaMessageTool: false,
+      replyDeliveryState: "delivered" as const,
       expectedFinalization: false,
     },
     {
       label: "legacy source-confirmed send",
       sourceReplyFinal: undefined,
       didDeliverSourceReplyViaMessageTool: true,
+      replyDeliveryState: "delivered" as const,
       expectedFinalization: false,
     },
     {
       label: "legacy coarse outbound send",
       sourceReplyFinal: undefined,
       didDeliverSourceReplyViaMessageTool: false,
+      replyDeliveryState: "missing" as const,
       expectedFinalization: true,
     },
   ])(
     "handles $label delivery evidence before settled finalization",
-    ({ sourceReplyFinal, didDeliverSourceReplyViaMessageTool, expectedFinalization }) => {
+    ({
+      sourceReplyFinal,
+      didDeliverSourceReplyViaMessageTool,
+      replyDeliveryState,
+      expectedFinalization,
+    }) => {
       const emptyStopAssistant = makeLastAssistant();
       const instruction = resolveSettledToolTerminalContinuationInstruction(
         makeSettledContinuationParams(
@@ -461,7 +480,7 @@ describe("runEmbeddedAgent incomplete-turn safety", () => {
             lastAssistant: emptyStopAssistant,
             currentAttemptAssistant: emptyStopAssistant,
           },
-          { allowEmptyStopContinuation: true },
+          { allowEmptyStopContinuation: true, replyDeliveryState },
         ),
       );
 

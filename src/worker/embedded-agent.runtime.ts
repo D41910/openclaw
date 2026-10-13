@@ -440,6 +440,7 @@ export async function runWorkerEmbeddedTurn(params: RunWorkerEmbeddedTurnParams)
         provider: model.provider,
         modelId: model.id,
         modelApi: model.api,
+        replyDeliveryState: attempt.sourceReplyDeliveryState,
         aborted: false,
         timedOut: false,
         attempt,

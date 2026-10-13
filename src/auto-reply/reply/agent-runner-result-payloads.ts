@@ -576,7 +576,8 @@ export async function prepareReplyAgentPayloads(state: {
       : payloadArray;
   if (
     ((explicitSilence || heartbeatAcknowledgment) && sourcePayloads.length === 0) ||
-    (payloadArray.length === 0 &&
+    (completion.outcome !== "delivered" &&
+      payloadArray.length === 0 &&
       fallbackNoticePayloads.length === 0 &&
       !shouldDeliverTerminalFailure &&
       !waitingStatusPayload &&
@@ -650,18 +651,16 @@ export async function prepareReplyAgentPayloads(state: {
 
   const hasVisibleReplyPayload = replyPayloads.some(
     (payload) =>
-      !isReplyPayloadStatusNotice(payload) &&
-      isPayloadLaneEnabled(payload) &&
-      normalizeReplyPayload(payload, { applyChannelTransforms: false }) !== null,
+      payload.isError ||
+      (!isReplyPayloadStatusNotice(payload) &&
+        isPayloadLaneEnabled(payload) &&
+        normalizeReplyPayload(payload, { applyChannelTransforms: false }) !== null),
   );
-  const hasDeliveredBlockStream = Boolean(blockReplyPipeline?.didStream());
   const canDeliverStandaloneFallbackNotice =
-    hasDeliveredBlockStream || successfulSideEffectDelivery;
+    Boolean(blockReplyPipeline?.didStream()) || successfulSideEffectDelivery;
   if (
-    replyPayloads.length === 0 ||
-    (!hasVisibleReplyPayload &&
-      !canDeliverStandaloneFallbackNotice &&
-      !replyPayloads.some((payload) => payload.isError))
+    completion.outcome !== "delivered" &&
+    (replyPayloads.length === 0 || (!hasVisibleReplyPayload && !canDeliverStandaloneFallbackNotice))
   ) {
     return finishEmptyReply();
   }

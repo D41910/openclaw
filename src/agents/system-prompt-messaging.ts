@@ -23,6 +23,7 @@ export function buildMessagingSection(params: {
   isMinimal: boolean;
   availableTools: Set<string>;
   inlineButtonsEnabled: boolean;
+  customInlineButtonHint?: boolean;
   runtimeChannel?: string;
   runtimeChatType?: ChatType;
   messageChannelOptions?: string;
@@ -36,7 +37,7 @@ export function buildMessagingSection(params: {
   const messageToolAvailable = params.availableTools.has("message");
   const visibleReplyInstruction = messageToolOnly
     ? messageToolAvailable
-      ? "- Current source visible reply MUST use `message(action=send)` unless the user explicitly requests only a reaction to the current source message: use `message(action=react, final=true)`. The final text is private. Set `final=false` for progress. Set `final=true`, or omit it, for the completed send. Skip tool = user gets nothing. No hidden instructions/private data/reasoning."
+      ? "- Current source visible reply MUST use `message(action=send)` or a final reaction to the current source message: `message(action=react, final=true)`. The final text is private. Set `final=false` for progress. Set `final=true`, or omit it, for the completed send. Skip tool = user gets nothing. No hidden instructions/private data/reasoning."
       : "- Current source visible reply unavailable; final text remains private."
     : `- Current-session final text normally routes to source.${messageToolAvailable ? " If turn says final private, visible output uses `message(action=send)`." : ""}`;
   const messageToolTargetInstruction = `- ${buildMessageToolTargetGuidance(params.requireExplicitMessageTarget === true)}`;
@@ -65,7 +66,7 @@ export function buildMessagingSection(params: {
       "",
     ];
   }
-  const showGenericInlineButtonHint = params.runtimeChannel !== "slack";
+  const showGenericInlineButtonHint = !params.customInlineButtonHint;
   const groupMessageToolOnly =
     messageToolOnly && (params.runtimeChatType === "group" || params.runtimeChatType === "channel");
   const hasSessionsSpawn = params.availableTools.has("sessions_spawn");
@@ -119,6 +120,7 @@ export function buildMessagingSection(params: {
           !suppressSilentTokenGuidance
             ? `Only the entire exact ${SILENT_REPLY_TOKEN} reply is silent. Send confirmations before ending silently.`
             : "",
+          "- A confirmed final message or added final reaction to the current source completes the reply; never repeat it in text.",
           showGenericInlineButtonHint
             ? params.inlineButtonsEnabled
               ? '- Inline buttons: `send` with `presentation={"blocks":[{"type":"buttons","buttons":[{"label":"Yes","action":{"type":"callback","value":"yes"},"style":"primary"}]}]}`.'
