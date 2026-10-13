@@ -1,7 +1,7 @@
-import type WaDropdown from "@awesome.me/webawesome/dist/components/dropdown/dropdown.js";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { icons } from "../../../components/icons.ts";
 import { Icon } from "../../../components/solid/icon.tsx";
+import { Menu, type MenuEntry, type MenuHandle } from "../../../components/solid/menu.tsx";
 import type { KeyboardShortcutCombo } from "../../../lib/keyboard-shortcut-contract.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
 import { LitContent } from "../../../lit/solid-content.tsx";
@@ -19,7 +19,7 @@ import {
   type SidebarSlotId,
 } from "../sidebar-layout.ts";
 import type { HeaderMenuQuickAction } from "./chat-header-session-menu.ts";
-import { ChatQuickActionItem, type ChatQuickAction } from "./chat-quick-action.tsx";
+import { chatQuickActionEntry, type ChatQuickAction } from "./chat-quick-action.tsx";
 import type { SidebarPanelDefinition } from "./chat-sidebar-region-types.ts";
 
 export type ChatPaneLayoutMenuProps = {
@@ -153,71 +153,71 @@ function layoutModel(props: ChatPaneLayoutMenuProps) {
     sideHeaderAction: sideDefinition?.headerAction,
   };
 }
+let nextLayoutId = 0;
+
 export function ChatPaneLayoutMenu(props: ChatPaneLayoutMenuProps) {
+  const id = `chat-pane-layout-${++nextLayoutId}`;
   const [opened, setOpened] = createSignal(false);
   const model = createMemo(() => layoutModel(props));
-  let menu!: WaDropdown;
-  let pendingAction: (() => void) | undefined;
+  let menu: MenuHandle | undefined;
+  const headerActions = (
+    <Show when={opened() || model().allActions.length === 0}>
+      <LitContent value={model().mainHeaderAction} />
+      <LitContent value={model().sideHeaderAction} />
+    </Show>
+  );
+  const items = createMemo((): MenuEntry[] => [
+    ...model().actions.map((action) => chatQuickActionEntry(action, action.id, true)),
+    ...(model().panelActions.length
+      ? [
+          {
+            kind: "content" as const,
+            id: "panel-actions",
+            content: <div class="session-menu__separator" role="separator" />,
+          },
+        ]
+      : []),
+    ...model().panelActions.map((action) => chatQuickActionEntry(action, action.id, true)),
+    {
+      kind: "content",
+      id: "header-actions",
+      content: headerActions,
+    },
+  ]);
   return (
     <Show when={model().allActions.length > 0 || model().mainHeaderAction}>
-      <wa-dropdown
-        ref={(element) => {
-          menu = element;
-        }}
+      <Menu
+        id={id}
         class="chat-pane__layout-menu chat-panel-layout-menu"
         placement="bottom-end"
-        onWa-show={() => setOpened(true)}
-        onWa-select={(event) => {
-          const action = model().allActions.find(
-            (candidate) => candidate.id === event.detail.item.value,
-          );
+        label={t("chat.sessionHeader.layout")}
+        triggerClass="btn btn--ghost chat-pane__layout-trigger"
+        trigger={
+          <>
+            <span aria-hidden="true">
+              <Icon name="columns2" />
+            </span>
+            {t("chat.sessionHeader.layout")}
+          </>
+        }
+        items={items()}
+        onOpenChange={(open) => {
+          if (open) {
+            setOpened(true);
+          }
+        }}
+        ref={(handle) => {
+          menu = handle;
+        }}
+        onSelect={(item, event) => {
+          const action = model().allActions.find((candidate) => candidate.id === item.id);
           if (action && action.kind !== "status" && !action.disabled) {
             event.preventDefault();
-            pendingAction = action.onActivate;
-            // Settle opening first; Web Awesome otherwise skips the hide transition.
-            const selectedMenu = menu;
-            void selectedMenu.updateComplete.then(() => {
-              selectedMenu.open = false;
-              selectedMenu
-                .querySelector<HTMLElement>('[slot="trigger"]')
-                ?.focus({ preventScroll: true });
-            });
+            menu?.close();
+            action.onActivate();
           }
         }}
-        onWa-after-hide={(event) => {
-          if (event.target !== event.currentTarget) {
-            return;
-          }
-          const action = pendingAction;
-          pendingAction = undefined;
-          action?.();
-        }}
-      >
-        <button
-          slot="trigger"
-          class="btn btn--ghost chat-pane__layout-trigger"
-          type="button"
-          aria-label={t("chat.sessionHeader.layout")}
-        >
-          <span aria-hidden="true">
-            <Icon name="columns2" />
-          </span>
-          {t("chat.sessionHeader.layout")}
-        </button>
-        <Show when={opened()}>
-          <For each={model().actions} keyed={(action) => action.id}>
-            {(action) => <ChatQuickActionItem action={action()} value={action().id} layout />}
-          </For>
-          <Show when={model().panelActions.length > 0}>
-            <div class="session-menu__separator" role="separator" />
-            <For each={model().panelActions} keyed={(action) => action.id}>
-              {(action) => <ChatQuickActionItem action={action()} value={action().id} layout />}
-            </For>
-          </Show>
-          <LitContent value={model().mainHeaderAction} />
-          <LitContent value={model().sideHeaderAction} />
-        </Show>
-      </wa-dropdown>
+      />
     </Show>
   );
 }

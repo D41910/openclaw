@@ -304,6 +304,7 @@ export function Menu(props: BranchProps): JSX.Element {
                         type="button"
                         class={["oc-menu-item", item().class]}
                         data-value={item().id}
+                        value={item().id}
                         data-variant={item().variant}
                         role={itemRole(item().type)}
                         aria-label={item().label}
@@ -331,7 +332,17 @@ export function Menu(props: BranchProps): JSX.Element {
                         id={`${identity.id}-${item().id}`}
                         label={item().label}
                         items={children()}
-                        trigger={item().label}
+                        trigger={
+                          <>
+                            <Show when={item().icon}>
+                              <span class="oc-menu-item__icon">{item().icon}</span>
+                            </Show>
+                            <span class="oc-menu-item__label">{item().label}</span>
+                            <Show when={item().details}>
+                              <span class="oc-menu-item__details">{item().details}</span>
+                            </Show>
+                          </>
+                        }
                         parent={overlay}
                         root={menuRoot}
                         parentBinding={binding}

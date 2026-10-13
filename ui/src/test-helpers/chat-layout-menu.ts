@@ -8,22 +8,8 @@ type DomChatLayoutScope = {
 
 function isChatLayoutMenuOpen(element: Element): boolean {
   return (
-    element.isConnected &&
-    (element.hasAttribute("open") ||
-      Boolean(element.shadowRoot?.querySelector("wa-popup")?.hasAttribute("active")))
+    element.isConnected && Boolean(element.querySelector(".oc-menu")?.matches(":popover-open"))
   );
-}
-
-function waitForMenuShow(menu: Element): Promise<void> {
-  return new Promise((resolve) => {
-    const shown = (event: Event) => {
-      if (event.target === menu) {
-        menu.removeEventListener("wa-after-show", shown);
-        resolve();
-      }
-    };
-    menu.addEventListener("wa-after-show", shown);
-  });
 }
 
 async function waitForMenuClose(menu: ElementHandle<Element> | HTMLElement): Promise<void> {
@@ -46,22 +32,22 @@ export async function openChatLayoutMenu(
     if (!menu || !trigger) {
       throw new Error("Expected a chat Layout menu");
     }
-    if (!menu.hasAttribute("open")) {
-      const shown = waitForMenuShow(menu);
+    if (!isChatLayoutMenuOpen(menu)) {
       await scope.click(trigger);
-      await shown;
+      await expect.poll(() => isChatLayoutMenuOpen(menu)).toBe(true);
     }
     return menu;
   }
   const trigger = scope.getByRole("button", { name: "Layout", exact: true }).first();
   const menu = trigger.locator("..");
-  if ((await menu.getAttribute("open")) === null) {
+  if (!(await menu.evaluate(isChatLayoutMenuOpen))) {
     const element = await menu.elementHandle();
     if (!element) {
       throw new Error("Expected a chat Layout menu");
     }
     try {
-      await Promise.all([element.evaluate(waitForMenuShow), trigger.click()]);
+      await trigger.click();
+      await expect.poll(() => element.evaluate(isChatLayoutMenuOpen)).toBe(true);
     } finally {
       await element.dispose();
     }
@@ -78,7 +64,7 @@ export async function closeChatLayoutMenu(
     if (!menu || !trigger) {
       throw new Error("Expected a chat Layout menu");
     }
-    if (menu.hasAttribute("open")) {
+    if (isChatLayoutMenuOpen(menu)) {
       await scope.click(trigger);
     }
     await waitForMenuClose(menu);
@@ -86,7 +72,7 @@ export async function closeChatLayoutMenu(
   }
   const trigger = scope.getByRole("button", { name: "Layout", exact: true }).first();
   const menu = trigger.locator("..");
-  if ((await menu.getAttribute("open")) !== null) {
+  if (await menu.evaluate(isChatLayoutMenuOpen)) {
     await trigger.click();
   }
   const element = await menu.elementHandle();
@@ -105,7 +91,7 @@ export async function selectChatLayoutAction(
 ): Promise<void> {
   if ("container" in scope) {
     const menu = await openChatLayoutMenu(scope);
-    const action = [...menu.querySelectorAll<HTMLElement>("wa-dropdown-item")].find((item) => {
+    const action = [...menu.querySelectorAll<HTMLElement>("[role^=menuitem]")].find((item) => {
       const label = item.getAttribute("aria-label") ?? item.textContent?.trim() ?? "";
       return typeof name === "string" ? label === name : name.test(label);
     });
@@ -126,7 +112,7 @@ export async function selectChatLayoutAction(
   }
   try {
     await action.click();
-    // Wait for Web Awesome's popup to finish hiding before another menu action.
+    // The overlay closes before actions can change the retained header.
     await waitForMenuClose(element);
   } finally {
     await element.dispose();

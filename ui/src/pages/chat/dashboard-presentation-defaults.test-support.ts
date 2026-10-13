@@ -36,7 +36,7 @@ type DashboardPane = TestChatPane & {
   handleBoardCommand: (event: BoardCommandEvent) => void;
   saveDashboardDefault: (row: GatewaySessionRow, agentId: string | undefined) => Promise<void>;
 };
-type HeaderMenu = HTMLElement & { updateComplete: Promise<boolean> };
+type HeaderMenu = HTMLElement;
 
 export const key = "agent:main:dashboard-defaults";
 
@@ -157,9 +157,11 @@ export function createDashboardHarness(
     );
     const menu = mount.querySelector<HeaderMenu>(".chat-pane__layout-menu");
     expect(menu).not.toBeNull();
-    menu!.dispatchEvent(new Event("wa-show"));
     flush();
-    await menu!.updateComplete;
+    if (!menu!.querySelector(".oc-menu")?.matches(":popover-open")) {
+      menu!.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
+      flush();
+    }
     return menu!;
   };
   return {
@@ -182,6 +184,15 @@ export function createDashboardHarness(
 }
 
 export function select(menu: ParentNode, value: string) {
+  if (menu instanceof HTMLElement && menu.matches(".chat-pane__layout-menu")) {
+    if (!menu.querySelector(".oc-menu")?.matches(":popover-open")) {
+      menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
+      flush();
+    }
+    menu.querySelector<HTMLButtonElement>(`button[data-value="${value}"]`)?.click();
+    flush();
+    return;
+  }
   const dropdown =
     menu instanceof Element && menu.matches("wa-dropdown")
       ? menu
@@ -195,9 +206,6 @@ export function select(menu: ParentNode, value: string) {
       detail: { item: { value } },
     }),
   );
-  if (dropdown!.matches(".chat-pane__layout-menu")) {
-    dropdown!.dispatchEvent(new CustomEvent("wa-after-hide"));
-  }
 }
 
 export function expectPresentation(layout: SidebarLayout, expanded: boolean) {

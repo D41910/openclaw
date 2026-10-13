@@ -82,7 +82,7 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         "Toggle browser panel",
       ]) {
         if (label === "Toggle browser panel") {
-          expect(container.querySelector('[value="browser"] kbd')?.textContent).toContain("U");
+          expect(container.querySelector('[data-value="browser"] kbd')?.textContent).toContain("U");
         }
         await selectChatLayoutAction(
           { container, click: (element: HTMLElement) => page.elementLocator(element).click() },
@@ -104,7 +104,7 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
           const menu = fixture.container.querySelector(".chat-pane__layout-menu")!;
           const trigger = menu.querySelector("button")!;
           observations.push({
-            open: menu.hasAttribute("open"),
+            open: Boolean(menu.querySelector(":popover-open")),
             focused: document.activeElement === trigger,
           });
           fixture.update({
@@ -120,14 +120,16 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
       )!;
       const menu = fixture.container.querySelector(".chat-pane__layout-menu")!;
       const shown = vi.fn();
-      menu.addEventListener("wa-after-show", shown, { once: true });
+      menu
+        .querySelector('[role="menu"]')!
+        .addEventListener("overlay-after-show", shown, { once: true });
       await openChatLayoutMenu({
         container: fixture.container,
         click: (element: HTMLElement) => page.elementLocator(element).click(),
       });
       expect(shown).toHaveBeenCalledOnce();
       await userEvent.keyboard("{Escape}");
-      await expect.poll(() => menu.hasAttribute("open")).toBe(false);
+      await expect.poll(() => Boolean(menu.querySelector(":popover-open"))).toBe(false);
       expect(document.activeElement).toBe(trigger);
       for (const label of ["Minimize side panel", "Side panel"]) {
         await selectChatLayoutAction(
@@ -141,9 +143,9 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
       }
       for (const expectedCount of [3, 4]) {
         trigger.click();
-        menu.querySelector<HTMLElement>('[value="side-panel"]')!.click();
+        menu.querySelector<HTMLElement>('[data-value="side-panel"]')!.click();
         await expect.poll(() => observations.length).toBe(expectedCount);
-        expect(menu.hasAttribute("open")).toBe(false);
+        expect(Boolean(menu.querySelector(":popover-open"))).toBe(false);
         expect(document.activeElement).toBe(trigger);
       }
       expect(observations).toEqual([

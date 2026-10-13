@@ -6,7 +6,14 @@ import { Icon } from "./icon.tsx";
 import "../tooltip.ts";
 import "../../styles/copy-button.css";
 
-export type CopyButtonProps = { text: string; idleLabel?: string; bare?: boolean };
+export type CopyButtonProps = {
+  text: string;
+  idleLabel?: string;
+  bare?: boolean;
+  buttonAttributes?: SolidJSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+    [name: `data-${string}`]: string | number | boolean | undefined;
+  };
+};
 
 export function CopyButton(props: CopyButtonProps): SolidJSX.Element {
   const label = () => props.idleLabel ?? t("chat.actions.copyAsMarkdown");
@@ -15,6 +22,7 @@ export function CopyButton(props: CopyButtonProps): SolidJSX.Element {
       {(text) => (
         <openclaw-tooltip prop:content={label()}>
           <button
+            {...props.buttonAttributes}
             class={props.bare ? "chat-copy-btn" : "btn btn--xs chat-copy-btn"}
             type="button"
             aria-label={label()}

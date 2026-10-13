@@ -2,7 +2,7 @@
 
 import { render } from "lit";
 import { flush } from "solid-js";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { decodeResumeHandoff } from "../../../../src/shared/resume-handoff.js";
 import type { GatewayBrowserClient, GatewayHelloOk } from "../../api/gateway.ts";
 import type { GatewaySessionRow } from "../../api/types.ts";
@@ -15,8 +15,17 @@ import { openSlot } from "./sidebar-layout.ts";
 
 function selectPanel(container: HTMLElement, value: string) {
   const menu = container.querySelector(".chat-pane__layout-menu")!;
-  menu.dispatchEvent(new CustomEvent("wa-select", { detail: { item: { value } } }));
-  menu.dispatchEvent(new CustomEvent("wa-after-hide"));
+  const panel = menu.querySelector<HTMLElement>(".oc-menu")!;
+  if (!panel.matches(":popover-open")) {
+    menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
+    flush();
+  }
+  const item = menu.querySelector<HTMLButtonElement>(`button[data-value="${value}"]`);
+  if (!item) {
+    throw new Error(`Expected Layout panel action: ${value}`);
+  }
+  item.click();
+  flush();
 }
 
 function desktopHello(methods: string[], scopes: string[]): GatewayHelloOk {
@@ -33,14 +42,19 @@ function createTerminalPane(client: GatewayBrowserClient) {
     client,
     sessions: createSessionCapabilityFixture(),
   });
-  const container = document.createElement("div");
+  const container = document.body.appendChild(document.createElement("div"));
+  onTestFinished(() => container.remove());
   const paint = (
     row: GatewaySessionRow | undefined,
     workspace = createPaneHeaderWorkspaceFixture(state),
   ) => {
     render(pane.renderPaneHeader(workspace, row, false, undefined, false, null), container);
-    container.querySelector(".chat-pane__layout-menu")?.dispatchEvent(new Event("wa-show"));
     flush();
+    const menu = container.querySelector(".chat-pane__layout-menu");
+    if (menu && !menu.querySelector(".oc-menu")?.matches(":popover-open")) {
+      menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")?.click();
+      flush();
+    }
   };
   return { pane, state, container, paint };
 }
@@ -137,7 +151,7 @@ describe("chat pane terminal action", () => {
           : undefined,
       });
     const panelActions = () =>
-      container.querySelectorAll(".chat-pane__layout-menu wa-dropdown-item");
+      container.querySelectorAll('.chat-pane__layout-menu button[role^="menuitem"]');
 
     renderHeader();
     expect(container.querySelector('button[aria-label="Toggle terminal"]')).toBeNull();
@@ -146,9 +160,9 @@ describe("chat pane terminal action", () => {
 
     state.terminalAvailable = false;
     renderHeader();
-    expect([...panelActions()].some((action) => action.getAttribute("value") === "terminal")).toBe(
-      false,
-    );
+    expect(
+      [...panelActions()].some((action) => action.getAttribute("data-value") === "terminal"),
+    ).toBe(false);
   });
 
   it("exposes Desktop as a side-panel action only for observable session targets", () => {
@@ -161,8 +175,8 @@ describe("chat pane terminal action", () => {
     } satisfies GatewaySessionRow;
     const renderHeader = paint;
     const panelActionIds = () =>
-      [...container.querySelectorAll(".chat-pane__layout-menu wa-dropdown-item")].map((item) =>
-        item.getAttribute("value"),
+      [...container.querySelectorAll('.chat-pane__layout-menu button[role^="menuitem"]')].map(
+        (item) => item.getAttribute("data-value"),
       );
     const snapshot = pane.context.gateway.snapshot;
     snapshot.hello = desktopHello([], ["operator.admin"]);
@@ -237,8 +251,8 @@ describe("chat pane terminal action", () => {
     } satisfies GatewaySessionRow;
     const renderHeader = () => paint(session);
     const panelActionIds = () =>
-      [...container.querySelectorAll(".chat-pane__layout-menu wa-dropdown-item")].map((item) =>
-        item.getAttribute("value"),
+      [...container.querySelectorAll('.chat-pane__layout-menu button[role^="menuitem"]')].map(
+        (item) => item.getAttribute("data-value"),
       );
 
     state.browserPanelAvailable = false;

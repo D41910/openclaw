@@ -92,7 +92,13 @@ it("updates accessible labels without splitting mounted DOM and machine identity
     },
     get items() {
       return [
-        { id: "assign", label: childLabel(), children: [{ id: "ada", label: "Ada Rivera" }] },
+        {
+          id: "assign",
+          label: childLabel(),
+          icon: <span data-testid="assign-icon">Icon</span>,
+          details: <span data-testid="assign-shortcut">A</span>,
+          children: [{ id: "ada", label: "Ada Rivera" }],
+        },
       ];
     },
   });
@@ -101,6 +107,9 @@ it("updates accessible labels without splitting mounted DOM and machine identity
   await openMenu();
   await openMenu("people-assign");
   const child = surface("people-assign");
+  expect(trigger("people-assign").querySelector('[data-testid="assign-icon"]')).not.toBeNull();
+  expect(trigger("people-assign").querySelector('[data-testid="assign-shortcut"]')).not.toBeNull();
+  expect(item("Ada Rivera", "people-assign").getAttribute("value")).toBe("ada");
   setId("replacement-id");
   setLabel("Updated actions");
   setChildLabel("Updated assignment");
