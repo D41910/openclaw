@@ -1,8 +1,9 @@
 /* @vitest-environment jsdom */
 
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { focusChatComposerFromPrintableKeydown } from "../pages/chat/chat-pane-shared.ts";
 import {
+  containers,
   menuItem,
   menuItemLabels,
   mountMenu,
@@ -109,4 +110,37 @@ it("preserves focused rows and an open owner search across external updates", as
   expect(search.value).toBe("Research");
   expect(document.activeElement).toBe(search);
   expect(menuItemLabels(host)).toContain("Mark as read");
+});
+
+it("ignores a stale native toggle after reopening the same session", async () => {
+  const onClose = vi.fn();
+  const trigger = document.body.appendChild(document.createElement("button"));
+  containers.push(trigger);
+  const escape = (item: HTMLElement) =>
+    item.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    );
+  const menu = await mountMenu({ onClose, trigger });
+  const stalePanel = menuPanel(menu);
+  const advanced = menuItem(menu, "Advanced");
+  const child = await openSubmenu(menu, "Advanced");
+  const childItem = menuItem(child, "Icon & color");
+  childItem.focus();
+  escape(childItem);
+  expect(child.matches(":popover-open")).toBe(false);
+  expect(stalePanel.matches(":popover-open")).toBe(true);
+  expect(document.activeElement).toBe(advanced);
+  expect(onClose).not.toHaveBeenCalled();
+  escape(advanced);
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(document.activeElement).toBe(trigger);
+
+  menu.anchor = { x: 120, y: 120 };
+  await settleSessionMenu(menu);
+  stalePanel.dispatchEvent(new Event("toggle"));
+  stalePanel.dispatchEvent(new Event("overlay-after-hide"));
+
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(menuPanel(menu)).not.toBe(stalePanel);
+  expect(menuPanel(menu).matches(":popover-open")).toBe(true);
 });

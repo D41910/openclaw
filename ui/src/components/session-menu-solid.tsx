@@ -258,7 +258,7 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
         return (
           <Menu
             id={menuId}
-            class={`session-menu${props.compact ? " session-menu--compact" : ""}`}
+            class={["session-menu", { "session-menu--compact": props.compact }]}
             panelClass="session-menu__panel"
             placement="bottom-start"
             label={label()}
