@@ -149,7 +149,6 @@ function buildAutoReplySystemPrompt(params: {
       ? buildGroupChatContext({
           sessionCtx: params.sessionCtx,
           silentToken: SILENT_REPLY_TOKEN,
-          silentReplyPolicy: "allow",
         })
       : "",
     params.includeGroupIntro

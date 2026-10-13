@@ -1,3 +1,4 @@
+import { expectDefined } from "@openclaw/normalization-core/expect";
 import { assert, describe, expect, it, vi } from "vitest";
 import { HEARTBEAT_EXTERNAL_RUN_FAILURE_TEXT } from "../../agents/failover/user-copy.js";
 import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-payload.js";
@@ -128,7 +129,9 @@ describe("executeAgentTurn: result and tool delivery", () => {
         isError: true,
         isStatusNotice: true,
       });
-      expect(getReplyPayloadMetadata(decision.payloads[0])).toMatchObject({
+      expect(
+        getReplyPayloadMetadata(expectDefined(decision.payloads[0], "missing-answer notice")),
+      ).toMatchObject({
         assistantTranscriptOwned: true,
         deliverDespiteSourceReplySuppression: true,
       });

@@ -651,7 +651,6 @@ async function createScenarios(codexApi: CodexPromptSnapshotApi): Promise<Prompt
         chatContext: buildGroupChatContext({
           sessionCtx: discordGroupCtx,
           sourceReplyDeliveryMode: "message_tool_only",
-          silentReplyPolicy: "allow",
           silentToken: SILENT_REPLY_TOKEN,
         }),
         intro: buildGroupIntro({

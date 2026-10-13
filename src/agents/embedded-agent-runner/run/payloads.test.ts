@@ -657,7 +657,7 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     "NO_REPLY.",
     "NO_REPLY NO_REPLY",
   ])("preserves non-token-only assistant text: %s", (text) => {
-    expect(buildPayloads({ assistantTexts: [text] })).toEqual([{ text }]);
+    expect(buildPayloads({ assistantTexts: [text] })).toEqual([expect.objectContaining({ text })]);
   });
 
   it("preserves media directives when stored assistant text was reduced to visible text only", () => {

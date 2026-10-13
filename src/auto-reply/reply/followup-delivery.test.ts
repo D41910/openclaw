@@ -1,4 +1,5 @@
 // Tests follow-up reply delivery and route preservation.
+import { expectDefined } from "@openclaw/normalization-core/expect";
 import { describe, expect, it, vi } from "vitest";
 import { createChatSendLateFollowupDisposition } from "../../gateway/server-methods/chat-send-late-followup.js";
 import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-payload.js";
@@ -359,7 +360,9 @@ describe("resolveFollowupDeliveryDecision", () => {
       if (decision.kind === "deliver") {
         expect(decision.payloads).toHaveLength(1);
         expect(decision.payloads[0]?.text).toBeUndefined();
-        expect(getReplyPayloadMetadata(decision.payloads[0])).toMatchObject({
+        expect(
+          getReplyPayloadMetadata(expectDefined(decision.payloads[0], "queued media payload")),
+        ).toMatchObject({
           assistantTranscriptOwned: true,
           deliverDespiteSourceReplySuppression: true,
         });
