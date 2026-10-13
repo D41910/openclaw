@@ -275,7 +275,9 @@ describe("Slack monitor dispatch", () => {
     configureReactions();
     await runMention();
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(sendMock.mock.calls[0]?.[1]).toBe("PFX No answer was returned.");
+    expect(sendMock.mock.calls[0]?.[1]).toBe(
+      "PFX No answer was returned. Ask again if you still need one.",
+    );
     await expectAck();
   });
 

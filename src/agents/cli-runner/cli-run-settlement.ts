@@ -2,6 +2,7 @@ import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/rep
 import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
+import { buildAgentRunTerminalReplySnapshot } from "../agent-run-terminal-reply.js";
 import {
   externalCliDiscoveryForProviderAuth,
   loadAuthProfileStoreForRuntimeAsync,
@@ -577,7 +578,11 @@ export function buildCliRunResult(params: {
       ...(output.finalPromptText ? { finalPromptText: output.finalPromptText } : {}),
       ...(finalAssistantVisibleText ? { finalAssistantVisibleText } : {}),
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
-      ...(explicitSilence ? { terminalReply: { disposition: "silent" as const } } : {}),
+      terminalReply: buildAgentRunTerminalReplySnapshot({
+        visibleText: finalAssistantVisibleText,
+        rawText: rawText ?? text,
+        terminalReplyKind: explicitSilence ? "silent-empty" : undefined,
+      }),
       systemPromptReport: context.systemPromptReport,
       ...(terminalInterruption
         ? {

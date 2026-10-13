@@ -1233,6 +1233,10 @@ describe("runCliAgent reliability", () => {
     expect(result.payloads).toEqual([{ text: "goodbye from cli" }]);
     expect(result.meta.finalAssistantVisibleText).toBe("goodbye from cli");
     expect(result.meta.finalAssistantRawText).toBe("hello from cli");
+    expect(result.meta.terminalReply).toEqual({
+      disposition: "visible",
+      text: "goodbye from cli",
+    });
   });
 
   it("does not wait for agent_end hooks before resolving channel-backed CLI runs", async () => {

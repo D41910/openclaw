@@ -248,12 +248,6 @@ export function createFollowupRunner(
           return resolved;
         },
       );
-      if (completion.kind === "completed" && operation.result?.kind === "failed") {
-        completion = {
-          kind: "failed",
-          error: formatErrorMessage(operation.result.cause ?? "Follow-up returned no answer."),
-        };
-      }
       if (decision.kind === "deliver") {
         for (const payload of decision.payloads) {
           progressContinuation = getReplyPayloadMetadata(payload)?.progressContinuation;

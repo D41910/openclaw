@@ -385,7 +385,7 @@ export function registerCliReplyCompletionTests({
     supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
     const result = await run(createContext({ terminalReplyExpectation: "required" }));
     expect(result.payloads).toEqual([{ text }]);
-    expect(result.meta.terminalReply).toBeUndefined();
+    expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
     expect(supervisorSpawnMock).toHaveBeenCalledOnce();
   });
 }
