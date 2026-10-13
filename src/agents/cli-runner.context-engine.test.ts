@@ -206,6 +206,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
     const context = buildPreparedContext(createContextEngine(hooks));
     context.params.isolatedCompletion = true;
     context.params.outputTextPolicy = "strict-visible";
+    context.params.terminalReplyExpectation = "result-required";
     executeMock.mockResolvedValueOnce({ text: "" });
     prepareMock.mockResolvedValue(context);
 
@@ -225,6 +226,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
     const context = buildPreparedContext(createContextEngine({ bootstrap, afterTurn }));
     context.params.controlOperation = "compact";
     context.params.allowEmptyAssistantReplyAsSilent = true;
+    context.params.terminalReplyExpectation = "result-required";
     executeMock.mockResolvedValueOnce({
       text: "",
       rawText: "",
@@ -236,13 +238,23 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
 
     expect(beforeReplyMock).not.toHaveBeenCalled();
     expect(result.meta.agentMeta?.sessionId).toBe("existing-external-cli-session");
-    expect(result.meta.terminalReply).toEqual({ disposition: "silent" });
+    expect(result.meta.terminalReply).toEqual({ disposition: "empty" });
     expect(executeMock).toHaveBeenCalledWith(context, "existing-external-cli-session", undefined);
     expect(hookRunnerMock).not.toHaveBeenCalled();
     expect(hookHistoryMock).not.toHaveBeenCalled();
     expect(historyMock).not.toHaveBeenCalled();
     expect(bootstrap).not.toHaveBeenCalled();
     expect(afterTurn).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "NO_REPLY"])("rejects a result-required ordinary completion %j", async (text) => {
+    const context = buildPreparedContext(createContextEngine());
+    context.params.terminalReplyExpectation = "result-required";
+    executeMock.mockResolvedValue({ text, rawText: text });
+
+    await expect(runPreparedCliAgent(context)).rejects.toMatchObject({
+      reason: "empty_response",
+    });
   });
 
   it("finalizes full post-bootstrap history with transcript turn text", async () => {
@@ -297,7 +309,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
     });
     expect(afterTurnParams?.messages[102]).toMatchObject({
       role: "assistant",
-      content: [{ type: "text", text: "final answer" }],
+      content: [{ type: "text", text: " final answer " }],
       provider: "claude-cli",
       model: "sonnet-4.6",
       usage: { input: 11, output: 7, total: 18 },
@@ -430,6 +442,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
           text: "",
           didSendViaMessagingTool: true,
           sourceReplyDelivered: true,
+          messagingToolSourceReplyPayloads: [{ text: "Delivered answer.", sourceReplyFinal: true }],
         });
       } else {
         context.params.currentInboundEventKind = "room_event";
@@ -465,7 +478,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
     expect(turnMessages).toHaveLength(1);
     expect(turnMessages?.[0]).toMatchObject({
       role: "assistant",
-      content: [{ type: "text", text: "final answer" }],
+      content: [{ type: "text", text: " final answer " }],
     });
     expect(dispose).not.toHaveBeenCalled();
   });

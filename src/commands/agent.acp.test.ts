@@ -416,7 +416,7 @@ describe("agentCommand ACP runtime routing", () => {
             finalText: "  ACP reply\n",
           },
         );
-        expect(result?.payloads).toEqual([{ text: "ACP reply", mediaUrl: null }]);
+        expect(result?.payloads).toEqual([{ text: "  ACP reply", mediaUrl: null }]);
         expect(result?.meta.aborted).toBe(
           scenario.status === "cancelled" || ("abort" in scenario && scenario.abort !== "delivery"),
         );

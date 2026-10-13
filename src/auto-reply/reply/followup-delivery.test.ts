@@ -781,7 +781,8 @@ describe("deliverFollowupDecision", () => {
         runFollowup: vi.fn(async () => {}),
       });
 
-      expect(result).toEqual({ kind: "completed", payloads: [{ text }] });
+      // Origin delivery leaves no payloads in queued dispatcher custody.
+      expect(result).toEqual({ kind: "completed", payloads: [] });
       expect(deliveryState.routeReply).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ payload: expect.objectContaining({ text }) }),
       );

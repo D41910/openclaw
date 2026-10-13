@@ -872,7 +872,11 @@ describe("subagent registry lifecycle error grace", () => {
     await registerCompletionRun("run-capped", "capped", "capped result test", undefined, false);
     setAssistantOutput("agent:main:subagent:capped", "x".repeat(120 * 1024), "run-capped");
 
-    emitLifecycleEvent("run-capped", { phase: "end", endedAt: Date.now() });
+    emitLifecycleEvent("run-capped", {
+      phase: "end",
+      endedAt: Date.now(),
+      terminalReply: { disposition: "visible", text: "x".repeat(4_096) },
+    });
     await flushAsync();
     await agentCallWaits.settle();
 

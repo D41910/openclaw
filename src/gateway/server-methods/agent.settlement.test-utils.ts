@@ -17,7 +17,10 @@ import {
   resetSubagentRegistryForTests,
   settleRequesterAfterSessionSpawns,
 } from "../../agents/subagents/registry/subagent-registry.test-helpers.js";
-import { appendTranscriptMessage } from "../../config/sessions/session-accessor.js";
+import {
+  appendTranscriptMessage,
+  replaceSessionEntry,
+} from "../../config/sessions/session-accessor.js";
 import { racePromiseWithAbortSignal } from "../../infra/abort-signal.js";
 import {
   resetGatewaySuspendCoordinatorForLifecycleRestart,
@@ -402,6 +405,10 @@ export function registerYieldedRequesterSettlementCase(
           cleanupCompletedAt: Date.now(),
         });
         mockSpawnedChildSessionEntry(childSessionKey, root);
+        await replaceSessionEntry(
+          { agentId: "main", sessionKey: childSessionKey, storePath: mocks.userTurnStorePath },
+          { sessionId: "spawned-child-session", updatedAt: Date.now() },
+        );
         mocks.agentCommand.mockImplementation(async () => {
           continuedAtDispatch = structuredClone(
             await getSubagentRunByChildSessionKey(childSessionKey),
@@ -416,6 +423,7 @@ export function registerYieldedRequesterSettlementCase(
             {
               message: {
                 role: "assistant",
+                display: true,
                 content: result,
                 stopReason: "stop",
                 __openclaw: { runId: nextRunId },

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { assert, describe, expect, it, vi } from "vitest";
+import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import type { InboundEventKind } from "../../channels/inbound-event/kind.js";
 import { setRuntimeConfigSnapshot } from "../../config/config.js";
 import { replaceSessionEntry } from "../../config/sessions/session-accessor.js";
@@ -12,7 +13,6 @@ import {
   markReplyPayloadForSourceSuppressionDelivery,
   type ReplyPayload,
 } from "../reply-payload.js";
-import { isSilentReplyText } from "../tokens.js";
 import {
   rootDir,
   runEmbeddedAgentMock,
@@ -115,9 +115,9 @@ describe("runReplyAgent private message_tool_only final warning (#85714)", () =>
         stopReason: params.stopReason,
         yielded: params.pendingContinuation,
         finalAssistantRawText: params.finalAssistantRawText,
-        ...(isSilentReplyText(params.finalAssistantRawText)
-          ? { terminalReply: { disposition: "silent" as const } }
-          : {}),
+        terminalReply: prepareAgentRunTerminalReply({
+          rawText: params.finalAssistantRawText ?? finalAssistantText,
+        }).terminalReply,
       },
       messagingToolSentTargets: params.messagingToolSentTargets,
       messagingToolSourceReplyPayloads: params.messagingToolSourceReplyPayloads,

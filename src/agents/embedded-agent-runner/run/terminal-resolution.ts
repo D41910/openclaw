@@ -572,7 +572,9 @@ async function completeEmbeddedRun(
   const isMissingReplyNotice =
     input.incompleteTurnText?.startsWith(MISSING_REPLY_NOTICE_TEXT) === true;
   const suppressMissingReplyNotice =
-    isMissingReplyNotice && !shouldDeliverMissingReplyNotice(input.runParams);
+    isMissingReplyNotice &&
+    (input.incompleteTurnFallbackSafe === true ||
+      !shouldDeliverMissingReplyNotice(input.runParams));
   const incompleteText =
     input.terminalToolPresentation && input.incompleteTurnText !== undefined
       ? input.terminalToolPresentation.concat("\n\n", input.incompleteTurnText)
@@ -610,14 +612,16 @@ async function completeEmbeddedRun(
         disposition: "visible" as const,
         text: sanitizeAgentRunTerminalReplyText(sourceFinal.text ?? ""),
       }
-    : error || incompleteText !== undefined
-      ? {
-          disposition: "visible" as const,
-          text: sanitizeAgentRunTerminalReplyText(incompleteText ?? error?.message ?? ""),
-        }
-      : input.emptyAssistantReplyIsSilent
-        ? { disposition: "silent" as const }
-        : input.prepared.preparedTerminalReply.terminalReply;
+    : isMissingReplyNotice
+      ? { disposition: "empty" as const }
+      : error || incompleteText !== undefined
+        ? {
+            disposition: "visible" as const,
+            text: sanitizeAgentRunTerminalReplyText(incompleteText ?? error?.message ?? ""),
+          }
+        : input.emptyAssistantReplyIsSilent
+          ? { disposition: "silent" as const }
+          : input.prepared.preparedTerminalReply.terminalReply;
   return {
     action: "complete",
     result: {
@@ -632,8 +636,13 @@ async function completeEmbeddedRun(
         systemPromptReport: input.attempt.systemPromptReport,
         finalPromptText: input.attempt.finalPromptText,
         finalAssistantVisibleText:
-          sourceFinal?.text ?? incompleteText ?? input.prepared.finalAssistantVisibleText,
-        finalAssistantRawText: input.prepared.finalAssistantRawText,
+          sourceFinal?.text ??
+          (isMissingReplyNotice
+            ? undefined
+            : (incompleteText ?? input.prepared.finalAssistantVisibleText)),
+        finalAssistantRawText: isMissingReplyNotice
+          ? undefined
+          : input.prepared.finalAssistantRawText,
         replayInvalid,
         livenessState,
         stopReason,

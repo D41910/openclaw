@@ -353,15 +353,12 @@ describe("progress narration through reply options", () => {
     }
   });
 
-  it.each([
-    { text: "NO_REPLY", narrations: 1 },
-    { text: "[[audio_as_voice]] _NO_REPLY_", narrations: 0 },
-  ])(
-    "honors exact silence without suppressing visible preambles: $text",
-    async ({ text, narrations }) => {
+  it.each(["NO_REPLY", "[[audio_as_voice]] _NO_REPLY_"])(
+    "treats prepared literal preambles as visible progress: %s",
+    async (text) => {
       vi.useFakeTimers();
       try {
-        const { narrator, generate, inputs } = createNarratorHarness();
+        const { narrator, generate } = createNarratorHarness();
 
         narrator.noteItemEvent({ kind: "preamble", progressText: "[[reply_to_current]]" });
         narrator.noteItemEvent({
@@ -371,10 +368,7 @@ describe("progress narration through reply options", () => {
         narrator.noteToolStart({ name: "exec", phase: "start", args: { command: "ls" } });
         await flushNarrations();
 
-        expect(generate).toHaveBeenCalledTimes(narrations);
-        if (narrations > 0) {
-          expect(inputs[0]?.activityNotes.some((note) => note.startsWith("model:"))).toBe(false);
-        }
+        expect(generate).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }

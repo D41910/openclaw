@@ -1,6 +1,5 @@
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import { describe, expect, it, vi } from "vitest";
-import { makeAgentAssistantMessage } from "../../agents/test-helpers/agent-message-fixtures.js";
 import { createStructuredOutboundPayloadPlan } from "../../infra/outbound/payloads.js";
 import { createDeferredCore } from "../../shared/deferred.js";
 import { appendReplyMediaFailures, setReplyPayloadMetadata } from "../reply-payload.js";
@@ -105,11 +104,28 @@ describe("agent runner streaming presentation", () => {
     }
   });
 
-  it.each(["NO_REPLY"])(
-    "suppresses producer-authored silence before coalesced prepared delivery: %s",
-    async (silentText) => {
-      const { createSubscribedSessionHarness } =
-        await import("../../agents/embedded-agent-subscribe.e2e-harness.js");
+  it.each([
+    {
+      name: "producer-authored silence",
+      text: "NO_REPLY",
+      silent: true,
+      expected: "First.\n\nLast.",
+    },
+    {
+      name: "prepared literal suffix",
+      text: "NO_REPLY",
+      silent: false,
+      expected: "First.\n\nNO_REPLY\n\nLast.",
+    },
+    {
+      name: "directive-stripped literal",
+      text: "[tool calls omitted]\nNO_REPLY",
+      silent: false,
+      expected: "First.\n\nNO_REPLY\n\nLast.",
+    },
+  ])(
+    "preserves $name policy through coalesced prepared delivery",
+    async ({ text, silent, expected }) => {
       const delivered = vi.fn(async (_payload: ReplyPayload) => {});
       const dispatcher = createReplyDispatcher({
         deliver: delivered,
@@ -144,59 +160,16 @@ describe("agent runner streaming presentation", () => {
       if (!handler) {
         throw new Error("expected the prepared block delivery handler");
       }
-      const blocks: string[] = [];
-      const { emit, subscription } = createSubscribedSessionHarness({
-        runId: "run-cleaned-silence",
-        onBlockReply: async (payload) => {
-          blocks.push(payload.text ?? "");
-          await handler(payload);
-        },
-        blockReplyBreak: "text_end",
-        blockReplyChunking: {
-          minChars: 1,
-          maxChars: 1200,
-          breakPreference: "paragraph",
-          flushOnParagraph: true,
-        },
-      });
-      const source = `First.\n\n[tool calls omitted]\n${silentText}\n\nLast.\n\n`;
-      const message = makeAgentAssistantMessage({
-        api: "google-generative-ai",
-        provider: "google",
-        model: "gemini-2.5-flash",
-        content: [{ type: "text", text: source }],
-      });
+      const middle = setReplyPayloadMetadata({ text }, silent ? { silentReply: true } : {});
       try {
-        emit({ type: "message_start", message: { ...message, content: [] } });
-        emit({
-          type: "message_update",
-          message,
-          assistantMessageEvent: {
-            type: "text_delta",
-            contentIndex: 0,
-            delta: source,
-            partial: message,
-          },
-        });
-        emit({
-          type: "message_update",
-          message,
-          assistantMessageEvent: {
-            type: "text_end",
-            contentIndex: 0,
-            content: source,
-            partial: message,
-          },
-        });
-        emit({ type: "message_end", message });
-        await subscription.waitForPendingEvents();
+        await handler({ text: "First." });
+        await handler(middle);
+        await handler({ text: "Last." });
         await pipeline.flush({ force: true });
         await dispatcher.waitForIdle();
 
-        expect(blocks).toEqual(["First.", `[tool calls omitted]\n${silentText}`, "Last."]);
-        expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual(["First.\n\nLast."]);
+        expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual([expected]);
       } finally {
-        subscription.unsubscribe();
         pipeline.stop();
         typing.cleanup();
         dispatcher.markComplete();

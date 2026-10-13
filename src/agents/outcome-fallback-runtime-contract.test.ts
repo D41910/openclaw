@@ -6,6 +6,8 @@ import {
   OUTCOME_FALLBACK_RUNTIME_CONTRACT,
 } from "openclaw/plugin-sdk/agent-runtime-test-contracts";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { getReplyPayloadMetadata, type ReplyPayload } from "../auto-reply/reply-payload.js";
+import { resolveTerminalAgentRunFailurePayload } from "../auto-reply/reply/agent-runner-failure-reply.js";
 import { applyInputProvenanceToUserMessage } from "../sessions/input-provenance.js";
 import {
   classifyEmbeddedAgentRunResultForModelFallback,
@@ -55,7 +57,9 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
 
   it.each([
     ["optional", undefined, 1, 2],
-    ["required", undefined, 1, 2],
+    ["result-required", undefined, 1, 2],
+    ["result-required", "empty", 3, 6],
+    ["result-required", "reasoning-only", 3, 9],
     ["required", "empty", 3, 6],
     ["required", "reasoning-only", 3, 9],
   ] as const)(
@@ -73,15 +77,18 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
         usage: createMockUsage(89, 4),
       });
       let modelRequests = 0;
+      const notices: ReplyPayload[] = [];
       const run = vi.fn(async () => {
         const attempt = makeEmbeddedRunnerAttempt({
           assistantTexts: [],
           agentHarnessResultClassification: classification,
           messagesSnapshot: [
-            applyInputProvenanceToUserMessage(
-              { role: "user", content: prompt, timestamp: 0 },
-              provenance,
-            ),
+            expectation === "required"
+              ? { role: "user" as const, content: prompt, timestamp: 0 }
+              : applyInputProvenanceToUserMessage(
+                  { role: "user", content: prompt, timestamp: 0 },
+                  provenance,
+                ),
             assistant,
           ],
           lastAssistant: assistant,
@@ -92,14 +99,21 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
           attempt,
           runParams: {
             prompt,
-            inputProvenance: provenance,
-            ...(expectation === "required" ? { terminalReplyExpectation: expectation } : {}),
+            inputProvenance: expectation === "required" ? undefined : provenance,
+            terminalReplyExpectation: expectation,
           },
         });
         for (;;) {
           modelRequests += 1;
           const terminal = await resolveEmbeddedRunTerminal(input);
           if (terminal.action === "complete") {
+            notices.push(
+              ...(terminal.result.payloads?.filter((payload) => payload.isStatusNotice) ?? []),
+            );
+            expect(terminal.result.payloads).toBeUndefined();
+            expect(terminal.result.meta.terminalReply).toEqual({ disposition: "empty" });
+            expect(terminal.result.meta.finalAssistantVisibleText).toBeUndefined();
+            expect(terminal.result.meta.finalAssistantRawText).toBeUndefined();
             return terminal.result;
           }
         }
@@ -120,13 +134,36 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
       expect(result.model).toBe(classification ? "gpt-5.6-luna" : "gpt-5.6-sol");
       expect(result.attempts).toHaveLength(classification ? 3 : 0);
       expect(result.result.meta.error?.kind).toBe("incomplete_turn");
-      expect(result.result.meta.terminalReply).toMatchObject({
-        disposition: "visible",
-        text: expect.stringContaining("Agent couldn't generate a response."),
+      expect(result.result.meta.terminalReply).toEqual({ disposition: "empty" });
+      expect(result.result.meta.finalAssistantVisibleText).toBeUndefined();
+      expect(result.result.meta.finalAssistantRawText).toBeUndefined();
+      expect(result.result.payloads).toBeUndefined();
+      expect(notices).toEqual([]);
+      const notice = await resolveTerminalAgentRunFailurePayload({
+        result: result.result,
+        run: {
+          messageChannel: "telegram",
+          terminalReplyExpectation: expectation,
+          inputProvenance: expectation === "required" ? undefined : provenance,
+        },
+        visibleReplyDelivered: async () => false,
       });
-      expect(result.result.payloads).toEqual([
-        { text: "⚠️ Agent couldn't generate a response. Please try again.", isError: true },
-      ]);
+      if (notice) {
+        notices.push(notice);
+      }
+      if (expectation === "required") {
+        expect(result.outcome).toBe("exhausted");
+        expect(notices).toEqual([
+          expect.objectContaining({
+            text: "No answer was returned. Ask again if you still need one.",
+            isError: true,
+            isStatusNotice: true,
+          }),
+        ]);
+        expect(getReplyPayloadMetadata(notice ?? {})?.assistantTranscriptOwned).toBe(true);
+      } else {
+        expect(notices).toEqual([]);
+      }
     },
   );
 
@@ -208,7 +245,7 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
     expect(result.attempts[0]?.code).toBe("empty_result");
   });
 
-  it("preserves a tool-authored summary when fallback candidates are exhausted", async () => {
+  it("preserves an incomplete tool-authored summary over stale silence when fallbacks exhaust", async () => {
     const terminalSummary =
       "Web fetch completed.\nOrigin: https://example.com\nStatus: 200\n\n" +
       "Agent couldn't generate a response.";
@@ -216,6 +253,7 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
       payloads: [{ text: terminalSummary, isError: true }],
       meta: {
         durationMs: 1,
+        terminalReply: { disposition: "silent" },
         toolSummary: { calls: 1, tools: ["web_fetch"] },
         error: {
           kind: "incomplete_turn",
@@ -385,7 +423,12 @@ describe("Outcome/fallback runtime contract - embedded runtime fallback classifi
     {
       name: "intentional NO_REPLY",
       result: createContractRunResult({
-        meta: { durationMs: 1, finalAssistantRawText: "NO_REPLY" },
+        meta: {
+          durationMs: 1,
+          agentHarnessResultClassification: "empty",
+          finalAssistantRawText: "NO_REPLY",
+          terminalReply: { disposition: "silent" },
+        },
       }),
     },
     {

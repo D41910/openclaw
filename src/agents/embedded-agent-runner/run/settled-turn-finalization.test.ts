@@ -514,7 +514,9 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       } else {
         expect(terminal.result.payloads).toBeUndefined();
       }
-      expect(terminal.result.meta.terminalReply?.disposition).not.toBe("silent");
+      expect(terminal.result.meta.terminalReply).toEqual({ disposition: "empty" });
+      expect(terminal.result.meta.finalAssistantVisibleText).toBeUndefined();
+      expect(terminal.result.meta.finalAssistantRawText).toBeUndefined();
     },
   );
 

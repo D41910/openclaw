@@ -13,7 +13,10 @@ import {
   resetSubagentRegistryForTests,
 } from "../../agents/subagents/registry/subagent-registry.test-helpers.js";
 import type { SubagentRunRecord } from "../../agents/subagents/registry/subagent-registry.types.js";
-import { appendTranscriptMessage } from "../../config/sessions/session-accessor.js";
+import {
+  appendTranscriptMessage,
+  replaceSessionEntry,
+} from "../../config/sessions/session-accessor.js";
 import { racePromiseWithAbortSignal } from "../../infra/abort-signal.js";
 import { bindInProcessSubagentResume } from "../in-process-subagent-resume.js";
 import { bindParentSubagentResume } from "../session-subagent-resume.js";
@@ -185,6 +188,10 @@ describe("gateway agent handler yielded orchestrator follow-ups", () => {
             expectsCompletionMessage: true,
           });
           mockSpawnedChildSessionEntry(childSessionKey, root);
+          await replaceSessionEntry(
+            { agentId: "main", sessionKey: childSessionKey, storePath: mocks.userTurnStorePath },
+            { sessionId: "spawned-child-session", updatedAt: Date.now() },
+          );
           mocks.agentCommand.mockImplementation(async () => {
             await appendTranscriptMessage(
               {
@@ -196,6 +203,7 @@ describe("gateway agent handler yielded orchestrator follow-ups", () => {
               {
                 message: {
                   role: "assistant",
+                  display: true,
                   content: result,
                   stopReason: "stop",
                   __openclaw: { runId },

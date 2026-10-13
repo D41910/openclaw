@@ -18,7 +18,10 @@ import {
   resetSubagentRegistryForTests,
 } from "../../agents/subagents/registry/subagent-registry.test-helpers.js";
 import { recordAgentRunTerminalOutcome } from "../../channels/turn/agent-run-terminal-outcome.js";
-import { appendTranscriptMessage } from "../../config/sessions/session-accessor.js";
+import {
+  appendTranscriptMessage,
+  replaceSessionEntry,
+} from "../../config/sessions/session-accessor.js";
 import { attachErrorDiagnostic } from "../../infra/error-diagnostics.js";
 import { withTestDir } from "../../test-helpers/temp-dir.js";
 import { createCanonicalAgentConfigFixture } from "../../test-utils/config-roster.js";
@@ -465,6 +468,10 @@ describe("gateway agent handler", () => {
           pauseReason: "sessions_yield",
           expectsCompletionMessage: true,
         });
+        await replaceSessionEntry(
+          { agentId: "work", sessionKey: childSessionKey, storePath: mocks.userTurnStorePath },
+          { sessionId: "spawned-child-session", updatedAt: Date.now() },
+        );
         mocks.agentCommand.mockImplementation(async () => {
           await appendTranscriptMessage(
             {
@@ -476,6 +483,7 @@ describe("gateway agent handler", () => {
             {
               message: {
                 role: "assistant",
+                display: true,
                 content: result,
                 stopReason: "stop",
                 __openclaw: { runId },

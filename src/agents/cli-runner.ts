@@ -377,6 +377,8 @@ async function runPreparedCliAgentOwned(
     if (
       !output.terminalInterruption &&
       ((resolveReplyExpectation(params) === "result-required" &&
+        !params.controlOperation &&
+        !(isolatedCompletion && params.outputTextPolicy === "strict-visible") &&
         preparedReply.terminalReply.disposition !== "visible" &&
         !completedFinalSource) ||
         (!output.text.trim() &&

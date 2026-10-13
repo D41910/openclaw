@@ -1053,7 +1053,7 @@ describe("subagent registry seam flow", () => {
       );
       expect(mocks.runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
     });
-    expect(mocks.captureSubagentCompletionReply).toHaveBeenCalledTimes(1);
+    expect(mocks.captureSubagentCompletionReply).not.toHaveBeenCalled();
   });
 
   it("refreshes unpublished timeout delivery payloads after lifecycle correction", async () => {

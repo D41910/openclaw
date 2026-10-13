@@ -209,6 +209,8 @@ A truncated response or an unfinished tool turn is not a successful silent endin
 
 The terminal producer prepares the reply once and records whether it is visible or silent. Delivery and clients consume that fact and the full prepared payload without interpreting the text again; an explicit visible fact stays visible even when its text is `NO_REPLY`. Lowercase `no_reply`, `NO_REPLY.`, `"NO_REPLY"`, `{"action":"NO_REPLY"}`, and tokens attached to or trailing ordinary prose are visible text, not silent endings. Stored assistant history uses existing display and final-result facts first, then the same exact check on raw assistant text; user text is never treated as a silence instruction.
 
+Waiting for a completed run reads that run's stored final using its session and run identity, not a newer reply from the same conversation. A recorded visible completion keeps its full answer if that run later ends with `NO_REPLY`.
+
 Conversation policy still controls admission and default reply expectations:
 
 - Direct and accepted group/channel requests normally receive answers. An explicit token-only `NO_REPLY` can end either silently.
@@ -219,11 +221,11 @@ Defaults live under `agents.defaults.silentReply.group`; `surfaces.<id>.silentRe
 
 Generic internal runner failures stay quiet for optional turns that have not shown visible output, including groups explicitly configured to allow silence. Required turns still receive an error. Classified recovery guidance, such as missing-auth, rate-limit, or overload notices, remains deliverable, and visible progress receives a failure outcome rather than being left unfinished. Direct chats show compact failure copy by default; raw runner details show only when `/verbose full` is enabled.
 
-An empty final is not intentional silence. OpenClaw keeps its bounded recovery path without repeating completed actions. If recovery still returns no answer, the run fails. An admitted user request receives at most one short system notice: "No answer was returned. Ask again if you still need one." The notice is not saved as a fabricated assistant answer. Heartbeat, cron, and other background or internal failures remain recorded without posting a missing-answer notice to chat. Existing classified failure guidance and alert paths still apply; a silent recovery cannot turn a provider failure into success. Confirmed delivery or still-owned delivery prevents duplicate recovery; see [Reply shaping](/concepts/agent-loop#reply-shaping).
+An empty final is not intentional silence. OpenClaw keeps its bounded recovery path without repeating completed actions. If recovery still returns no answer, the run fails. An admitted user request receives at most one short system notice: "No answer was returned. Ask again if you still need one." When model fallback is available, that notice appears only after the fallback chain is exhausted, not once per candidate. It is not saved or classified as an assistant answer. Heartbeat, cron, and other background or internal failures remain recorded without posting a missing-answer notice to chat. Existing classified failure guidance and alert paths still apply; a silent recovery cannot turn a provider failure into success. Confirmed delivery or still-owned delivery prevents duplicate recovery; see [Reply shaping](/concepts/agent-loop#reply-shaping).
 
 Pending media work without an authored acknowledgment retains its existing waiting status so supported channels can keep the live progress card until the media arrives. An explicit `NO_REPLY` still ends silently without canceling that work. Failed delegated tasks use the same short missing-answer copy; their existing delivery and requester-history mirroring are unchanged.
 
-Pending WebChat and Control UI work retains authored yield acknowledgments and the existing media waiting status while a result is still owed.
+Pending WebChat and Control UI work retains progress cards, authored yield acknowledgments, and the existing media waiting status while a result is still owed.
 
 ## Related
 

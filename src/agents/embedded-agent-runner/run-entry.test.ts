@@ -613,6 +613,7 @@ describe("runEmbeddedAgentEntry", () => {
             meta: {
               finalAssistantVisibleText: "done",
               finalAssistantRawText: "done",
+              terminalReply: { disposition: "visible", text: "done" },
               agentMeta: {
                 sessionId: "session-1",
                 provider,

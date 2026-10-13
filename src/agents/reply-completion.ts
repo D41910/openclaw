@@ -15,6 +15,10 @@ import { AGENT_LANE_SUBAGENT } from "./lanes.js";
 import type { EmbeddedRunTrigger } from "./run-trigger.js";
 
 export type ReplyExpectation = "required" | "optional" | "result-required";
+
+export function isRequiredReplyExpectation(expectation: ReplyExpectation | undefined): boolean {
+  return expectation === "required" || expectation === "result-required";
+}
 export type ReplyDeliveryState = "delivered" | "pending" | "missing";
 export type ReplyDeliveryObserver = (
   minimumAssistantMessageIndex?: number,

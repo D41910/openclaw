@@ -53,7 +53,7 @@ function toolUseStopWithoutCall(overrides: Parameters<typeof makeEmbeddedRunnerA
 describe("terminal resolution for a tool-use stop without a tool call", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("retries once before surfacing the incomplete-turn warning", async () => {
+  it("retries once before returning a fallback-eligible failure without a candidate notice", async () => {
     const turn = toolUseStopWithoutCall();
     // Delivery hides the markup; the original assistant still drives incomplete-call detection.
     expect(turn.payloadsWithToolMedia).toEqual([expect.objectContaining({ text: "exec" })]);
@@ -75,14 +75,14 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
     if (exhausted.action !== "complete") {
       return;
     }
-    expect(exhausted.result.meta.error).toMatchObject({ kind: "incomplete_turn" });
-    expect(exhausted.result.payloads).toEqual([
-      {
-        text: "No answer was returned. Ask again if you still need one.",
-        isError: true,
-        isStatusNotice: true,
-      },
-    ]);
+    expect(exhausted.result.meta.error).toMatchObject({
+      kind: "incomplete_turn",
+      fallbackSafe: true,
+    });
+    expect(exhausted.result.payloads).toBeUndefined();
+    expect(exhausted.result.meta.terminalReply).toEqual({ disposition: "empty" });
+    expect(exhausted.result.meta.finalAssistantVisibleText).toBeUndefined();
+    expect(exhausted.result.meta.finalAssistantRawText).toBeUndefined();
   });
 
   it.each(["toolUse", "length"] as const)(
@@ -127,12 +127,19 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
       }
       expect(resolved.result.meta.error).toMatchObject({ kind: "incomplete_turn" });
       expect(resolved.result.meta.stopReason).toBe("error");
-      expect(resolved.result.meta.terminalReply?.disposition).toBe("visible");
       expect(resolved.result.sourceReplyDeliveryState).toBe("missing");
-      expect(resolved.result.payloads).toEqual([
-        expect.objectContaining({ text: expect.any(String), isError: true }),
-      ]);
-      expect(resolved.result.payloads?.[0]?.text).not.toBe("NO_REPLY");
+      if (stopReason === "toolUse") {
+        expect(resolved.result.meta.terminalReply).toEqual({ disposition: "empty" });
+        expect(resolved.result.meta.finalAssistantVisibleText).toBeUndefined();
+        expect(resolved.result.meta.finalAssistantRawText).toBeUndefined();
+        expect(resolved.result.payloads).toBeUndefined();
+      } else {
+        expect(resolved.result.meta.terminalReply?.disposition).toBe("visible");
+        expect(resolved.result.payloads).toEqual([
+          expect.objectContaining({ text: expect.any(String), isError: true }),
+        ]);
+        expect(resolved.result.payloads?.[0]?.text).not.toBe("NO_REPLY");
+      }
     },
   );
 });

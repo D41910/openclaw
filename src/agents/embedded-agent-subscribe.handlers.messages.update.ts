@@ -268,7 +268,11 @@ export function handleMessageUpdate(
     const previousCommentaryText = ctx.getPartialReplySourceText();
     ctx.resetPartialReplyDirectives();
     ctx.consumePartialReplyDirectives(commentaryText, { final: evtType === "text_end" });
-    const preparedCommentaryText = ctx.getPartialReplySourceText();
+    const preparedCommentarySource = ctx.getPartialReplySourceText();
+    const preparedCommentaryText = extractAssistantCommentaryText(
+      streamAssistant,
+      (_text, final) => (final ? preparedCommentarySource : ""),
+    );
     if (
       (preparedCommentaryText || previousCommentaryText) &&
       (chunk || !hadResponsesCommentaryText || evtType === "text_end")

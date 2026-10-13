@@ -1,6 +1,7 @@
 // Subagent announce output tests cover transcript reads, completion extraction,
 // compact stats, and wait-outcome text used in announce messages.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import { textAssistant } from "../../test-helpers/sparse-transcript.test-support.js";
 import {
   testing,
@@ -303,7 +304,10 @@ describe("buildChildCompletionFindings", () => {
           childSessionKey: "agent:main:subagent:child",
           task: "child task",
           createdAt: 1,
-          completion: { resultText: "captured findings" },
+          completion: {
+            resultText: "captured findings",
+            terminalReply: { disposition: "visible", text: "captured findings" },
+          },
           endedReason,
           execution: { outcome },
         },
@@ -340,7 +344,12 @@ describe("buildChildCompletionFindings", () => {
         label: "L".repeat(20_000),
         task: "child task",
         createdAt: 1,
-        completion: { resultText: `${"<".repeat(2_000)}-required-tail` },
+        completion: {
+          resultText: `${"<".repeat(2_000)}-required-tail`,
+          terminalReply: prepareAgentRunTerminalReply({
+            rawText: `${"<".repeat(2_000)}-required-tail`,
+          }).terminalReply,
+        },
         execution: { outcome: { status: "error", error: "E".repeat(20_000) } },
       },
     ]);
@@ -369,27 +378,32 @@ describe("buildChildCompletionFindings", () => {
   it.each([
     { name: "successful NO_REPLY", status: "ok", resultText: "NO_REPLY" },
     { name: "blank failed", status: "error", resultText: "" },
-  ] as const)("uses captured fallback output for a $name completion", ({ status, resultText }) => {
-    const findings = buildChildCompletionFindings([
-      {
-        childSessionKey: "agent:main:subagent:child",
-        task: "child task",
-        createdAt: 1,
-        completion: {
-          resultText,
-          fallbackResultText: "findings captured before the wake",
+  ] as const)(
+    "does not revive fallback output for a $name completion",
+    ({ status, resultText }) => {
+      const findings = buildChildCompletionFindings([
+        {
+          childSessionKey: "agent:main:subagent:child",
+          task: "child task",
+          createdAt: 1,
+          completion: {
+            required: true,
+            terminalReply: prepareAgentRunTerminalReply({ rawText: resultText }).terminalReply,
+            resultText,
+            fallbackResultText: "findings captured before the wake",
+          },
+          execution: { outcome: { status } },
         },
-        execution: { outcome: { status } },
-      },
-    ]);
+      ]);
 
-    expect(findings).toContain("findings captured before the wake");
-    expect(findings).not.toContain("(no output)");
-    expect(findings).not.toContain("NO_REPLY");
-  });
+      expect(findings).not.toContain("findings captured before the wake");
+      expect(findings).toContain("(no output)");
+      expect(findings).not.toContain("NO_REPLY");
+    },
+  );
 
   it.each(["HEARTBEAT_OK"])(
-    "does not override an intentional %s completion with fallback output",
+    "keeps %s visible without substituting fallback output",
     (resultText) => {
       const findings = buildChildCompletionFindings([
         {
@@ -398,13 +412,15 @@ describe("buildChildCompletionFindings", () => {
           createdAt: 1,
           completion: {
             resultText,
+            terminalReply: prepareAgentRunTerminalReply({ rawText: resultText }).terminalReply,
             fallbackResultText: "stale findings",
           },
           execution: { outcome: { status: "ok" } },
         },
       ]);
 
-      expect(findings).toBeUndefined();
+      expect(findings).toContain(resultText);
+      expect(findings).not.toContain("stale findings");
     },
   );
 
@@ -421,7 +437,10 @@ describe("buildChildCompletionFindings", () => {
         childSessionKey: "agent:main:subagent:visible",
         task: "visible task",
         createdAt: 2,
-        completion: { resultText: "actual output" },
+        completion: {
+          resultText: "actual output",
+          terminalReply: { disposition: "visible", text: "actual output" },
+        },
         execution: { outcome: { status: "ok" } },
       },
     ]);
@@ -435,14 +454,20 @@ describe("buildChildCompletionFindings", () => {
       childSessionKey: "agent:main:subagent:z",
       task: "Z task",
       createdAt: 1_000,
-      completion: { resultText: "Z result" },
+      completion: {
+        resultText: "Z result",
+        terminalReply: prepareAgentRunTerminalReply({ rawText: "Z result" }).terminalReply,
+      },
       execution: { endedAt: 2_000, outcome: { status: "ok" as const } },
     };
     const earlierKey = {
       ...laterKey,
       childSessionKey: "agent:main:subagent:a",
       task: "A task",
-      completion: { resultText: "A result" },
+      completion: {
+        resultText: "A result",
+        terminalReply: prepareAgentRunTerminalReply({ rawText: "A result" }).terminalReply,
+      },
     };
 
     const forward = buildChildCompletionFindings([laterKey, earlierKey]);

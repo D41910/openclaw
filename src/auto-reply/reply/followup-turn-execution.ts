@@ -1,3 +1,4 @@
+import { isRequiredReplyExpectation } from "../../agents/reply-completion.js";
 import { settleProgressVisibilityCallbackResult } from "../../channels/progress-visibility.js";
 import { sessionPersonalProfileId } from "../../config/sessions/session-entry-provenance.js";
 import { logVerbose } from "../../globals.js";
@@ -86,7 +87,8 @@ export async function executeFollowupTurn(params: {
   const deliveryAllowed = () => turn.sendPolicy === "allow" && !roomEvent;
   const progressAllowed = () =>
     deliveryAllowed() &&
-    (sourceOpts?.progressRequiresReply !== true || terminalReplyExpectation === "required");
+    (sourceOpts?.progressRequiresReply !== true ||
+      isRequiredReplyExpectation(terminalReplyExpectation));
   const currentVerboseLevel = (): VerboseLevel => {
     const level =
       turn.queued.run.verboseLevelOverride ??

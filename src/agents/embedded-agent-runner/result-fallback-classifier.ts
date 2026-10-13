@@ -218,14 +218,6 @@ export function classifyEmbeddedAgentRunResultForModelFallback(params: {
       preserveResultPriority: params.result.meta.error?.terminalPresentation === true ? 1 : 0,
     };
   }
-  const harnessClassification = classifyHarnessResult(
-    params,
-    params.result.meta.agentHarnessResultClassification,
-  );
-  if (harnessClassification) {
-    return harnessClassification;
-  }
-
   const errorPayloads = payloads.filter((payload) => payload?.isError === true);
   const errorText = errorPayloads
     .map((payload) => (typeof payload.text === "string" ? payload.text : ""))
@@ -262,6 +254,14 @@ export function classifyEmbeddedAgentRunResultForModelFallback(params: {
   if (params.result.meta.terminalReply?.disposition === "silent") {
     return null;
   }
+  const harnessClassification = classifyHarnessResult(
+    params,
+    params.result.meta.agentHarnessResultClassification,
+  );
+  if (harnessClassification) {
+    return harnessClassification;
+  }
+
   if (errorText.trim()) {
     return null;
   }

@@ -10,6 +10,7 @@ import {
 import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
 import {
   MISSING_REPLY_NOTICE_TEXT,
+  isRequiredReplyExpectation,
   isSyntheticSourceReplyTurn,
   resolveReplyCompletion,
   shouldDeliverMissingReplyNotice,
@@ -124,7 +125,7 @@ export async function resolveFollowupDeliveryDecision(params: {
   });
   const terminalReplyExpectation = resolveFollowupReplyExpectation(turn.queued, turn.config);
   const isInteractive =
-    terminalReplyExpectation === "required" ||
+    isRequiredReplyExpectation(terminalReplyExpectation) ||
     (!isSyntheticSourceReplyTurn({ inputProvenance: turn.queued.run.inputProvenance }) &&
       !isInternalMessageChannel(
         turn.queued.originatingChannel ?? turn.queued.run.messageProvider,

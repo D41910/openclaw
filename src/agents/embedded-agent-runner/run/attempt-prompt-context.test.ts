@@ -434,9 +434,11 @@ describe("prepareEmbeddedAttemptPromptContext", () => {
 
     expect(result.prePromptMessageCount).toBe(2);
     expect(fixture.replaceSessionMessages).not.toHaveBeenCalled();
-    expect(contentModifiedHistory[1]?.content).toEqual([
-      { type: "text", text: "Slides ready" },
-      { type: "text", text: "NO_REPLY" },
-    ]);
+    expect(contentModifiedHistory[1]).toMatchObject({
+      content: [
+        { type: "text", text: "Slides ready" },
+        { type: "text", text: "NO_REPLY" },
+      ],
+    });
   });
 });

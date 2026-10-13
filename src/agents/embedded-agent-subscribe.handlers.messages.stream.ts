@@ -30,7 +30,10 @@ import type {
   EmbeddedAgentSubscribeContext,
   EmbeddedAgentSubscribeState,
 } from "./embedded-agent-subscribe.handlers.types.js";
-import { stripDowngradedToolCallText } from "./embedded-agent-utils.js";
+import {
+  extractAssistantCommentaryText,
+  stripDowngradedToolCallText,
+} from "./embedded-agent-utils.js";
 import type { AgentMessage } from "./runtime/index.js";
 
 export function isSubscribeTranscriptOnlyOpenClawAssistantMessage(
@@ -185,12 +188,12 @@ export function emitAssistantCommentaryStreamData(
     }
   }
   for (const commentaryMessage of commentaryMessages) {
-    const rawText = readAssistantTextBlocksForPhase(commentaryMessage, "commentary")
-      .map((block) => block.text)
-      .join("");
     const accumulator = createStreamingDirectiveAccumulator();
-    accumulator.consume(rawText, { final: finalMessage });
-    const text = accumulator.sourceText;
+    const text = extractAssistantCommentaryText(commentaryMessage, (part, final) => {
+      const preparedStart = accumulator.sourceText.length;
+      accumulator.consume(part, { final: finalMessage && final });
+      return accumulator.sourceText.slice(preparedStart);
+    });
     if (!text || (!finalMessage && isResponsesCommentary && ctx.state.deltaBuffer === text)) {
       continue;
     }

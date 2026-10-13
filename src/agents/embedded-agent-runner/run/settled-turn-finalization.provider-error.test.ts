@@ -41,7 +41,21 @@ describe("prepared provider errors after settled tools", () => {
   ])(
     "does not mistake the generated provider error for a required answer after $name",
     ({ assistantTexts }) => {
-      const request = prepareRequest(createSettledProviderFailureAttempt({ assistantTexts }));
+      const base = createSettledProviderFailureAttempt();
+      const request = prepareRequest(
+        createSettledProviderFailureAttempt({
+          assistantTexts,
+          messagesSnapshot: [
+            base.messagesSnapshot[0]!,
+            ...assistantTexts.map((text) => ({
+              ...base.lastAssistant!,
+              stopReason: "stop" as const,
+              content: [{ type: "text" as const, text }],
+            })),
+            ...base.messagesSnapshot.slice(1),
+          ],
+        }),
+      );
       request.runParams.terminalReplyExpectation = "result-required";
       expect(request.payloadsWithToolMedia).toEqual([
         expect.objectContaining({

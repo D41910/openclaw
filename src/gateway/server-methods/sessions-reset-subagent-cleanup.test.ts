@@ -269,7 +269,7 @@ async function expectResultRetained() {
       currentAgentId: "main",
       config: cfg,
     }),
-  ).resolves.toMatchObject({ runId, status: "failed", result: "launch failed" });
+  ).resolves.toMatchObject({ runId, status: "failed", result: "", error: "launch failed" });
 }
 
 test("a real registry write failure blocks reset publication and leaves cleanup retryable", async () => {

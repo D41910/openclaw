@@ -3,6 +3,8 @@
 import { runSubagentStateWorkerOperation, useSubagentControlFixture } from "./subagent-control.test-support.js";
 import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
 import { captureRuntimeConfigAsyncReader, getRuntimeConfig } from "../../../config/config.js";
+import { resolveSessionStorePathCore } from "../../../config/sessions.js";
+import { upsertSessionEntryCore } from "../../../config/sessions/session-accessor.js";
 import { abortControlledSubagents } from "../../../gateway/server-methods/chat-abort-descendants.js";
 import { emitAgentEvent } from "../../../infra/agent-events.js";
 import { resetSystemEventsForTest } from "../../../infra/system-events.js";
@@ -106,6 +108,16 @@ function answerWakes(
       result: {
         payloads: terminal.text ? [{ text: terminal.text }] : [],
         meta: { terminalReply: terminal.terminalReply },
+        ...(terminal.terminalReply.disposition === "silent"
+          ? {
+              deliveryStatus: {
+                status: "suppressed",
+                succeeded: true,
+                reason: "no_visible_payload",
+                resultCount: 0,
+              },
+            }
+          : {}),
       },
     } as T;
   };
@@ -121,29 +133,46 @@ function expectNoChildResultPushed(draft: TestDraft) {
 }
 
 it.each([
-  ["a visible answer", ["The delegated work is done."]],
-  ["intentional external silence", ["NO_REPLY"]],
-] as const)(
-  "retires the card once, after the cohort's requester wake settles through %s",
-  async (_name, replies) => {
-    const spawns = await yieldCohort("parent-turn", ["a", "b"]);
-    const draft = newDraft();
-    expect(adoptSubagentProgressDraft(spawns, draft)).toBe(true);
-    const wakes = answerWakes(draft, replies);
-
-    await endRun("a");
-    expect(wakes).toEqual([]);
-    expect(draft.retire).not.toHaveBeenCalled();
-
-    await endRun("b");
-    expect(wakes.map(({ retiredBefore }) => retiredBefore)).toEqual(replies.map(() => 0));
-    expect(draft.retire).toHaveBeenCalledOnce();
-    expect(draft.push).toHaveBeenCalledWith(
-      expect.objectContaining({ itemId: "b", kind: "subagent", status: "completed" }),
+  ["a visible answer", ["The delegated work is done."], true],
+  ["intentional external silence", ["NO_REPLY"], true],
+  ["required internal result", ["NO_REPLY"], false],
+] as const)("settles the progress card according to %s", async (name, replies, retired) => {
+  const requesterOrigin =
+    name === "intentional external silence"
+      ? { channel: "telegram", to: "12345", accountId: "default" }
+      : undefined;
+  if (requesterOrigin) {
+    await upsertSessionEntryCore(
+      {
+        storePath: resolveSessionStorePathCore(getRuntimeConfig().session?.store, {
+          agentId: "main",
+        }),
+        sessionKey: requesterKey,
+      },
+      { deliveryContext: requesterOrigin },
     );
-    expectNoChildResultPushed(draft);
-  },
-);
+  }
+  const spawns = await yieldCohort("parent-turn", ["a", "b"], requesterOrigin);
+  const draft = newDraft();
+  expect(adoptSubagentProgressDraft(spawns, draft)).toBe(true);
+  const wakes = answerWakes(draft, replies);
+
+  await endRun("a");
+  expect(wakes).toEqual([]);
+  expect(draft.retire).not.toHaveBeenCalled();
+
+  await endRun("b");
+  expect(wakes.map(({ retiredBefore }) => retiredBefore)).toEqual(replies.map(() => 0));
+  if (retired) {
+    expect(draft.retire).toHaveBeenCalledOnce();
+  } else {
+    expect(draft.retire).not.toHaveBeenCalled();
+  }
+  expect(draft.push).toHaveBeenCalledWith(
+    expect.objectContaining({ itemId: "b", kind: "subagent", status: "completed" }),
+  );
+  expectNoChildResultPushed(draft);
+});
 
 it("does not adopt a card for a cohort whose completion was already delivered", async () => {
   const spawns = await yieldCohort("parent-turn", ["a", "b"]);

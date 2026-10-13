@@ -261,9 +261,9 @@ describe("subagent announce seam flow", () => {
     outputTesting.setDepsForTest();
   });
 
-  it.each([false, true])(
-    "delivers the result while deleting the encoded child owner: terminal=%s",
-    async (terminal) => {
+  it.each(["  child result  ", "child result"])(
+    "delivers the result while deleting the encoded child owner: reply=%j",
+    async (roundOneReply) => {
       loadSessionStoreMock.mockReturnValue({
         "agent:main:subagent:test": {
           sessionId: "child-session-id",
@@ -280,13 +280,8 @@ describe("subagent announce seam flow", () => {
           lifecycleRevision: "child-lifecycle-revision",
         },
         cleanup: "delete",
-        roundOneReply: "  child result  ",
-        ...(terminal
-          ? {
-              terminalReply: { disposition: "visible" as const, text: "child result" },
-              roundOneReply: "child result",
-            }
-          : {}),
+        roundOneReply,
+        terminalReply: { disposition: "visible", text: "child result" },
       });
 
       expect(didAnnounce).toBe("delivered");
@@ -438,6 +433,7 @@ describe("subagent announce seam flow", () => {
       cleanup: "keep" as const,
       outcome: { status: "ok" as const },
       roundOneReply: "private child result",
+      terminalReply: { disposition: "visible" as const, text: "private child result" },
       expectsCompletionMessage: true,
       startedAt: 10,
       endedAt: 20,

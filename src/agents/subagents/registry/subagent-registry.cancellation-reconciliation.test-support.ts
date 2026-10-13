@@ -167,6 +167,10 @@ export function registerCancellationReconciliationTests({
         expectsCompletionMessage: false,
         createdAt: startedAt,
         startedAt,
+        completion: {
+          required: false,
+          terminalReply: { disposition: "visible", text: "late provider result" },
+        },
       }),
     );
 

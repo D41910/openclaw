@@ -227,6 +227,7 @@ describe("source reply settlement across provider retries", () => {
           agentDir: workspace.agentDir,
           config,
           prompt: "Finish the work and reply.",
+          terminalReplyExpectation: "required",
           provider: "openai",
           model: "mock-1",
           runId: id,
@@ -245,9 +246,17 @@ describe("source reply settlement across provider retries", () => {
           expect(result.payloads).toEqual([
             expect.objectContaining({
               isError: true,
-              text: expect.stringContaining("couldn't generate a response"),
+              isStatusNotice: true,
+              text:
+                mode === "dry-run"
+                  ? "No answer was returned. Ask again if you still need one."
+                  : "No answer was returned. Ask again if you still need one. Note: some tool actions may have already been executed — please verify before retrying.",
             }),
           ]);
+          expect(result.meta.error?.kind).toBe("incomplete_turn");
+          expect(result.meta.terminalReply).toEqual({ disposition: "empty" });
+          expect(result.meta.finalAssistantVisibleText).toBeUndefined();
+          expect(result.meta.finalAssistantRawText).toBeUndefined();
         }
       } finally {
         admission.close();

@@ -14,10 +14,15 @@ import {
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeStringEntries } from "@openclaw/normalization-core/string-normalization";
 import { GatewayClientRequestError } from "../../packages/gateway-client/src/request-error.js";
+import { getRuntimeConfig } from "../config/config.js";
+import { resolveSessionStorePathCore } from "../config/sessions/paths.js";
+import { readSessionEntryReadOnlyInWorker } from "../config/sessions/session-entry-read-runtime.js";
+import { findTranscriptEvent } from "../config/sessions/session-transcript-match.js";
 import type { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { hasRetryableConnectionErrorCode } from "../infra/retryable-network-errors.js";
 import { getGatewayRestartDrainSignal } from "../process/gateway-work-admission.js";
+import { parseAgentSessionKey } from "../routing/session-key.js";
 import { normalizeBlockedLivenessWaitStatus } from "../shared/agent-liveness.js";
 import { getAsyncWorkSignal } from "../shared/async-work-scope.js";
 import { readTerminalSourceReplyDeliveryMirror } from "../shared/chat-message-content.js";
@@ -204,6 +209,29 @@ export async function readLatestAssistantReply(params: {
   return undefined;
 }
 
+async function readAgentRunReply(params: {
+  sessionKey?: string;
+  agentId?: string;
+  runId: string;
+}): Promise<string | undefined> {
+  const sessionKey = params.sessionKey;
+  const agentId = params.agentId ?? parseAgentSessionKey(sessionKey)?.agentId;
+  if (!sessionKey || !agentId) {
+    return undefined;
+  }
+  const storePath = resolveSessionStorePathCore(getRuntimeConfig().session?.store, { agentId });
+  const scope = { agentId, storePath, sessionKey };
+  const entry = await readSessionEntryReadOnlyInWorker(scope);
+  if (!entry?.sessionId) {
+    return undefined;
+  }
+  const found = await findTranscriptEvent(
+    { ...scope, sessionId: entry.sessionId },
+    { kind: "visible-final", runId: params.runId },
+  );
+  return isRecord(found?.event) ? extractStoredAssistantText(found.event.message) : undefined;
+}
+
 export async function waitForAgentRun(params: {
   runId: string;
   timeoutMs: number;
@@ -280,13 +308,7 @@ export async function waitForAgentRunReply(params: {
   return wait.status === "ok" && wait.terminalReply?.disposition === "visible"
     ? {
         ...wait,
-        replyText: params.sessionKey
-          ? await readLatestAssistantReply({
-              sessionKey: params.sessionKey,
-              agentId: params.agentId,
-              callGateway: params.callGateway,
-            })
-          : undefined,
+        replyText: params.sessionKey ? await readAgentRunReply(params) : undefined,
       }
     : wait;
 }

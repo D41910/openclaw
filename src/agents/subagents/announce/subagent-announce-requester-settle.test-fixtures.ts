@@ -183,7 +183,7 @@ export function createRequesterSettleCases() {
     ),
     settleCase(
       "rejects a yielded turn that emits only the silent reply token",
-      { payloads: [{ text: "NO_REPLY" }] },
+      { payloads: [], meta: { yielded: true, terminalReply: { disposition: "silent" } } },
       localOnly,
     ),
     settleCase(

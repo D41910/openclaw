@@ -52,7 +52,7 @@ export function isVisibleAssistantResultEventForRun(event: unknown, runId: strin
   return Boolean(text?.trim()) && !isSilentAssistantTranscriptMessage(event.message);
 }
 
-/** Matches newest-first without resurrecting an older answer after an explicit silent final. */
+/** Matches newest-first without resurrecting unsent output after an explicit silent final. */
 export function createVisibleAssistantResultEventMatcher(
   runId: string,
 ): (event: unknown) => boolean {
@@ -61,7 +61,10 @@ export function createVisibleAssistantResultEventMatcher(
     if (!isAssistantResultEventForRun(event, runId) || !isRecord(event)) {
       return false;
     }
-    if (readTerminalSourceReplyDeliveryMirror(event.message)) {
+    if (
+      (isRecord(event.message) && event.message.display === true) ||
+      readTerminalSourceReplyDeliveryMirror(event.message)
+    ) {
       return isVisibleAssistantResultEventForRun(event, runId);
     }
     if (silentFinalSeen) {

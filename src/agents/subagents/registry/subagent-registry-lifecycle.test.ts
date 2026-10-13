@@ -38,6 +38,7 @@ import {
   tryBeginGatewayRootWorkAdmission,
   tryBeginGatewaySuspendAdmission,
 } from "../../../process/gateway-work-admission.js";
+import { createVisibleAssistantResultEventMatcher } from "../../../sessions/transcript-visible-record.js";
 import {
   AsyncWorkScope,
   getAsyncWorkSignal,
@@ -46,6 +47,7 @@ import {
 import { createDeferredCore } from "../../../shared/deferred.js";
 import { getOpenClawStateWorkerOwner } from "../../../state/openclaw-state-worker-owner.js";
 import { createTestAdmittedRunContext } from "../../admitted-run-context.test-support.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   buildAnnounceIdFromChildRun,
   buildAnnounceIdempotencyKey,
@@ -526,6 +528,61 @@ describe("subagent registry lifecycle hardening", () => {
       expect(prepared.isCurrent()).toBe(current);
     },
   );
+
+  it("retains and retrieves the full visible answer after a later silent receipt for the same run", async () => {
+    const text = `${"complete report ".repeat(700)}\nrequired-tail: preserved`;
+    const visible = prepareAgentRunTerminalReply({ rawText: text });
+    const silent = prepareAgentRunTerminalReply({ rawText: "NO_REPLY" });
+    const entry = createRunEntry({ expectsCompletionMessage: true });
+    const controller = createLifecycleController({
+      entry,
+      captureSubagentCompletionReply: vi.fn(async () => text),
+    });
+    await completeRun(controller, entry, {
+      terminalReply: visible.terminalReply,
+      endedAt: 4_000,
+    });
+    await mutateLifecycleRun(entry, (draft) => {
+      draft.completion!.resultText = text.slice(0, 4_096);
+      draft.execution.transcriptTarget = {
+        agentId: "main",
+        sessionId: "completed-session",
+        sessionKey: entry.childSessionKey,
+        storePath: "/unused",
+      };
+    });
+    await completeRun(controller, entry, {
+      terminalReply: silent.terminalReply,
+      endedAt: 4_001,
+    });
+
+    const stored = readLifecycleRun(entry);
+    expect(stored.completion?.terminalReply).toEqual(visible.terminalReply);
+    const events = [text, "NO_REPLY"].map((content, index) => ({
+      type: "message",
+      message: {
+        role: "assistant",
+        content,
+        stopReason: "stop",
+        ...(index === 0 ? { display: true } : {}),
+        __openclaw: { runId: entry.runId },
+      },
+    }));
+    const prepared = await readSubagentRunAnnounceResultUsing(stored, {
+      getRuntimeConfig: () => ({}),
+      readSubagentRun: (id) => controller.options.runs.get(id),
+      resolveSessionStorePathCore: () => "/unused",
+      readSubagentSessionEntry: async () => undefined,
+      findTranscriptEvent: async (_scope, match) => {
+        expect(match).toEqual({ kind: "visible-final", runId: entry.runId });
+        const event = events.findLast(createVisibleAssistantResultEventMatcher(entry.runId));
+        return event ? { event } : undefined;
+      },
+      findSessionTranscriptArchiveEventReadOnly: async () => undefined,
+    });
+    expect(prepared.text).toBe(text);
+    expect(prepared.text).toContain("required-tail: preserved");
+  });
 
   describe.each([
     {

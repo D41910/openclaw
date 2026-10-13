@@ -186,9 +186,13 @@ describe("queued completion handoff", () => {
             status: "ok",
             ...(outcome === "private" ? { inputProcessingCompleted: true } : {}),
             result: {
-              payloads: [
-                { text: outcome === "private" ? "NO_REPLY" : "Parent received child result" },
-              ],
+              payloads: outcome === "private" ? [] : [{ text: "Parent received child result" }],
+              meta: {
+                terminalReply:
+                  outcome === "private"
+                    ? { disposition: "silent" }
+                    : { disposition: "visible", text: "Parent received child result" },
+              },
             },
           } as T;
         });
@@ -1224,7 +1228,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     );
   });
 
-  it("sanitizes and bounds text before direct completion fallback delivery", async () => {
+  it("sanitizes text while preserving the complete direct completion fallback", async () => {
     const callGateway = createPayloadGatewayMock();
     const sendMessage = createSendMessageMock();
     const leaked = [
@@ -1254,7 +1258,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     expect(content).not.toContain("subagent_announce");
     expect(content).not.toContain("video_generate");
     expect(content).not.toContain(modelRouteChange);
-    expect(content.length).toBeLessThanOrEqual(4_096);
+    expect(content).toContain("x".repeat(8_000));
   });
 
   it.each(["cancelled", "source owner changed"] as const)(
@@ -1490,7 +1494,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     },
     {
       name: "accepts non-subagent session-only completion handoff when the in-process agent intentionally replies NO_REPLY",
-      result: { payloads: [{ text: "NO_REPLY" }] },
+      result: { payloads: [], meta: { terminalReply: { disposition: "silent" } } },
       sourceTool: "agent_harness_task",
     },
     {
@@ -2043,7 +2047,8 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     error: "completion agent did not produce a visible reply",
   };
   const silentGatewayResult = {
-    payloads: [{ text: "NO_REPLY" }],
+    payloads: [],
+    meta: { terminalReply: { disposition: "silent" } },
     deliveryStatus: sentDeliveryStatus,
   };
   type NoOutputCompletionCase = [
@@ -2056,7 +2061,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
   it.each<NoOutputCompletionCase>([
     [
       "rejects missing automatic visible delivery",
-      { payloads: [{ text: "NO_REPLY" }] },
+      { payloads: [], meta: { terminalReply: { disposition: "silent" } } },
       missingVisibleCompletion,
       "automatic",
     ],

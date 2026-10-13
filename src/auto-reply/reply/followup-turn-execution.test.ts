@@ -258,7 +258,7 @@ describe("executeFollowupTurn", () => {
     expect(result.commentaryPayloadsEnabled).toBe(false);
   });
 
-  it.each(["optional", "required"] as const)(
+  it.each(["optional", "required", "result-required"] as const)(
     "uses queued %s requiredness for previews but preserves media",
     async (expectation) => {
       const turn = createTurn();
@@ -284,7 +284,7 @@ describe("executeFollowupTurn", () => {
         onToolResult: onDurableToolResult,
       });
       await result.progress.drain();
-      expect(onItemEvent).toHaveBeenCalledTimes(expectation === "required" ? 1 : 0);
+      expect(onItemEvent).toHaveBeenCalledTimes(expectation !== "optional" ? 1 : 0);
       expect(onDurableToolResult).toHaveBeenCalledExactlyOnceWith(media);
     },
   );
@@ -710,6 +710,7 @@ describe("executeFollowupTurn lifecycle", () => {
 
   it.each([
     { expectation: "required", progress: "none", accepted: false, visible: false },
+    { expectation: "result-required", progress: "none", accepted: false, visible: false },
     { expectation: "optional", progress: "item", accepted: false, visible: false },
     { expectation: "optional", progress: "compaction", accepted: undefined, visible: true },
   ] as const)(
@@ -763,9 +764,9 @@ describe("executeFollowupTurn lifecycle", () => {
       expect(result.execution.outcome).toMatchObject({
         kind: "rejected",
         payload:
-          visible || expectation === "required"
+          visible || expectation !== "optional"
             ? { isError: true, text: expect.not.stringContaining("NO_REPLY") }
-            : { text: "NO_REPLY" },
+            : { text: "" },
       });
       expect(fail).toHaveBeenCalledWith("run_failed", failure);
       expect(resolveReplyOperationAgentTurn(receipt)).toBe("failed");

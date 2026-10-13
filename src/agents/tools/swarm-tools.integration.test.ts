@@ -7,6 +7,11 @@ import { createTempDirTracker } from "../../../test/helpers/temp-dir.js";
 import { cleanupBrowserSessionsForLifecycleEnd } from "../../browser-lifecycle-cleanup.js";
 import { getRuntimeConfig } from "../../config/config.js";
 import { clearRuntimeConfigSnapshot, setRuntimeConfigSnapshot } from "../../config/io.js";
+import { resolveSessionStorePathCore } from "../../config/sessions.js";
+import {
+  appendTranscriptMessage,
+  loadSessionEntry,
+} from "../../config/sessions/session-accessor.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { ensureContextEnginesInitialized } from "../../context-engine/init.js";
 import { resolveContextEngine } from "../../context-engine/registry.js";
@@ -108,6 +113,8 @@ describe("swarm tools integration", () => {
     setRuntimeConfigSnapshot(config);
     const publicToGateway = new Map<string, string>();
     const resultTextBySession = new Map<string, string>();
+    const resultTextByRun = new Map<string, string>();
+    const sessionKeyByRun = new Map<string, string>();
     const modelStructuredCalls: number[] = [];
     const childGuidance: string[] = [];
     const acceptedNotes: string[] = [];
@@ -152,6 +159,8 @@ describe("swarm tools integration", () => {
       }
       publicToGateway.set(publicRunId, gatewayRunId);
       resultTextBySession.set(childSessionKey, `result-${index}`);
+      resultTextByRun.set(gatewayRunId, `result-${index}`);
+      sessionKeyByRun.set(gatewayRunId, childSessionKey);
       return { runId: gatewayRunId, status: "accepted", acceptedAt: Date.now() };
     });
     spawnTesting.setDepsForTest({
@@ -183,7 +192,32 @@ describe("swarm tools integration", () => {
             waitsStarted.resolve();
           }
         });
-        return { status: "ok", startedAt: 1, endedAt: Date.now() } as T;
+        const sessionKey = sessionKeyByRun.get(runId);
+        assert(sessionKey, "collector run must identify its session");
+        const scope = {
+          agentId: "main",
+          storePath: resolveSessionStorePathCore(config.session?.store, { agentId: "main" }),
+          sessionKey,
+        };
+        const entry = loadSessionEntry(scope);
+        assert(entry, "collector session must exist");
+        await appendTranscriptMessage(
+          { ...scope, sessionId: entry.sessionId },
+          {
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: resultTextByRun.get(runId) }],
+              stopReason: "stop",
+              __openclaw: { runId },
+            },
+          },
+        );
+        return {
+          status: "ok",
+          startedAt: 1,
+          endedAt: Date.now(),
+          terminalReply: { disposition: "visible", text: resultTextByRun.get(runId) },
+        } as T;
       },
     );
     vi.mocked(captureSubagentCompletionReply).mockImplementation(async (sessionKey) => {

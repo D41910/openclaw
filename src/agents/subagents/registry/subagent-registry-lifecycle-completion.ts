@@ -108,15 +108,14 @@ function resolveTerminalRequest(
     completionOutcome = { status: "timeout" };
     completionReason = SUBAGENT_ENDED_REASON_COMPLETE;
   }
-  // Reply evidence follows producer order; duplicate receipts may still drain cleanup.
-  const terminalReply = mergeAgentRunTerminalReplySnapshot(
-    entry.completion?.terminalReply,
-    entry.completion?.terminalReply &&
-      typeof existingEndedAt === "number" &&
-      (completeParams.endedAt ?? now) <= existingEndedAt
-      ? undefined
-      : completeParams.terminalReply,
-  );
+  // A later silent receipt cannot retract this run's recorded visible answer.
+  const prior = entry.completion?.terminalReply;
+  const next = completeParams.terminalReply;
+  const terminalReply =
+    (prior?.disposition === "visible" && next?.disposition === "silent") ||
+    (prior && existingEndedAt !== undefined && (completeParams.endedAt ?? now) <= existingEndedAt)
+      ? prior
+      : mergeAgentRunTerminalReplySnapshot(prior, next);
   return {
     requestedEndedAt,
     endedAt,

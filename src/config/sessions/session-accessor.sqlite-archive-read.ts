@@ -192,14 +192,14 @@ export async function readTranscriptArchiveFinalInWorker(
           hasTerminalResult = true;
           if (isVisibleAssistantResultEventForRun(event, plan.runId)) {
             result.event = event;
-          } else if (
-            isRecord(event) &&
-            isSilentAssistantTranscriptMessage(event.message) &&
-            !readTerminalSourceReplyDeliveryMirror(
-              isRecord(result.event) ? result.event.message : undefined,
-            )
-          ) {
-            result.event = undefined;
+          } else if (isRecord(event) && isSilentAssistantTranscriptMessage(event.message)) {
+            const previousMessage = isRecord(result.event) ? result.event.message : undefined;
+            if (
+              !(isRecord(previousMessage) && previousMessage.display === true) &&
+              !readTerminalSourceReplyDeliveryMirror(previousMessage)
+            ) {
+              result.event = undefined;
+            }
           }
         },
       );

@@ -454,11 +454,13 @@ export async function resolveTerminalAgentRunFailurePayload(params: {
   useHeartbeatFailureCopy?: boolean;
   visibleReplyDelivered: () => Promise<boolean>;
 }): Promise<ReplyPayload | undefined> {
+  const terminalError = params.result.meta?.error;
+  const missingReplyNotice =
+    terminalError?.kind === "incomplete_turn" &&
+    terminalError.message.startsWith(MISSING_REPLY_NOTICE_TEXT) &&
+    params.useHeartbeatFailureCopy !== true;
   const suppressMissingReplyNotice =
-    params.result.meta?.error?.kind === "incomplete_turn" &&
-    params.result.meta.error.message.startsWith(MISSING_REPLY_NOTICE_TEXT) &&
-    params.useHeartbeatFailureCopy !== true &&
-    !shouldDeliverMissingReplyNotice(params.run);
+    missingReplyNotice && !shouldDeliverMissingReplyNotice(params.run);
   const ownedFailureNotice = params.result.payloads?.find(
     (payload) =>
       payload.isError === true &&
@@ -475,6 +477,9 @@ export async function resolveTerminalAgentRunFailurePayload(params: {
   }
   if (suppressMissingReplyNotice) {
     return undefined;
+  }
+  if (missingReplyNotice) {
+    return markAgentRunFailureReplyPayload(createMissingReplyNotice(terminalError.message));
   }
   const replyExpectation = resolveReplyExpectation(params.run);
   return buildTerminalAgentRunFailureReplyPayload({

@@ -3,8 +3,11 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { GatewayClient } from "openclaw/plugin-sdk/gateway-runtime";
 import { describe, expect, it } from "vitest";
-import { createQaGatewayChild } from "../../../../extensions/qa-lab/api.js";
-import { createQaChannelGatewayConfig } from "../../../../extensions/qa-lab/src/qa-channel-transport.js";
+import {
+  createQaBusState,
+  createQaChannelTransport,
+  createQaGatewayChild,
+} from "../../../../extensions/qa-lab/api.js";
 import {
   GATEWAY_CLIENT_MODES,
   GATEWAY_CLIENT_NAMES,
@@ -251,11 +254,7 @@ describe("provider terminal reply delivery", () => {
           primaryModel: MODEL,
           alternateModel: MODEL,
           transportBaseUrl: baseUrl,
-          transport: {
-            requiredPluginIds: ["qa-channel"],
-            createGatewayConfig: ({ baseUrl: url }) =>
-              createQaChannelGatewayConfig({ baseUrl: url }),
-          },
+          transport: createQaChannelTransport(createQaBusState()),
           controlUiEnabled: false,
           fastMode: true,
           runtimeEnvPatch: { OPENCLAW_TEST_MINIMAL_GATEWAY: "1" },

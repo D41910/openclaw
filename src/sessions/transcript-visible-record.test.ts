@@ -31,6 +31,12 @@ describe("stored terminal result selection", () => {
     expect(events.findLast(createVisibleAssistantResultEventMatcher(runId))).toBeUndefined();
   });
 
+  it("retains a recorded visible final when the same run later ends silently", () => {
+    const answer = assistant("complete earlier answer", { display: true });
+    const events = [answer, assistant("unsent later text"), assistant("NO_REPLY")];
+    expect(events.findLast(createVisibleAssistantResultEventMatcher(runId))).toBe(answer);
+  });
+
   it("retains a final message-tool source row when the model later ends silently", () => {
     const source = assistant("NO_REPLY", {
       openclawDeliveryMirror: {

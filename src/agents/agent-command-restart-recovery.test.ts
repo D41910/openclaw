@@ -161,6 +161,7 @@ describe("buildRestartRecoveryTerminalDeliveryEvidence", () => {
     },
     parentOnly: false,
     requesterSessionBound: true,
+    replyExpectation: "optional",
     deliveryTarget: {},
     shouldDeliverAgentFinal: true,
     requiresMessageToolDelivery: false,

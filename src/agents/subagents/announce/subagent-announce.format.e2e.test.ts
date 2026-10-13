@@ -191,6 +191,8 @@ const defaultOutcomeAnnounce = {
   cleanup: "keep" as const,
   startedAt: 10,
   endedAt: 20,
+  roundOneReply: "raw subagent reply",
+  terminalReply: { disposition: "visible", text: "raw subagent reply" } as const,
   outcome: { status: "ok" } as const,
 };
 
@@ -203,7 +205,7 @@ function makeChildCompletion(
   const { endedAt: terminalAt, ...record } = overrides;
   const createdAt = record.createdAt ?? 10;
   const endedAt = terminalAt ?? createdAt + 1;
-  return {
+  const childRun: MockSubagentRun = {
     runId: `run-${child}`,
     childSessionKey: `${requesterSessionKey}:subagent:${child}`,
     requesterSessionKey,
@@ -213,9 +215,16 @@ function makeChildCompletion(
     createdAt,
     execution: { endedAt, outcome: { status: "ok" } },
     cleanupCompletedAt: endedAt + 1,
-    completion: { required: true, resultText },
+    completion: {
+      required: true,
+      resultText,
+      terminalReply: prepareAgentRunTerminalReply({ rawText: resultText }).terminalReply,
+    },
     ...record,
   };
+  sessionStore[childRun.childSessionKey] = { sessionId: `session-${childRun.runId}` };
+  transcriptEvents.push(assistantEvent(childRun.runId, resultText));
+  return childRun;
 }
 
 function setCompletionSessions(
@@ -380,6 +389,11 @@ describe("subagent announce formatting", () => {
       requesterOrigin: { channel: "discord", to: "channel:12345", accountId: "acct-1" },
       expectsCompletionMessage: true,
       ...params,
+      terminalReply:
+        params.terminalReply ??
+        prepareAgentRunTerminalReply({
+          rawText: params.roundOneReply ?? defaultOutcomeAnnounce.roundOneReply,
+        }).terminalReply,
     });
   }
 
@@ -395,6 +409,11 @@ describe("subagent announce formatting", () => {
       expectsCompletionMessage: true,
       wakeOnDescendantSettle: true,
       ...params,
+      terminalReply:
+        params.terminalReply ??
+        prepareAgentRunTerminalReply({
+          rawText: params.roundOneReply ?? defaultOutcomeAnnounce.roundOneReply,
+        }).terminalReply,
     });
   }
 
@@ -638,6 +657,7 @@ describe("subagent announce formatting", () => {
         await runSubagentAnnounceFlow({
           ...defaultOutcomeAnnounce,
           ...params,
+          roundOneReply: "child result",
           terminalReply: { disposition: "visible", text: "child result", modelRouteChange },
         }),
       ).toBe("delivered");
@@ -667,13 +687,13 @@ describe("subagent announce formatting", () => {
         totalTokensVersion: 1,
       },
     };
-    readLatestAssistantReplyMock.mockResolvedValue(
-      Array.from({ length: 140 }, (_, index) => `step-${index}`).join(" "),
-    );
+    const text = Array.from({ length: 140 }, (_, index) => `step-${index}`).join(" ");
 
     await runSubagentAnnounceFlow({
       ...defaultOutcomeAnnounce,
       childRunId: "run-usage",
+      roundOneReply: text,
+      terminalReply: prepareAgentRunTerminalReply({ rawText: text }).terminalReply,
     });
 
     const call = getAgentCall();
@@ -858,6 +878,7 @@ describe("subagent announce formatting", () => {
         requesterOrigin: { channel: "whatsapp", to: "+15550000000", accountId: "default" },
         expectsCompletionMessage: true,
         roundOneReply: "final answer",
+        terminalReply: { disposition: "visible", text: "final answer" } as const,
       },
       outcome: "delivered",
     },
@@ -869,6 +890,7 @@ describe("subagent announce formatting", () => {
         requesterOrigin: { channel: "telegram", to: "telegram:1234" },
         expectsCompletionMessage: true,
         roundOneReply: "final answer",
+        terminalReply: { disposition: "visible", text: "final answer" } as const,
       },
       outcome: "permanent_failure",
     },
@@ -896,6 +918,7 @@ describe("subagent announce formatting", () => {
         childRunId: "run-direct-agent-fallback-summary-retry",
         requesterOrigin: { channel: "discord", to: "channel:C123", accountId: "default" },
         roundOneReply: "worker result",
+        terminalReply: { disposition: "visible", text: "worker result" } as const,
       },
       outcome: "delivered",
     },
@@ -1050,6 +1073,7 @@ describe("subagent announce formatting", () => {
     readLatestAssistantReplyMock.mockResolvedValue("");
     const didAnnounce = await announceCompletion({
       childRunId: "run-completion-status",
+      roundOneReply: "child details",
       outcome: testCase.outcome,
       ...(testCase.spawnMode ? { spawnMode: testCase.spawnMode } : {}),
     });
@@ -1338,6 +1362,7 @@ describe("subagent announce formatting", () => {
     const didAnnounce = await announceCompletion({
       childSessionKey: "agent:main:subagent:worker",
       childRunId: "run-completion-output",
+      roundOneReply: expected === "(no output)" ? "" : expected,
     });
     expect(didAnnounce).toBe("delivered");
     expectParentAnnounce();
@@ -1491,12 +1516,9 @@ describe("subagent announce formatting", () => {
     expectInputProvenance(call.params, "agent:main:subagent:worker");
   });
 
-  it("retries reading subagent output when early lifecycle completion had no text", async () => {
+  it("uses the producer's complete reply after the child settles without rereading history", async () => {
     embeddedRunMock.isEmbeddedAgentRunActive.mockReturnValueOnce(true).mockReturnValue(false);
     embeddedRunMock.waitForEmbeddedAgentRunEnd.mockResolvedValue(true);
-    readLatestAssistantReplyMock
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce("Read #12 complete.");
     sessionStore = {
       "agent:main:subagent:test": {
         sessionId: "child-session-1",
@@ -1509,6 +1531,8 @@ describe("subagent announce formatting", () => {
     await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:test",
       childRunId: "run-child",
+      roundOneReply: "Read #12 complete.",
+      terminalReply: { disposition: "visible", text: "Read #12 complete." },
       requesterSessionKey: "agent:main:main",
       task: "context-stress-test",
       timeoutMs: 1000,
@@ -1526,6 +1550,8 @@ describe("subagent announce formatting", () => {
     const context = getAgentCallContext(call);
     expect(context).toContain("Read #12 complete.");
     expect(context).not.toContain("(no output)");
+    expect(chatHistoryMock).not.toHaveBeenCalled();
+    expect(readLatestAssistantReplyMock).not.toHaveBeenCalled();
   });
 
   it.each([0, 600, undefined])(

@@ -186,7 +186,7 @@ describe("Astra async response tails", () => {
       ],
       transcript: ["stop:text+text"],
       delivered: ["First part.", "Second part."],
-      reply: { disposition: "visible", text: "First part.\nSecond part." },
+      reply: { disposition: "visible", text: "First part.Second part." },
     },
     {
       name: "a repeated answer is delivered once",
@@ -204,7 +204,7 @@ describe("Astra async response tails", () => {
       delivered: ["/tmp/openclaw/tts-a/voice-a.opus"],
     },
     {
-      name: "a NO_REPLY after a superseding silent attachment does not restore the earlier answer",
+      name: "a NO_REPLY after a superseding attachment-only answer does not restore earlier text",
       delivery: "deferred",
       requests: [
         answered,
@@ -216,10 +216,11 @@ describe("Astra async response tails", () => {
       ],
       transcript: ["toolUse:toolCall", "stop:text", "toolUse:toolCall", "stop:text", "stop:text"],
       delivered: ["/tmp/openclaw/tts-a/voice-a.opus"],
-      reply: { disposition: "silent" },
+      // The kept attachment answer owns the result; its parsed text is empty, not NO_REPLY.
+      reply: { disposition: "empty" },
     },
     {
-      name: "a later voice NO_REPLY that persistence normalized first supersedes the completed answer",
+      name: "a voice reply normalized to exact NO_REPLY before subscription stays silent",
       delivery: "deferred",
       requests: [answered, "NO_REPLY [[audio_as_voice]]"],
       transcript: answeredTail,

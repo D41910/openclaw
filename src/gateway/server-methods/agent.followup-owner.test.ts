@@ -343,7 +343,11 @@ describe("Gateway followup owner final effect", () => {
           completion,
           runId: "owner-proof-child",
           skip: false,
-          reply: { status: "ok", replyText: "ready" },
+          reply: {
+            status: "ok",
+            replyText: "ready",
+            terminalReply: { disposition: "visible", text: "ready" },
+          },
           notifyRequesterOnWaitFailure: true,
           targetSessionKey: CHILD,
           targetAgentId: "main",

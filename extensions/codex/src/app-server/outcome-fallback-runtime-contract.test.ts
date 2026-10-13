@@ -71,7 +71,7 @@ function forCurrentTurn(
 }
 
 function classifyProjectedAttemptResult(result: ProjectedAttemptResult) {
-  const finalAssistantText = result.assistantTexts.join("\n\n").trim();
+  const finalAssistantText = result.preparedTerminalReply.text;
   return classifyEmbeddedAgentRunResultForModelFallback({
     provider: "codex",
     model: OUTCOME_FALLBACK_RUNTIME_CONTRACT.primaryModel,
@@ -81,6 +81,7 @@ function classifyProjectedAttemptResult(result: ProjectedAttemptResult) {
         durationMs: 1,
         aborted: readAttemptTerminal(result).aborted,
         agentHarnessResultClassification: result.agentHarnessResultClassification,
+        terminalReply: result.preparedTerminalReply.terminalReply,
         finalAssistantRawText: finalAssistantText || undefined,
         finalAssistantVisibleText: finalAssistantText || undefined,
       },
@@ -226,6 +227,10 @@ describe("Outcome/fallback runtime contract - Codex app-server adapter", () => {
     const result = projector.buildResult(buildToolTelemetry());
 
     expect(result.assistantTexts).toEqual([]);
+    expect(result.preparedTerminalReply).toEqual({
+      text: "",
+      terminalReply: { disposition: "silent" },
+    });
     expect(result.lastAssistant?.content).toEqual([{ type: "text", text: "NO_REPLY" }]);
     expect(readAttemptTerminal(result).promptError).toBeNull();
     expect(classifyProjectedAttemptResult(result)).toBeNull();

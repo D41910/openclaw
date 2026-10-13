@@ -747,7 +747,7 @@ describe("agentCommand compaction transcript rotation", () => {
     ["empty payloads", "empty"],
     ["an intentional silent final", "silent"],
   ] as const)(
-    "preserves the %s outcome through compaction failure without manufacturing delivery state",
+    "preserves compaction failure after %s without manufacturing delivery state",
     async (_label, sessionSuffix) => {
       const sessionId = `no-reply-compaction-failure-${sessionSuffix}`;
       const sessionKey = `agent:main:explicit:${sessionId}`;
@@ -776,17 +776,13 @@ describe("agentCommand compaction transcript rotation", () => {
         ...discordTurn(sessionId, sessionKey),
         message: "prompt with no assistant reply",
       });
-      if (sessionSuffix === "silent") {
-        await expect(command).resolves.toMatchObject({ deliverySucceeded: true });
-      } else {
-        await expect(command).rejects.toThrow("Summarization failed: Connection error");
-      }
+      await expect(command).rejects.toThrow("Summarization failed: Connection error");
 
       expect(state.runCliTurnCompactionLifecycleMock).toHaveBeenCalledOnce();
       expect(state.deliverAgentCommandResultMock).not.toHaveBeenCalled();
       const storedEntry = findStoredSessionEntry(sessionKey);
       expect(storedEntry?.pendingFinalDelivery).toBeUndefined();
-      expect(readLifecyclePhases()).toContain(sessionSuffix === "silent" ? "end" : "error");
+      expect(readLifecyclePhases()).toContain("error");
     },
   );
 

@@ -9,6 +9,12 @@ import {
 } from "@openclaw/normalization-core/number-coercion";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GatewayClientRequestError } from "../../packages/gateway-client/src/request-error.js";
+import {
+  clearRuntimeConfigSnapshot,
+  setRuntimeConfigSnapshot,
+} from "../config/runtime-snapshot.js";
+import * as sessionEntryRuntime from "../config/sessions/session-entry-read-runtime.js";
+import * as transcriptRuntime from "../config/sessions/session-transcript-match.js";
 import * as gatewayCallRuntime from "../gateway/call.js";
 import {
   markGatewayRestartDraining,
@@ -16,7 +22,14 @@ import {
 } from "../process/gateway-work-admission.js";
 import { AsyncWorkScope } from "../shared/async-work-scope.js";
 const callGatewayMock = vi.spyOn(gatewayCallRuntime, "callGateway");
-afterAll(() => callGatewayMock.mockRestore());
+const readSessionEntryMock = vi.spyOn(sessionEntryRuntime, "readSessionEntryReadOnlyInWorker");
+const findTranscriptEventMock = vi.spyOn(transcriptRuntime, "findTranscriptEvent");
+afterAll(() => {
+  callGatewayMock.mockRestore();
+  clearRuntimeConfigSnapshot();
+  readSessionEntryMock.mockRestore();
+  findTranscriptEventMock.mockRestore();
+});
 
 import {
   readLatestAssistantReply,
@@ -399,26 +412,41 @@ describe("waitForAgentRun", () => {
 describe("waitForAgentRunReply", () => {
   beforeEach(() => {
     callGatewayMock.mockReset();
+    setRuntimeConfigSnapshot({});
+    readSessionEntryMock
+      .mockReset()
+      .mockResolvedValue({ sessionId: "shared-session", updatedAt: 1 });
+    findTranscriptEventMock.mockReset();
   });
 
-  it("reads the full prepared reply rather than the bounded snapshot", async () => {
-    callGatewayMock.mockImplementation(async (request) => {
-      if (request.method === "chat.history") {
-        return { messages: [textAssistant("full authoritative reply")] };
+  it("reads the waited run's full reply even after another run completes in the same session", async () => {
+    const answers = new Map([
+      ["run-visible-terminal-reply", "full authoritative reply"],
+      ["newer-run", "another run's reply"],
+    ]);
+    findTranscriptEventMock.mockImplementation(async (_scope, match) => {
+      if (match.kind !== "visible-final") {
+        throw new Error("expected a final reply lookup");
       }
-      if (request.method !== "agent.wait") {
-        throw new Error("unexpected gateway request");
-      }
-      return {
-        status: "ok",
-        startedAt: 100,
-        endedAt: 200,
-        stopReason: "completed",
-        yielded: true,
-        providerStarted: true,
-        terminalReply: { disposition: "visible", text: "authoritative reply" },
-      };
+      const text = answers.get(match.runId);
+      return text ? { event: { type: "message", message: textAssistant(text) } } : undefined;
     });
+    callGatewayMock.mockResolvedValue({
+      status: "ok",
+      startedAt: 100,
+      endedAt: 200,
+      stopReason: "completed",
+      yielded: true,
+      providerStarted: true,
+      terminalReply: { disposition: "visible", text: "authoritative reply" },
+    });
+    await expect(
+      waitForAgentRunReply({
+        runId: "newer-run",
+        timeoutMs: 1_000,
+        sessionKey: "agent:main:main",
+      }),
+    ).resolves.toMatchObject({ replyText: "another run's reply" });
 
     const result = await waitForAgentRunReply({
       runId: "run-visible-terminal-reply",
@@ -436,18 +464,24 @@ describe("waitForAgentRunReply", () => {
       terminalReply: { disposition: "visible", text: "authoritative reply" },
       replyText: "full authoritative reply",
     });
+    expect(findTranscriptEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "shared-session", sessionKey: "agent:main:main" }),
+      { kind: "visible-final", runId: "run-visible-terminal-reply" },
+    );
     expect(callGatewayMock.mock.calls.map(([request]) => request.method)).toEqual([
       "agent.wait",
-      "chat.history",
+      "agent.wait",
     ]);
   });
 
   it("delivers literal NO_REPLY under an explicit visible fact", async () => {
-    callGatewayMock.mockImplementation(async (request) =>
-      request.method === "agent.wait"
-        ? { status: "ok", terminalReply: { disposition: "visible", text: "NO_REPLY" } }
-        : { messages: [{ ...textAssistant("NO_REPLY"), display: true }] },
-    );
+    callGatewayMock.mockResolvedValue({
+      status: "ok",
+      terminalReply: { disposition: "visible", text: "NO_REPLY" },
+    });
+    findTranscriptEventMock.mockResolvedValue({
+      event: { type: "message", message: { ...textAssistant("NO_REPLY"), display: true } },
+    });
     await expect(
       waitForAgentRunReply({
         runId: "run-visible-marker",
@@ -460,42 +494,30 @@ describe("waitForAgentRunReply", () => {
   it.each(["NO_REPLY", "NO_REPLY\nexample"])(
     "reads the latest final tool source reply %j instead of an older answer",
     async (text) => {
-      callGatewayMock.mockImplementation(async (request) => {
-        if (request.method === "agent.wait") {
-          return { status: "ok", terminalReply: { disposition: "visible", text } };
-        }
-        return {
-          messages: [
-            {
-              ...textAssistant("older answer"),
-              __openclaw: { runId: "older-run" },
+      callGatewayMock.mockResolvedValue({
+        status: "ok",
+        terminalReply: { disposition: "visible", text },
+      });
+      findTranscriptEventMock.mockResolvedValue({
+        event: {
+          type: "message",
+          message: {
+            ...textAssistant(text),
+            provider: "openclaw",
+            model: "delivery-mirror",
+            __openclaw: { runId: "run-tool-final" },
+            openclawMessageToolMirror: {
+              toolName: "message",
+              toolCallId: "call-source-final",
             },
-            {
-              ...textAssistant(text),
-              provider: "openclaw",
-              model: "delivery-mirror",
-              __openclaw: { runId: "run-tool-final" },
-              openclawMessageToolMirror: {
-                toolName: "message",
-                toolCallId: "call-source-final",
-              },
-              openclawDeliveryMirror: {
-                kind: "message-tool-source-reply",
-                sourceTurnId: "run-tool-final",
-                toolCallId: "call-source-final",
-                final: true,
-              },
+            openclawDeliveryMirror: {
+              kind: "message-tool-source-reply",
+              sourceTurnId: "run-tool-final",
+              toolCallId: "call-source-final",
+              final: true,
             },
-            {
-              ...textAssistant("progress after the final source reply"),
-              openclawDeliveryMirror: {
-                kind: "message-tool-source-reply",
-                sourceTurnId: "run-tool-final",
-                final: false,
-              },
-            },
-          ],
-        };
+          },
+        },
       });
 
       await expect(

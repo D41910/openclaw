@@ -322,6 +322,7 @@ it("does not replace a successfully recovered final assistant after a prompt-tim
       hasSuccessfulFinalAssistantAfterPromptTimeout: true,
       hasPartialAssistantTextAfterPromptTimeout: false,
       replyDeliveryState: "missing",
+      sourceReplyDeliveryState: "missing",
       reportedModelRef: { provider: "openai", model: "gpt-5.4" },
       preparedTerminalReply: {
         text: answer,

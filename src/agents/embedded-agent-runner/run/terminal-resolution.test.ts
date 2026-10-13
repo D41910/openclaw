@@ -546,6 +546,9 @@ describe("terminal resolution", () => {
       fallbackSafe: false,
       terminalPresentation: true,
     });
+    expect(exhausted.result.meta.terminalReply).toEqual({ disposition: "empty" });
+    expect(exhausted.result.meta.finalAssistantVisibleText).toBeUndefined();
+    expect(exhausted.result.meta.finalAssistantRawText).toBeUndefined();
   });
 
   it("keeps a prepared answer when a later assistant message is reasoning-only", async () => {
@@ -685,7 +688,9 @@ describe("terminal resolution", () => {
     }
     expect(resolved.result.payloads?.[0]).toMatchObject({ isError: true });
     expect(resolved.result.meta.error?.kind).toBe("incomplete_turn");
-    expect(resolved.result.meta.terminalReply?.disposition).not.toBe("silent");
+    expect(resolved.result.meta.terminalReply).toEqual({ disposition: "empty" });
+    expect(resolved.result.meta.finalAssistantVisibleText).toBeUndefined();
+    expect(resolved.result.meta.finalAssistantRawText).toBeUndefined();
   });
 
   it("delivers partial text with a truncation notice when the output budget ends", async () => {
