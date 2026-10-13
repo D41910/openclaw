@@ -53,6 +53,22 @@ export function session(overrides: Partial<GatewaySessionRow> = {}): GatewaySess
   };
 }
 
+async function settleLayoutMenu() {
+  flush();
+  await Promise.resolve();
+  flush();
+}
+
+async function openLayoutMenu(menu: HTMLElement) {
+  await settleLayoutMenu();
+  const panel = menu.querySelector<HTMLElement>(".oc-menu")!;
+  if (!panel.matches(":popover-open")) {
+    menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
+    await settleLayoutMenu();
+  }
+  expect(panel.matches(":popover-open")).toBe(true);
+}
+
 export function createDashboardHarness(
   options: {
     row?: GatewaySessionRow;
@@ -155,13 +171,10 @@ export function createDashboardHarness(
       ),
       mount,
     );
+    await settleLayoutMenu();
     const menu = mount.querySelector<HeaderMenu>(".chat-pane__layout-menu");
     expect(menu).not.toBeNull();
-    flush();
-    if (!menu!.querySelector(".oc-menu")?.matches(":popover-open")) {
-      menu!.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
-      flush();
-    }
+    await openLayoutMenu(menu!);
     return menu!;
   };
   return {
@@ -183,29 +196,13 @@ export function createDashboardHarness(
   };
 }
 
-export function select(menu: ParentNode, value: string) {
-  if (menu instanceof HTMLElement && menu.matches(".chat-pane__layout-menu")) {
-    if (!menu.querySelector(".oc-menu")?.matches(":popover-open")) {
-      menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
-      flush();
-    }
-    menu.querySelector<HTMLButtonElement>(`button[data-value="${value}"]`)?.click();
-    flush();
-    return;
+export async function select(menu: ParentNode, value: string) {
+  if (!(menu instanceof HTMLElement) || !menu.matches(".chat-pane__layout-menu")) {
+    throw new Error("Expected native Layout menu");
   }
-  const dropdown =
-    menu instanceof Element && menu.matches("wa-dropdown")
-      ? menu
-      : menu.querySelector("wa-dropdown");
-  expect(dropdown).not.toBeNull();
-  dropdown!.dispatchEvent(
-    new CustomEvent("wa-select", {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      detail: { item: { value } },
-    }),
-  );
+  await openLayoutMenu(menu);
+  menu.querySelector<HTMLButtonElement>(`button[data-value="${value}"]`)?.click();
+  await settleLayoutMenu();
 }
 
 export function expectPresentation(layout: SidebarLayout, expanded: boolean) {

@@ -104,7 +104,7 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
           const menu = fixture.container.querySelector(".chat-pane__layout-menu")!;
           const trigger = menu.querySelector("button")!;
           observations.push({
-            open: Boolean(menu.querySelector(":popover-open")),
+            open: trigger.getAttribute("aria-expanded") === "true",
             focused: document.activeElement === trigger,
           });
           fixture.update({
@@ -119,17 +119,16 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         ".chat-pane__layout-trigger",
       )!;
       const menu = fixture.container.querySelector(".chat-pane__layout-menu")!;
+      const surface = menu.querySelector('[role="menu"]')!;
       const shown = vi.fn();
-      menu
-        .querySelector('[role="menu"]')!
-        .addEventListener("overlay-after-show", shown, { once: true });
+      surface.addEventListener("overlay-after-show", shown, { once: true });
       await openChatLayoutMenu({
         container: fixture.container,
         click: (element: HTMLElement) => page.elementLocator(element).click(),
       });
       expect(shown).toHaveBeenCalledOnce();
       await userEvent.keyboard("{Escape}");
-      await expect.poll(() => Boolean(menu.querySelector(":popover-open"))).toBe(false);
+      await expect.poll(() => surface.matches(":popover-open")).toBe(false);
       expect(document.activeElement).toBe(trigger);
       for (const label of ["Minimize side panel", "Side panel"]) {
         await selectChatLayoutAction(
@@ -142,10 +141,16 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         expect(document.activeElement).toBe(trigger);
       }
       for (const expectedCount of [3, 4]) {
-        trigger.click();
-        menu.querySelector<HTMLElement>('[data-value="side-panel"]')!.click();
-        await expect.poll(() => observations.length).toBe(expectedCount);
-        expect(Boolean(menu.querySelector(":popover-open"))).toBe(false);
+        const hidden = new Promise<Event>((resolve) => {
+          surface.addEventListener("overlay-after-hide", resolve, { once: true });
+        });
+        await page.elementLocator(trigger).click();
+        await page
+          .elementLocator(menu.querySelector<HTMLElement>('[data-value="side-panel"]')!)
+          .click();
+        expect((await hidden).target).toBe(surface);
+        expect(observations).toHaveLength(expectedCount);
+        expect(surface.matches(":popover-open")).toBe(false);
         expect(document.activeElement).toBe(trigger);
       }
       expect(observations).toEqual([

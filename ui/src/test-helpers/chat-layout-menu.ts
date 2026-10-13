@@ -12,6 +12,19 @@ function isChatLayoutMenuOpen(element: Element): boolean {
   );
 }
 
+function waitForMenuShow(menu: Element): Promise<void> {
+  const surface = menu.querySelector<HTMLElement>(".oc-menu");
+  if (!surface) {
+    throw new Error("Expected a native Layout menu surface");
+  }
+  if (surface.dataset.phase === "open") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    surface.addEventListener("overlay-after-show", () => resolve(), { once: true });
+  });
+}
+
 async function waitForMenuClose(menu: ElementHandle<Element> | HTMLElement): Promise<void> {
   await expect
     .poll(
@@ -33,8 +46,11 @@ export async function openChatLayoutMenu(
       throw new Error("Expected a chat Layout menu");
     }
     if (!isChatLayoutMenuOpen(menu)) {
+      const shown = waitForMenuShow(menu);
       await scope.click(trigger);
-      await expect.poll(() => isChatLayoutMenuOpen(menu)).toBe(true);
+      await shown;
+    } else {
+      await waitForMenuShow(menu);
     }
     return menu;
   }
@@ -46,11 +62,12 @@ export async function openChatLayoutMenu(
       throw new Error("Expected a chat Layout menu");
     }
     try {
-      await trigger.click();
-      await expect.poll(() => element.evaluate(isChatLayoutMenuOpen)).toBe(true);
+      await Promise.all([element.evaluate(waitForMenuShow), trigger.click()]);
     } finally {
       await element.dispose();
     }
+  } else {
+    await menu.evaluate(waitForMenuShow);
   }
   return menu;
 }

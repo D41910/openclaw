@@ -325,19 +325,31 @@ export function useMenuMachine(
           ) {
             return;
           }
+          const fromButton =
+            target.matches("button[data-form-control]") &&
+            (e.key === "ArrowDown" || e.key === "ArrowUp");
           if (
             e.key === "Tab" ||
             e.key === "Escape" ||
-            target.matches("input,textarea,select,[data-form-control]")
+            target.matches("input,textarea,select") ||
+            (target.hasAttribute("data-form-control") && !fromButton)
           ) {
             return;
           }
           focusFromKeyboard = true;
           const value = target.dataset.value;
-          if (value && value !== read().highlightedValue) {
-            read().setHighlightedValue(value);
+          if (fromButton) {
+            // Embedded buttons enter the item list through Zag's first/last navigation.
+            if (!e.defaultPrevented) {
+              e.preventDefault();
+              service.send({ type: e.key === "ArrowDown" ? "HOME" : "END" });
+            }
+          } else {
+            if (value && value !== read().highlightedValue) {
+              read().setHighlightedValue(value);
+            }
+            result.onKeyDown?.(e);
           }
-          result.onKeyDown?.(e);
           // End/Home can keep the same highlight after the user scrolls it out of view.
           focusItem(service.service);
         },

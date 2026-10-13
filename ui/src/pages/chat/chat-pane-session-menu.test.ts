@@ -10,6 +10,7 @@ import { t } from "../../i18n/index.ts";
 import { resolveSessionDisplayName } from "../../lib/session-display.ts";
 import { sessionsResult } from "../../lib/sessions/session-capability.test-support.ts";
 import { showToast } from "../../lib/toast.ts";
+import { openChatLayoutMenu } from "../../test-helpers/chat-layout-menu.ts";
 import { createMountedPanes, refreshPane } from "./chat-pane-mounted.test-support.ts";
 import {
   createGatewayBrowserClientFixture,
@@ -103,11 +104,17 @@ describe("chat pane session menu boundary", () => {
     await menu.updateComplete;
     expectRetainedMenu();
     expect(itemUpdates.every((spy) => spy.mock.calls.length === 0)).toBe(true);
-    container.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!.click();
+    const layout = await openChatLayoutMenu({
+      container,
+      click: async (element) => {
+        element.click();
+        await Promise.resolve();
+        flush();
+      },
+    });
+    layout.querySelector<HTMLButtonElement>('[data-value="session-files"]')!.click();
+    await Promise.resolve();
     flush();
-    container
-      .querySelector<HTMLButtonElement>('.chat-pane__layout-menu [value="session-files"]')!
-      .click();
     expect(workspace.onToggleCollapsed).toHaveBeenCalledOnce();
 
     state.settings = { ...state.settings };

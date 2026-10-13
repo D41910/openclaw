@@ -12,6 +12,7 @@ import {
   createModalDialogTestFixture,
   waitForConfirmDialogActions,
 } from "../../test-helpers/modal-dialog.ts";
+import { waitForSolid } from "../../test-helpers/solid-settle.ts";
 import {
   resolveChatPanePlacement,
   resolveChatPaneWorkerPresentation,
@@ -181,7 +182,15 @@ describe("chat pane worker stop", () => {
       expect(container.querySelector(".chat-pane__placement-chip")?.textContent?.trim()).toBe(
         copy.label,
       );
-      const stop = container.querySelector<HTMLElement>(".chat-pane__placement-reclaim");
+      container.querySelector<HTMLButtonElement>(".chat-pane__placement-chip")!.click();
+      await waitForSolid(() =>
+        expect(
+          container
+            .querySelector('.chat-pane__placement-menu > [role="menu"]')
+            ?.matches(":popover-open"),
+        ).toBe(true),
+      );
+      const stop = container.querySelector<HTMLButtonElement>(".chat-pane__placement-reclaim");
       expect(stop?.textContent?.trim()).toBe(copy.stopLabel);
       stop?.click();
       const actions = await waitForConfirmDialogActions();

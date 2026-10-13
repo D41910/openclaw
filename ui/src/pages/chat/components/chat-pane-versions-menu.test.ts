@@ -1,4 +1,5 @@
 /* @vitest-environment jsdom */
+import { flush } from "solid-js";
 import { afterEach, expect, it } from "vitest";
 import { mountChatPaneHeader } from "./chat-pane-header.test-support.ts";
 
@@ -40,7 +41,10 @@ it("hides one branch and lists multiple branches with the active tip marked", as
   expect(items[1]?.textContent).toContain("Earlier idea");
 
   trigger?.click();
+  await Promise.resolve();
+  flush();
   multiple.container.querySelector<HTMLButtonElement>('[data-value="other"]')?.click();
+  await Promise.resolve();
   expect(multiple.props.onBranchSelect).toHaveBeenCalledWith("other");
 });
 
@@ -56,6 +60,9 @@ it("disables branch switching while the agent is working", async () => {
   const trigger = container.querySelector<HTMLButtonElement>(".chat-pane__branches-trigger");
   expect(trigger?.disabled).toBe(true);
   trigger?.click();
+  await Promise.resolve();
+  flush();
   container.querySelector<HTMLButtonElement>('[data-value="other"]')?.click();
+  await Promise.resolve();
   expect(props.onBranchSelect).not.toHaveBeenCalled();
 });

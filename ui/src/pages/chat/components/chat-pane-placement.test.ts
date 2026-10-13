@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewaySessionRow } from "../../../api/types.ts";
 import type { ApplicationPlacementStartupStatus } from "../../../app/session-placement-startup.ts";
 import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { waitForSolid } from "../../../test-helpers/solid-settle.ts";
 import { ChatPanePlacement } from "./chat-pane-placement.ts";
 
 const containers: HTMLElement[] = [];
@@ -168,7 +169,7 @@ describe("chat pane device placement", () => {
 
   it.each(["local", undefined] as const)(
     "offers worker dispatch for a repository-only session with %s placement",
-    (placementState) => {
+    async (placementState) => {
       const container = document.createElement("div");
       document.body.append(container);
       containers.push(container);
@@ -198,12 +199,20 @@ describe("chat pane device placement", () => {
       expect(container.querySelector(".chat-pane__placement-chip")?.textContent?.trim()).toBe(
         "Worker required",
       );
-      const dispatch = container.querySelector<HTMLElement>(".chat-pane__placement-recovery");
+      container.querySelector<HTMLButtonElement>(".chat-pane__placement-chip")!.click();
+      await waitForSolid(() =>
+        expect(
+          container
+            .querySelector('.chat-pane__placement-menu > [role="menu"]')
+            ?.matches(":popover-open"),
+        ).toBe(true),
+      );
+      const dispatch = container.querySelector<HTMLButtonElement>(".chat-pane__placement-recovery");
       expect(container.querySelectorAll(".chat-pane__placement-recovery")).toHaveLength(1);
       expect(dispatch?.textContent?.trim()).toBe("Choose worker…");
       expect(container.querySelector(".chat-pane__placement-move")).toBeNull();
       dispatch?.click();
-      expect(onPlacementRecover).toHaveBeenCalledOnce();
+      await waitForSolid(() => expect(onPlacementRecover).toHaveBeenCalledOnce());
     },
   );
 

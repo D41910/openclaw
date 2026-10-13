@@ -28,6 +28,33 @@ afterEach(async () => {
   await page.viewport(originalViewport.width, originalViewport.height);
 });
 
+it("routes arrow navigation from an embedded button through the menu", async () => {
+  const activate = vi.fn();
+  mountMenu({
+    items: [
+      { id: "disabled", label: "Unavailable", disabled: true },
+      { id: "first", label: "First" },
+      { id: "last", label: "Last" },
+    ],
+    children: (
+      <button type="button" data-form-control="" autofocus onClick={activate}>
+        About choices
+      </button>
+    ),
+  });
+  await openMenu();
+  const info = surface().querySelector<HTMLButtonElement>("[data-form-control]")!;
+  expect(document.activeElement).toBe(info);
+  await userEvent.keyboard("{Enter}");
+  expect(activate).toHaveBeenCalledOnce();
+  expect(surface().matches(":popover-open")).toBe(true);
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.poll(() => document.activeElement).toBe(item("First"));
+  info.focus();
+  await userEvent.keyboard("{ArrowUp}");
+  await expect.poll(() => document.activeElement).toBe(item("Last"));
+});
+
 it.each([false, true])(
   "rolls rejected controlled visibility back to accepted state (initial=%s)",
   async (initial) => {
