@@ -100,7 +100,7 @@ it.each(
       );
       const trigger = page.getByRole("button", { name: "Session sharing", exact: true });
       await expect.element(trigger).toBeVisible();
-      returnTarget = trigger.element();
+      returnTarget = root.querySelector<HTMLButtonElement>(".chat-pane__sharing-trigger")!;
       reopen = async () => {
         await userEvent.click(trigger);
       };
@@ -108,6 +108,10 @@ it.each(
       await userEvent.keyboard("{Enter}");
       await shown;
     }
+    const afterMenu = document.createElement("button");
+    afterMenu.textContent = "After menu";
+    roots.push(afterMenu);
+    document.body.append(afterMenu);
     const input = page.getByRole("searchbox", { name: "Search people and agents…" });
     await expect.element(input).toBeVisible();
     if (surface === "assignment") {
@@ -138,8 +142,8 @@ it.each(
       .poll(() => document.activeElement)
       .toBe([...root.querySelectorAll(selector)].at(-1));
     await userEvent.keyboard("{Tab}");
-    await expect.element(input).not.toBeVisible();
-    expect(document.activeElement).toBe(returnTarget);
+    await expect.element(input).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(afterMenu);
     await reopen();
     await expect.element(input).toBeVisible();
     await userEvent.click(input);

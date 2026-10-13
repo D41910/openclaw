@@ -707,6 +707,7 @@ suite.define(() => {
           viewDropdown
             .getByRole("menu", { name: "View", exact: true })
             .getByRole("menuitemcheckbox")
+            .locator(".session-menu__text")
             .allTextContents(),
         )
         .toEqual(["Reasoning", "Tool calls", "Keep commentary"]);

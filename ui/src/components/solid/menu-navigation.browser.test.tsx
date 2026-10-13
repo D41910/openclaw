@@ -17,6 +17,53 @@ import { Menu, type MenuItem } from "./menu.tsx";
 afterEach(cleanup);
 
 describe("Solid menu navigation", () => {
+  it("materializes lazy content at first keyboard admission and retains it when reopened", async () => {
+    let itemReads = 0;
+    let childrenReads = 0;
+    const view = mountMenu({
+      lazy: true,
+      get items() {
+        itemReads += 1;
+        return [{ id: "ready", label: "Ready" }];
+      },
+      get children() {
+        childrenReads += 1;
+        return <span>Lazy heading</span>;
+      },
+    });
+    expect(itemReads).toBe(0);
+    expect(childrenReads).toBe(0);
+    trigger().focus();
+    await userEvent.keyboard("{ArrowDown}");
+    await phase(surface(), "open");
+    const ready = item("Ready");
+    expect(document.activeElement).toBe(ready);
+    expect(childrenReads).toBe(1);
+    await userEvent.keyboard("{Escape}");
+    await phase(surface(), "hidden");
+    expect(view.handle.open()).toBe(true);
+    await phase(surface(), "open");
+    expect(item("Ready")).toBe(ready);
+    expect(childrenReads).toBe(1);
+  });
+
+  it.each([false, true])("refuses lazy admission without active effects (veto %s)", (veto) => {
+    const view = mountMenu({
+      lazy: true,
+      items: veto ? [{ id: "ready", label: "Ready" }] : [],
+      onBeforeShow: (event) => {
+        if (veto) {
+          event.preventDefault();
+        }
+      },
+    });
+    trigger().focus();
+    expect(view.handle.open()).toBe(false);
+    expect(surface().matches(":popover-open")).toBe(false);
+    expect(document.activeElement).toBe(trigger());
+    expect(openSurfaces()).toEqual([]);
+  });
+
   it.each(["ArrowDown", "ArrowUp"])(
     "skips disabled submenu triggers when opened with %s",
     async (key) => {

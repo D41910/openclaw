@@ -71,7 +71,6 @@ export function useSessionMenuDetails(
     const currentOwner = readState().currentOwner;
     const id = currentOwner?.identity?.id ?? currentOwner?.id;
     if (
-      !state.directory &&
       currentOwner?.type === "human" &&
       id &&
       !options.some((owner) => owner.type === "human" && owner.id === id)
@@ -115,11 +114,16 @@ export function useSessionMenuDetails(
       />
     </div>
   );
+  const ownerSearchEntry: MenuEntry = {
+    kind: "content",
+    id: "owners-search",
+    content: ownerSearch,
+  };
   const ownerOptions = (): MenuEntry[] => {
     const current = readState().currentOwner;
     const options = owners();
     return [
-      { kind: "content", id: "owners-search", content: ownerSearch },
+      ownerSearchEntry,
       ...options.map((owner): MenuEntry => {
         const checked =
           owner.type === current?.type && owner.id === (current?.identity?.id ?? current?.id);
@@ -228,12 +232,18 @@ export function useSessionMenuDetails(
       </For>
     </div>
   );
+  const communicationStart: MenuEntry = {
+    kind: "content",
+    id: "communication-start",
+    content: <div class="session-menu__separator" role="separator" />,
+  };
+  const communicationEnd: MenuEntry = {
+    kind: "content",
+    id: "communication-end",
+    content: <div class="session-menu__separator" role="separator" />,
+  };
   const communication = (): MenuEntry[] => [
-    {
-      kind: "content",
-      id: "communication-start",
-      content: <div class="session-menu__separator" role="separator" />,
-    },
+    communicationStart,
     { kind: "content", id: "communication-controls", content: communicationControls },
     ...(policy()?.send !== undefined || policy()?.receive !== undefined
       ? [
@@ -247,11 +257,7 @@ export function useSessionMenuDetails(
           },
         ]
       : []),
-    {
-      kind: "content",
-      id: "communication-end",
-      content: <div class="session-menu__separator" role="separator" />,
-    },
+    communicationEnd,
   ];
   const error = createMemo(() => {
     revision();

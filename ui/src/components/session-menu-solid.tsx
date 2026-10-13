@@ -81,8 +81,17 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
       return Object.values(props);
     },
   );
+  let closeNotified = false;
+  const notifyClosed = () => {
+    if (!closeNotified) {
+      closeNotified = true;
+      props.onClose();
+    }
+  };
   const close = () => {
-    menu?.close();
+    if (menu?.close()) {
+      notifyClosed();
+    }
   };
   const actions = new SessionMenuActions(
     controllerHost,
@@ -116,27 +125,27 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
     id,
     content: <div class="session-menu__separator" role="separator" />,
   });
+  const primaryDivider = separator("primary-divider");
+  const prDivider = separator("pr-divider");
+  const advancedDivider = separator("advanced-divider");
+  const lastActive: MenuEntry = {
+    kind: "content",
+    id: "last-active",
+    content: (
+      <div class="session-menu__info">
+        {t("sessionsView.lastActive", { time: props.lastActive })}
+      </div>
+    ),
+  };
   const items = createMemo((): MenuEntry[] => {
     revision();
     if (props.compact && compactView() !== "root") {
       return view.compact(compactView());
     }
     return [
-      ...(!batch() && props.lastActive
-        ? [
-            {
-              kind: "content" as const,
-              id: "last-active",
-              content: (
-                <div class="session-menu__info">
-                  {t("sessionsView.lastActive", { time: props.lastActive })}
-                </div>
-              ),
-            },
-          ]
-        : []),
+      ...(!batch() && props.lastActive ? [lastActive] : []),
       ...view.primary(),
-      separator("primary-divider"),
+      primaryDivider,
       ...view.organization(),
       ...(!batch()
         ? props.pluginActions.map((action) => ({
@@ -156,7 +165,7 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
         : []),
       ...(!batch() && props.work?.pullRequestUrl
         ? [
-            separator("pr-divider"),
+            prDivider,
             {
               id: "open-pr",
               label: t("sessionsView.openPullRequest"),
@@ -178,7 +187,7 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
             },
           ]
         : []),
-      separator("advanced-divider"),
+      advancedDivider,
       ...(!batch() && props.cloudWorkerStopAllowed
         ? [
             {
@@ -233,6 +242,19 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
     <Show when={props.anchor} keyed>
       {(anchor) => {
         let mounted: MenuHandle | undefined;
+        const closed = () => {
+          if (props.anchor === anchor && mounted?.overlay.surface.isConnected) {
+            notifyClosed();
+          }
+        };
+        const afterHide = (event: Event) => {
+          if (event.target === mounted?.overlay.surface) {
+            closed();
+          }
+        };
+        onCleanup(() =>
+          mounted?.overlay.surface.removeEventListener("overlay-after-hide", afterHide),
+        );
         return (
           <Menu
             id={menuId}
@@ -262,7 +284,10 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
                 handle.overlay.setReturnTarget(props.trigger);
               }
               handle.overlay.surface.addEventListener("keydown", shortcut, true);
-              handle.open();
+              handle.overlay.surface.addEventListener("overlay-after-hide", afterHide);
+              if (!handle.open()) {
+                closed();
+              }
             }}
             onBeforeShow={() => {
               actions.loadOwners();
@@ -270,9 +295,10 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
             }}
             onEscape={(event) => actions.handleKeydown(event, view.appearance)}
             onOpenChange={(open) => {
-              if (!open && props.anchor === anchor && mounted?.overlay.surface.isConnected) {
+              if (open) {
+                closeNotified = false;
+              } else {
                 actions.advanced.close();
-                props.onClose();
               }
             }}
           />

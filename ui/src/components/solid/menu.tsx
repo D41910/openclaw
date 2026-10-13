@@ -1,5 +1,14 @@
 import type { JSX } from "@solidjs/web";
-import { For, Show, createEffect, createSignal, onCleanup, onSettled, untrack } from "solid-js";
+import {
+  For,
+  Show,
+  createEffect,
+  createSignal,
+  flush,
+  onCleanup,
+  onSettled,
+  untrack,
+} from "solid-js";
 import { acquireNativeOverlaySurface } from "../../lib/native-overlay-occlusion.ts";
 import { createOverlayAnchor, type OverlayPlacement } from "../overlay-anchor.ts";
 import { createOverlay, findOverlayParent, type Overlay } from "../overlay-lifecycle.ts";
@@ -36,6 +45,8 @@ export type MenuProps = {
   id: string;
   label: string;
   items: readonly MenuEntry[];
+  /** Materialize content on first open, then retain it across closes. Stable for this mount. */
+  lazy?: boolean;
   trigger?: JSX.Element;
   children?: JSX.Element;
   class?: string;
@@ -87,9 +98,12 @@ export function Menu(props: BranchProps): JSX.Element {
     root: props.root,
   }));
   const direction = () => props.dir ?? (document.documentElement.dir === "rtl" ? "rtl" : "ltr");
+  const [materialized, setMaterialized] = createSignal(!untrack(() => props.lazy));
   const overlay = createOverlay(identity.id, identity.parent, {
     exclusiveGroup: "menu",
+    // Admission rechecks real controls after beforeShow materializes a cold menu.
     isValid: (panel) =>
+      !materialized() ||
       Boolean(
         panel.querySelector(
           '[role^="menuitem"], [data-form-control], [data-search], input, textarea, select, button, a[href]',
@@ -185,6 +199,11 @@ export function Menu(props: BranchProps): JSX.Element {
       }
       if (props.disabled) {
         event.preventDefault();
+        return;
+      }
+      if (!materialized()) {
+        setMaterialized(true);
+        flush();
       }
       props.onBeforeShow?.(event);
     };
@@ -294,98 +313,102 @@ export function Menu(props: BranchProps): JSX.Element {
         aria-label={props.label}
         dir={direction()}
       >
-        {props.children}
-        <For each={props.items} keyed={(entry) => entry.id}>
-          {(entry) => {
-            const actionable = () => {
-              const current = entry();
-              return current.kind === "content" ? undefined : current;
-            };
-            const content = () => {
-              const current = entry();
-              return current.kind === "content" ? current.content : undefined;
-            };
-            return (
-              <Show when={actionable()} fallback={content()}>
-                {(item) => (
-                  <Show
-                    when={item().children}
-                    fallback={
-                      <button
-                        {...item().attributes}
-                        {...binding.item(
-                          item().id,
-                          item().disabled,
-                          item().type,
-                          item().checked,
-                          item().label,
-                        )}
-                        type="button"
-                        class={["oc-menu-item", item().class]}
-                        data-value={item().id}
-                        value={item().id}
-                        data-variant={item().variant}
-                        role={itemRole(item().type)}
-                        aria-label={item().label}
-                        aria-checked={item().type ? (item().checked ? "true" : "false") : undefined}
-                        aria-disabled={item().disabled ? "true" : undefined}
-                        disabled={item().disabled}
-                      >
-                        <Show when={item().type}>
-                          <span class="oc-menu-item__check" aria-hidden="true">
-                            {item().checked ? "✓" : ""}
-                          </span>
-                        </Show>
-                        <Show when={item().icon}>
-                          <span class="oc-menu-item__icon">{item().icon}</span>
-                        </Show>
-                        <span class={["oc-menu-item__label", item().labelClass]}>
-                          {item().content ?? item().label}
-                        </span>
-                        <Show when={item().details}>
-                          <span class="oc-menu-item__details">{item().details}</span>
-                        </Show>
-                      </button>
-                    }
-                  >
-                    {(children) => (
-                      <Menu
-                        id={`${identity.id}-${item().id}`}
-                        label={item().label}
-                        items={children()}
-                        trigger={
-                          <>
-                            <Show when={item().icon}>
-                              <span class="oc-menu-item__icon">{item().icon}</span>
-                            </Show>
-                            <span class={["oc-menu-item__label", item().labelClass]}>
-                              {item().label}
+        <Show when={materialized()}>
+          {props.children}
+          <For each={props.items} keyed={(entry) => entry.id}>
+            {(entry) => {
+              const actionable = () => {
+                const current = entry();
+                return current.kind === "content" ? undefined : current;
+              };
+              const content = () => {
+                const current = entry();
+                return current.kind === "content" ? current.content : undefined;
+              };
+              return (
+                <Show when={actionable()} fallback={content()}>
+                  {(item) => (
+                    <Show
+                      when={item().children}
+                      fallback={
+                        <button
+                          {...item().attributes}
+                          {...binding.item(
+                            item().id,
+                            item().disabled,
+                            item().type,
+                            item().checked,
+                            item().label,
+                          )}
+                          type="button"
+                          class={["oc-menu-item", item().class]}
+                          data-value={item().id}
+                          value={item().id}
+                          data-variant={item().variant}
+                          role={itemRole(item().type)}
+                          aria-label={item().label}
+                          aria-checked={
+                            item().type ? (item().checked ? "true" : "false") : undefined
+                          }
+                          aria-disabled={item().disabled ? "true" : undefined}
+                          disabled={item().disabled}
+                        >
+                          <Show when={item().type}>
+                            <span class="oc-menu-item__check" aria-hidden="true">
+                              {item().checked ? "✓" : ""}
                             </span>
-                            <Show when={item().details}>
-                              <span class="oc-menu-item__details">{item().details}</span>
-                            </Show>
-                          </>
-                        }
-                        parent={overlay}
-                        root={menuRoot}
-                        parentBinding={binding}
-                        dir={direction()}
-                        disabled={item().disabled}
-                        triggerClass={item().class}
-                        triggerAttributes={{ ...item().attributes, value: item().id }}
-                        onSelect={props.onSelect}
-                        onBeforeShow={(event) => item().onBeforeShow?.(event)}
-                        onEscape={(event) => props.onEscape?.(event) ?? false}
-                      >
-                        {item().content}
-                      </Menu>
-                    )}
-                  </Show>
-                )}
-              </Show>
-            );
-          }}
-        </For>
+                          </Show>
+                          <Show when={item().icon}>
+                            <span class="oc-menu-item__icon">{item().icon}</span>
+                          </Show>
+                          <span class={["oc-menu-item__label", item().labelClass]}>
+                            {item().content ?? item().label}
+                          </span>
+                          <Show when={item().details}>
+                            <span class="oc-menu-item__details">{item().details}</span>
+                          </Show>
+                        </button>
+                      }
+                    >
+                      {(children) => (
+                        <Menu
+                          id={`${identity.id}-${item().id}`}
+                          label={item().label}
+                          items={children()}
+                          trigger={
+                            <>
+                              <Show when={item().icon}>
+                                <span class="oc-menu-item__icon">{item().icon}</span>
+                              </Show>
+                              <span class={["oc-menu-item__label", item().labelClass]}>
+                                {item().label}
+                              </span>
+                              <Show when={item().details}>
+                                <span class="oc-menu-item__details">{item().details}</span>
+                              </Show>
+                            </>
+                          }
+                          parent={overlay}
+                          root={menuRoot}
+                          parentBinding={binding}
+                          dir={direction()}
+                          disabled={item().disabled}
+                          triggerClass={item().class}
+                          triggerAttributes={{ ...item().attributes, value: item().id }}
+                          onSelect={props.onSelect}
+                          onBeforeShow={(event) => item().onBeforeShow?.(event)}
+                          onEscape={(event) => props.onEscape?.(event) ?? false}
+                        >
+                          {item().content}
+                        </Menu>
+                      )}
+                    </Show>
+                  )}
+                </Show>
+              );
+            }}
+          </For>
+        </Show>
       </div>
     </div>
   );

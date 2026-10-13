@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { expect, it } from "vitest";
+import { focusChatComposerFromPrintableKeydown } from "../pages/chat/chat-pane-shared.ts";
 import {
   menuItem,
   menuItemLabels,
@@ -11,6 +12,38 @@ import {
 } from "../test-helpers/session-menu.ts";
 import { createSessionOwnerMenuHarness } from "../test-helpers/session-owner-menu.ts";
 import { waitForSolid } from "../test-helpers/solid-settle.ts";
+
+it("keeps advertised native menu shortcuts ahead of composer autotype", async () => {
+  const actions: string[] = [];
+  const host = await mountMenu({
+    archiveAllowed: true,
+    onAction: (action) => actions.push(action.kind),
+  });
+  const root = host.parentElement!;
+  const composer = root.appendChild(document.createElement("div"));
+  composer.className = "agent-chat__composer-combobox";
+  const input = composer.appendChild(document.createElement("textarea"));
+  const capture = (event: KeyboardEvent) => focusChatComposerFromPrintableKeydown(root, event);
+  document.addEventListener("keydown", capture, true);
+  try {
+    menuItem(host, "Pin session").focus();
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true, composed: true }),
+    );
+    await waitForSolid(() => expect(actions).toEqual(["toggle-archived"]));
+    expect(document.activeElement).not.toBe(input);
+
+    host.anchor = { x: 100, y: 100 };
+    await settleSessionMenu(host);
+    menuItem(host, "Pin session").focus();
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "x", bubbles: true, cancelable: true, composed: true }),
+    );
+    expect(document.activeElement).toBe(input);
+  } finally {
+    document.removeEventListener("keydown", capture, true);
+  }
+});
 
 it("updates registered menu props and retires its keyboard owner when unmounted", async () => {
   const calls: string[] = [];

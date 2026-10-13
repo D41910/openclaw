@@ -9,6 +9,7 @@ import {
   createSessionOwnerMenuHarness,
   sessionOwnerProfiles,
 } from "../test-helpers/session-owner-menu.ts";
+import { waitForSolid } from "../test-helpers/solid-settle.ts";
 import { waitForFast } from "../test-helpers/wait-for.ts";
 
 describe("searchable session people", () => {
@@ -58,8 +59,9 @@ describe("searchable session people", () => {
     );
     flush();
     root.querySelector<HTMLButtonElement>(".chat-pane__sharing-trigger")!.click();
-    flush();
-    expect(root.querySelector(".chat-pane__sharing-panel")?.matches(":popover-open")).toBe(true);
+    await waitForSolid(() =>
+      expect(root.querySelector(".chat-pane__sharing-panel")?.matches(":popover-open")).toBe(true),
+    );
     const search = root.querySelector<HTMLInputElement>('input[type="search"]');
     expect(search).not.toBeNull();
     search!.focus();
@@ -74,7 +76,6 @@ describe("searchable session people", () => {
       root.querySelector('[data-value="member:person-100"] .session-menu__check'),
     ).not.toBeNull();
     root.querySelector<HTMLButtonElement>('[data-value="member:person-100"]')!.click();
-    flush();
-    expect(onMemberChange).toHaveBeenCalledWith("person-100", false);
+    await waitForFast(() => expect(onMemberChange).toHaveBeenCalledWith("person-100", false));
   });
 });

@@ -5,7 +5,6 @@ import {
   type Service as MenuService,
   type Api,
 } from "@zag-js/menu";
-import { isPointInPolygon } from "@zag-js/rect-utils";
 import { VanillaMachine, normalizeProps } from "@zag-js/vanilla";
 import { createEffect, createSignal, onSettled, untrack } from "solid-js";
 import type { Overlay } from "../overlay-lifecycle.ts";
@@ -43,7 +42,6 @@ const normalizer: Parameters<typeof connect>[1] = {
 export type MenuBinding = {
   service: MenuService;
   read(): Api;
-  pointerDelta(x: number): number;
   item(
     value: string,
     disabled?: boolean,
@@ -61,7 +59,6 @@ export function useMenuMachine(
   onSelect: (value: string) => void,
   parent?: MenuService,
 ): MenuBinding {
-  let lastPointerX: number | undefined;
   let focusFromKeyboard = false;
   const focusItem = (service: MenuService) => {
     if (!overlay.open) {
@@ -194,11 +191,6 @@ export function useMenuMachine(
   return {
     service: service.service,
     read,
-    pointerDelta(x) {
-      const delta = lastPointerX === undefined ? 0 : x - lastPointerX;
-      lastPointerX = x;
-      return delta;
-    },
     item(
       value: string,
       disabled = false,
@@ -268,24 +260,9 @@ export function useMenuMachine(
           focusFromKeyboard = false;
           const target = event.currentTarget;
           const point = { x: event.clientX, y: event.clientY };
-          const deltaX = parentBinding.pointerDelta(point.x);
-          const protectedTravel =
-            parent &&
-            Object.values(parent.refs.get("children")).some((child) => {
-              const polygon = child.context.get("intentPolygon");
-              return (
-                child.scope.id !== overlay.id &&
-                child.state.hasTag("open") &&
-                (child.context.get("currentPlacement")?.startsWith("left")
-                  ? deltaX < 0
-                  : deltaX > 0) &&
-                polygon &&
-                isPointInPolygon(polygon, point)
-              );
-            });
-          // A leave can lock the parent before the child's document tracker is installed.
-          // A sibling's first move must release that stale lock unless its point is protected.
-          if (parent && !protectedTravel) {
+          // A real sibling hover wins; diagonal travel through another row switches to it.
+          // Zag still protects travel through the gap into the current submenu.
+          if (parent) {
             parent.refs.set("pointerRoutingLocked", false);
             parent.context.set("pointerRoutingMode", "interactive");
           }
@@ -314,9 +291,6 @@ export function useMenuMachine(
       return {
         ...rest,
         tabIndex: -1,
-        onPointerMove: (event: PointerEvent) => {
-          lastPointerX = event.clientX;
-        },
         onKeyDown: (e: KeyboardEvent) => {
           const target = e.target;
           if (

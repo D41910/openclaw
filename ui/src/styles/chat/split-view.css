@@ -501,6 +501,12 @@
   stroke-width: 1.6px;
 }
 
+.chat-header-session-menu__trigger > .oc-menu-item__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .chat-pane__public-share-indicator {
   display: inline-flex;
   flex: 0 0 auto;

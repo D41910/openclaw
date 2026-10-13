@@ -94,6 +94,7 @@ export function useSessionMenuEntries(
   });
   const separator = (id: string) =>
     content(id, <div class="session-menu__separator" role="separator" />);
+  const deleteDivider = separator("delete-divider");
   const item = (entry: ItemOptions): MenuItem => ({
     id: entry.kind,
     label: entry.label,
@@ -378,7 +379,7 @@ export function useSessionMenuEntries(
           ]
         : []),
       ...(!state.involvingMeContext ? involvement() : []),
-      separator("delete-divider"),
+      deleteDivider,
       deleteAction(),
     ];
   }
@@ -527,6 +528,7 @@ export function useSessionMenuEntries(
   const advanced = () => [
     submenu({ view: "advanced", label: t("sessionsView.advanced"), icon: "settings" }),
   ];
+  const backDivider = separator("back-divider");
   const compact = (view: CompactSessionMenuView): MenuEntry[] => [
     {
       id:
@@ -538,7 +540,7 @@ export function useSessionMenuEntries(
       icon: icon("arrowLeft"),
       closeOnSelect: false,
     },
-    separator("back-divider"),
+    backDivider,
     ...body(view),
   ];
   return { appearance, primary, organization, advanced, deleteAction, compact };

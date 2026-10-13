@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred as deferred } from "../../../test/helpers/promise.js";
 import { createShellOwner } from "../app/app-host-solid.test-support.ts";
+import { profileDirectory } from "../lib/profile-directory.ts";
 import type { ApplicationContextProvider } from "../test-helpers/application-context.ts";
 import {
   containers,
@@ -39,7 +40,9 @@ function focusButton() {
 describe("session menu", () => {
   it("keeps self, agents, and the current owner while the directory loads, then retries a visible failure", async () => {
     const pending = deferred<ReturnType<typeof sessionOwnerProfiles>>();
-    const { context, request } = createSessionOwnerMenuHarness(() => pending.promise);
+    const { context, request } = createSessionOwnerMenuHarness(() => sessionOwnerProfiles("Ada"));
+    await profileDirectory(context.gateway).load();
+    request.mockImplementation(() => pending.promise);
     const menu = await mountMenu({
       context,
       currentOwner: {
@@ -82,7 +85,7 @@ describe("session menu", () => {
       ]),
     );
     expect(menu.querySelector('[role="alert"]')).toBeNull();
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(3);
   });
 
   it.each(["reconnect", "replace gateway"] as const)(
@@ -943,7 +946,7 @@ describe("session menu", () => {
         expect(document.activeElement).not.toBe(trigger);
       }
       expect(escaped).not.toHaveBeenCalled();
-      expect(onClose).toHaveBeenCalledTimes(1);
+      await waitForSolid(() => expect(onClose).toHaveBeenCalledTimes(1));
       expect(panel.matches(":popover-open")).toBe(false);
     },
   );

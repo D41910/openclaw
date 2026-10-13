@@ -170,6 +170,18 @@ function ChatHeaderSessionMenuContent(
   });
   const separator = (id: string) =>
     content(id, <div class="session-menu__separator" role="separator" />);
+  // Replacing a divider can move adjacent branches and close their native popovers.
+  const paletteDivider = separator("palette-divider");
+  const boardDivider = separator("board-divider");
+  const viewDivider = separator("view-divider");
+  const primaryDivider = separator("primary-divider");
+  const organizationDivider = separator("organization-divider");
+  const browserOnlyInfo = content(
+    "browser-only",
+    <div class="session-menu__info" role="note">
+      {t("quickSettings.personal.browserOnly")}
+    </div>,
+  );
   function viewOptions(): MenuEntry[] {
     return [
       ...VIEW_SETTINGS.map(([value, key, label, onboarding]) => ({
@@ -204,16 +216,7 @@ function ChatHeaderSessionMenuContent(
             },
           ]
         : []),
-      ...(props.preferencesBrowserOnly
-        ? [
-            content(
-              "browser-only",
-              <div class="session-menu__info" role="note">
-                {t("quickSettings.personal.browserOnly")}
-              </div>,
-            ),
-          ]
-        : []),
+      ...(props.preferencesBrowserOnly ? [browserOnlyInfo] : []),
     ];
   }
   function group(
@@ -260,7 +263,7 @@ function ChatHeaderSessionMenuContent(
           </span>
         ),
       },
-      separator("palette-divider"),
+      paletteDivider,
       ...(board
         ? [
             content(
@@ -279,7 +282,7 @@ function ChatHeaderSessionMenuContent(
                   disabled: false,
                 }).map((entry) => Object.assign(entry, { id: `board-widget:${entry.id}` }))
               : []),
-            separator("board-divider"),
+            boardDivider,
           ]
         : []),
       ...(props.compact &&
@@ -295,15 +298,16 @@ function ChatHeaderSessionMenuContent(
           ]
         : []),
       group("view", t("chat.view.menu"), "eye"),
-      separator("view-divider"),
+      viewDivider,
       ...view.primary(),
-      separator("primary-divider"),
+      primaryDivider,
       ...view.organization(),
       ...props.sessionActions.map((action) => chatQuickActionEntry(action, `quick:${action.id}`)),
-      separator("organization-divider"),
+      organizationDivider,
       ...view.advanced(),
     ];
   }
+  const backDivider = separator("back-divider");
   const items = createMemo((): MenuEntry[] => {
     revision();
     const current = compactView();
@@ -325,7 +329,7 @@ function ChatHeaderSessionMenuContent(
         ),
         closeOnSelect: false,
       },
-      separator("back-divider"),
+      backDivider,
       ...(current === "sharing" && props.sharing ? sharing.items() : viewOptions()),
     ];
   });
@@ -415,6 +419,7 @@ function ChatHeaderSessionMenuContent(
   return (
     <Menu
       id={menuId}
+      lazy
       class={`session-menu chat-header-session-menu${props.compact ? " session-menu--compact chat-header-session-menu--compact" : ""}${props.compact && compactView() === "sharing" ? " chat-header-session-menu--compact-sharing" : ""}`}
       panelClass="chat-header-session-menu__panel"
       placement="bottom-end"

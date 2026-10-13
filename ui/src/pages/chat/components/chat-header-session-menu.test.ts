@@ -186,6 +186,8 @@ async function select(menu: HeaderMenuElement, value: string) {
       flush();
     }
   }
+  await menu.updateComplete;
+  flush();
   target.click();
   flush();
   await menu.updateComplete;
@@ -506,6 +508,7 @@ describe("chat header session menu", () => {
     // The open checkbox keeps its DOM identity and keyboard navigation position.
     expect(item(menu, "Speech bubbles")).toBe(bubbleItem);
     expect(bubbleItem.getAttribute("aria-checked") === "true").toBe(true);
+    expect(bubbleItem.closest('[role="menu"]')?.matches(":popover-open")).toBe(true);
     menu.session = { ...menu.session, target: { key: "agent:main:third" } };
     await menu.updateComplete;
     expect(item(menu, "Speech bubbles").getAttribute("aria-checked") === "true").toBe(false);

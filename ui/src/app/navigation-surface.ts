@@ -7,7 +7,6 @@ import {
   type KeyboardShortcutsDialogElement,
   matchesShortcutCombo,
 } from "../lib/keyboard-shortcut-contract.ts";
-import type { ShellChromeHost } from "./app-shell-chrome.ts";
 import type { ApplicationContext } from "./context.ts";
 import { KEYBOARD_SHORTCUTS_ELEMENT } from "./lazy-custom-element.ts";
 
@@ -22,7 +21,11 @@ type SidebarAttentionElement = HTMLElement & { dismissPanel(): boolean };
 // Open controls own Escape. Slotted items hide their menu/listbox in shadow DOM,
 // so recognize the open control host before Settings can consume the key.
 export function shouldIgnoreSettingsEscape(
-  host: Pick<ShellChromeHost, "context" | "commandPalette" | "querySelector" | "approvalOverlay">,
+  host: Pick<HTMLElement, "querySelector"> & {
+    context: ApplicationContext | undefined;
+    commandPalette: { isOpen: boolean } | undefined;
+    approvalOverlay: { dialogOpen?: boolean } | undefined;
+  },
   event: KeyboardEvent,
 ): boolean {
   const overlaySnapshot = host.context?.overlays.snapshot;

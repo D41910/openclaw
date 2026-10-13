@@ -159,6 +159,7 @@ export async function focusSessionMenuItem(page: Page, name: string): Promise<Lo
       .indexOf(element);
   });
   expect(index).toBeGreaterThanOrEqual(0);
+  await parent.focus();
   await expect
     .poll(() =>
       parent.evaluate((element) => {

@@ -181,7 +181,8 @@ export function useChatSessionSharingMenu(props: ChatSessionSharingProps): {
       />
     </div>
   );
-  const items = createMemo((): readonly MenuEntry[] => {
+  const searchEntry: MenuEntry = { kind: "content", id: "members-search", content: search };
+  const baseItems = createMemo((): readonly MenuEntry[] => {
     const entries: MenuEntry[] = [];
     if (canPublish()) {
       entries.push(
@@ -352,66 +353,76 @@ export function useChatSessionSharingMenu(props: ChatSessionSharingProps): {
           content: <div class="chat-pane__sharing-status">{t("chat.sessionSharing.noPeople")}</div>,
         });
       } else {
-        entries.push({ kind: "content", id: "members-search", content: search });
-        for (const identity of matches()) {
-          const member = members().has(identity.id);
-          const disabledReason = member
-            ? props.memberRemoveDisabledReason
-            : props.memberAddDisabledReason;
-          entries.push({
-            id: `member:${identity.id}`,
-            label: identity.label ?? identity.id,
-            class: "session-menu__item chat-pane__sharing-member",
-            disabled: Boolean(disabledReason),
-            attributes: { title: disabledReason },
-            icon: (
-              <span class="chat-pane__sharing-member-icon" aria-hidden="true">
-                <Show when={identity.type === "human"} fallback={<Icon name="bot" />}>
-                  <LitContent value={renderSessionOwnerChip(identity, "header")} />
-                </Show>
-              </span>
-            ),
-            content: (
-              <span
-                class="session-menu__text chat-pane__sharing-member-label"
-                title={disabledReason ? undefined : (identity.label ?? identity.id)}
-              >
-                {identity.label ?? identity.id}
-              </span>
-            ),
-            details: member ? (
-              <span class="session-menu__check" aria-label={t("chat.sessionSharing.selected")}>
-                <Icon name="check" />
-              </span>
-            ) : undefined,
-          });
-        }
-        if (matches().length === 0) {
-          entries.push({
-            kind: "content",
-            id: "members-no-match",
-            content: (
-              <div class="people-menu__status" role="status">
-                {t("sessionsView.noPeopleMatch")}
-              </div>
-            ),
-          });
-        }
+        entries.push(searchEntry);
       }
     }
-    if (props.state?.error) {
+    return entries;
+  });
+  const memberItems = createMemo((): readonly MenuEntry[] => {
+    if (props.membersAvailable === false || props.state?.loading || identities().length === 0) {
+      return [];
+    }
+    const entries: MenuEntry[] = [];
+    for (const identity of matches()) {
+      const member = members().has(identity.id);
+      const disabledReason = member
+        ? props.memberRemoveDisabledReason
+        : props.memberAddDisabledReason;
+      entries.push({
+        id: `member:${identity.id}`,
+        label: identity.label ?? identity.id,
+        class: "session-menu__item chat-pane__sharing-member",
+        disabled: Boolean(disabledReason),
+        attributes: { title: disabledReason },
+        icon: (
+          <span class="chat-pane__sharing-member-icon" aria-hidden="true">
+            <Show when={identity.type === "human"} fallback={<Icon name="bot" />}>
+              <LitContent value={renderSessionOwnerChip(identity, "header")} />
+            </Show>
+          </span>
+        ),
+        content: (
+          <span
+            class="session-menu__text chat-pane__sharing-member-label"
+            title={disabledReason ? undefined : (identity.label ?? identity.id)}
+          >
+            {identity.label ?? identity.id}
+          </span>
+        ),
+        details: member ? (
+          <span class="session-menu__check" aria-label={t("chat.sessionSharing.selected")}>
+            <Icon name="check" />
+          </span>
+        ) : undefined,
+      });
+    }
+    if (matches().length === 0) {
       entries.push({
         kind: "content",
-        id: "error",
+        id: "members-no-match",
         content: (
-          <div class="chat-pane__sharing-status chat-pane__sharing-status--error" role="alert">
-            {props.state.error}
+          <div class="people-menu__status" role="status">
+            {t("sessionsView.noPeopleMatch")}
           </div>
         ),
       });
     }
     return entries;
   });
+  const errorEntry: MenuEntry = {
+    kind: "content",
+    id: "error",
+    content: (
+      <div class="chat-pane__sharing-status chat-pane__sharing-status--error" role="alert">
+        {props.state?.error}
+      </div>
+    ),
+  };
+  const items = createMemo(() => [
+    ...baseItems(),
+    ...memberItems(),
+    ...(props.state?.error ? [errorEntry] : []),
+  ]);
   return { items };
 }
 
@@ -460,6 +471,7 @@ export function ChatSessionSharing(props: ChatSessionSharingProps) {
       >
         <ChatSessionPublicIndicator {...props} />
         <Menu
+          lazy
           id={id}
           class={
             capped()

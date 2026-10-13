@@ -10,7 +10,12 @@ wa-dropdown.session-menu::part(menu),
 }
 
 /* Contributed dropdown rows share the menu typography without renderer-specific classes. */
-:is(.session-menu wa-dropdown-item, .session-menu__item, .sidebar-session-sort-menu__item) {
+:is(
+  .session-menu wa-dropdown-item,
+  .session-menu .oc-menu-item,
+  .session-menu__item,
+  .sidebar-session-sort-menu__item
+) {
   font: inherit;
   font-size: calc(13px * var(--control-ui-text-scale));
 }
