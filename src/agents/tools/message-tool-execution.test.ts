@@ -836,6 +836,7 @@ describe("message tool group thread replies", () => {
         "Other thread",
         "Top-level send",
         "**Reviewer**\nRedirected reply",
+        "**Reviewer**\nNO_REPLY",
         "**Reviewer**\n",
         "**Reviewer**\nEdited final",
         "Unplaced edit",
@@ -844,6 +845,7 @@ describe("message tool group thread replies", () => {
         [{ text: "Final reply" }],
         [{ text: "**Reviewer**\nRewritten visible final" }],
         [{ text: "**Reviewer**\nPass-through hook" }],
+        [{ text: "NO_REPLY" }],
         [{ mediaUrl: "https://example.com/group-thread.png" }],
         [{ text: "Edited final" }],
       ]);

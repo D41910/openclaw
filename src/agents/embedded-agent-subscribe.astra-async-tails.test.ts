@@ -19,7 +19,6 @@ import { runAgentLoop } from "../plugin-sdk/agent-core.js";
 import { attachSessionTranscriptRunId } from "../sessions/transcript-events.js";
 import { matchesTranscriptEvent } from "../sessions/transcript-visible-record.js";
 import { createTestAdmittedRunContext } from "./admitted-run-context.test-support.js";
-import { buildAgentRunTerminalReplySnapshot } from "./agent-run-terminal-reply.js";
 import type { EmbeddedRunAttemptWithReceiptEvidence } from "./embedded-agent-runner/run/attempt-result.js";
 import { createEmbeddedRunContextRecoveryState } from "./embedded-agent-runner/run/context-recovery-state.js";
 import { resolveFinalAssistantVisibleText } from "./embedded-agent-runner/run/helpers.js";
@@ -474,12 +473,7 @@ describe("Astra async response tails", () => {
     expect([...sent, ...replyPayloads.map(show)]).toEqual(delivered);
     if ("reply" in row) {
       // Sub-agent completion and A2A forwarding read the terminal reply, not the payloads.
-      expect(
-        buildAgentRunTerminalReplySnapshot({
-          visibleText: prepared.finalAssistantVisibleText,
-          rawText: prepared.finalAssistantRawText,
-        }),
-      ).toEqual(row.reply);
+      expect(prepared.preparedTerminalReply.terminalReply).toEqual(row.reply);
     }
     if ("announce" in row) {
       // A parent's sub-agent announcement hydrates the answer from the persisted rows.
@@ -508,10 +502,7 @@ describe("Astra async response tails", () => {
         },
         completion: {
           required: true,
-          terminalReply: buildAgentRunTerminalReplySnapshot({
-            visibleText: prepared.finalAssistantVisibleText,
-            rawText: prepared.finalAssistantRawText,
-          }),
+          terminalReply: prepared.preparedTerminalReply.terminalReply,
         },
       };
       const unexpected = () => {

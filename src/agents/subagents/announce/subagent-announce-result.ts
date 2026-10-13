@@ -61,7 +61,7 @@ function captureAnnounceResultAuthority(
   };
 }
 
-/** Read the final assistant message from the transcript identity owned by this run. */
+/** Prepare the completed run's full result using its recorded terminal fact. */
 export async function readSubagentRunAnnounceResultUsing(
   observed: SubagentRunRecord,
   deps: SubagentAnnounceResultDeps,
@@ -73,27 +73,20 @@ export async function readSubagentRunAnnounceResultUsing(
     );
   }
   const isCurrent = captureAnnounceResultAuthority(child, deps.readSubagentRun);
-  const terminalReply = child.completion?.terminalReply;
   const capturedResult = resolveSubagentCompletionResultText(child);
-  if (
-    !capturedResult ||
-    terminalReply?.disposition !== "visible" ||
-    child.execution.outcome?.status !== "ok"
-  ) {
+  if (child.completion?.terminalReply?.disposition !== "visible" || capturedResult !== undefined) {
     return { text: capturedResult, isCurrent };
   }
-  const runId = child.runId;
-  const childSessionKey = child.childSessionKey;
   const childAgentId = resolveSubagentChildAgentId(child);
   if (!childAgentId) {
-    return { text: capturedResult, isCurrent };
+    return { text: undefined, isCurrent };
   }
   const target = child.execution.transcriptTarget;
   const agentId = target?.agentId ?? childAgentId;
   const storePath =
     target?.storePath ??
     deps.resolveSessionStorePathCore(deps.getRuntimeConfig().session?.store, { agentId });
-  const sessionKey = target?.sessionKey ?? childSessionKey;
+  const sessionKey = target?.sessionKey ?? child.childSessionKey;
   return withSubagentSessionSource({ agentId, storePath, sessionKey }, async (source) => {
     const sourcePath = source ? ("kind" in source ? source.path : source.actor.path) : storePath;
     const sessionId =
@@ -101,27 +94,24 @@ export async function readSubagentRunAnnounceResultUsing(
       (await deps.readSubagentSessionEntry(sourcePath, sessionKey, agentId))?.sessionId;
     const scope = { agentId, storePath: sourcePath, sessionKey };
     const found = sessionId
-      ? await deps.findTranscriptEvent({ ...scope, sessionId }, { kind: "visible-final", runId })
+      ? await deps.findTranscriptEvent(
+          { ...scope, sessionId },
+          { kind: "visible-final", runId: child.runId },
+        )
       : undefined;
-    let event: unknown = found?.event;
-    if (!event) {
-      // Delete commits the canonical archive before its derived file is published.
-      event = (await deps.findSessionTranscriptArchiveEventReadOnly({ ...scope, sessionId }, runId))
+    const event =
+      found?.event ??
+      (await deps.findSessionTranscriptArchiveEventReadOnly({ ...scope, sessionId }, child.runId))
         ?.event;
-    }
     if (!isCurrent()) {
       throw new SubagentAnnouncePreparationConflictError(
         "The completed child run's transcript identity changed during announcement.",
       );
     }
-    const answer = isRecord(event) ? extractStoredAssistantText(event.message) : undefined;
-    if (!answer) {
-      return {
-        text: `[truncated-by-retention: complete child answer unavailable]\n${terminalReply.text}`,
-        isCurrent,
-      };
-    }
-    return { text: answer, isCurrent };
+    return {
+      text: isRecord(event) ? extractStoredAssistantText(event.message) : undefined,
+      isCurrent,
+    };
   });
 }
 
@@ -189,16 +179,16 @@ export function buildChildCompletionFindings(
 
   const sections: string[] = [];
   for (const [index, child] of sorted.entries()) {
-    const resultText = child.announceResult ?? resolveSubagentCompletionResultText(child);
+    const resultText =
+      child.completion?.terminalReply?.disposition === "visible"
+        ? (child.announceResult ?? resolveSubagentCompletionResultText(child))
+        : undefined;
     const outcome = describeSubagentOutcome(child);
     if (
       child.execution.outcome?.status === "ok" &&
       !resultText &&
       child.completion?.required !== true &&
-      child.completion?.terminalReply?.disposition !== "empty" &&
-      (child.completion?.terminalReply ||
-        child.completion?.resultText?.trim() ||
-        child.completion?.fallbackResultText?.trim())
+      child.completion?.terminalReply?.disposition === "silent"
     ) {
       continue;
     }

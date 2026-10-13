@@ -10,6 +10,7 @@ import {
   deliverAgentHarnessUserInputPrompt,
   formatAgentHarnessUserInputPrompt,
   getModelProviderRequestTransport,
+  prepareAgentRunTerminalReply,
   queueAgentHarnessMessage,
   setActiveEmbeddedRun,
   type AgentHarness,
@@ -36,7 +37,7 @@ describe("classifyAgentHarnessTerminalOutcome", () => {
     });
   }
 
-  it("does not classify deliberate silent replies such as NO_REPLY", () => {
+  it("accepts prepared literal NO_REPLY text as visible output", () => {
     expect(classify({ assistantTexts: ["NO_REPLY"] })).toBeUndefined();
   });
 
@@ -61,6 +62,13 @@ describe("classifyAgentHarnessTerminalOutcome", () => {
 });
 
 describe("agent harness runtime SDK facade", () => {
+  it("exposes paired full prepared text and terminal facts for native producers", () => {
+    expect(prepareAgentRunTerminalReply({ rawText: "NO_REPLY\nNO_REPLY" })).toEqual({
+      text: "NO_REPLY",
+      terminalReply: { disposition: "visible", text: "NO_REPLY" },
+    });
+  });
+
   it("exposes structured input through one frozen named runtime surface", () => {
     expect(Object.isFrozen(agentHarnessStructuredInput)).toBe(true);
     expect(Object.keys(agentHarnessStructuredInput).toSorted()).toEqual([

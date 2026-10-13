@@ -56,6 +56,13 @@ function createHeartbeatReplySpy(): HeartbeatReplySpy {
   replySpy.mockResolvedValue({ text: "ok" });
   return replySpy;
 }
+export function setHeartbeatSilentCompletion(options: object | undefined): void {
+  const runState = resolveReplyOperationRunState(options);
+  if (!runState) {
+    throw new Error("Expected heartbeat reply operation run state");
+  }
+  runState.replyCompletion = { expectation: "optional", outcome: "silent" };
+}
 
 /** Set the invocation's execution receipt without replacing its admission state. */
 export function setHeartbeatAgentTurnStatus(

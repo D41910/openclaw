@@ -284,7 +284,7 @@ describe("subagent announce seam flow", () => {
         ...(terminal
           ? {
               terminalReply: { disposition: "visible" as const, text: "child result" },
-              fallbackReply: "stale result",
+              roundOneReply: "child result",
             }
           : {}),
       });
@@ -354,6 +354,7 @@ describe("subagent announce seam flow", () => {
           },
           cleanup: "delete",
           terminalReply: { disposition: "visible", text: "Research result" },
+          roundOneReply: "Research result",
         }),
       ).toBe("delivered");
       expect(sessionsDeleteSpy).toHaveBeenCalledExactlyOnceWith(

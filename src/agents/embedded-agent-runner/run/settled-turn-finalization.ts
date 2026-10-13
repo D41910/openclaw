@@ -4,12 +4,18 @@ import {
   setReplyPayloadMetadata,
   type ReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
-import { isSilentReplyTokenOnly } from "../../../auto-reply/reply/mixed-silent-reply-tokens.js";
+import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import { captureSessionWriterDeliveryRead } from "../../../auto-reply/reply/session-writer-delivery-authority.js";
 import type { SessionTranscriptWriterFence } from "../../../config/sessions/transcript-write-context.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
+import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
 import { resolveAdmittedRunActiveAssertion } from "../../admitted-run-context.js";
 import { classifyAgentRunTerminalOutcome } from "../../agent-run-terminal-outcome.js";
+import {
+  prepareAgentRunTerminalReply,
+  sanitizeAgentRunTerminalReplyText,
+} from "../../agent-run-terminal-reply.js";
+import { extractAssistantVisibleText } from "../../embedded-agent-utils.js";
 import { runAgentHarnessSettledTurnFinalization } from "../../harness/selection.js";
 import { resolveSettledTurnFinalizationText } from "../../harness/settled-turn-finalization-result.js";
 import type {
@@ -30,7 +36,6 @@ import {
 import { copyAttemptDeliveryState } from "./attempt-delivery-state.js";
 import type { EmbeddedRunAttemptWithReceiptEvidence } from "./attempt-result.js";
 import { resolveRuntimeModelAttempt } from "./backend.js";
-import { resolveFinalAssistantVisibleText } from "./helpers.js";
 import { shouldTreatEmptyAssistantReplyAsSilent } from "./incomplete-turn-recovery.js";
 import type { createEmbeddedRunLaneController } from "./lane-controller.js";
 import {
@@ -404,18 +409,32 @@ function buildSettledTurnFinalizationAttemptResult(input: {
   runtimePlan?: EmbeddedRunAttemptParams["runtimePlan"];
 }): EmbeddedRunAttemptWithReceiptEvidence {
   const { result, settledAttempt } = input;
-  const authoredText = resolveFinalAssistantVisibleText(result.assistant) ?? "";
+  const preparedTerminalReply =
+    result.preparedTerminalReply ??
+    prepareAgentRunTerminalReply({ rawText: resolveRawAssistantAnswerText(result.assistant) });
+  if (
+    !result.preparedTerminalReply &&
+    preparedTerminalReply.terminalReply.disposition !== "silent"
+  ) {
+    const rawText = preparedTerminalReply.text;
+    preparedTerminalReply.text = parseReplyDirectives(
+      extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
+    ).text;
+    const snapshotText = sanitizeAgentRunTerminalReplyText(preparedTerminalReply.text);
+    preparedTerminalReply.terminalReply = snapshotText
+      ? { disposition: "visible", text: snapshotText }
+      : { disposition: "empty" };
+  }
   const text =
     input.outcome === "empty"
-      ? isSilentReplyTokenOnly(authoredText)
-        ? authoredText
-        : ""
-      : resolveSettledTurnFinalizationText(result);
+      ? preparedTerminalReply.text
+      : resolveSettledTurnFinalizationText({ ...result, preparedTerminalReply });
   // Finalization replaces terminal ownership, not host-private facts from settled tools.
   // Its response model does not replace the original runtime-owned selection.
   // Replay, abort, and lifecycle state remain finalizer-local.
   return {
     terminal: { kind: "ok" },
+    preparedTerminalReply,
     sessionIdUsed: settledAttempt.sessionIdUsed,
     sessionFileUsed: settledAttempt.sessionFileUsed,
     ...(input.agentHarnessId ? { agentHarnessId: input.agentHarnessId } : {}),
@@ -431,7 +450,7 @@ function buildSettledTurnFinalizationAttemptResult(input: {
     finalPromptText: input.prompt,
     ...copyAttemptDeliveryState(settledAttempt),
     messagesSnapshot: [...settledAttempt.messagesSnapshot, result.assistant],
-    assistantTexts: [text],
+    assistantTexts: text ? [text] : [],
     assistantTranscriptOwned: result.assistantTranscriptOwned,
     assistantTranscriptIdempotencyKey: result.assistantTranscriptIdempotencyKey,
     lastAssistantTextMessageIndex: result.assistantMessageIndex,

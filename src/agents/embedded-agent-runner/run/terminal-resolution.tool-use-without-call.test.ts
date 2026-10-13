@@ -127,8 +127,7 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
       }
       expect(resolved.result.meta.error).toMatchObject({ kind: "incomplete_turn" });
       expect(resolved.result.meta.stopReason).toBe("error");
-      expect(resolved.result.meta.terminalReply).toBeUndefined();
-      expect(resolved.result.meta.terminalReplyKind).toBeUndefined();
+      expect(resolved.result.meta.terminalReply?.disposition).toBe("visible");
       expect(resolved.result.sourceReplyDeliveryState).toBe("missing");
       expect(resolved.result.payloads).toEqual([
         expect.objectContaining({ text: expect.any(String), isError: true }),

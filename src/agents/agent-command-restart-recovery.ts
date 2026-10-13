@@ -113,7 +113,6 @@ export function constrainRestartRecoveryDeliveryPayloads(
         { payloads: [payload] },
         {
           includeErrorPayloads: false,
-          includeSilentReplyPayloads: false,
           requireTerminalContent: true,
         },
       ),
@@ -156,7 +155,6 @@ export function buildRestartRecoveryTerminalDeliveryEvidence(
           requireTerminalContent: true,
           includeErrorPayloads: false,
           includeReasoningPayloads: false,
-          includeSilentReplyPayloads: false,
         },
       );
       const evidence: { mediaUrls?: string[]; visible?: boolean } = { visible };

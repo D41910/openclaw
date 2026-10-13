@@ -430,6 +430,7 @@ export function registerDeliveryRetryOwnerTests({
     );
     const controller = createLifecycleController({
       entry,
+      captureSubagentCompletionReply: vi.fn(async () => terminalReply.text),
       runSubagentAnnounceFlow,
       resumeSubagentRun,
     });

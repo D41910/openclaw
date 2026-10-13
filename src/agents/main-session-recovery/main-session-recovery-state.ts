@@ -1,7 +1,3 @@
-import {
-  PENDING_FINAL_DELIVERY_CLEAR_PATCH,
-  sanitizePendingFinalDeliveryText,
-} from "../../auto-reply/reply/pending-final-delivery-state.js";
 import type {
   InternalSessionEntry as SessionEntry,
   MainRestartRecoveryState,
@@ -530,14 +526,6 @@ export function transitionMainSessionRecovery(
         runId: command.runId,
         lifecycleGeneration: command.lifecycleGeneration,
       });
-      if (entry.pendingFinalDelivery?.kind === "replayable") {
-        const pendingText = sanitizePendingFinalDeliveryText(entry.pendingFinalDelivery.text);
-        if (pendingText) {
-          entry.pendingFinalDelivery = { ...entry.pendingFinalDelivery, text: pendingText };
-        } else {
-          Object.assign(entry, PENDING_FINAL_DELIVERY_CLEAR_PATCH);
-        }
-      }
       return {
         kind: "admitted_recovery",
         admission: {

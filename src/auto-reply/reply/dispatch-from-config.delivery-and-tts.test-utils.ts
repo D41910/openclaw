@@ -1985,7 +1985,7 @@ describe("dispatchReplyFromConfig", () => {
         text: "generated",
         mediaUrls: ["https://example.com/generated.png"],
       });
-      return { text: "NO_REPLY" };
+      return {};
     };
 
     await dispatchReplyFromConfig({

@@ -36,6 +36,37 @@ describe("projectSessionDisplayMessage", () => {
     ]);
   });
 
+  test.each(["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "no_reply", "Done\nNO_REPLY"])(
+    "preserves ordinary raw assistant text %s",
+    (content) => {
+      expect(projectSessionDisplayMessage({ role: "assistant", content })).toEqual({
+        role: "assistant",
+        text: content,
+      });
+    },
+  );
+
+  test("preserves user text and explicit visible or final source replies", () => {
+    for (const message of [
+      { role: "user", content: "NO_REPLY" },
+      { role: "assistant", content: "NO_REPLY", display: true },
+      {
+        role: "assistant",
+        content: "NO_REPLY",
+        openclawDeliveryMirror: {
+          kind: "message-tool-source-reply",
+          final: true,
+          sourceTurnId: "source-run",
+        },
+      },
+    ]) {
+      expect(projectSessionDisplayMessage(message)).toEqual({
+        role: message.role,
+        text: "NO_REPLY",
+      });
+    }
+  });
+
   test("bounds previews without splitting surrogate pairs", () => {
     const longReply = `${"a".repeat(SESSION_LAST_MESSAGE_PREVIEW_DEFAULT_CHARS - 2)}😊tail`;
     const preview = projectSessionDisplayMessage({ role: "assistant", content: longReply });

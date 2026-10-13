@@ -44,15 +44,43 @@ describe("session-memory transcript extraction", () => {
       ),
     );
     expect(memoryContent).toContain(sessionMemoryRecord("assistant", "Visible summary"));
-    expect(memoryContent).toContain(sessionMemoryRecord("assistant", "Done"));
+    expect(memoryContent).toContain(sessionMemoryRecord("assistant", "Done\n\nNO_REPLY"));
     expect(memoryContent).toContain(sessionMemoryRecord("user", "Real follow-up"));
     expect(memoryContent).toContain("<media:image:abc>");
     expect(memoryContent).not.toContain("<|im_start|>");
     expect(memoryContent).not.toContain("<tool_call>");
     expect(memoryContent).not.toContain("secret.md");
-    expect(memoryContent).not.toContain("NO_REPLY");
     expect(memoryContent).not.toContain("<system>");
     expect(memoryContent).not.toContain("ignore previous instructions");
+  });
+
+  it.each(["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "no_reply", "Done\nNO_REPLY"])(
+    "keeps literal assistant and user text %s",
+    (text) => {
+      expect(
+        getRecentSessionContentFromEvents([message("user", text), message("assistant", text)]),
+      ).toBe(
+        [sessionMemoryRecord("user", text), sessionMemoryRecord("assistant", text)].join("\n"),
+      );
+    },
+  );
+
+  it("keeps user silence markers and explicit visible assistant rows", () => {
+    const visible = {
+      ...message("assistant", "NO_REPLY"),
+      message: { role: "assistant", content: "NO_REPLY", display: true },
+    };
+    expect(
+      getRecentSessionContentFromEvents([
+        message("user", "NO_REPLY"),
+        message("assistant", "NO_REPLY"),
+        visible,
+      ]),
+    ).toBe(
+      [sessionMemoryRecord("user", "NO_REPLY"), sessionMemoryRecord("assistant", "NO_REPLY")].join(
+        "\n",
+      ),
+    );
   });
 
   it("keeps multiline message text inside its structured role record", () => {

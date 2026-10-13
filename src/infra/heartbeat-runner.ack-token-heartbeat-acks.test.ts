@@ -151,7 +151,7 @@ describe("heartbeat acknowledgements", () => {
   }>([
     {
       name: "canonical NO_REPLY acknowledgement",
-      payload: { text: "NO_REPLY" },
+      payload: {},
       options: { showOk: true },
       sends: 1,
       sentText: "HEARTBEAT_OK",
@@ -185,7 +185,16 @@ describe("heartbeat acknowledgements", () => {
       if (exec) {
         enqueueCompletion(sessionKey);
       }
-      replySpy.mockResolvedValue(payload);
+      replySpy.mockImplementation(async (_ctx, opts) => {
+        if (!Object.keys(payload).length) {
+          const state = resolveReplyOperationRunState(opts);
+          if (!state) {
+            throw new Error("Heartbeat invocation state missing");
+          }
+          state.replyCompletion = { expectation: "optional", outcome: "silent" };
+        }
+        return payload;
+      });
       expect((await run({}, exec ? "exec-event" : undefined)).status).toBe("ran");
       expect(send).toHaveBeenCalledTimes(sends);
       if (sentText) {
@@ -336,7 +345,8 @@ async function runCommittedWork(params: {
         if (params.status) {
           setHeartbeatAgentTurnStatus(opts, params.status);
         }
-        return { text: "NO_REPLY" };
+        state.replyCompletion = { expectation: "optional", outcome: "silent" };
+        return undefined;
       });
       const result = await run();
       return { result, event: getLastHeartbeatEvent(), send };

@@ -32,11 +32,8 @@ describe("buildEmbeddedRunPayloads tool-error silence", () => {
     { text: "NO_REPLY", mutatingAction: false },
     { text: "NO_REPLY", mutatingAction: true },
     { text: "NO_REPLY", mutatingAction: undefined },
-    { text: '{"action":"NO_REPLY"}', mutatingAction: false },
-    { text: '{"action":"NO_REPLY"}', mutatingAction: true },
-    { text: '{"action":"NO_REPLY"}', mutatingAction: undefined },
   ])(
-    "only suppresses token-only silence: $text, mutatingAction=$mutatingAction",
+    "suppresses authored silence: $text, mutatingAction=$mutatingAction",
     ({ text, mutatingAction }) => {
       const payloads = buildPayloads({
         assistantTexts: [text],
@@ -46,12 +43,7 @@ describe("buildEmbeddedRunPayloads tool-error silence", () => {
           mutatingAction,
         },
       });
-      if (text === "NO_REPLY") {
-        expect(payloads).toHaveLength(0);
-      } else {
-        expectSinglePayloadText(payloads, text);
-        expect(payloads[0]?.isError).not.toBe(true);
-      }
+      expect(payloads).toHaveLength(0);
     },
   );
 

@@ -422,11 +422,8 @@ export { stripInternalRuntimeContext } from "../../../../src/agents/internal-run
 export { isHeartbeatUserMessage } from "../../../../src/auto-reply/heartbeat-filter.js";
 export { HEARTBEAT_PROMPT } from "../../../../src/auto-reply/heartbeat.js";
 export { stripInboundMetadata } from "../../../../src/auto-reply/reply/strip-inbound-meta.js";
-export {
-  HEARTBEAT_TOKEN,
-  SILENT_REPLY_TOKEN,
-  isSilentReplyPayloadText,
-} from "../../../../src/auto-reply/tokens.js";
+export { HEARTBEAT_TOKEN, SILENT_REPLY_TOKEN } from "../../../../src/auto-reply/tokens.js";
+export { isSilentAssistantTranscriptMessage } from "../../../../src/agents/embedded-agent-runner/message-visibility.js";
 export { getRuntimeConfig } from "../../../../src/config/config.js";
 export {
   isCompactionCheckpointTranscriptFileName,

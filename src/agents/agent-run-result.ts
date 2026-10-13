@@ -1,6 +1,5 @@
 /** Agent-run result projections shared by execution owners and diagnostic probes. */
 import { isReplyPayloadTerminalContent, type ReplyPayload } from "../auto-reply/reply-payload.js";
-import { isSilentReplyTokenOnly } from "../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { buildAgentRunTerminalOutcomeFromLifecycleEvent } from "./agent-run-terminal-outcome.js";
 import type { EmbeddedAgentRunResult } from "./embedded-agent-runner/types.js";
 
@@ -32,6 +31,7 @@ export function appendAgentRunFailure(
 export type AgentRunResultView = {
   payloads?: Array<ReplyPayload & { visible?: boolean }>;
   meta?: {
+    terminalReply?: EmbeddedAgentRunResult["meta"]["terminalReply"];
     aborted?: boolean;
     stopReason?: string;
     timeoutPhase?: EmbeddedAgentRunResult["meta"]["timeoutPhase"];
@@ -45,9 +45,12 @@ export type AgentRunResultView = {
 };
 
 export function extractAgentRunText(result: AgentRunResultView): string | undefined {
-  const visibleText = result.meta?.finalAssistantVisibleText?.trim();
-  if (visibleText) {
-    return isSilentReplyTokenOnly(visibleText) ? undefined : visibleText;
+  if (result.meta?.terminalReply?.disposition === "silent") {
+    return undefined;
+  }
+  const visibleText = result.meta?.finalAssistantVisibleText;
+  if (visibleText?.trim()) {
+    return visibleText;
   }
   return (
     result.payloads
@@ -57,8 +60,8 @@ export function extractAgentRunText(result: AgentRunResultView): string | undefi
           payload.isError !== true &&
           isReplyPayloadTerminalContent(payload),
       )
-      .map((payload) => payload.text?.trim())
-      .filter((text): text is string => Boolean(text) && !isSilentReplyTokenOnly(text))
+      .map((payload) => payload.text)
+      .filter((text): text is string => Boolean(text?.trim()))
       .join("\n") || undefined
   );
 }

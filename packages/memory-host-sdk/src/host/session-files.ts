@@ -24,7 +24,7 @@ import {
   isIncognitoOpenClawAgentSqlitePath,
   isIncognitoSessionKey,
   isSessionArchiveArtifactName,
-  isSilentReplyPayloadText,
+  isSilentAssistantTranscriptMessage,
   isUsageCountedSessionTranscriptFileName,
   materializeSessionArchiveForRead,
   parseUsageCountedSessionIdFromFileName,
@@ -436,9 +436,6 @@ function sanitizeSessionText(text: string, role: "user" | "assistant"): string |
   ) {
     return null;
   }
-  if (isSilentReplyPayloadText(normalized)) {
-    return null;
-  }
   // Assistant-side machinery acks: HEARTBEAT_OK is the canonical "all clear,
   // nothing to do" reply to a heartbeat tick. Drop on the assistant side
   // directly so we do not have to rely on cross-message coupling with the
@@ -816,6 +813,12 @@ async function buildSessionEntryFromSource(
         insideRecalledMemoryTurn ||
         generatedByDreamingNarrative ||
         generatedByCronRun
+      ) {
+        continue;
+      }
+      if (
+        ("display" in message && message.display === false) ||
+        isSilentAssistantTranscriptMessage(message)
       ) {
         continue;
       }

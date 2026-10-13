@@ -196,7 +196,13 @@ describe("native Talk action ownership through public plugin registration", () =
             modelRun = session.prompt(params.prompt);
             await modelRun;
             await recorder?.waitForRuntimePersistence();
-            return { payloads: [{ text: "Both labels are preserved." }], meta: { durationMs: 0 } };
+            return {
+              payloads: [{ text: "Both labels are preserved." }],
+              meta: {
+                durationMs: 0,
+                terminalReply: { disposition: "visible", text: "Both labels are preserved." },
+              },
+            };
           }).catch((error: unknown) => {
             providerStarted.reject(error);
             throw error;

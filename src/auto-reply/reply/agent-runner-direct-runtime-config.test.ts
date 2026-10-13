@@ -24,7 +24,6 @@ import { withTestDir } from "../../test-helpers/temp-dir.js";
 import { withReplyDispatcher } from "../dispatch-dispatcher.js";
 import { getReplyPayloadMetadata } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
 import { createTestFollowupRun, withTestModelContextTokens } from "./agent-runner.test-fixtures.js";
 import type { QueueSettings } from "./queue.js";
@@ -672,12 +671,13 @@ describe("runReplyAgent runtime config", () => {
 
       const result = await runReplyAgent(replyParams);
 
-      expect(result).toMatchObject({
-        text:
-          abortMethod === "abortByUser"
-            ? SILENT_REPLY_TOKEN
-            : "⚠️ Gateway is restarting. Please wait a few seconds and try again.",
-      });
+      expect(result).toEqual(
+        abortMethod === "abortByUser"
+          ? {}
+          : {
+              text: "⚠️ Gateway is restarting. Please wait a few seconds and try again.",
+            },
+      );
       expect(resolveReplyOperationAgentTurn(runState)).toBe("cancelled");
       expect(executeAgentTurnMock).not.toHaveBeenCalled();
     },

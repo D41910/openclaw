@@ -174,6 +174,11 @@ describe("sessions_send directed policy at the tool boundary", () => {
             terminalReply: { disposition: "visible", text: replyText },
           };
         }
+        if (request.method === "chat.history") {
+          return {
+            messages: [{ role: "assistant", content: [{ type: "text", text: replyText }] }],
+          };
+        }
         throw new Error("Unexpected Gateway method: " + request.method);
       },
     );

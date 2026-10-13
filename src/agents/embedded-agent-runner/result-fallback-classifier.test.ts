@@ -422,6 +422,7 @@ describe("classifyEmbeddedAgentRunResultForModelFallback", () => {
         payloads: [],
         meta: {
           durationMs: 42,
+          terminalReply: { disposition: "silent" },
           finalAssistantRawText: "NO_REPLY",
           finalAssistantVisibleText: "NO_REPLY",
         },
@@ -431,16 +432,23 @@ describe("classifyEmbeddedAgentRunResultForModelFallback", () => {
     expect(result).toBeNull();
   });
 
-  it.each(['{"action":"NO_REPLY"}', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
-    "does not waive missing output for non-token-only raw text: %s",
+  it.each(['{"action":"NO_REPLY"}', '"NO_REPLY"', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
+    "does not retry prepared ordinary text: %s",
     (text) => {
       expect(
         classifyEmbeddedAgentRunResultForModelFallback({
           provider: "openai",
           model: "gpt-5.5",
-          result: { payloads: [], meta: { durationMs: 42, finalAssistantRawText: text } },
+          result: {
+            payloads: [{ text }],
+            meta: {
+              durationMs: 42,
+              finalAssistantRawText: text,
+              terminalReply: { disposition: "visible", text },
+            },
+          },
         }),
-      ).toMatchObject({ code: "empty_result", reason: "format" });
+      ).toBeNull();
     },
   );
 

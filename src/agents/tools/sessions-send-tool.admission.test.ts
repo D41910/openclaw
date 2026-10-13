@@ -242,7 +242,11 @@ describe("sessions_send dispatch admission", () => {
             completion = SessionFollowupCompletion.bind(followup);
             followup.completion = completion;
             completion.markAccepted(runId);
-            await completion.settle(runId, { status: "ok", replyText: "Task complete" });
+            await completion.settle(runId, {
+              status: "ok",
+              replyText: "Task complete",
+              terminalReply: { disposition: "visible", text: "Task complete" },
+            });
             completion.finishExecution(runId);
           }
           return { runId, status: "accepted" };
@@ -384,6 +388,11 @@ describe("sessions_send dispatch admission", () => {
               terminalReply: { disposition: "visible", text: "Task complete" },
             };
           }
+          if (request.method === "chat.history") {
+            return {
+              messages: [{ role: "assistant", content: [{ type: "text", text: "Task complete" }] }],
+            };
+          }
           if (request.method === "agent") {
             if (!isRecord(request.params)) {
               throw new Error("Expected agent request parameters");
@@ -511,6 +520,10 @@ describe("sessions_send dispatch admission", () => {
             return {
               status: "ok",
               terminalReply: { disposition: "visible", text: "Task complete" },
+            };
+          case "chat.history":
+            return {
+              messages: [{ role: "assistant", content: [{ type: "text", text: "Task complete" }] }],
             };
           case "send":
             return { messageId: "final-reply" };

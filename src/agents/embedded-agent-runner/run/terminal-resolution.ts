@@ -4,7 +4,6 @@ import {
   retainSilentFinalPayloads,
   setReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
-import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { freezeDiagnosticTraceContext } from "../../../infra/diagnostic-trace-context.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
 import type { AssistantMessage } from "../../../llm/types.js";
@@ -14,6 +13,7 @@ import {
   classifyAgentRunTerminalOutcome,
   projectAgentRunAttemptTerminal,
 } from "../../agent-run-terminal-outcome.js";
+import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
 import type { AuthProfileFailureReason, AuthProfileStore } from "../../auth-profiles.js";
 import type { ResolvedProviderAuth } from "../../model-auth.js";
 import {
@@ -56,7 +56,6 @@ import {
   hasYieldContinuationEvidence,
   resolveIncompleteTurnPayloadText,
   resolveRunLivenessState,
-  resolveSilentToolResultReplyPayload,
   shouldRetryMissingAssistantTurn,
   TRUNCATED_REPLY_NOTICE_TEXT,
   YIELD_DIAGNOSTIC_TEXT,
@@ -136,16 +135,9 @@ export function resolveSettledTurnFinalizationRequest(input: {
     payloads: input.payloadsWithToolMedia,
     attempt: input.attempt,
   });
-  const silentToolResultReplyPayload = resolveSilentToolResultReplyPayload({
-    isCronTrigger: input.runParams.trigger === "cron",
-    payloadCount: preparedPayloadCount,
-    aborted: terminalAborted,
-    timedOut: terminalTimedOut,
-    attempt: input.attempt,
-  });
   const payloadCount = input.recoveredFinalAssistantPayloadsAfterPromptTimeout
     ? input.recoveredFinalAssistantPayloadsAfterPromptTimeout.length
-    : preparedPayloadCount || (silentToolResultReplyPayload ? 1 : 0);
+    : preparedPayloadCount;
   const emptyAssistantReplyIsSilent = shouldTreatEmptyAssistantReplyAsSilent({
     terminalReplyExpectation: resolveReplyExpectation(input.runParams),
     payloadCount,
@@ -228,20 +220,9 @@ export async function resolveEmbeddedRunTerminal(input: {
   const terminalTimedOut = isEmbeddedRunTerminalTimeout(input.terminalState.outcome);
   const terminalInterrupted = isEmbeddedRunTerminalInterrupted(input.terminalState.outcome);
   const { signalOwnedInterruption } = input.terminalState;
-  const silentToolResultReplyPayload = resolveSilentToolResultReplyPayload({
-    isCronTrigger: runParams.trigger === "cron",
-    payloadCount: input.prepared.payloadsWithToolMedia?.length ?? 0,
-    aborted: terminalAborted,
-    timedOut: terminalTimedOut,
-    attempt,
-  });
-  const payloadsForTerminalPath = input.prepared.recoveredFinalAssistantPayloadsAfterPromptTimeout
-    ? input.prepared.recoveredFinalAssistantPayloadsAfterPromptTimeout
-    : input.prepared.payloadsWithToolMedia?.length
-      ? input.prepared.payloadsWithToolMedia
-      : silentToolResultReplyPayload
-        ? [silentToolResultReplyPayload]
-        : input.prepared.payloadsWithToolMedia;
+  const payloadsForTerminalPath =
+    input.prepared.recoveredFinalAssistantPayloadsAfterPromptTimeout ??
+    input.prepared.payloadsWithToolMedia;
   const payloadCount = payloadsForTerminalPath?.length ?? 0;
   const terminalFacts = {
     payloadCount,
@@ -602,10 +583,7 @@ async function completeEmbeddedRun(
       : error
         ? input.payloadsForTerminalPath
         : input.emptyAssistantReplyIsSilent
-          ? [
-              ...retainSilentFinalPayloads(input.payloadsForTerminalPath ?? []),
-              { text: SILENT_REPLY_TOKEN },
-            ]
+          ? retainSilentFinalPayloads(input.payloadsForTerminalPath ?? [])
           : input.payloadsForTerminalPath?.length
             ? isTruncatedPartialReply
               ? [
@@ -619,6 +597,22 @@ async function completeEmbeddedRun(
             : input.attempt.yieldDetected && !yieldHasContinuation
               ? [setReplyPayloadMetadata({ text: YIELD_DIAGNOSTIC_TEXT }, { hostNotice: true })]
               : input.payloadsForTerminalPath;
+  const sourceFinal = input.attempt.messagingToolSourceReplyPayloads?.findLast(
+    (payload) => payload.sourceReplyFinal === true && payload.text?.trim(),
+  );
+  const terminalReply = sourceFinal
+    ? {
+        disposition: "visible" as const,
+        text: sanitizeAgentRunTerminalReplyText(sourceFinal.text ?? ""),
+      }
+    : error || incompleteText !== undefined
+      ? {
+          disposition: "visible" as const,
+          text: sanitizeAgentRunTerminalReplyText(incompleteText ?? error?.message ?? ""),
+        }
+      : input.emptyAssistantReplyIsSilent
+        ? { disposition: "silent" as const }
+        : input.prepared.preparedTerminalReply.terminalReply;
   return {
     action: "complete",
     result: {
@@ -632,15 +626,14 @@ async function completeEmbeddedRun(
         aborted: terminalAborted,
         systemPromptReport: input.attempt.systemPromptReport,
         finalPromptText: input.attempt.finalPromptText,
-        finalAssistantVisibleText: input.prepared.finalAssistantVisibleText,
+        finalAssistantVisibleText:
+          sourceFinal?.text ?? incompleteText ?? input.prepared.finalAssistantVisibleText,
         finalAssistantRawText: input.prepared.finalAssistantRawText,
         replayInvalid,
         livenessState,
         stopReason,
         agentHarnessResultClassification: input.attempt.agentHarnessResultClassification,
-        ...(input.emptyAssistantReplyIsSilent
-          ? { terminalReply: { disposition: "silent" as const } }
-          : {}),
+        terminalReply,
         ...(error
           ? { error }
           : {
@@ -649,9 +642,6 @@ async function completeEmbeddedRun(
                 ? { yieldAcknowledgment: input.attempt.yieldAcknowledgment }
                 : {}),
               ...(acceptedSessionSpawnContinuation ? { continuationPending: true as const } : {}),
-              ...(input.emptyAssistantReplyIsSilent
-                ? { terminalReplyKind: "silent-empty" as const }
-                : {}),
               ...(input.intentionalTerminalCompletion
                 ? { intentionalTerminalCompletion: "tool-batch" as const }
                 : {}),

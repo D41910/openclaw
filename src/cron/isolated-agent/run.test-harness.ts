@@ -85,8 +85,6 @@ const replaceSessionEntryMock = vi.fn();
 export const patchSessionEntryMock = vi.fn();
 export const resolveCronSessionMock = vi.fn();
 export const logWarnMock = vi.fn();
-export const readDescendantExecutionStateMock =
-  vi.fn<typeof import("./run-subagent-registry.runtime.js").readDescendantExecutionState>();
 export const pickLastNonEmptyTextFromPayloadsMock = vi.fn();
 export const resolveCronPayloadOutcomeMock = vi.fn();
 export const resolveCronDeliveryPlanMock = vi.fn();
@@ -329,10 +327,6 @@ vi.mock("./run-embedded.runtime.js", () => ({
   resolveFastModeState: resolveFastModeStateMock,
   resolveCronAgentLane: resolveCronAgentLaneMock,
   runEmbeddedAgent: runEmbeddedAgentMock,
-}));
-
-vi.mock("./run-subagent-registry.runtime.js", () => ({
-  readDescendantExecutionState: readDescendantExecutionStateMock,
 }));
 
 vi.mock("../../agents/agent-bundle-mcp-tools.js", () => ({
@@ -607,10 +601,6 @@ function resetRunExecutionMocks(): void {
   runEmbeddedAgentMock.mockResolvedValue(makeDefaultEmbeddedResult());
   runCliAgentMock.mockReset();
   getCliSessionBindingMock.mockReturnValue(undefined);
-  readDescendantExecutionStateMock.mockReset().mockResolvedValue({
-    hasFreshDescendants: false,
-    hasActiveDescendants: false,
-  });
 }
 
 function resetRunOutcomeMocks(): void {

@@ -482,11 +482,7 @@ describe("normalizeAssistantReplayContent", () => {
       "NO_REPLY",
       { type: "thinking", thinking: "yield reasoning", thinkingSignature: "sig_yield" },
     ],
-    [
-      "after metadata removal",
-      `${COPIED_INBOUND_METADATA_ONLY_TEXT}\n\nNO_REPLY`,
-      { type: "redacted_thinking", data: "redacted-yield" },
-    ],
+    ["with redacted reasoning", "NO_REPLY", { type: "redacted_thinking", data: "redacted-yield" }],
   ])("drops thinking-only silent replies %s (#99620)", (_label, text, reasoning) => {
     const messages = [
       userMessage("hi"),
@@ -543,7 +539,29 @@ describe("normalizeAssistantReplayContent", () => {
     expect((out[1] as { content: unknown[] }).content).toEqual([
       { type: "thinking", thinking: "useful reasoning", thinkingSignature: "sig" },
       companion,
+      { type: "text", text: "NO_REPLY" },
     ]);
+  });
+
+  it.each(["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "no_reply", "Done\nNO_REPLY"])(
+    "preserves ordinary assistant replay text %s",
+    (text) => {
+      const messages = [userMessage("first"), bedrockAssistant(text), userMessage("NO_REPLY")];
+      expect(normalizeAssistantReplayContent(messages)).toEqual(messages);
+    },
+  );
+
+  it("classifies the raw whole row before removing metadata", () => {
+    const message = bedrockAssistant(`${COPIED_INBOUND_METADATA_ONLY_TEXT}\n\nNO_REPLY`);
+    expect(normalizeAssistantReplayContent([message])).toHaveLength(1);
+  });
+
+  it("does not classify a text block separately from the answer", () => {
+    const message = bedrockAssistant([
+      { type: "text", text: "NO_REPLY" },
+      { type: "text", text: " is the protocol marker." },
+    ]);
+    expect(normalizeAssistantReplayContent([message])).toEqual([message]);
   });
 
   it("strips copied runtime context from assistant replay text", () => {

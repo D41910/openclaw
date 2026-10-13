@@ -2,9 +2,12 @@ import type { PluginHookReplyDispatchEvent } from "openclaw/plugin-sdk/core";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { PLUGIN_COMMAND_DISPATCH } from "../plugins/plugin-command-dispatch-contract.js";
 import type { PluginRuntimeChannel } from "../plugins/runtime/types-channel.js";
+import type * as ReplyChunking from "./reply-chunking.js";
+import type * as ReplyRuntime from "./reply-runtime.js";
 import {
   createReplyDispatcher,
   dispatchInboundMessage,
+  isSilentReplyText,
   type GetReplyOptions,
   type PreparedAgentRunStart,
   type ReplyDispatcher,
@@ -25,6 +28,21 @@ type ProgressBoundaryCallback = GetReplyOptions[
   | "onBlockReplyQueued"
   | "onCompactionStart"
   | "onCompactionEnd"];
+
+describe("reply SDK silence surface", () => {
+  it("exposes only the exact helper from reply-runtime", () => {
+    type ChunkingExports = keyof typeof ReplyChunking;
+    type RuntimeExports = keyof typeof ReplyRuntime;
+    expectTypeOf<"isSilentReplyText">().not.toExtend<ChunkingExports>();
+    expectTypeOf<"isSilentReplyPayloadText">().not.toExtend<ChunkingExports>();
+    expectTypeOf<"isSilentReplyPayloadText">().not.toExtend<RuntimeExports>();
+    expectTypeOf(isSilentReplyText).parameters.toEqualTypeOf<[text?: string]>();
+    expect(isSilentReplyText(" \nNO_REPLY\t")).toBe(true);
+    for (const text of ["no_reply", "NO_REPLY.", '{"text":"NO_REPLY"}', "NO_REPLY\nNO_REPLY"]) {
+      expect(isSilentReplyText(text)).toBe(false);
+    }
+  });
+});
 
 describe("reply runtime public progress contracts", () => {
   it("retains released run-start callback arguments and synchronous completion acknowledgment", () => {

@@ -4,10 +4,6 @@ import readline from "node:readline";
 import { safeParseJsonRecord } from "@openclaw/normalization-core/json-coercion";
 import { asOptionalRecord, isRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
-import {
-  isSilentReplyTokenOnly,
-  stripMixedSilentReplyTokens,
-} from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { messageToolOwnsVisibleReply } from "../../auto-reply/source-reply-delivery-mode.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import {
@@ -29,7 +25,10 @@ import {
   readClaudeCliFallbackSeed,
 } from "../../gateway/cli-session-history.claude.js";
 import { sleep } from "../../utils/sleep.js";
-import { buildAgentRunTerminalReplySnapshot } from "../agent-run-terminal-reply.js";
+import {
+  prepareAgentRunTerminalReply,
+  type PreparedAgentRunTerminalReply,
+} from "../agent-run-terminal-reply.js";
 import type { AgentRunTerminalReplySnapshot } from "../agent-run-terminal-reply.types.js";
 import type { ExecApprovalContinuationPromptRange } from "../bash-tools.exec-approval-output.js";
 import { isClaudeToolResultBlockType, isClaudeToolUseBlockType } from "../cli-output-records.js";
@@ -394,69 +393,54 @@ export async function buildClaudeCliFallbackContextPrelude(params: {
   return sections.join("\n");
 }
 
-/** Buffers a possible control token until ACP output identifies silence or ordinary text. */
+/** Withholds only a possible exact leading control line while ACP is producing output. */
 export function createAcpVisibleTextAccumulator() {
   let visibleText = "";
   let rawText = "";
-  const resolveNextCandidate = (base: string, chunk: string): string => {
-    if (!base) {
-      return chunk;
-    }
-    if (chunk.startsWith(base) && chunk.length > base.length) {
-      return chunk;
-    }
-    return `${base}${chunk}`;
-  };
-  const flushBufferedText = (): string => {
-    if (!visibleText && !isSilentReplyTokenOnly(rawText)) {
-      visibleText = stripMixedSilentReplyTokens(rawText) ?? rawText;
-    }
-    return visibleText;
-  };
+  let released = false;
+  let prepared: PreparedAgentRunTerminalReply | undefined;
+  const finalize = () => (prepared ??= prepareAgentRunTerminalReply({ rawText }));
 
   return {
     consume(chunk: string): { text: string; delta: string } | null {
       if (!chunk) {
         return null;
       }
-
-      if (!visibleText) {
-        const leadCandidate = resolveNextCandidate(rawText, chunk);
-        rawText = leadCandidate;
-        const trimmedLeadCandidate = leadCandidate.trim();
-        if (
-          isSilentReplyTokenOnly(trimmedLeadCandidate) ||
-          SILENT_REPLY_TOKEN.startsWith(trimmedLeadCandidate.toUpperCase())
-        ) {
-          return null;
-        }
-        const text = stripMixedSilentReplyTokens(leadCandidate) ?? leadCandidate;
-        if (!text) {
-          return null;
-        }
-        visibleText = text;
-        return { text, delta: text };
-      }
-
       const delta =
-        chunk.startsWith(rawText) && chunk.length > rawText.length
+        rawText && chunk.startsWith(rawText) && chunk.length > rawText.length
           ? chunk.slice(rawText.length)
           : chunk;
       rawText += delta;
+      if (!released) {
+        const candidate = rawText.trimStart();
+        if (
+          SILENT_REPLY_TOKEN.startsWith(candidate) ||
+          (candidate.startsWith(SILENT_REPLY_TOKEN) &&
+            !candidate.slice(SILENT_REPLY_TOKEN.length).trim())
+        ) {
+          // A literal newline ends the one permitted control line. Its suffix
+          // is ordinary text, even if it spells another control token.
+          if (!rawText.startsWith(`${SILENT_REPLY_TOKEN}\n`)) {
+            return null;
+          }
+        }
+        released = true;
+        visibleText = rawText.startsWith(`${SILENT_REPLY_TOKEN}\n`)
+          ? rawText.slice(SILENT_REPLY_TOKEN.length + 1)
+          : rawText;
+        return visibleText ? { text: visibleText, delta: visibleText } : null;
+      }
       visibleText += delta;
       return { text: visibleText, delta };
     },
     finalize(): string {
-      return flushBufferedText().trim();
+      return finalize().text;
     },
     finalizeRaw(): string {
-      return flushBufferedText();
+      return rawText;
     },
     finalizeReplySnapshot(): AgentRunTerminalReplySnapshot {
-      return buildAgentRunTerminalReplySnapshot({
-        visibleText: flushBufferedText(),
-        rawText: visibleText ? "" : rawText,
-      });
+      return finalize().terminalReply;
     },
   };
 }

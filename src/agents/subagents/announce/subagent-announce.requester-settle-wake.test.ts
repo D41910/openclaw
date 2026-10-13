@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../test/helpers/promise.js";
 import { getAgentEventLifecycleGeneration } from "../../../infra/agent-events.js";
 import { matchesTranscriptEvent } from "../../../sessions/transcript-visible-record.js";
-import { buildAgentRunTerminalReplySnapshot } from "../../agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   promoteRequesterFinalAttachment,
   registerRequesterFinalAttachment,
@@ -292,12 +292,12 @@ describe("maybeWakeRequesterAfterAllChildrenSettled", () => {
     const findings = ["alpha findings", "bravo findings", "charlie findings"];
     for (const [index, child] of children.entries()) {
       const text = `${resultPrefix}${findings[index]}`;
-      const terminalReply = buildAgentRunTerminalReplySnapshot({ visibleText: text });
+      const terminalReply = prepareAgentRunTerminalReply({ rawText: text }).terminalReply;
       expect(terminalReply.disposition).toBe("visible");
       if (terminalReply.disposition !== "visible") {
         throw new Error("expected visible terminal evidence");
       }
-      child.completion = { required: true, terminalReply, resultText: terminalReply.text };
+      child.completion = { required: true, terminalReply, resultText: text };
       expect(terminalReply.text).toHaveLength(4_096);
       const sessionId = `session-${child.runId}`;
       sessionStore[child.childSessionKey] = { sessionId };
@@ -853,7 +853,8 @@ describe("maybeWakeRequesterAfterAllChildrenSettled", () => {
       outcome: { status: "ok" },
       completion: {
         required: true,
-        terminalReply: buildAgentRunTerminalReplySnapshot({ visibleText: text }),
+        terminalReply: prepareAgentRunTerminalReply({ rawText: text }).terminalReply,
+        resultText: text,
       },
       requesterSettleWake: {
         status: "pending",

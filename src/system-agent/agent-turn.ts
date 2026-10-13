@@ -307,6 +307,7 @@ async function runSystemAgentTurnWithDeps(
     runId,
     messageChannel: "openclaw",
     messageProvider: "openclaw",
+    terminalReplyExpectation: "result-required" as const,
     disableTrajectory: true,
   };
   // Directives are per-turn: the tool records at most one interactive handoff
@@ -406,7 +407,7 @@ async function runSystemAgentTurnWithDeps(
     }
     failureGuidance = "retry";
     const text = extractAgentRunText(result);
-    if (!text) {
+    if (!text || result.meta?.terminalReply?.disposition === "silent") {
       throw new SystemAgentInferenceUnavailableError("agent-turn");
     }
     return {

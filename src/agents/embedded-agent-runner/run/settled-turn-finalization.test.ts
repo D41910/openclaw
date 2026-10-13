@@ -404,7 +404,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       expect(backendMocks.runSettledFinalization).toHaveBeenCalledTimes(silent ? 1 : 2);
       if (!errorText) {
         expect(result.finalizationOutcome).toBe("answered");
-        expect(result.attempt.assistantTexts).toEqual([SILENT_REPLY_TOKEN]);
+        expect(result.attempt.assistantTexts).toEqual([""]);
         expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
       } else {
         expect(result.finalizationOutcome).toBe("failed");
@@ -514,7 +514,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       } else {
         expect(terminal.result.payloads).toBeUndefined();
       }
-      expect(terminal.result.meta.terminalReplyKind).toBeUndefined();
+      expect(terminal.result.meta.terminalReply?.disposition).not.toBe("silent");
     },
   );
 

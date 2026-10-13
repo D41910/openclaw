@@ -68,9 +68,7 @@ import {
 } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
 import type { VerboseLevel } from "../thinking.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
-import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 
 type ReplyFailoverFacts = ReturnType<typeof resolveReplyFailoverFacts>;
 
@@ -390,9 +388,7 @@ export function buildExternalRunFailureReply(
 
 export function markAgentRunFailureReplyPayload<T extends ReplyPayload>(payload: T): T {
   const marked = markReplyPayloadForSourceSuppressionDelivery(payload);
-  if (!isSilentReplyTokenOnly(marked.text, SILENT_REPLY_TOKEN)) {
-    marked.isError = true;
-  }
+  marked.isError = true;
   return marked;
 }
 
@@ -428,7 +424,7 @@ export function resolveAgentRunFailureText(params: {
   return params.replyExpectation === "optional" &&
     params.isGenericRunnerFailure &&
     !params.visibleReplyDelivered
-    ? SILENT_REPLY_TOKEN
+    ? ""
     : params.text;
 }
 

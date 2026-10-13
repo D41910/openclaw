@@ -58,17 +58,35 @@ function firstMockArg(
 describe("runSessionsSendA2AFlow reply delivery", () => {
   let gatewayCalls: CallGatewayOptions[];
   let sessionListRows: GatewaySessionListRow[];
+  let transcriptReply: string | undefined;
 
   beforeEach(() => {
     setActivePluginRegistry(createSessionConversationTestRegistry());
     gatewayCalls = [];
     sessionListRows = [];
+    transcriptReply = undefined;
     callGatewayMock.mockReset();
     const callGateway = async <T = Record<string, unknown>>(
       opts: CallGatewayOptions,
     ): Promise<T> => {
       if (opts.method === "agent.wait") {
-        return await agentWaitMock(opts);
+        const wait = await agentWaitMock(opts);
+        transcriptReply =
+          wait.terminalReply?.disposition === "visible" ? wait.terminalReply.text : undefined;
+        return wait;
+      }
+      if (opts.method === "chat.history") {
+        return {
+          messages: transcriptReply
+            ? [
+                {
+                  role: "assistant",
+                  content: [{ type: "text", text: transcriptReply }],
+                  __openclaw: { display: true },
+                },
+              ]
+            : [],
+        } as T;
       }
       gatewayCalls.push(opts);
       if (opts.method === "sessions.describe") {
@@ -116,7 +134,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
         sessionKey: "agent:main:telegram:group:-100123:topic:554",
       },
       replyTimeoutMs: 10_000,
-      reply: { status: "ok", replyText: "Worker completed successfully" },
+      reply: {
+        status: "ok",
+        replyText: "Worker completed successfully",
+        terminalReply: { disposition: "visible", text: "Worker completed successfully" },
+      },
     });
 
     const sendCall = requireGatewayCall("send");
@@ -127,6 +149,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
   });
 
   it.each([
+    {
+      name: "visible literal NO_REPLY",
+      reply: "NO_REPLY",
+      expected: { message: "NO_REPLY", agentId: "orion" },
+    },
     {
       name: "a generated voice note",
       reply:
@@ -155,7 +182,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
           sessionKey: "agent:orion:discord:channel:target-room",
         },
         requesterChannel: "discord",
-        reply: { status: "ok", replyText: reply },
+        reply: {
+          status: "ok",
+          replyText: reply,
+          terminalReply: { disposition: "visible", text: reply },
+        },
       });
 
       const sendParams = requireGatewayCall("send").params as Record<string, unknown>;
@@ -205,12 +236,13 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
     expect(sendParams).not.toHaveProperty("sessionKey");
   });
 
-  it("does not deliver when the completed run has no reply", async () => {
-    agentWaitMock.mockResolvedValueOnce({
-      status: "ok",
-      terminalReply: { disposition: "silent" },
-    });
-
+  it.each([
+    { terminalReply: { disposition: "silent" as const }, replyText: "stale visible result" },
+    {
+      terminalReply: { disposition: "visible" as const, text: "HEARTBEAT_OK" },
+      replyText: "HEARTBEAT_OK",
+    },
+  ])("does not deliver silent completion or the exact heartbeat acknowledgement", async (reply) => {
     await runSessionsSendA2AFlow({
       targetAgentId: "main",
       targetSessionKey: "agent:main:discord:channel:target-room",
@@ -219,6 +251,7 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
       requesterSessionKey: "agent:main:discord:channel:target-room",
       requesterChannel: "discord",
       runId: "run-silent",
+      reply: { status: "ok", ...reply },
     });
 
     expect(runAgentStep).not.toHaveBeenCalled();
@@ -234,7 +267,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
       requesterSessionKey: requesterDeliveryGeneration.sessionKey,
       requesterChannel: "discord",
       replyTimeoutMs: 10_000,
-      reply: { status: "ok", replyText: "Task complete" },
+      reply: {
+        status: "ok",
+        replyText: "Task complete",
+        terminalReply: { disposition: "visible", text: "Task complete" },
+      },
     });
     expect(gatewayCalls.find((call) => call.method === "send")).toBeUndefined();
     expect(runAgentStep).not.toHaveBeenCalled();
@@ -249,7 +286,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
       replyTimeoutMs: 10_000,
       requesterSessionKey: "agent:main:discord:channel:target-room",
       requesterChannel: "webchat",
-      reply: { status: "ok", replyText: "Substantive channel reply" },
+      reply: {
+        status: "ok",
+        replyText: "Substantive channel reply",
+        terminalReply: { disposition: "visible", text: "Substantive channel reply" },
+      },
     });
 
     expect(runAgentStep).not.toHaveBeenCalled();
@@ -329,7 +370,14 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
         requesterOrigin: captured
           ? { channel: "qa-channel", to: "dm:alice", accountId: "default" }
           : undefined,
-        reply: { status: "ok", replyText: "Delayed result for a session with no saved route" },
+        reply: {
+          status: "ok",
+          replyText: "Delayed result for a session with no saved route",
+          terminalReply: {
+            disposition: "visible",
+            text: "Delayed result for a session with no saved route",
+          },
+        },
       });
 
       expect(runAgentStep).not.toHaveBeenCalled();
@@ -371,7 +419,11 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
       requesterSessionKey: session.key,
       requesterDeliveryGeneration,
       replyTimeoutMs: 10_000,
-      reply: { status: "ok", replyText: "Worker completed successfully" },
+      reply: {
+        status: "ok",
+        replyText: "Worker completed successfully",
+        terminalReply: { disposition: "visible", text: "Worker completed successfully" },
+      },
     });
 
     requireGatewayCall("sessions.describe");

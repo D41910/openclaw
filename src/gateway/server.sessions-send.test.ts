@@ -14,7 +14,7 @@ import {
   vi,
 } from "vitest";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
-import { buildAgentRunTerminalReplySnapshot } from "../agents/agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../agents/agent-run-terminal-reply.js";
 import type { AgentCommandGatewayIngressOpts } from "../agents/command/types.js";
 import {
   loadSessionEntry,
@@ -158,7 +158,7 @@ async function emitLifecycleAssistantReply(params: {
       phase: "end",
       startedAt,
       endedAt: Date.now(),
-      terminalReply: buildAgentRunTerminalReplySnapshot({ visibleText: text, rawText: text }),
+      terminalReply: prepareAgentRunTerminalReply({ rawText: text }).terminalReply,
     },
   });
 }

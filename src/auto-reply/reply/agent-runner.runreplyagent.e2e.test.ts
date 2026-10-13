@@ -254,7 +254,6 @@ vi.mock("../../agents/model-fallback-attempt.js", () => ({
 vi.mock("../../agents/runtime-plan/build.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../agents/runtime-plan/build.js")>()),
   buildAgentRuntimeDeliveryPlan: () => ({
-    isSilentPayload: () => false,
     resolveFollowupRoute: () => undefined,
   }),
 }));
@@ -4903,7 +4902,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     }
   });
 
-  it("surfaces a persisted configured backend failure when the active fallback is silent", async () => {
+  it("surfaces a persisted configured backend failure when the active fallback is empty", async () => {
     const sessionEntry = makeSessionEntry({
       providerOverride: "openai",
       modelOverride: "gpt-5.5",
@@ -4913,7 +4912,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     });
     const sessionStore = { main: sessionEntry };
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [{ text: "NO_REPLY" }],
+      payloads: [],
       meta: {},
     });
 
@@ -4969,7 +4968,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     {
       label: "target-only evidence",
       result: {
-        payloads: [{ text: "NO_REPLY" }],
+        payloads: [],
         messagingToolSentTargets: [{ tool: "message", provider: "discord", to: "channel:C1" }],
       },
     },
@@ -4994,7 +4993,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
 
   it("does not treat whitespace-only messaging evidence as fallback delivery", async () => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [{ text: "NO_REPLY" }],
+      payloads: [],
       didSendViaMessagingTool: true,
       messagingToolSentTexts: ["  "],
       messagingToolSentMediaUrls: ["\t"],
@@ -5022,7 +5021,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
 
   it("surfaces a missing required answer after fallback completed only a cron side effect", async () => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [{ text: "NO_REPLY" }],
+      payloads: [],
       successfulCronAdds: 1,
       meta: {},
     });
@@ -5079,7 +5078,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
 
   it("preserves fallback silence for an explicitly optional turn", async () => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [{ text: "NO_REPLY" }],
+      payloads: [],
       meta: {
         finalAssistantRawText: "NO_REPLY",
         finalAssistantVisibleText: "NO_REPLY",

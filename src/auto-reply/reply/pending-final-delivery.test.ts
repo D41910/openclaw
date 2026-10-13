@@ -78,11 +78,10 @@ describe("sanitizePendingFinalDeliveryText", () => {
     expect(sanitizePendingFinalDeliveryText(text)).toBe("Visible reply");
   });
 
-  it("drops silent reply sentinel payloads", () => {
-    expect(sanitizePendingFinalDeliveryText(" NO_REPLY ")).toBe("");
-    expect(sanitizePendingFinalDeliveryText('"NO_REPLY"')).toBe('"NO_REPLY"');
-    expect(sanitizePendingFinalDeliveryText('{"action":"NO_REPLY"}')).toBe('{"action":"NO_REPLY"}');
-  });
+  it.each(["NO_REPLY", '"NO_REPLY"', '{"action":"NO_REPLY"}', "NO_REPLY."])(
+    "preserves prepared text without reinterpreting it: %s",
+    (text) => expect(sanitizePendingFinalDeliveryText(text)).toBe(text),
+  );
 
   it.each(["NO_REPLYThe user is saying hello", "HEARTBEAT_OK NO_REPLY"])(
     "preserves mixed silent tokens in recovery text: %s",
@@ -91,9 +90,9 @@ describe("sanitizePendingFinalDeliveryText", () => {
     },
   );
 
-  it("removes one leading control line before preserving the recovery answer", () => {
+  it("preserves a prepared leading control-looking line", () => {
     expect(sanitizePendingFinalDeliveryText("NO_REPLY\nAnswer.\n    Code.")).toBe(
-      "Answer.\n    Code.",
+      "NO_REPLY\nAnswer.\n    Code.",
     );
   });
 });

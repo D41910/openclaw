@@ -176,7 +176,6 @@ export type EmbeddedAgentRunMeta = {
     | "idle_timeout_circuit_breaker"
     | "provider_review_continuation";
   agentHarnessResultClassification?: "empty" | "reasoning-only" | "planning-only";
-  terminalReplyKind?: "silent-empty";
   /** An exact, successfully settled tool batch intentionally completed the turn without a reply. */
   intentionalTerminalCompletion?: "tool-batch";
   terminalReply?: AgentRunTerminalReplySnapshot;

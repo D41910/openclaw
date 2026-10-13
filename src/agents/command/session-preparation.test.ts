@@ -177,11 +177,9 @@ it.each([
       shared
         ? buildGroupChatContext({
             sessionCtx: ctx,
-            silentToken: "NO_REPLY",
           })
         : buildSourceConversationContext({
             sessionCtx: ctx,
-            silentToken: channel === "webchat" ? undefined : "NO_REPLY",
           }),
       shared && buildGroupIntro({ activation: "always", defaultActivation: "mention" }),
     ]
@@ -298,7 +296,7 @@ it.each([
       expect(prompt).toBe(
         [
           buildInboundMetaSystemPrompt(ctx, {}),
-          buildSourceConversationContext({ sessionCtx: ctx, silentToken: "NO_REPLY" }),
+          buildSourceConversationContext({ sessionCtx: ctx }),
         ].join("\n\n"),
       );
     }

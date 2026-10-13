@@ -290,11 +290,10 @@ export async function prepareReplyAgentPayloads(state: {
       authoredSilence ||
       !sessionKey ||
       !storePath ||
-      followupRun.strandedReplyRetry !== true
+      followupRun.strandedReplyRetry !== true ||
+      sessionCtx.InboundEventKind === "room_event" ||
+      completedSourceReplyDelivery
     ) {
-      return undefined;
-    }
-    if (sessionCtx.InboundEventKind === "room_event" || completedSourceReplyDelivery) {
       return undefined;
     }
     const sourceReplyPolicy = resolveSourceReplyPolicy({
@@ -311,6 +310,7 @@ export async function prepareReplyAgentPayloads(state: {
       base: followupRun,
       payloads: [],
       finalText: "",
+      terminalReply: runResult.meta?.terminalReply,
       sourceReplyDeliveryMode: sourceReplyPolicy.sourceReplyDeliveryMode,
       sendPolicyDenied: sourceReplyPolicy.sendPolicyDenied,
       successfulSourceReplyDelivery: completedSourceReplyDelivery,

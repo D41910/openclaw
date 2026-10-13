@@ -1,4 +1,3 @@
-import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import {
   buildHandledBeforeAgentReplyPayloads,
   runBeforeAgentReplyForTurn,
@@ -7,6 +6,7 @@ import {
   buildAgentHookContextChannelFields,
   buildAgentHookContextIdentityFields,
 } from "../../plugins/hook-agent-context.js";
+import { sanitizeAgentRunTerminalReplyText } from "../agent-run-terminal-reply.js";
 import { resolveCliBackendConfig } from "../cli-backends.js";
 import type { EmbeddedAgentRunResult } from "../embedded-agent-runner/types.js";
 import { cliBackendLog, formatCliBackendOutputDigest } from "./log.js";
@@ -58,7 +58,8 @@ export async function runCliBeforeAgentReply(
             }),
         });
   if (hookResult?.handled) {
-    const finalText = hookResult.reply?.text ?? SILENT_REPLY_TOKEN;
+    const finalText = hookResult.reply?.text ?? "";
+    const text = sanitizeAgentRunTerminalReplyText(finalText);
     const syntheticBackend = resolveCliBackendConfig(params.provider, params.config, {
       agentId: params.agentId,
     });
@@ -78,6 +79,9 @@ export async function runCliBeforeAgentReply(
         },
         finalAssistantVisibleText: finalText,
         finalAssistantRawText: finalText,
+        terminalReply: text
+          ? { disposition: "visible", text }
+          : { disposition: hookResult.reply ? "empty" : "silent" },
       },
     };
   }

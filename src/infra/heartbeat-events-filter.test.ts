@@ -34,7 +34,7 @@ describe("heartbeat event prompts", () => {
       name: "builds user-relay cron prompt by default",
       events: ["Cron: rotate logs"],
       expected: ["Cron: rotate logs", "Please relay this reminder to the user"],
-      unexpected: ["Handle this reminder internally", "Reply NO_REPLY."],
+      unexpected: ["Handle this reminder internally", "Reply with exactly NO_REPLY"],
     },
     {
       name: "builds internal-only cron prompt when delivery is disabled",
@@ -46,14 +46,21 @@ describe("heartbeat event prompts", () => {
     {
       name: "falls back to bare heartbeat reply when cron content is empty",
       events: ["", "   "],
-      expected: ["Reply NO_REPLY."],
+      expected: [
+        "Reply with exactly NO_REPLY as the entire final answer.",
+        "send confirmations before ending silently",
+      ],
       unexpected: ["Handle this reminder internally"],
     },
     {
       name: "uses internal empty-content fallback when delivery is disabled",
       events: ["", "   "],
       opts: { deliverToUser: false },
-      expected: ["Handle this internally", "NO_REPLY when nothing needs user-facing follow-up"],
+      expected: [
+        "Handle this internally",
+        "If nothing needs user-facing follow-up",
+        "reply with exactly NO_REPLY as the entire final answer",
+      ],
       unexpected: ["Please relay this reminder to the user"],
     },
   ])("$name", ({ events, opts, expected, unexpected }) => {
@@ -78,7 +85,7 @@ describe("heartbeat event prompts", () => {
         "continue any outstanding authorized work",
         "routine output, duplicate or superseded results",
         "failures already recovered from",
-        "reply NO_REPLY only",
+        "reply with exactly NO_REPLY as the entire final answer",
       ],
       unexpected: ["system messages above", "Please relay the command output", "[truncated]"],
     },
@@ -86,7 +93,11 @@ describe("heartbeat event prompts", () => {
       name: "builds internal-only exec prompt when delivery is disabled",
       events: ["Exec failed (node=abc id=123, code 1)\nUpload failed"],
       opts: { deliverToUser: false },
-      expected: ["user delivery is disabled", "Handle the result internally", "NO_REPLY only"],
+      expected: [
+        "user delivery is disabled",
+        "Handle the result internally",
+        "reply with exactly NO_REPLY as the entire final answer",
+      ],
       unexpected: [
         "Upload failed",
         "system messages above",
@@ -101,7 +112,7 @@ describe("heartbeat event prompts", () => {
         "Exec completed (abc12345, code 0) without captured stdout/stderr.",
         "continue any outstanding authorized work",
         "Do not ask the user to provide missing logs",
-        "reply NO_REPLY only",
+        "reply with exactly NO_REPLY as the entire final answer",
       ],
       unexpected: ["Please relay the command output to the user"],
     },
@@ -115,7 +126,7 @@ describe("heartbeat event prompts", () => {
         "Do not ask the user to provide missing logs",
         "Notify the user only",
         "failures already recovered from",
-        "reply NO_REPLY only",
+        "reply with exactly NO_REPLY as the entire final answer",
       ],
       unexpected: ["Please relay the command output to the user"],
     },
@@ -164,7 +175,7 @@ describe("heartbeat event prompts", () => {
     expect(prompt).toContain("heartbeat_respond");
     expect(prompt).toContain("notify=false");
     expect(prompt).toContain("notify=true with notificationText");
-    expect(prompt).not.toContain("reply NO_REPLY only");
+    expect(prompt).not.toContain("reply with exactly NO_REPLY");
     expect(prompt).not.toContain("Please relay the command output");
   });
 
@@ -202,7 +213,7 @@ describe("heartbeat event classification", () => {
   it.each([
     { value: "  Cron: rotate logs  ", expected: true },
     { value: "   ", expected: false },
-    { value: "NO_REPLY", expected: false },
+    { value: "NO_REPLY", expected: true },
     { value: "no_reply: actual reminder", expected: true },
     { value: "HEARTBEAT_OK", expected: false },
     { value: "heartbeat_ok: already handled", expected: false },

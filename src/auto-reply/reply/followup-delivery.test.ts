@@ -722,58 +722,66 @@ describe("resolveFollowupDeliveryDecision", () => {
 });
 
 describe("deliverFollowupDecision", () => {
-  it.each(['{"action":"NO_REPLY"}', "NO_REPLY."])(
-    "sends queued ordinary text unchanged without a notice: %s",
-    async (text) => {
-      const turn = createTurn();
-      const execution = createSettledExecution(text);
-      execution.outcome.result.meta.finalAssistantRawText = text;
-      const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
-      deliveryState.routeReply.mockReset();
-      deliveryState.routeReply.mockResolvedValue({ ok: true, delivered: true });
-      deliveryState.runtimeError.mockReset();
+  it.each([
+    { text: '{"action":"NO_REPLY"}', silent: true },
+    { text: "NO_REPLY.", silent: true },
+    { text: '"NO_REPLY"', silent: true },
+    { text: "An ordinary answer.", silent: false },
+  ])("agrees on queued authored silence without a notice: $text", async ({ text, silent }) => {
+    const turn = createTurn();
+    const execution = createSettledExecution(text);
+    execution.outcome.result.meta.finalAssistantRawText = text;
+    const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
+    deliveryState.routeReply.mockReset();
+    deliveryState.routeReply.mockResolvedValue({ ok: true, delivered: true });
+    deliveryState.runtimeError.mockReset();
 
-      const decision = await resolveFollowupDeliveryDecision({
-        turn,
-        execution,
-        accounting: createAccounting([{ text }]),
-      });
-      await deliverFollowupDecision({
-        decision,
-        turn,
-        defaults: createDefaults(onBlockReply),
-        runId: turn.runId,
-        runFollowup: vi.fn(async () => {}),
-      });
-      expect(deliveryState.routeReply).toHaveBeenCalledOnce();
+    const decision = await resolveFollowupDeliveryDecision({
+      turn,
+      execution,
+      accounting: createAccounting([{ text }]),
+    });
+    await deliverFollowupDecision({
+      decision,
+      turn,
+      defaults: createDefaults(onBlockReply),
+      runId: turn.runId,
+      runFollowup: vi.fn(async () => {}),
+    });
+    if (silent) {
+      expect(decision).toMatchObject({ kind: "suppress", reason: "silent" });
+      expect(deliveryState.routeReply).not.toHaveBeenCalled();
+    } else {
       expect(decision).toMatchObject({ kind: "deliver", payloads: [{ text }] });
-
       expect(deliveryState.routeReply).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ payload: expect.objectContaining({ text }) }),
       );
+    }
+    expect(onBlockReply).not.toHaveBeenCalled();
+    expect(deliveryState.runtimeError).not.toHaveBeenCalled();
+  });
+
+  it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
+    "does not send queued authored silence at the delivery boundary: %s",
+    async (text) => {
+      const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
+      deliveryState.routeReply.mockReset();
+      deliveryState.runtimeError.mockReset();
+
+      const result = await deliverFollowupDecision({
+        decision: { kind: "deliver", payloads: [{ text }] },
+        turn: createTurn(),
+        defaults: createDefaults(onBlockReply),
+        runId: "run-1",
+        runFollowup: vi.fn(async () => {}),
+      });
+
+      expect(result).toEqual({ kind: "completed", payloads: [] });
+      expect(deliveryState.routeReply).not.toHaveBeenCalled();
       expect(onBlockReply).not.toHaveBeenCalled();
       expect(deliveryState.runtimeError).not.toHaveBeenCalled();
     },
   );
-
-  it("does not send a queued token-only NO_REPLY at the delivery boundary", async () => {
-    const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
-    deliveryState.routeReply.mockReset();
-    deliveryState.runtimeError.mockReset();
-
-    const result = await deliverFollowupDecision({
-      decision: { kind: "deliver", payloads: [{ text: "NO_REPLY" }] },
-      turn: createTurn(),
-      defaults: createDefaults(onBlockReply),
-      runId: "run-1",
-      runFollowup: vi.fn(async () => {}),
-    });
-
-    expect(result).toEqual({ kind: "completed", payloads: [] });
-    expect(deliveryState.routeReply).not.toHaveBeenCalled();
-    expect(onBlockReply).not.toHaveBeenCalled();
-    expect(deliveryState.runtimeError).not.toHaveBeenCalled();
-  });
 
   it("retains the event source delivery owner through progress and final settlement", async () => {
     const source = vi.fn(async () => {});

@@ -1,8 +1,11 @@
 import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
-import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { buildAgentRunTerminalReplySnapshot } from "../agent-run-terminal-reply.js";
+import {
+  prepareAgentRunTerminalReply,
+  sanitizeAgentRunTerminalReplyText,
+  type PreparedAgentRunTerminalReply,
+} from "../agent-run-terminal-reply.js";
 import {
   externalCliDiscoveryForProviderAuth,
   loadAuthProfileStoreForRuntimeAsync,
@@ -20,11 +23,15 @@ import {
   shouldClearInterruptedCliSessionBinding,
 } from "../cli-session.js";
 import type { EmbeddedAgentRunResult } from "../embedded-agent-runner.js";
-import { resolveExplicitFinalSourceReplyDeliveryEvidence } from "../embedded-agent-runner/delivery-evidence.js";
+import {
+  hasCompletedSourceReplyDeliveryEvidence,
+  resolveExplicitFinalSourceReplyDeliveryEvidence,
+} from "../embedded-agent-runner/delivery-evidence.js";
 import { resolveAuthProfileFailureReason } from "../embedded-agent-runner/run/auth-profile-failure-policy.js";
 import { buildEmbeddedRunPayloads } from "../embedded-agent-runner/run/payloads.js";
 import { mergeAttemptToolMediaPayloads } from "../embedded-agent-runner/run/tool-media-payloads.js";
 import { isFailoverError } from "../failover-error.js";
+import { applyPluginTextReplacements } from "../plugin-text-transforms.js";
 import {
   createMissingReplyNotice,
   resolveReplyExpectation,
@@ -347,6 +354,7 @@ export function buildBlockedCliRunResult(params: {
       finalAssistantVisibleText: message,
       finalAssistantRawText: message,
       livenessState: "blocked",
+      terminalReply: { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(message) },
       error: {
         kind: "hook_block",
         message,
@@ -410,6 +418,14 @@ export function buildCliDeliveredFailure(params: {
     meta: {
       durationMs: Date.now() - context.started,
       systemPromptReport: context.systemPromptReport,
+      terminalReply: visiblePayloads?.length
+        ? {
+            disposition: "visible",
+            text: sanitizeAgentRunTerminalReplyText(
+              visiblePayloads.map((payload) => payload.text ?? "").join("\n\n"),
+            ),
+          }
+        : { disposition: "empty" },
       stopReason: "error",
       error: { kind: "incomplete_turn", message, fallbackSafe: false },
       ...buildCliExecutionMetadata(context, { result: "error", reason: message }),
@@ -438,9 +454,57 @@ export function buildCliDeliveredFailure(params: {
   };
 }
 
+export function prepareCliRunTerminalReply(
+  context: PreparedCliRunContext,
+  output: CliOutput,
+): PreparedAgentRunTerminalReply {
+  const sourceReplyMirror = resolveCliSourceReplyMirror({
+    evidence: output,
+    runParams: context.params,
+    modelId: context.modelId,
+  });
+  const completedFinalSource =
+    sourceReplyMirror.payloads.length > 0 &&
+    resolveExplicitFinalSourceReplyDeliveryEvidence(output) === true &&
+    hasCompletedSourceReplyDeliveryEvidence(output);
+  // A delivery receipt without a mirrored body must not replace authored silence with empty output.
+  if (
+    sourceReplyMirror.visibleText !== undefined &&
+    (resolveReplyExpectation(context.params) !== "result-required" || completedFinalSource)
+  ) {
+    const text = sourceReplyMirror.visibleText;
+    const snapshotText = sanitizeAgentRunTerminalReplyText(text);
+    return {
+      text,
+      terminalReply: snapshotText
+        ? { disposition: "visible", text: snapshotText }
+        : { disposition: "empty" },
+    };
+  }
+  const rawText = output.rawText ?? output.text;
+  const prepared = prepareAgentRunTerminalReply({ rawText });
+  const text =
+    prepared.terminalReply.disposition === "silent"
+      ? ""
+      : prepared.text === rawText
+        ? (output.text ?? "")
+        : applyPluginTextReplacements(
+            prepared.text,
+            context.backendResolved.textTransforms?.output,
+          );
+  return {
+    text,
+    terminalReply:
+      prepared.terminalReply.disposition === "visible"
+        ? { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(text) }
+        : prepared.terminalReply,
+  };
+}
+
 export function buildCliRunResult(params: {
   context: PreparedCliRunContext;
   output: CliOutput;
+  preparedReply?: PreparedAgentRunTerminalReply;
   effectiveCliSessionId?: string;
   bindingFlushOk?: boolean;
   assistantTranscriptOwned?: boolean;
@@ -463,40 +527,35 @@ export function buildCliRunResult(params: {
     userTurnHandled,
   } = params;
   const runParams = context.params;
-  const text = output.text?.trim();
-  const rawText = output.rawText?.trim();
-  const replyExpectation = resolveReplyExpectation(runParams);
-  const explicitSilence =
-    !output.terminalInterruption &&
-    ((runParams.controlOperation !== undefined && !text) ||
-      (isSilentReplyTokenOnly(text) && replyExpectation !== "result-required"));
+  const rawText = output.rawText ?? output.text;
   const sourceReplyMirror = resolveCliSourceReplyMirror({
     evidence: output,
     runParams,
     modelId: context.modelId,
   });
-  const finalAssistantVisibleText = sourceReplyMirror.delivered
-    ? sourceReplyMirror.visibleText
-    : text;
+  const preparedReply = params.preparedReply ?? prepareCliRunTerminalReply(context, output);
+  const text = preparedReply.text;
+  const finalAssistantVisibleText = text;
   const payloads =
     sourceReplyMirror.payloads.length > 0
       ? sourceReplyMirror.payloads
       : sourceReplyMirror.delivered
         ? undefined
         : text
-          ? (output.textParts ?? [text]).map((partText, assistantMessageIndex) =>
-              assistantTranscriptOwned || output.textParts
-                ? setReplyPayloadMetadata(
-                    { text: partText },
-                    {
-                      ...(output.textParts ? { assistantMessageIndex } : {}),
-                      ...(assistantTranscriptOwned ? { assistantTranscriptOwned: true } : {}),
-                      ...(assistantTranscriptIdempotencyKey
-                        ? { assistantTranscriptIdempotencyKey }
-                        : {}),
-                    },
-                  )
-                : { text: partText },
+          ? (output.textParts && text === output.text ? output.textParts : [text]).map(
+              (partText, assistantMessageIndex) =>
+                assistantTranscriptOwned || output.textParts
+                  ? setReplyPayloadMetadata(
+                      { text: partText },
+                      {
+                        ...(output.textParts ? { assistantMessageIndex } : {}),
+                        ...(assistantTranscriptOwned ? { assistantTranscriptOwned: true } : {}),
+                        ...(assistantTranscriptIdempotencyKey
+                          ? { assistantTranscriptIdempotencyKey }
+                          : {}),
+                      },
+                    )
+                  : { text: partText },
             )
           : undefined;
   const payloadsWithToolMedia = mergeAttemptToolMediaPayloads({
@@ -579,14 +638,7 @@ export function buildCliRunResult(params: {
       ...(output.finalPromptText ? { finalPromptText: output.finalPromptText } : {}),
       ...(finalAssistantVisibleText ? { finalAssistantVisibleText } : {}),
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
-      terminalReply: buildAgentRunTerminalReplySnapshot({
-        visibleText: finalAssistantVisibleText,
-        rawText:
-          replyExpectation === "result-required" && sourceReplyMirror.payloads.length > 0
-            ? finalAssistantVisibleText
-            : (rawText ?? text),
-        terminalReplyKind: explicitSilence ? "silent-empty" : undefined,
-      }),
+      terminalReply: preparedReply.terminalReply,
       systemPromptReport: context.systemPromptReport,
       ...(terminalInterruption
         ? {

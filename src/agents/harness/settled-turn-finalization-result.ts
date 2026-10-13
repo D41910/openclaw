@@ -1,6 +1,11 @@
-import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
+import { parseReplyDirectives } from "../../auto-reply/reply/reply-directives.js";
+import { resolveRawAssistantAnswerText } from "../../shared/assistant-answer-text.js";
 import { normalizeAgentRunAttemptTerminal } from "../agent-run-terminal-outcome.js";
-import { resolveFinalAssistantVisibleText } from "../embedded-agent-runner/run/helpers.js";
+import {
+  prepareAgentRunTerminalReply,
+  sanitizeAgentRunTerminalReplyText,
+} from "../agent-run-terminal-reply.js";
+import { extractAssistantVisibleText } from "../embedded-agent-utils.js";
 import { EmptySettledTurnFinalizationError } from "./settled-turn-finalization-outcome.js";
 import type {
   AgentHarnessAttemptResult,
@@ -9,6 +14,7 @@ import type {
 
 const ALLOWED_SETTLED_FINALIZATION_RESULT_KEYS = new Set([
   "assistant",
+  "preparedTerminalReply",
   "usage",
   "assistantTranscriptOwned",
   "assistantTranscriptIdempotencyKey",
@@ -54,18 +60,49 @@ export function assertSettledTurnFinalizationResult(
   ) {
     throw new Error("Settled-turn finalization returned an invalid assistant message index");
   }
-  resolveSettledTurnFinalizationText(result);
-  return result;
+  const preparedTerminalReply =
+    result.preparedTerminalReply ??
+    prepareAgentRunTerminalReply({
+      rawText: resolveRawAssistantAnswerText(result.assistant),
+    });
+  if (
+    !result.preparedTerminalReply &&
+    preparedTerminalReply.terminalReply.disposition !== "silent"
+  ) {
+    const rawText = preparedTerminalReply.text;
+    preparedTerminalReply.text = parseReplyDirectives(
+      extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
+    ).text;
+    const text = sanitizeAgentRunTerminalReplyText(preparedTerminalReply.text);
+    preparedTerminalReply.terminalReply = text
+      ? { disposition: "visible", text }
+      : { disposition: "empty" };
+  }
+  const preparedResult = { ...result, preparedTerminalReply };
+  resolveSettledTurnFinalizationText(preparedResult);
+  return preparedResult;
 }
 
 export function resolveSettledTurnFinalizationText(
   result: AgentHarnessSettledTurnFinalizationResult,
 ): string {
-  const text = resolveFinalAssistantVisibleText(result.assistant);
-  if (!text || isSilentReplyTokenOnly(text)) {
-    throw new EmptySettledTurnFinalizationError(result);
+  const prepared =
+    result.preparedTerminalReply ??
+    prepareAgentRunTerminalReply({
+      rawText: resolveRawAssistantAnswerText(result.assistant),
+    });
+  if (!result.preparedTerminalReply && prepared.terminalReply.disposition !== "silent") {
+    const rawText = prepared.text;
+    prepared.text = parseReplyDirectives(
+      extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
+    ).text;
+    const text = sanitizeAgentRunTerminalReplyText(prepared.text);
+    prepared.terminalReply = text ? { disposition: "visible", text } : { disposition: "empty" };
   }
-  return text;
+  if (prepared.terminalReply.disposition !== "visible") {
+    throw new EmptySettledTurnFinalizationError({ ...result, preparedTerminalReply: prepared });
+  }
+  return prepared.text;
 }
 
 /**
@@ -124,6 +161,7 @@ export function projectSettledTurnFinalizationAttemptResult(
   }
   return assertSettledTurnFinalizationResult({
     assistant,
+    preparedTerminalReply: result.preparedTerminalReply,
     ...(result.attemptUsage ? { usage: result.attemptUsage } : {}),
     ...(result.assistantTranscriptOwned
       ? {

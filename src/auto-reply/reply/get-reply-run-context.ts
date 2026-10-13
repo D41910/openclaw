@@ -25,7 +25,6 @@ import {
 } from "../command-turn-context.js";
 import { resolveEnvelopeFormatOptions } from "../envelope.js";
 import { normalizeThinkLevel } from "../thinking.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { applySessionHints } from "./body.js";
 import { resolveTurnModelOverride } from "./dispatch-from-config.harness-defaults.js";
 import { shouldUseReplyFastTestRuntime } from "./get-reply-fast-path.js";
@@ -188,7 +187,6 @@ export async function prepareReplyRunContext(params: RunPreparedReplyParams) {
     buildSourceConversationContext({
       sourceReplyDeliveryMode: mode,
       sessionCtx: promptSessionCtx,
-      silentToken: SILENT_REPLY_TOKEN,
     });
   const sourceConversationContextByMode = {
     automatic: sourceConversationContext("automatic"),

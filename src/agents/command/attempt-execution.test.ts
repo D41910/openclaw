@@ -474,6 +474,19 @@ describe("createAcpVisibleTextAccumulator", () => {
 
   it.each([
     { name: "exact silence", chunks: ["NO_REPLY"], expected: { disposition: "silent" } },
+    { name: "padded silence", chunks: [" \tNO_REPLY\r\n"], expected: { disposition: "silent" } },
+    ...["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "no_reply", "No response needed."].map(
+      (text) => ({
+        name: `ordinary text ${text}`,
+        chunks: [text],
+        expected: { disposition: "visible", text },
+      }),
+    ),
+    {
+      name: "literal suffix",
+      chunks: ["NO_REPLY\nNO_REPLY"],
+      expected: { disposition: "visible", text: "NO_REPLY" },
+    },
     {
       name: "partial control prefix",
       chunks: ["NO_RE"],
@@ -485,5 +498,15 @@ describe("createAcpVisibleTextAccumulator", () => {
       acc.consume(chunk);
     }
     expect(acc.finalizeReplySnapshot()).toEqual(expected);
+  });
+
+  it("preserves raw transcript and full prepared leading-line bytes", () => {
+    const acc = createAcpVisibleTextAccumulator();
+    const suffix = `  ${"answer".repeat(1000)}\n`;
+    expect(acc.consume("NO_REPLY\n")).toBeNull();
+    expect(acc.consume(suffix)).toEqual({ text: suffix, delta: suffix });
+    expect(acc.finalize()).toBe(suffix);
+    expect(acc.finalizeRaw()).toBe(`NO_REPLY\n${suffix}`);
+    expect(acc.finalizeReplySnapshot().disposition).toBe("visible");
   });
 });

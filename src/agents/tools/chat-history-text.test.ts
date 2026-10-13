@@ -36,6 +36,77 @@ describe("extractStoredAssistantText", () => {
   });
 
   it.each([
+    ["NO_REPLY\nVisible answer", "Visible answer"],
+    ["NO_REPLY\nNO_REPLY", "NO_REPLY"],
+    ["NO_REPLY\nNO_REPLY\nVisible answer", "NO_REPLY\nVisible answer"],
+    ["NO_REPLY.\nVisible answer", "NO_REPLY.\nVisible answer"],
+    ['{"action":"NO_REPLY"}', '{"action":"NO_REPLY"}'],
+    ['"NO_REPLY"', '"NO_REPLY"'],
+    ["no_reply", "no_reply"],
+    ["Visible answer\nNO_REPLY", "Visible answer\nNO_REPLY"],
+  ])("strips only one literal leading control line from %s", (content, expected) => {
+    expect(extractStoredAssistantText({ role: "assistant", content })).toBe(expected);
+  });
+
+  it("assembles raw blocks before stripping the leading control line", () => {
+    expect(
+      extractStoredAssistantText({
+        role: "assistant",
+        content: [
+          { type: "text", text: "NO_" },
+          { type: "text", text: "REPLY\n" },
+          { type: "text", text: "NO_REPLY" },
+        ],
+      }),
+    ).toBe("NO_REPLY");
+  });
+
+  it.each([
+    { name: "displayed answer", fields: { display: true } },
+    {
+      name: "final source reply",
+      fields: {
+        openclawDeliveryMirror: {
+          kind: "message-tool-source-reply",
+          sourceTurnId: "run-source",
+          final: true,
+        },
+      },
+    },
+  ])("preserves a prepared leading literal in a $name", ({ fields }) => {
+    expect(
+      extractStoredAssistantText({
+        role: "assistant",
+        content: "NO_REPLY\nexample",
+        ...fields,
+      }),
+    ).toBe("NO_REPLY\nexample");
+  });
+
+  it("still prepares a raw non-final source mirror exactly once", () => {
+    expect(
+      extractStoredAssistantText({
+        role: "assistant",
+        content: "NO_REPLY\nNO_REPLY\nexample",
+        openclawDeliveryMirror: {
+          kind: "message-tool-source-reply",
+          sourceTurnId: "run-source",
+          final: false,
+        },
+      }),
+    ).toBe("NO_REPLY\nexample");
+  });
+
+  it("does not reinterpret a visible fact or extract user control text", () => {
+    expect(
+      extractStoredAssistantText({ role: "assistant", display: true, content: "NO_REPLY" }),
+    ).toBe("NO_REPLY");
+    expect(
+      extractStoredAssistantText({ role: "user", content: "NO_REPLY\nVisible answer" }),
+    ).toBeUndefined();
+  });
+
+  it.each([
     {
       name: "transcript error",
       message: {

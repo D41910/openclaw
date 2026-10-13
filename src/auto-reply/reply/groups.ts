@@ -9,6 +9,7 @@ import { isInternalMessageChannel } from "../../utils/message-channel.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
 import { normalizeGroupActivation } from "../group-activation.js";
 import type { TemplateContext } from "../templating.js";
+import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { PreparedReplyConversation } from "./prompt-session-context.js";
 
 const groupsRuntimeLoader = createLazyImportLoader(() => import("./groups.runtime.js"));
@@ -99,7 +100,6 @@ function resolveProviderLabel(rawProvider: string | undefined): string {
 export function buildGroupChatContext(params: {
   sessionCtx: TemplateContext;
   sourceReplyDeliveryMode?: SourceReplyDeliveryMode;
-  silentToken?: string;
 }): string {
   const providerLabel = resolveProviderLabel(params.sessionCtx.Provider);
   const provider = normalizeOptionalLowercaseString(params.sessionCtx.Provider);
@@ -142,11 +142,9 @@ export function buildGroupChatContext(params: {
       `If no visible ${sharedChatNoun === "channel" ? "channel" : "group"} response is needed, do not call message(action=send).`,
     );
   }
-  if (params.silentToken) {
-    lines.push(
-      `If no text reply is needed, including after a reaction or other action, reply with exactly "${params.silentToken}" as the entire final answer, without commentary, punctuation, or formatting. ${params.silentToken} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
-    );
-  }
+  lines.push(
+    `If no text reply is needed, including after a reaction or other action, reply with exactly "${SILENT_REPLY_TOKEN}" as the entire final answer, without commentary, punctuation, or formatting. ${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
+  );
   return lines.join(" ");
 }
 
@@ -154,7 +152,6 @@ export function buildGroupChatContext(params: {
 function buildDirectChatContext(params: {
   sessionCtx: TemplateContext;
   sourceReplyDeliveryMode?: SourceReplyDeliveryMode;
-  silentToken?: string;
 }): string {
   const providerLabel = resolveProviderLabel(params.sessionCtx.Provider);
   return [
@@ -167,11 +164,7 @@ function buildDirectChatContext(params: {
       : [
           "Your replies are automatically sent to this conversation unless the current-turn context says final replies stay private.",
         ]),
-    ...(params.silentToken
-      ? [
-          `If no text reply is needed, including after a reaction or other action, reply with exactly "${params.silentToken}" as the entire final answer, without commentary, punctuation, or formatting. ${params.silentToken} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
-        ]
-      : []),
+    `If no text reply is needed, including after a reaction or other action, reply with exactly "${SILENT_REPLY_TOKEN}" as the entire final answer, without commentary, punctuation, or formatting. ${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
   ].join(" ");
 }
 

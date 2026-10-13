@@ -465,7 +465,6 @@ describe("runEmbeddedAttempt context engine sessionKey forwarding", () => {
             forwardedAuthProfileId: undefined,
           },
           delivery: {
-            isSilentPayload: () => false,
             resolveFollowupRoute: () => undefined,
           },
           outcome: {

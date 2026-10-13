@@ -129,7 +129,7 @@ export function registerSessionsSendPrivateCompletionTests(
           throw new Error("synthetic retained parent failure");
         }
         await inputRecorder.persistApproved();
-        return { payloads: [], meta: { durationMs: 1 } };
+        return { payloads: [], meta: { durationMs: 1, terminalReply: { disposition: "empty" } } };
       });
       await startSessionsSendReplyFlow({
         runId: childRunId,

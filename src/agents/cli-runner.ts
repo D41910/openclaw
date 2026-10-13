@@ -1,4 +1,3 @@
-import { isSilentReplyTokenOnly } from "../auto-reply/reply/mixed-silent-reply-tokens.js";
 import { runWithCliHistoryWriter } from "../config/sessions/cli-history-boundary.js";
 import { prepareCronRootSessionGeneration } from "../config/sessions/session-delivery-generation.js";
 import { buildGenericCliContextEngineHostSupport } from "../context-engine/host-compat.js";
@@ -37,6 +36,7 @@ import {
   buildCliRunResult,
   formatCliTerminalInterruption,
   isClaudeCliBackend,
+  prepareCliRunTerminalReply,
   resolveCliSourceReplyMirror,
   settleCliPreparationError,
   settlePreparedCliRun,
@@ -68,7 +68,11 @@ import {
 import type { PreparedCliRunContext, RunCliAgentParams } from "./cli-runner/types.js";
 import { claudeCliSessionTranscriptHasContent } from "./command/attempt-execution.helpers.js";
 import type { EmbeddedAgentRunResult } from "./embedded-agent-runner.js";
-import { resolveSourceReplyDelivery } from "./embedded-agent-runner/delivery-evidence.js";
+import {
+  hasCompletedSourceReplyDeliveryEvidence,
+  resolveExplicitFinalSourceReplyDeliveryEvidence,
+  resolveSourceReplyDelivery,
+} from "./embedded-agent-runner/delivery-evidence.js";
 import { coerceToFailoverError, recordModelFallbackStop } from "./failover-error.js";
 import { runBeforeAgentRunGate } from "./harness/before-agent-run.js";
 import { bootstrapHarnessContextEngine } from "./harness/context-engine-lifecycle.js";
@@ -366,14 +370,17 @@ async function runPreparedCliAgentOwned(
       runParams: params,
       modelId: context.modelId,
     });
-    const assistantText = sourceReplyMirror.delivered
-      ? (sourceReplyMirror.visibleText ?? "")
-      : output.text.trim();
+    const completedFinalSource =
+      sourceReplyMirror.payloads.length > 0 &&
+      resolveExplicitFinalSourceReplyDeliveryEvidence(output) === true &&
+      hasCompletedSourceReplyDeliveryEvidence(output);
+    const preparedReply = prepareCliRunTerminalReply(context, output);
+    const assistantText = preparedReply.text;
     if (
       !output.terminalInterruption &&
       ((resolveReplyExpectation(params) === "result-required" &&
-        isSilentReplyTokenOnly(output.text) &&
-        sourceReplyMirror.payloads.length === 0) ||
+        preparedReply.terminalReply.disposition !== "visible" &&
+        !completedFinalSource) ||
         (!output.text.trim() &&
           !params.controlOperation &&
           resolveSourceReplyDelivery(output) === "missing" &&
@@ -424,7 +431,7 @@ async function runPreparedCliAgentOwned(
             stopReason: resolveCliAssistantStopReason(output),
           })
         : undefined;
-    if (assistantText.length > 0 && hasLlmOutputHooks) {
+    if (hasLlmOutputHooks) {
       runAgentHarnessLlmOutputHook({
         event: {
           runId: params.runId,
@@ -443,6 +450,7 @@ async function runPreparedCliAgentOwned(
     }
     return {
       output,
+      preparedReply,
       assistantText,
       lastAssistant,
       sourceReplyWasDelivered: sourceReplyMirror.delivered,
@@ -473,10 +481,12 @@ async function runPreparedCliAgentOwned(
           `CLI backend ${context.backendResolved.id} cannot ${params.controlOperation} without a reusable native session.`,
         );
       }
-      const { output, usedHistoryPrompt } = await executeCliAttempt(reusableCliSessionId);
+      const { output, preparedReply, usedHistoryPrompt } =
+        await executeCliAttempt(reusableCliSessionId);
       return buildCliRunResult({
         ...resultContext,
         output,
+        preparedReply,
         ...(!isolatedCompletion ? { effectiveCliSessionId: reusableCliSessionId } : {}),
         bindingFlushOk: true,
         assistantTranscriptOwned: false,
@@ -512,8 +522,14 @@ async function runPreparedCliAgentOwned(
       result: Awaited<ReturnType<typeof executeCliAttempt>>,
       fallbackCliSessionId?: string,
     ) => {
-      const { output, assistantText, lastAssistant, sourceReplyWasDelivered, usedHistoryPrompt } =
-        result;
+      const {
+        output,
+        preparedReply,
+        assistantText,
+        lastAssistant,
+        sourceReplyWasDelivered,
+        usedHistoryPrompt,
+      } = result;
       try {
         const terminalInterruption = output.terminalInterruption;
         if (!terminalInterruption) {
@@ -524,7 +540,7 @@ async function runPreparedCliAgentOwned(
           runParams: params,
           // Dispatch owns source-reply transcript mirrors and their idempotency keys.
           // Persisting them here would duplicate the same visible assistant reply.
-          text: sourceReplyWasDelivered ? "" : assistantText,
+          text: sourceReplyWasDelivered ? "" : (output.rawText ?? output.text),
           modelId: context.modelId,
           usage: output.usage,
           stopReason: resolveCliAssistantStopReason(output),
@@ -554,6 +570,7 @@ async function runPreparedCliAgentOwned(
         return buildCliRunResult({
           ...resultContext,
           output,
+          preparedReply,
           effectiveCliSessionId,
           bindingFlushOk,
           assistantTranscriptOwned: assistantTranscript.owned,

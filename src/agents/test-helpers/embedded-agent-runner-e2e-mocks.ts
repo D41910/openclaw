@@ -226,7 +226,6 @@ export function installEmbeddedRunnerFastRunE2eMocks(
           resolvePolicy: vi.fn(() => undefined),
         },
         delivery: {
-          isSilentPayload: vi.fn(() => false),
           resolveFollowupRoute: vi.fn(() => undefined),
         },
         outcome: {

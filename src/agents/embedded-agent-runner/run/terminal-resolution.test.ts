@@ -174,8 +174,8 @@ describe("terminal resolution", () => {
     if (resolved.action !== "complete") {
       return;
     }
-    expect(resolved.result.payloads).toEqual([{ text: SILENT_REPLY_TOKEN }]);
-    expect(resolved.result.meta.terminalReplyKind).toBe("silent-empty");
+    expect(resolved.result.payloads).toBeUndefined();
+    expect(resolved.result.meta.terminalReply).toEqual({ disposition: "silent" });
     expect(resolved.result.meta.livenessState).toBe("working");
     expect(activateInternalPrompt).not.toHaveBeenCalled();
   });
@@ -401,46 +401,19 @@ describe("terminal resolution", () => {
     },
   );
 
-  it("keeps a length-stopped silent cron result silent", async () => {
-    // The only payload is the synthesized silent result of a successful tool and
-    // the assistant produced no prose, so there is no partial reply to label; a
-    // truncation notice here would turn intentional silence into a message.
-    const assistant = emptyAssistant({ stopReason: "length" });
-    const attempt = makeEmbeddedRunnerAttempt({
-      assistantTexts: [],
-      toolMetas: [{ toolName: "exec" }],
-      messagesSnapshot: [
-        {
-          role: "toolResult",
-          content: [{ type: "text", text: SILENT_REPLY_TOKEN }],
-          details: { aggregated: SILENT_REPLY_TOKEN },
-        } as never,
-        assistant,
-      ],
-      lastAssistant: assistant,
-      currentAttemptAssistant: assistant,
-    });
-    const input = makeTerminalInput({
-      attempt,
-      attemptAssistant: assistant,
-      runParams: { trigger: "cron", terminalReplyExpectation: "required" },
-    });
-
-    const resolved = await resolveEmbeddedRunTerminal(input);
-
-    expect(resolved.action).toBe("complete");
-    if (resolved.action !== "complete") {
-      return;
-    }
-    expect(resolved.result.payloads).toEqual([{ text: SILENT_REPLY_TOKEN }]);
-  });
-
-  it.each(["cross-chat send", "reaction", "group", "yield"] as const)(
-    "honors required external silence after %s without recovery",
-    async (effect) => {
-      const assistant = emptyAssistant({ content: [{ type: "text", text: "NO_REPLY" }] });
+  it.each(
+    (["cross-chat send", "reaction", "group", "yield"] as const).flatMap((effect) =>
+      ["NO_REPLY", " \tNO_REPLY\n"].map((text) => ({
+        effect,
+        text,
+      })),
+    ),
+  )(
+    "honors required external silence after $effect: $text without recovery",
+    async ({ effect, text }) => {
+      const assistant = emptyAssistant({ content: [{ type: "text", text }] });
       const attempt = makeEmbeddedRunnerAttempt({
-        assistantTexts: ["NO_REPLY"],
+        assistantTexts: [text],
         toolMetas: [
           { toolName: effect === "yield" ? "sessions_yield" : "message", replaySafe: false },
         ],
@@ -456,7 +429,7 @@ describe("terminal resolution", () => {
       const input = makeTerminalInput({
         attempt,
         attemptAssistant: assistant,
-        finalAssistantRawText: "NO_REPLY",
+        finalAssistantRawText: text,
         runParams: {
           terminalReplyExpectation: "required",
           sessionKey:
@@ -474,7 +447,7 @@ describe("terminal resolution", () => {
       }
       expect(resolved.result.meta.error).toBeUndefined();
       expect(resolved.result.meta.terminalReply).toEqual({ disposition: "silent" });
-      expect(resolved.result.payloads).toEqual([{ text: SILENT_REPLY_TOKEN }]);
+      expect(resolved.result.payloads).toBeUndefined();
       expect(input.sessionPromptState.activateInternalPrompt).not.toHaveBeenCalled();
     },
   );
@@ -482,7 +455,13 @@ describe("terminal resolution", () => {
   it.each(["subagent", undefined])(
     "requires a real private result (lane=%s) and preserves mixed-token text",
     async (lane) => {
-      for (const text of ["NO_REPLY", "NO_REPLY The requested result."]) {
+      for (const { text, silent } of [
+        { text: "NO_REPLY", silent: true },
+        { text: "NO_REPLY.", silent: false },
+        { text: '"NO_REPLY"', silent: false },
+        { text: '{"action":"NO_REPLY"}', silent: false },
+        { text: "NO_REPLY The requested result.", silent: false },
+      ]) {
         const assistant = emptyAssistant({ content: [{ type: "text", text }] });
         const attempt = makeEmbeddedRunnerAttempt({
           assistantTexts: [text],
@@ -494,11 +473,11 @@ describe("terminal resolution", () => {
           attempt,
           attemptAssistant: assistant,
           finalAssistantRawText: text,
-          payloadsWithToolMedia: text === "NO_REPLY" ? [] : [{ text }],
+          payloadsWithToolMedia: silent ? [] : [{ text }],
           runParams: { lane, messageChannel: undefined },
         });
         const resolved = await resolveEmbeddedRunTerminal(input);
-        if (text === "NO_REPLY") {
+        if (silent) {
           expect(resolved).toEqual({ action: "retry" });
           expect(input.sessionPromptState.activateInternalPrompt).toHaveBeenCalledOnce();
         } else {
@@ -507,7 +486,7 @@ describe("terminal resolution", () => {
             throw new Error("expected mixed-token answer");
           }
           expect(resolved.result.payloads).toEqual([{ text }]);
-          expect(resolved.result.meta.terminalReply).toBeUndefined();
+          expect(resolved.result.meta.terminalReply).toEqual({ disposition: "visible", text });
         }
       }
     },
@@ -706,7 +685,7 @@ describe("terminal resolution", () => {
     }
     expect(resolved.result.payloads?.[0]).toMatchObject({ isError: true });
     expect(resolved.result.meta.error?.kind).toBe("incomplete_turn");
-    expect(resolved.result.meta.terminalReplyKind).not.toBe("silent-empty");
+    expect(resolved.result.meta.terminalReply?.disposition).not.toBe("silent");
   });
 
   it("delivers partial text with a truncation notice when the output budget ends", async () => {

@@ -1,11 +1,19 @@
 import { copyReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
+import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import { applyPreparedReplyMedia } from "../../../auto-reply/reply/reply-media-paths.js";
 import type { AssistantMessage } from "../../../llm/types.js";
 import { estimateAggregateUsageCost } from "../../../utils/usage-format.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
 import type { AgentRunTerminalReceipt } from "../../agent-run-terminal-receipt.js";
+import {
+  prepareAgentRunTerminalReply,
+  sanitizeAgentRunTerminalReplyText,
+} from "../../agent-run-terminal-reply.js";
 import type { AuthProfileStore } from "../../auth-profiles.js";
-import { sanitizeAssistantVisibleStreamText } from "../../embedded-agent-utils.js";
+import {
+  extractAssistantVisibleText,
+  sanitizeAssistantVisibleStreamText,
+} from "../../embedded-agent-utils.js";
 import type { PreparedProviderFailoverOwner } from "../../failover/provider-patterns.js";
 import { isProviderModelRerouted } from "../../provider-model-route.js";
 import type { ReplyDeliveryState } from "../../reply-completion.js";
@@ -25,7 +33,6 @@ import {
   buildUsageAgentMetaFields,
   normalizeAssistantUsageForContext,
   resolveFinalAssistantRawText,
-  resolveFinalAssistantVisibleText,
   resolveReportedModelRef,
 } from "./helpers.js";
 import type { RunEmbeddedAgentInternalParams } from "./internal-params.js";
@@ -156,16 +163,31 @@ export function prepareEmbeddedRunTerminal(input: {
   };
   const attemptFinalText = answerAssistant
     ? undefined
-    : attempt.assistantTexts
-        .map((text) => sanitizeAssistantVisibleStreamText(text))
-        .findLast((text) => text.trim().length > 0)
-        ?.trim();
-  const finalAssistantVisibleText = terminalAssistantCanOwnFinalText
-    ? (resolveFinalAssistantVisibleText(answerAssistant) ?? attemptFinalText)
-    : undefined;
+    : attempt.assistantTexts.findLast(
+        (text) => sanitizeAssistantVisibleStreamText(text).trim().length > 0,
+      );
   const finalAssistantRawText = terminalAssistantCanOwnFinalText
     ? (resolveFinalAssistantRawText(answerAssistant) ?? attemptFinalText)
     : undefined;
+  const preparedTerminalReply =
+    attempt.preparedTerminalReply ??
+    prepareAgentRunTerminalReply({ rawText: finalAssistantRawText });
+  if (
+    !attempt.preparedTerminalReply &&
+    preparedTerminalReply.terminalReply.disposition !== "silent"
+  ) {
+    const rawText = preparedTerminalReply.text;
+    preparedTerminalReply.text = answerAssistant
+      ? extractAssistantVisibleText(answerAssistant, (_text, final) => (final ? rawText : ""))
+      : sanitizeAssistantVisibleStreamText(rawText);
+  }
+  const finalAssistantVisibleText = parseReplyDirectives(preparedTerminalReply.text).text;
+  if (preparedTerminalReply.terminalReply.disposition === "visible") {
+    const text = sanitizeAgentRunTerminalReplyText(finalAssistantVisibleText);
+    preparedTerminalReply.terminalReply = text
+      ? { disposition: "visible", text }
+      : { disposition: "empty" };
+  }
   const terminalTurnId = (attempt as { terminalTurnId?: string }).terminalTurnId;
   Object.assign(agentMeta, {
     terminalReceipt: {
@@ -191,6 +213,7 @@ export function prepareEmbeddedRunTerminal(input: {
       : input.currentAttemptCompletedAssistant;
   const payloads = buildEmbeddedRunPayloads({
     ...attempt,
+    preparedTerminalReply,
     assistantMessageIndex: attempt.lastAssistantTextMessageIndex,
     lastAssistant: payloadAssistant,
     currentAssistant: attempt.yieldDetected ? null : (payloadAssistant ?? null),
@@ -296,6 +319,7 @@ export function prepareEmbeddedRunTerminal(input: {
     agentMeta,
     replyDeliveryState: input.replyDeliveryState ?? "missing",
     reportedModelRef,
+    preparedTerminalReply,
     finalAssistantVisibleText,
     finalAssistantRawText,
     payloads,

@@ -1,11 +1,16 @@
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
+import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import { freezeDiagnosticTraceContext } from "../../../infra/diagnostic-trace-context.js";
 import { isTransientNetworkError } from "../../../infra/retryable-network-errors.js";
+import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
+import {
+  sanitizeAgentRunTerminalReplyText,
+  prepareAgentRunTerminalReply,
+} from "../../agent-run-terminal-reply.js";
 import { isCloudCodeAssistFormatError } from "../../embedded-agent-helpers.js";
 import type { CompletedAssistantAnswer } from "../../embedded-agent-subscribe.handlers.types.js";
 import type { subscribeEmbeddedAgentSession } from "../../embedded-agent-subscribe.js";
-import { extractEmbeddedAssistantText } from "../../embedded-agent-utils.js";
+import { extractAssistantVisibleText } from "../../embedded-agent-utils.js";
 import {
   INCOMPLETE_ASSISTANT_STREAM_RE,
   TERMINATED_TRANSPORT_MESSAGE_RE,
@@ -27,7 +32,6 @@ import {
 } from "./attempt-terminal-evidence.js";
 import { hasComposedVisibleAnswerAfterSettledTools } from "./incomplete-turn-classification.js";
 import { shouldTreatEmptyAssistantReplyAsSilent } from "./incomplete-turn-recovery.js";
-import { resolveSilentToolResultReplyPayload } from "./incomplete-turn-resolution.js";
 import { readSubscriptionCompletionEvidence } from "./subscription-completion-evidence.js";
 import type { EmbeddedRunAttemptResult } from "./types.js";
 
@@ -248,15 +252,24 @@ export function completeEmbeddedAttemptResult(
     completedClientToolCalls.length > 0 ? completedClientToolCalls : undefined;
   // The runtime has settled. Progress sent as the last tool batch was written
   // after every other tool result; an empty stop after it is the reply.
-  const terminalAssistant = state.currentAttemptAssistant;
-  const closingText = terminalAssistant
-    ? extractEmbeddedAssistantText(terminalAssistant).trim()
-    : "";
+  const terminalAssistant = state.currentAttemptCompletedAssistant ?? state.currentAttemptAssistant;
+  const closingReply = prepareAgentRunTerminalReply({
+    rawText: resolveRawAssistantAnswerText(terminalAssistant),
+  });
+  if (terminalAssistant && closingReply.terminalReply.disposition !== "silent") {
+    const rawText = closingReply.text;
+    closingReply.text = extractAssistantVisibleText(terminalAssistant, (_text, final) =>
+      final ? rawText : "",
+    );
+    const text = sanitizeAgentRunTerminalReplyText(parseReplyDirectives(closingReply.text).text);
+    closingReply.terminalReply = text ? { disposition: "visible", text } : { disposition: "empty" };
+  }
   const progressIsReply =
     subscription.endsWithSourceProgress() &&
+    resolveReplyExpectation(attempt) !== "result-required" &&
     state.terminal.kind === "ok" &&
     terminalAssistant?.stopReason === "stop" &&
-    (!closingText || isSilentReplyText(closingText, SILENT_REPLY_TOKEN));
+    closingReply.terminalReply.disposition !== "visible";
   const completeLastProgress = <T extends { sourceReplyFinal?: boolean }>(sends: T[]): T[] => {
     const index = sends.findLastIndex((send) => send.sourceReplyFinal === false);
     return progressIsReply && index >= 0
@@ -272,9 +285,22 @@ export function completeEmbeddedAttemptResult(
     messagesSnapshot: state.messagesSnapshot,
     terminal: state.terminal,
   });
+  const keptAnswer = evidence.keptAnswer;
+  const keptReply = keptAnswer
+    ? prepareAgentRunTerminalReply({ rawText: resolveRawAssistantAnswerText(keptAnswer.assistant) })
+    : closingReply;
+  if (keptAnswer && keptReply.terminalReply.disposition !== "silent") {
+    const rawText = keptReply.text;
+    keptReply.text = extractAssistantVisibleText(keptAnswer.assistant, (_text, final) =>
+      final ? rawText : "",
+    );
+    const text = sanitizeAgentRunTerminalReplyText(parseReplyDirectives(keptReply.text).text);
+    keptReply.terminalReply = text ? { disposition: "visible", text } : { disposition: "empty" };
+  }
   const result: EmbeddedRunAttemptWithReceiptEvidence = {
     ...state,
     ...evidence,
+    preparedTerminalReply: keptReply,
     sandboxRuntime: input.setup.sandboxRuntime,
     ...(settledTurnFinalizationContext ? { settledTurnFinalizationContext } : {}),
     replayMetadata,
@@ -309,18 +335,8 @@ export function completeEmbeddedAttemptResult(
       ? 1
       : 0;
   const visibleBlockReplyCount = subscription.getVisibleBlockReplyCount();
-  const silentToolResultReplyPayload = resolveSilentToolResultReplyPayload({
-    isCronTrigger: attempt.trigger === "cron",
-    payloadCount: pendingToolMediaPayloadCount,
-    aborted: terminal.aborted,
-    timedOut: terminal.timedOut,
-    attempt: resultEvidence,
-  });
   const synthesizedPayloadCount =
-    visibleBlockReplyCount +
-    pendingToolMediaPayloadCount +
-    messagingToolSourceReplyPayloads.length +
-    (silentToolResultReplyPayload ? 1 : 0);
+    visibleBlockReplyCount + pendingToolMediaPayloadCount + messagingToolSourceReplyPayloads.length;
   const emptyAssistantReplyIsSilent = shouldTreatEmptyAssistantReplyAsSilent({
     terminalReplyExpectation: resolveReplyExpectation(attempt),
     payloadCount: 0,

@@ -1,3 +1,4 @@
+import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
 import { FailoverError, resolveFailoverStatus } from "../../failover-error.js";
 import type {
   EmbeddedRunLivenessState,
@@ -26,19 +27,22 @@ export function handleRetryLimitExhaustion(params: {
       status: resolveFailoverStatus(params.decision.reason),
     });
   }
+  const text =
+    "Request failed after repeated internal retries. " +
+    "Please try again, or use /new to start a fresh session.";
 
   return {
     payloads: [
       {
-        text:
-          "Request failed after repeated internal retries. " +
-          "Please try again, or use /new to start a fresh session.",
+        text,
         isError: true,
       },
     ],
     meta: {
       durationMs: params.durationMs,
       agentMeta: params.agentMeta,
+      terminalReply: { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(text) },
+      finalAssistantVisibleText: text,
       ...(params.replayInvalid ? { replayInvalid: true } : {}),
       ...(params.livenessState ? { livenessState: params.livenessState } : {}),
       error: { kind: "retry_limit", message: params.message },

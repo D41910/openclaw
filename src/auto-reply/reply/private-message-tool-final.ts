@@ -1,8 +1,8 @@
 /** Detects and logs long private finals when message-tool-only delivery was expected. */
 import { estimateStringChars } from "@openclaw/normalization-core/cjk-chars";
+import type { AgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.types.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
-import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 
 const privateFinalReplyLogger = createSubsystemLogger("source-reply/private-final");
 
@@ -18,6 +18,7 @@ type PrivateMessageToolFinalContext = {
   successfulSourceReplyDelivery: boolean;
   isHeartbeat: boolean;
   isRoomEvent: boolean;
+  terminalReply?: AgentRunTerminalReplySnapshot;
 };
 
 /** Returns whether a private final can represent an expected source reply that was not delivered. */
@@ -43,7 +44,7 @@ export function classifyPrivateMessageToolFinal(
     return "none";
   }
   const trimmed = params.finalText.trim();
-  if (!trimmed || isSilentReplyTokenOnly(trimmed)) {
+  if (!trimmed || params.terminalReply?.disposition === "silent") {
     return "none";
   }
   // Both thresholds are substance proxies, so they must use the shared CJK-aware estimate.

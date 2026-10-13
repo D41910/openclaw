@@ -168,6 +168,7 @@ export async function completeReplyAgentRun(input: {
       base: followupRun,
       payloads: finalPayloads,
       finalText: assistantFinalText,
+      terminalReply: runResult.meta?.terminalReply,
       sourceReplyDeliveryMode: sourceReplyPolicy.sourceReplyDeliveryMode,
       sendPolicyDenied: sourceReplyPolicy.sendPolicyDenied,
       successfulSourceReplyDelivery: completedSourceReplyDelivery,

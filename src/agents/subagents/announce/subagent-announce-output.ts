@@ -1,7 +1,6 @@
 import { formatCompactTokenCount } from "@openclaw/normalization-core";
 import { asFiniteNumber } from "@openclaw/normalization-core/number-coercion";
 import { asOptionalObjectRecord, isRecord } from "@openclaw/normalization-core/record-coerce";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import {
   findTranscriptEvent,
   type SessionTranscriptRuntimeTarget,
@@ -12,6 +11,7 @@ import { isFastTestRuntimeEnv } from "../../../infra/env.js";
 import { formatDurationCompact } from "../../../infra/format-time/format-duration.js";
 import { isContractToolCallBlock } from "../../../shared/tool-block-contract.js";
 import { sleep } from "../../../utils/sleep.js";
+import { isSilentAssistantTranscriptMessage } from "../../embedded-agent-runner/message-visibility.js";
 import { extractStoredAssistantText } from "../../tools/chat-history-text.js";
 import { resolveSubagentChildAgentId } from "../registry/subagent-child-owner-match.js";
 import { subagentRuns } from "../registry/subagent-registry-memory.js";
@@ -92,6 +92,10 @@ function summarizeSubagentOutputHistory(messages: Array<unknown>): SubagentOutpu
         snapshot.latestText = undefined;
         continue;
       }
+      if (isSilentAssistantTranscriptMessage(message)) {
+        snapshot.latestText = undefined;
+        continue;
+      }
       const toolCalls = record.toolCalls ?? record.tool_calls;
       const toolCallCount =
         (Array.isArray(record.content)
@@ -125,7 +129,11 @@ function summarizeSubagentOutputHistory(messages: Array<unknown>): SubagentOutpu
 export async function readSubagentOutput(
   sessionKey: string,
   outcome?: SubagentRunOutcome,
-  options?: { childAgentId?: string; sessionTarget?: SessionTranscriptRuntimeTarget },
+  options?: {
+    childAgentId?: string;
+    sessionTarget?: SessionTranscriptRuntimeTarget;
+    runId?: string;
+  },
 ): Promise<string | undefined> {
   const agentId =
     options?.sessionTarget?.agentId ??
@@ -135,6 +143,13 @@ export async function readSubagentOutput(
     });
   if (!agentId) {
     return undefined;
+  }
+  if (options?.runId && options.sessionTarget) {
+    const result = await findTranscriptEvent(options.sessionTarget, {
+      kind: "visible-final",
+      runId: options.runId,
+    });
+    return isRecord(result?.event) ? extractStoredAssistantText(result.event.message) : undefined;
   }
   let messages: unknown[] | undefined;
   if (options?.sessionTarget) {
@@ -214,7 +229,7 @@ export async function readSubagentTimeoutProgress(
   const progress = initial?.trim()
     ? initial
     : await readLatestSubagentOutputWithRetry({ sessionKey, childAgentId, maxWaitMs, outcome });
-  return progress && !isSilentReplyText(progress, SILENT_REPLY_TOKEN) ? progress : undefined;
+  return progress;
 }
 
 export async function captureSubagentCompletionReply(
@@ -223,13 +238,17 @@ export async function captureSubagentCompletionReply(
     waitForReply?: boolean;
     outcome?: SubagentRunOutcome;
     sessionTarget?: SessionTranscriptRuntimeTarget;
+    runId?: string;
   },
 ): Promise<string | undefined> {
   const waitForReply = options?.waitForReply;
   const maxWaitMs = isFastTestRuntimeEnv() ? 50 : 1_500;
   const retryIntervalMs = isFastTestRuntimeEnv() ? FAST_TEST_RETRY_INTERVAL_MS : 100;
   const readOutput = () =>
-    readSubagentOutput(sessionKey, options?.outcome, { sessionTarget: options?.sessionTarget });
+    readSubagentOutput(sessionKey, options?.outcome, {
+      sessionTarget: options?.sessionTarget,
+      runId: options?.runId,
+    });
   const immediate = await readOutput();
   if (immediate?.trim()) {
     return immediate;

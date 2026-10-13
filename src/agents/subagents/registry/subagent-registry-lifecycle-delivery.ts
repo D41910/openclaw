@@ -10,16 +10,15 @@ import {
 } from "../../../plugins/runtime/gateway-request-scope.js";
 import { extractTextFromChatContent } from "../../../shared/chat-content.js";
 import { captureOpenClawStateWorkerContext } from "../../../state/openclaw-state-worker-context.js";
+import type { AgentRunTerminalReplySnapshot } from "../../agent-run-terminal-reply.types.js";
 import {
   buildAnnounceIdFromChildRun,
   buildAnnounceIdempotencyKey,
 } from "../../announce-idempotency.js";
-import { isSilentAgentReplyText } from "../../embedded-agent-runner/message-visibility.js";
 import type { SubagentAnnounceDeliveryResult } from "../announce/subagent-announce-dispatch.js";
 import type { SubagentRunOutcome } from "../subagent-run-outcome.types.js";
 import { resolveSubagentChildSessionOwner } from "./subagent-child-session-owner.js";
 import { ensureCompletionState, ensureDeliveryState } from "./subagent-delivery-state.js";
-import { capFrozenResultText } from "./subagent-registry-helpers.js";
 import type {
   SubagentLifecycleCommonContext,
   SubagentLifecycleOptions,
@@ -183,6 +182,7 @@ export const captureSubagentRunResult = async (
   entry: SubagentRunRecord,
   outcome: SubagentRunOutcome,
   assertCurrent: () => void,
+  terminalReply?: AgentRunTerminalReplySnapshot,
 ) => {
   const params = context.options;
   const result = (resultText: string | null) => ({
@@ -191,8 +191,15 @@ export const captureSubagentRunResult = async (
     outcome,
     transcriptTarget: entry.execution.transcriptTarget,
   });
+  if (terminalReply?.disposition !== "visible") {
+    return result(null);
+  }
   const currentResult = entry.completion?.resultText;
-  if (currentResult !== undefined && !(entry.killReconciliation && !currentResult?.trim())) {
+  if (
+    currentResult?.trim() &&
+    (!entry.completion?.terminalReply ||
+      JSON.stringify(entry.completion.terminalReply) === JSON.stringify(terminalReply))
+  ) {
     return result(currentResult);
   }
   if (outcome.status === "error") {
@@ -262,7 +269,7 @@ export const captureSubagentRunResult = async (
             },
           )
         : await capture(transcriptTarget?.sessionId);
-    resultText = captured?.trim() ? capFrozenResultText(captured) : null;
+    resultText = captured?.trim() ? captured : null;
   } catch (error) {
     if (hasSqliteWorkerOutcomeUnknown(error)) {
       throw error;
@@ -297,7 +304,9 @@ export const refreshFrozenResultFromSession = async (
       typeof entry.execution.endedAt === "number" &&
       typeof entry.cleanupCompletedAt !== "number" &&
       entry.pauseReason !== "sessions_yield" &&
-      entry.execution.outcome?.status !== "error",
+      entry.execution.outcome?.status !== "error" &&
+      entry.completion?.terminalReply?.disposition === "visible" &&
+      !entry.completion.resultText,
   );
   const entry = candidates.toSorted(compareSubagentRunGeneration).at(-1);
   if (!entry || context.newerGenerationOwnsSession(entry)) {
@@ -323,7 +332,7 @@ export const refreshFrozenResultFromSession = async (
     return false;
   }
   const trimmed = captured?.trim();
-  if (!trimmed || isSilentAgentReplyText(trimmed)) {
+  if (!trimmed) {
     return false;
   }
   // Reply capture yields while registration can transfer session ownership.
@@ -337,7 +346,7 @@ export const refreshFrozenResultFromSession = async (
     return false;
   }
 
-  const nextFrozen = capFrozenResultText(trimmed);
+  const nextFrozen = captured;
   if (entry.completion?.resultText === nextFrozen) {
     return false;
   }

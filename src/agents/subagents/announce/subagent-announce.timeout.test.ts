@@ -326,7 +326,7 @@ describe("subagent announce timeout config", () => {
 
       await runAnnounceFlowForTest("run-timeout-visible-terminal", {
         outcome: { status: "timeout" },
-        roundOneReply: undefined,
+        roundOneReply: text,
         terminalReply: { disposition: "visible", text },
       });
 
@@ -405,7 +405,6 @@ describe("subagent announce timeout config", () => {
     await runAnnounceFlowForTest("run-terminal-error-no-stale-output", {
       outcome: { status: "error", error: "All models failed (2): timeout" },
       roundOneReply: "stale frozen output",
-      fallbackReply: "older fallback output",
     });
 
     const directAgentCall = findFinalDirectAgentCall();

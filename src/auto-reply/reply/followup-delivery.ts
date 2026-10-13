@@ -283,6 +283,7 @@ export async function resolveFollowupDeliveryDecision(params: {
           base: turn.queued,
           payloads,
           finalText: assistantFinalText,
+          terminalReply: result.meta?.terminalReply,
           sourceReplyDeliveryMode: sourcePolicy.sourceReplyDeliveryMode,
           sendPolicyDenied: sourcePolicy.sendPolicyDenied,
           successfulSourceReplyDelivery: completedSourceDelivery,
@@ -427,12 +428,7 @@ async function sendFollowupPayloads(params: {
     workspaceDir: turn.queued.run.workspaceDir,
     agentDir: turn.queued.run.agentDir,
   });
-  const payloads = params.payloads.filter(
-    (payload) =>
-      hasOutboundReplyContent(payload) &&
-      (!deliveryPlan.isSilentPayload(payload) ||
-        getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression === true),
-  );
+  const payloads = params.payloads.filter((payload) => hasOutboundReplyContent(payload));
   if (payloads.length === 0) {
     return [];
   }

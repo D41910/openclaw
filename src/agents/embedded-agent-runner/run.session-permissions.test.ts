@@ -322,6 +322,10 @@ it("does not replace a successfully recovered final assistant after a prompt-tim
       hasPartialAssistantTextAfterPromptTimeout: false,
       replyDeliveryState: "missing",
       reportedModelRef: { provider: "openai", model: "gpt-5.4" },
+      preparedTerminalReply: {
+        text: payloads[0].text,
+        terminalReply: { disposition: "visible", text: payloads[0].text },
+      },
       finalAssistantVisibleText: undefined,
       finalAssistantRawText: undefined,
       recoveredFinalAssistantPayloadsAfterPromptTimeout: undefined,

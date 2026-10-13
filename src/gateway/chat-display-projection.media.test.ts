@@ -87,6 +87,37 @@ it("caps commentary captions across an intervening image as one message", () => 
   expect(source.content[2]).toMatchObject({ text: "B".repeat(20) });
 });
 
+it("keeps raw literal text, source facts and nontext content through history projection", () => {
+  const visibleTexts = [
+    "NO_REPLY.",
+    '"NO_REPLY"',
+    '{"action":"NO_REPLY"}',
+    "no_reply",
+    "Done\nNO_REPLY",
+  ];
+  for (const value of visibleTexts) {
+    const source = assistant({ content: [text(value)] });
+    expect(project([source])).toEqual([source]);
+  }
+  const silent = assistant({ content: [text("NO_REPLY")] });
+  expect(project([silent])).toEqual([]);
+  const visible = assistant({ content: [text("NO_REPLY")], display: true });
+  expect(project([visible])).toEqual([visible]);
+  const withImage = assistant({ content: [text("NO_REPLY"), image] });
+  expect(project([withImage])).toEqual([withImage]);
+  const sourceReply = assistant({
+    content: [text("NO_REPLY")],
+    openclawDeliveryMirror: {
+      kind: "message-tool-source-reply",
+      sourceTurnId: "source-run",
+      final: true,
+    },
+  });
+  expect(project([sourceReply, silent])).toEqual([sourceReply]);
+  const user = { role: "user", content: '{"action":"NO_REPLY"}' };
+  expect(project([user])).toEqual([user]);
+});
+
 describe("commentary group visibility", () => {
   const progress = "Visible progress";
   const keyed = phased(progress, "commentary", "progress");

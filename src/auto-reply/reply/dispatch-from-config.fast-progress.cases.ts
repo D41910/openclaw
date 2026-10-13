@@ -25,7 +25,7 @@ export function registerFastAutoProgressCases() {
         text: "💨Fast: auto-off(75s>=60s)",
         channelData: { openclawProgressKind: "fast-mode-auto" },
       });
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
 
     const result = await dispatchReplyFromConfig({
@@ -60,7 +60,7 @@ export function registerFastAutoProgressCases() {
     } satisfies ReplyPayload;
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.(payload);
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
     const ctx = buildTestCtx({ SessionKey: "test:session", ChatType: "channel" });
 
@@ -95,7 +95,7 @@ export function registerFastAutoProgressCases() {
     } satisfies ReplyPayload;
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.(payload);
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
 
     const result = await dispatchReplyFromConfig({
@@ -138,7 +138,7 @@ export function registerFastAutoProgressCases() {
       } satisfies ReplyPayload;
       const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
         await opts?.onToolResult?.(payload);
-        return { text: "NO_REPLY" } satisfies ReplyPayload;
+        return {} satisfies ReplyPayload;
       });
 
       const result = await dispatchReplyFromConfig({
@@ -180,7 +180,7 @@ export function registerFastAutoProgressCases() {
     } satisfies ReplyPayload;
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.(payload);
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
 
     await dispatchReplyFromConfig({
@@ -214,7 +214,7 @@ export function registerFastAutoProgressCases() {
     } satisfies ReplyPayload;
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.(payload);
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
 
     await dispatchReplyFromConfig({
@@ -259,7 +259,7 @@ export function registerFastAutoProgressCases() {
       } satisfies ReplyPayload;
       const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
         await opts?.onToolResult?.(payload);
-        return { text: "NO_REPLY" } satisfies ReplyPayload;
+        return {} satisfies ReplyPayload;
       });
 
       await dispatchReplyFromConfig({

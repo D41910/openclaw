@@ -188,7 +188,10 @@ describe("gateway agent handler yielded orchestrator follow-ups", () => {
               endedAt: Date.now(),
               terminalReply: { disposition: "visible", text: result },
             });
-            return { payloads: [{ text: result }], meta: { durationMs: 1 } };
+            return {
+              payloads: [{ text: result }],
+              meta: { durationMs: 1, terminalReply: { disposition: "visible", text: result } },
+            };
           });
           const context = makeContext();
           const request = {

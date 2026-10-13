@@ -8,14 +8,17 @@ import {
   isReplyPayloadTerminalContent,
   type ReplyPayload,
 } from "../../auto-reply/reply-payload.js";
-import { isSilentReplyTokenOnly } from "../../auto-reply/reply/mixed-silent-reply-tokens.js";
-import { resolveAssistantMessagePhase } from "../../shared/chat-message-content.js";
+import { isSilentReplyText } from "../../auto-reply/tokens.js";
+import { hasPersistedMedia } from "../../sessions/user-turn-media.js";
+import {
+  readAssistantTextBlocksForPhase,
+  resolveAssistantMessagePhase,
+} from "../../shared/chat-message-content.js";
 import { hasAnyNonEmptyString as hasNonEmptyStringArray } from "../delivery-evidence-values.js";
 
 type PayloadVisibilityOptions = {
   includeErrorPayloads?: boolean;
   includeReasoningPayloads?: boolean;
-  includeSilentReplyPayloads?: boolean;
   requireTerminalContent?: boolean;
 };
 
@@ -54,11 +57,6 @@ function hasVisibleAttachmentReference(value: unknown): boolean {
   return urls.size > 0;
 }
 
-/** Applies the exact structural terminal-silence contract. */
-export function isSilentAgentReplyText(value: unknown): boolean {
-  return typeof value === "string" && isSilentReplyTokenOnly(value);
-}
-
 export function hasVisibleAgentPayload(
   result: { payloads?: unknown },
   options: PayloadVisibilityOptions = {},
@@ -78,9 +76,7 @@ export function hasVisibleAgentPayload(
       ) {
         return false;
       }
-      const visibleText =
-        hasNonEmptyString(record.text) &&
-        (options.includeSilentReplyPayloads !== false || !isSilentAgentReplyText(record.text));
+      const visibleText = hasNonEmptyString(record.text);
       return Boolean(
         visibleText ||
         hasNonEmptyString(record.mediaUrl) ||
@@ -105,20 +101,6 @@ export function hasExplicitlyVisibleAgentPayload(payload: unknown): boolean {
     { payloads: [payload] },
     { includeErrorPayloads: false, includeReasoningPayloads: false },
   );
-}
-
-export function hasIntentionalSilentAgentPayload(result: { payloads?: unknown }): boolean {
-  const payloads = Array.isArray(result.payloads) ? result.payloads : [];
-  return payloads.some((payload) => {
-    const record = asOptionalRecord(payload);
-    if (!record) {
-      return false;
-    }
-    return (
-      isSilentAgentReplyText(record.text) &&
-      !hasVisibleAgentPayload({ payloads: [{ ...record, text: undefined }] })
-    );
-  });
 }
 
 export function getTranscriptMessageRole(message: unknown): string | undefined {
@@ -170,36 +152,63 @@ export function isIntermediateAssistantTranscriptMessage(message: unknown): bool
   return fallback?.source === "segment" && hasNonEmptyString(fallback.itemId);
 }
 
-/** Returns whether a stopped assistant turn contains only reasoning and a silent marker. */
-export function isTerminalSilentAssistantMessage(message: unknown): boolean {
-  const messageRecord = asOptionalObjectRecord(message);
+/** Classifies raw assistant rows after their persisted visibility facts. */
+export function isSilentAssistantTranscriptMessage(message: unknown): boolean {
+  const record = asOptionalObjectRecord(message);
+  if (record?.role !== "assistant") {
+    return false;
+  }
+  if (record.display === false) {
+    return true;
+  }
   if (
-    messageRecord?.role !== "assistant" ||
-    typeof messageRecord.stopReason !== "string" ||
-    messageRecord.stopReason.trim() !== "stop"
+    record.display === true ||
+    readTerminalSourceReplyDeliveryMirror(message) ||
+    hasPersistedMedia(message) ||
+    hasNonEmptyStringArray(asOptionalRecord(record.openclawDelivery)?.mediaUrls)
   ) {
     return false;
   }
-  const content = messageRecord.content;
-  if (!Array.isArray(content) || content.length === 0) {
+  if (typeof record.content === "string") {
+    return isSilentReplyText(record.content);
+  }
+  if (record.content === undefined && typeof record.text === "string") {
+    return isSilentReplyText(record.text);
+  }
+  if (!Array.isArray(record.content)) {
     return false;
   }
-  const textParts: string[] = [];
-  for (const block of content) {
-    if (!block || typeof block !== "object") {
-      return false;
-    }
-    const record = block as { type?: unknown; text?: unknown };
-    const type = typeof record.type === "string" ? record.type.trim() : undefined;
-    if (type === "thinking") {
+  const text: string[] = [];
+  for (const block of record.content) {
+    const part = asOptionalRecord(block);
+    if (
+      part?.type === "thinking" ||
+      part?.type === "reasoning" ||
+      part?.type === "redacted_thinking"
+    ) {
       continue;
     }
-    if (type !== "text") {
+    if (
+      !["text", "input_text", "output_text"].includes(String(part?.type)) ||
+      typeof part?.text !== "string"
+    ) {
       return false;
     }
-    if (typeof record.text === "string" && record.text.trim()) {
-      textParts.push(record.text.trim());
-    }
+    text.push(part.text);
   }
-  return isSilentAgentReplyText(textParts.join("\n"));
+  const finalBlocks = readAssistantTextBlocksForPhase(message, "final_answer");
+  return isSilentReplyText(
+    finalBlocks.length ? finalBlocks.map((block) => block.text).join("") : text.join(""),
+  );
+}
+
+/** Only a completed final assistant row can prove terminal silence. */
+export function isTerminalSilentAssistantMessage(message: unknown): boolean {
+  const record = asOptionalObjectRecord(message);
+  return (
+    record?.stopReason === "stop" &&
+    record.endTurn !== false &&
+    !isIntermediateAssistantTranscriptMessage(message) &&
+    isSilentAssistantTranscriptMessage(message)
+  );
 }

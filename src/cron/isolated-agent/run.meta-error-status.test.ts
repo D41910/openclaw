@@ -171,7 +171,7 @@ describe("runCronIsolatedAgentTurn - meta.error status propagation", () => {
     await useRealOutcome();
     mockAgentRun({
       usage: { input: 10, output: 1 },
-      meta: { finalAssistantRawText: "NO_REPLY", finalAssistantVisibleText: "NO_REPLY" },
+      meta: { terminalReply: { disposition: "silent" } },
     });
     const result = await runTurn();
     expect(dispatchCronDeliveryMock).toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe("runCronIsolatedAgentTurn - meta.error status propagation", () => {
     await useRealOutcome();
     mockAgentRun({
       payloads: [{ text: "⚠️ 🛠️ Bash failed: mount unavailable", isError: true }],
-      meta: { finalAssistantVisibleText: "NO_REPLY" },
+      meta: { terminalReply: { disposition: "silent" } },
     });
     const result = await runTurn();
     expect(result.status).toBe("error");
@@ -309,8 +309,7 @@ describe("delivered report outcome", () => {
       messagingToolSentTargets,
       meta: {
         agentMeta: { usage: { input: 10, output: 20 } },
-        finalAssistantVisibleText: "NO_REPLY",
-        finalAssistantRawText: "NO_REPLY",
+        terminalReply: { disposition: "silent" },
       },
     });
 

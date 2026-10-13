@@ -80,7 +80,7 @@ it.each(["groups"] as const)(
         runState.replyCompletion?.expectation ?? "required",
         "blocked",
       );
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     };
 
     await dispatchReplyFromConfig({

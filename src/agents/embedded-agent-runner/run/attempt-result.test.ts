@@ -192,6 +192,24 @@ function settledToolMessages(): EmbeddedRunAttemptResult["messagesSnapshot"] {
 }
 
 describe("attempt result projection", () => {
+  it.each([
+    ["NO_REPLY\n<final></final>", "", "empty"],
+    ["NO_REPLY\nNO_REPLY", "NO_REPLY", "visible"],
+    ["[[reply_to_current]]", "[[reply_to_current]]", "empty"],
+  ] as const)("prepares raw final output before rendering %j", (rawText, text, disposition) => {
+    const result = completeResult({
+      currentAttemptCompletedAssistant: makeAssistantMessageFixture({
+        content: [{ type: "text", text: rawText }],
+        stopReason: "stop",
+        errorMessage: undefined,
+      }),
+    });
+    expect(result.preparedTerminalReply).toEqual({
+      text,
+      terminalReply: disposition === "visible" ? { disposition, text } : { disposition },
+    });
+  });
+
   it("keeps the settled result snapshot when an output hook replaces live state", () => {
     const assistant = makeAssistantMessageFixture({ content: [{ type: "text", text: "settled" }] });
     const fixture = createResultFixture({
@@ -738,9 +756,9 @@ describe("trailing source progress at runtime settlement", () => {
     maxTokens: 8_000,
   };
   // Native-async calls run while the provider streams; each settles before the next fragment.
-  type ModelCall = { tools?: Array<"progress" | "read">; async?: true };
+  type ModelCall = { tools?: Array<"progress" | "read">; async?: true; text?: string };
 
-  async function settleRealLoop(calls: ModelCall[]) {
+  async function settleRealLoop(calls: ModelCall[], resultRequired = false) {
     const sessionManager = {};
     const { emit, subscription } = createSubscribedSessionHarness({
       runId: "run-1",
@@ -834,7 +852,7 @@ describe("trailing source progress at runtime settlement", () => {
           api: testModel.api,
           provider: testModel.provider,
           model: testModel.id,
-          content: [...toolCalls, { type: "text", text: "" }],
+          content: [...toolCalls, { type: "text", text: call.text ?? "" }],
           stopReason: toolCalls.length > 0 && !call.async ? "toolUse" : "stop",
           errorMessage: undefined,
         });
@@ -860,6 +878,10 @@ describe("trailing source progress at runtime settlement", () => {
     );
     expect(callIndex).toBe(calls.length);
     const fixture = createResultFixture();
+    Object.assign(fixture.input.attempt, {
+      messageChannel: "telegram",
+      terminalReplyExpectation: resultRequired ? "result-required" : "required",
+    });
     fixture.input.preparedStreamRuntime.stream.subscription = subscription as never;
     const terminalAssistant = messages.findLast((message) => message.role === "assistant");
     fixture.settled.currentAttemptAssistant = terminalAssistant as never;
@@ -887,6 +909,9 @@ describe("trailing source progress at runtime settlement", () => {
 
   it.each<[string, ModelCall[], boolean]>([
     ["last tool batch", [{ tools: ["progress"] }, {}], true],
+    ["punctuated answer", [{ tools: ["progress"] }, { text: "NO_REPLY." }], false],
+    ["quoted answer", [{ tools: ["progress"] }, { text: '"NO_REPLY"' }], false],
+    ["JSON answer", [{ tools: ["progress"] }, { text: '{"action":"NO_REPLY"}' }], false],
     ["later work", [{ tools: ["progress"], async: true }, { tools: ["read"] }, {}], false],
     ["shared provider response", [{ tools: ["read", "progress"], async: true }, {}], false],
   ])("settles source progress with %s", async (_name, calls, delivered) => {
@@ -895,10 +920,17 @@ describe("trailing source progress at runtime settlement", () => {
     expect(result.messagingToolSentTargets?.map((send) => send.sourceReplyFinal)).toEqual([
       delivered,
     ]);
-    if (delivered) {
+    if (delivered || calls.at(-1)?.text) {
       expect(finalizerInstruction).toBeNull();
     } else {
       expect(finalizerInstruction).toContain("did not produce a user-visible answer");
     }
+  });
+
+  it("does not promote source progress into a required final result", async () => {
+    const { result } = await settleRealLoop([{ tools: ["progress"] }, { text: "NO_REPLY" }], true);
+    expect(result.sourceReplyDeliveryState).toBe("missing");
+    expect(result.messagingToolSentTargets?.map((send) => send.sourceReplyFinal)).toEqual([false]);
+    expect(result.preparedTerminalReply?.terminalReply.disposition).toBe("silent");
   });
 });

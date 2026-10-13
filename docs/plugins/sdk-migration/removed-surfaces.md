@@ -79,6 +79,22 @@ The four Copilot exports and their earlier deprecation entries were removed in
 [`f2de06b38de710854aacd19218327358445816c8`](https://github.com/openclaw/openclaw/commit/f2de06b38de710854aacd19218327358445816c8);
 third-party plugins must own their provider-specific token exchange and caching.
 
+### Reply silence parsing
+
+`isSilentReplyText` and `isSilentReplyPayloadText` were removed from
+`openclaw/plugin-sdk/reply-chunking`. The exact whole-reply classifier remains
+available from `openclaw/plugin-sdk/reply-runtime` for raw producer input.
+Delivery plugins must forward prepared text without reclassifying it: literal
+`NO_REPLY` can be a visible answer.
+
+Harness producers use `prepareAgentRunTerminalReply` from
+`openclaw/plugin-sdk/agent-harness-runtime` once on the raw final text, then
+render the returned text and publish the matching terminal fact. Do not deliver the
+bounded `terminalReply.text` snapshot as the answer. An exact uppercase
+`NO_REPLY`, ignoring surrounding whitespace, requests silence; punctuation,
+quotes, JSON, and prose do not. A literal leading `NO_REPLY\n` removes one line
+without reclassifying the suffix. See [Silent replies](/concepts/messages#silent-replies).
+
 ### Tool argument redaction
 
 `sanitizeToolArgs` was removed from `openclaw/plugin-sdk/agent-harness-runtime`

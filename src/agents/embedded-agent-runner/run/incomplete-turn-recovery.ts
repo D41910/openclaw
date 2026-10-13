@@ -340,6 +340,7 @@ export function resolveSettledToolTerminalContinuationInstruction(
   );
   if (
     params.payloadCount !== 0 ||
+    (assistantState.assistant?.stopReason === "stop" && assistantState.visibleText.length > 0) ||
     // Optional authored silence skips generation without clearing tool failure evidence.
     (!params.allowEmptyStopContinuation &&
       assistantState.silent &&

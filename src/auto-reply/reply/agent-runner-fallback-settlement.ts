@@ -145,6 +145,7 @@ export async function settleAgentFallbackCycle(params: {
       isHeartbeat: turn.isHeartbeat,
       isRoomEvent: turn.sessionCtx.InboundEventKind === "room_event",
       finalText,
+      terminalReply: runResult.meta?.terminalReply,
     }) === "short"
       ? ({ disposition: "empty", code: "message-tool-not-called" } as const)
       : undefined;

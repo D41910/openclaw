@@ -3,6 +3,10 @@ import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
+  isSilentAssistantTranscriptMessage,
+  readTerminalSourceReplyDeliveryMirror,
+} from "../../agents/embedded-agent-runner/message-visibility.js";
+import {
   executeSqliteQuerySync,
   executeSqliteQueryTakeFirstSync,
   getNodeSqliteKysely,
@@ -13,6 +17,7 @@ import {
   readSessionTranscriptRunId,
 } from "../../sessions/transcript-events.js";
 import {
+  isAssistantResultEventForRun,
   isVisibleAssistantResultEventForRun,
   isVisibleTranscriptRecord,
 } from "../../sessions/transcript-visible-record.js";
@@ -175,17 +180,30 @@ export async function readTranscriptArchiveFinalInWorker(
       if (hashSessionArchiveBytes(row.archive_blob) !== row.archive_sha256) {
         throw new Error("Archived transcript bytes do not match their registered hash.");
       }
+      let hasTerminalResult = false;
       await scanArchivedTranscript(
         row.archive_blob,
         row.encoding === "zstd",
         archive.sessionId,
         (event) => {
+          if (!isAssistantResultEventForRun(event, plan.runId)) {
+            return;
+          }
+          hasTerminalResult = true;
           if (isVisibleAssistantResultEventForRun(event, plan.runId)) {
             result.event = event;
+          } else if (
+            isRecord(event) &&
+            isSilentAssistantTranscriptMessage(event.message) &&
+            !readTerminalSourceReplyDeliveryMirror(
+              isRecord(result.event) ? result.event.message : undefined,
+            )
+          ) {
+            result.event = undefined;
           }
         },
       );
-      if (result.event !== undefined) {
+      if (hasTerminalResult) {
         break;
       }
     }

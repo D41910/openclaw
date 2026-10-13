@@ -112,12 +112,12 @@ export function buildMessagingSection(params: {
           messageToolOnly
             ? suppressSilentTokenGuidance
               ? "- Visible `message(send)` content: never repeat in final."
-              : `- Visible \`message(send)\` content: never repeat in final; end with ${SILENT_REPLY_TOKEN}.`
+              : `- Visible \`message(send)\` content: never repeat in final; end with only uppercase ${SILENT_REPLY_TOKEN}.`
             : suppressSilentTokenGuidance
               ? "- Follow turn delivery: private final => visible via `message(send)`; otherwise normal reply once."
-              : `- After visible \`message(send)\`, final ONLY ${SILENT_REPLY_TOKEN}.`,
+              : `- After visible \`message(send)\`, final ONLY uppercase ${SILENT_REPLY_TOKEN}, with no punctuation or quotes.`,
           !suppressSilentTokenGuidance
-            ? `${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`
+            ? `Only the entire exact ${SILENT_REPLY_TOKEN} reply is silent. Send confirmations before ending silently.`
             : "",
           showGenericInlineButtonHint
             ? params.inlineButtonsEnabled

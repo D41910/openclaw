@@ -13,9 +13,9 @@ import {
   resolveExplicitFinalSourceReplyDeliveryEvidence,
 } from "./delivery-evidence.js";
 import {
-  hasIntentionalSilentAgentPayload,
   hasVisibleAgentPayload,
   isMeaningfulTranscriptMessage,
+  isSilentAssistantTranscriptMessage,
   isTerminalSilentAssistantMessage,
 } from "./message-visibility.js";
 
@@ -309,24 +309,49 @@ describe("queued delivery evidence", () => {
 });
 
 describe("agent reply visibility", () => {
-  it("distinguishes visible replies from intentional silent payloads", () => {
-    const result = { payloads: [{ text: "NO_REPLY" }] };
+  it("uses terminal facts without reinterpreting prepared payload text", () => {
+    const result = {
+      payloads: [{ text: "NO_REPLY" }],
+      meta: { terminalReply: { disposition: "visible" as const, text: "NO_REPLY" } },
+    };
     expect(hasVisibleAgentPayload(result)).toBe(true);
-    expect(hasVisibleAgentPayload(result, { includeSilentReplyPayloads: false })).toBe(false);
-    expect(hasIntentionalSilentAgentPayload(result)).toBe(true);
-    expect(
-      hasIntentionalSilentAgentPayload({
-        payloads: [{ text: "NO_REPLY", mediaUrls: ["/tmp/proof.png"] }],
-      }),
-    ).toBe(false);
+    expect(extractAgentRunText(result)).toBe("NO_REPLY");
+    const silent = { meta: { terminalReply: { disposition: "silent" as const } } };
+    expect(extractAgentRunText(silent)).toBeUndefined();
   });
 
-  it.each(['{"action":"NO_REPLY"}', "NO_REPLY.", "NO_REPLY NO_REPLY", "NO_REPLY The answer."])(
-    "keeps non-token-only text visible: %s",
+  it("extracts full prepared bytes instead of the bounded terminal snapshot", () => {
+    const text = `    ${"answer ".repeat(900)}\n`;
+    expect(
+      extractAgentRunText({
+        payloads: [{ text }],
+        meta: { terminalReply: { disposition: "visible", text: "bounded summary" } },
+      }),
+    ).toBe(text);
+  });
+
+  it.each(['{"action":"NO_REPLY"}', '"NO_REPLY"', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
+    "preserves ordinary assistant text: %s",
     (text) => {
       const result = { payloads: [{ text }] };
-      expect(hasVisibleAgentPayload(result, { includeSilentReplyPayloads: false })).toBe(true);
-      expect(hasIntentionalSilentAgentPayload(result)).toBe(false);
+      expect(hasVisibleAgentPayload(result)).toBe(true);
+      expect(extractAgentRunText(result)).toBe(text);
+      expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
+      expect(
+        isTerminalSilentAssistantMessage({
+          role: "assistant",
+          stopReason: "stop",
+          content: [{ type: "text", text }],
+        }),
+      ).toBe(false);
+    },
+  );
+
+  it.each(["The requested answer.", "NO_REPLY The answer."])(
+    "keeps substantive text visible: %s",
+    (text) => {
+      const result = { payloads: [{ text }] };
+      expect(hasVisibleAgentPayload(result)).toBe(true);
       expect(extractAgentRunText(result)).toBe(text);
       expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
       expect(
@@ -352,5 +377,41 @@ describe("agent reply visibility", () => {
     ).toBe(true);
     expect(isMeaningfulTranscriptMessage({ role: "system" })).toBe(false);
     expect(isMeaningfulTranscriptMessage({ role: "toolResult" })).toBe(true);
+  });
+
+  it("honors stored row visibility and final phase before the exact raw text check", () => {
+    expect(isSilentAssistantTranscriptMessage({ role: "user", content: "NO_REPLY" })).toBe(false);
+    expect(
+      isSilentAssistantTranscriptMessage({
+        role: "assistant",
+        display: true,
+        content: "NO_REPLY",
+      }),
+    ).toBe(false);
+    expect(
+      isSilentAssistantTranscriptMessage({
+        role: "assistant",
+        content: "NO_REPLY",
+        openclawDelivery: { mediaUrls: ["/tmp/image.png"] },
+      }),
+    ).toBe(false);
+    expect(
+      isSilentAssistantTranscriptMessage({
+        role: "assistant",
+        content: [
+          { type: "text", text: "Earlier progress", textSignature: '{"v":1,"phase":"commentary"}' },
+          { type: "text", text: "NO_REPLY", textSignature: '{"v":1,"phase":"final_answer"}' },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isSilentAssistantTranscriptMessage({
+        role: "assistant",
+        content: [
+          { type: "text", text: "NO_REPLY", textSignature: '{"v":1,"phase":"commentary"}' },
+          { type: "text", text: "Visible final", textSignature: '{"v":1,"phase":"final_answer"}' },
+        ],
+      }),
+    ).toBe(false);
   });
 });

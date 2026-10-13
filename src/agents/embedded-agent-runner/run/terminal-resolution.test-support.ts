@@ -1,4 +1,6 @@
 import { expect, vi } from "vitest";
+import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   buildEmbeddedRunnerAssistant,
   makeEmbeddedRunnerAttempt,
@@ -116,6 +118,14 @@ export function makeTerminalInput(overrides: TerminalInputOverrides = {}): Termi
       hasSuccessfulFinalAssistantAfterPromptTimeout: false,
       hasPartialAssistantTextAfterPromptTimeout: false,
       terminalToolFailure: undefined,
+      preparedTerminalReply:
+        attempt.preparedTerminalReply ??
+        prepareAgentRunTerminalReply({
+          rawText:
+            overrides.finalAssistantRawText ??
+            overrides.finalAssistantVisibleText ??
+            resolveRawAssistantAnswerText(resolveCurrentAttemptAssistant(attempt)),
+        }),
       ...base,
       ...overrides,
       ...overrides.prepared,

@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { createDeferred } from "../../../test/helpers/promise.js";
 import { observeHostDataSql } from "../../../test/helpers/sqlite-statement-execution-counter.js";
 import { useAutoCleanupTempDirTracker } from "../../../test/helpers/temp-dir.js";
-import { buildAgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import * as sessionAccessor from "../../config/sessions/session-accessor.js";
 import { applySessionEntryLifecycleMutation } from "../../config/sessions/session-accessor.js";
@@ -483,9 +483,9 @@ it.each([
     fixture.context.followupRun.run.traceLevelOverride = "raw";
     fixture.context.followupRun.run.terminalReplyExpectation = expectation;
     fixture.context.execution.result.payloads = [];
-    fixture.context.execution.result.meta.terminalReply = buildAgentRunTerminalReplySnapshot({
+    fixture.context.execution.result.meta.terminalReply = prepareAgentRunTerminalReply({
       rawText: kind === "NO_REPLY" ? "NO_REPLY" : "",
-    });
+    }).terminalReply;
     if (kind === "NO_REPLY") {
       fixture.context.execution.result.meta.finalAssistantRawText = "NO_REPLY";
     } else if (kind === "hook_block") {
@@ -579,9 +579,9 @@ it.each([
       { provider: diagnostic.provider, model: diagnostic.model, reason: "auth", error: "No login" },
     ];
     context.execution.result.payloads = [];
-    context.execution.result.meta.terminalReply = buildAgentRunTerminalReplySnapshot({
+    context.execution.result.meta.terminalReply = prepareAgentRunTerminalReply({
       rawText: completion === "NO_REPLY" ? "NO_REPLY" : "",
-    });
+    }).terminalReply;
     if (completion === "NO_REPLY") {
       context.execution.result.meta.finalAssistantRawText = "NO_REPLY";
     } else if (completion === "hook_block") {

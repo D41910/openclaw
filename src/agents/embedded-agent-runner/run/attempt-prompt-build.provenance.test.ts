@@ -10,7 +10,7 @@ import type { PluginHookAgentContext } from "../../../plugins/hook-types.js";
 import { createHookRunner } from "../../../plugins/hooks.js";
 import { matchesTranscriptEvent } from "../../../sessions/transcript-visible-record.js";
 import { prepareSystemAgentRunAdmission } from "../../admitted-run-context.js";
-import { buildAgentRunTerminalReplySnapshot } from "../../agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   createTestSession,
   registerAgentSessionLoopTestLifecycle,
@@ -303,7 +303,7 @@ it("injects complete lifecycle results into requester prompts and acknowledges o
       outcome: { status: "ok" },
       reason: SUBAGENT_ENDED_REASON_COMPLETE,
       triggerCleanup: false,
-      terminalReply: buildAgentRunTerminalReplySnapshot({ visibleText: answer }),
+      terminalReply: prepareAgentRunTerminalReply({ rawText: answer }).terminalReply,
     });
     await mutateSubagentRuns(
       [child.runId],

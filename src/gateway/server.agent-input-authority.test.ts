@@ -11,7 +11,7 @@ import {
   getAdmittedRunDelegatedAuthority,
   prepareAgentRunAdmission,
 } from "../agents/admitted-run-context.js";
-import { buildAgentRunTerminalReplySnapshot } from "../agents/agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../agents/agent-run-terminal-reply.js";
 import { captureAgentToolSourceExecutionGuard } from "../agents/agent-tool-source-execution-guard.js";
 import type { AgentCommandGatewayIngressOpts } from "../agents/command/types.js";
 import {
@@ -179,10 +179,7 @@ describe("spawn input ownership transfer", () => {
         }
         const text =
           opts.sessionKey === childKey ? "delayed child result" : "received child result";
-        const terminalReply = buildAgentRunTerminalReplySnapshot({
-          visibleText: text,
-          rawText: text,
-        });
+        const { terminalReply } = prepareAgentRunTerminalReply({ rawText: text });
         emitAgentEvent({
           runId: opts.runId!,
           stream: "lifecycle",

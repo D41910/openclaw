@@ -78,7 +78,13 @@ describe("registered native delegation replay", () => {
             });
             effects.push(result.details);
             runIds.push(params.runId);
-            return { payloads: [{ text: "Native effect completed." }], meta: { durationMs: 0 } };
+            return {
+              payloads: [{ text: "Native effect completed." }],
+              meta: {
+                durationMs: 0,
+                terminalReply: { disposition: "visible", text: "Native effect completed." },
+              },
+            };
           } finally {
             host.close();
           }

@@ -176,7 +176,6 @@ export function registerGroupIntroPromptCases(): void {
         const extraSystemPrompt = [
           buildGroupChatContext({
             sessionCtx: testCase.message,
-            silentToken: "NO_REPLY",
           }),
           buildGroupIntro({
             defaultActivation: testCase.defaultActivation ?? "mention",

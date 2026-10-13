@@ -586,7 +586,7 @@ it("appends visible text across long blank runs without stalling the media scan"
       previousCleaned: "",
       visibleDelta: delta,
       appendDelta: delta,
-      parsedStreamDirectives: { text: delta, replyToTag: false, isSilent: false },
+      parsedStreamDirectives: { text: delta, replyToTag: false },
       previousAudioDirectiveCount: 0,
     }),
   ).toEqual({
@@ -594,7 +594,7 @@ it("appends visible text across long blank runs without stalling the media scan"
     delta,
     replace: false,
     hasText: true,
-    replyDirectives: { text: delta, replyToTag: false, isSilent: false },
+    replyDirectives: { text: delta, replyToTag: false },
     audioDirectiveCount: 0,
   });
   expect(performance.now() - started).toBeLessThan(1_000);

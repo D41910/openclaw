@@ -1860,7 +1860,7 @@ describe("runCliAgent reliability", () => {
       const operation = runPreparedCliAgent(context);
       if (text.trim()) {
         const result = await operation;
-        expect(result.payloads).toEqual([{ text: SILENT_REPLY_TOKEN }]);
+        expect(result.payloads).toBeUndefined();
         expect(result.meta.terminalReply).toEqual({ disposition: "silent" });
         expect(result.meta.executionTrace?.fallbackUsed).toBe(false);
         expect(hookRunner.runLlmOutput).toHaveBeenCalledOnce();

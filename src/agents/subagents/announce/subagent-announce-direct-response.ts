@@ -12,10 +12,7 @@ import {
   hasCommittedOutboundDeliveryEvidence,
   getAutomaticDeliveryEvidence,
 } from "../../embedded-agent-runner/delivery-evidence.js";
-import {
-  hasIntentionalSilentAgentPayload,
-  hasVisibleAgentPayload,
-} from "../../embedded-agent-runner/message-visibility.js";
+import { hasVisibleAgentPayload } from "../../embedded-agent-runner/message-visibility.js";
 import {
   buildRequesterCompletionDeliveryResult,
   hasMessagingToolDeliveryToSource,
@@ -109,22 +106,18 @@ export function createDirectAnnounceResponseClassifier(context: DirectAnnounceRe
       directAnnounceResult &&
       hasMessagingToolDeliveryToSource(directAnnounceResult, deliveryTarget),
     );
+    const terminalReply = normalizeAgentRunTerminalReplySnapshot(
+      directAnnounceResult?.meta?.terminalReply,
+    );
+    const hasIntentionalSilentCompletionReply = terminalReply?.disposition === "silent";
     const hasVisibleNonSilentGatewayPayload = Boolean(
       directAnnounceResult &&
+      !hasIntentionalSilentCompletionReply &&
       hasVisibleAgentPayload(directAnnounceResult, {
         includeErrorPayloads: false,
         includeReasoningPayloads: false,
         requireTerminalContent: true,
-        includeSilentReplyPayloads: false,
       }),
-    );
-    const hasIntentionalSilentCompletionReply = Boolean(
-      directAnnounceResult && hasIntentionalSilentAgentPayload(directAnnounceResult),
-    );
-    // Command delivery strips NO_REPLY payloads; the producer-owned terminal
-    // snapshot preserves intentional silence through that normalization.
-    const terminalReply = normalizeAgentRunTerminalReplySnapshot(
-      directAnnounceResult?.meta?.terminalReply,
     );
     // A yielded private turn may intentionally stay silent, but a failed or
     // empty turn must not consume the batch as though its final was delivered.
@@ -137,9 +130,7 @@ export function createDirectAnnounceResponseClassifier(context: DirectAnnounceRe
       params.sourceTool === "subagent_settle" &&
       !(
         requesterCompletedSuccessfully &&
-        (terminalReply
-          ? terminalReply.disposition === "silent"
-          : hasIntentionalSilentCompletionReply) &&
+        terminalReply?.disposition === "silent" &&
         !hasVisibleNonSilentGatewayPayload &&
         directAnnounceResult?.meta?.yielded !== true &&
         directAnnounceResult?.meta?.continuationPending !== true
@@ -267,7 +258,9 @@ export function createDirectAnnounceResponseClassifier(context: DirectAnnounceRe
           // effects. Retain the completion for explicit recovery instead.
           disposition: "permanent_failure",
         };
-        return subagentDirectMessageCompletionRequiresMessageTool
+        return subagentDirectMessageCompletionRequiresMessageTool &&
+          (!hasIntentionalSilentCompletionReply ||
+            textCompletionDirectDeliveryKind === "failed_notice")
           ? tryTextCompletionDirectDelivery(
               textCompletionDirectDeliveryKind,
               directAnnounceResult ?? undefined,
@@ -323,6 +316,8 @@ export function createDirectAnnounceResponseClassifier(context: DirectAnnounceRe
       shouldDeliverAgentFinal &&
       isSubagentCompletion &&
       !hasVisibleNonSilentGatewayPayload &&
+      (!hasIntentionalSilentCompletionReply ||
+        textCompletionDirectDeliveryKind === "failed_notice") &&
       !hasMessagingToolDelivery
     ) {
       return tryTextCompletionDirectDelivery(

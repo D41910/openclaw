@@ -20,7 +20,6 @@ import { deriveSessionChatTypeFromKey } from "../../../sessions/session-chat-typ
 import { isNonTerminalAgentRunStatus } from "../../../shared/agent-run-status.js";
 import type { DeliveryContext } from "../../../utils/delivery-context.types.js";
 import { buildAgentRunTerminalOutcomeFromWaitResult } from "../../agent-run-terminal-outcome.js";
-import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
 import {
   getGatewayAgentResult,
   hasCommittedSourceReplyDeliveryEvidence,
@@ -301,7 +300,6 @@ function collectDirectCompletionContent(params: {
           {
             includeErrorPayloads: false,
             includeReasoningPayloads: false,
-            includeSilentReplyPayloads: false,
             requireTerminalContent: true,
           },
         )
@@ -316,7 +314,7 @@ function collectDirectCompletionContent(params: {
       if (parsed.audioAsVoice === true || record.audioAsVoice === true) {
         audioAsVoice = true;
       }
-      const text = sanitizeAgentRunTerminalReplyText(sanitizePendingFinalDeliveryText(parsed.text));
+      const text = sanitizePendingFinalDeliveryText(parsed.text);
       // A result that only reads like the producer's placeholder is still a real
       // result: absence is recorded on the event fact, never matched here.
       if (text) {

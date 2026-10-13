@@ -4,7 +4,6 @@ import { createRestartRecoveryClaimChangedError } from "../../infra/agent-lifecy
 import { resolveFallbackTransition } from "../fallback-state.js";
 import { getReplyPayloadMetadata } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
   buildSilentFallbackFailurePayload,
   handleReplyAgentRunError,
@@ -34,9 +33,7 @@ it.each([false, true])(
         sessionCtx: {},
       });
       expect(reply?.text).toBe(
-        armed
-          ? SILENT_REPLY_TOKEN
-          : "⚠️ Gateway is restarting. Please wait a few seconds and try again.",
+        armed ? undefined : "⚠️ Gateway is restarting. Please wait a few seconds and try again.",
       );
     } finally {
       replyOperation.complete();

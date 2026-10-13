@@ -62,18 +62,15 @@ export function registerRequiredReplyCompletionCases({
   });
 
   it.each(["required", "optional"] as const)(
-    "honors %s completion despite silentExpected and bare NO_REPLY payloads",
+    "honors %s completion with a prepared silent outcome",
     async (terminalReplyExpectation) => {
       const onPartialReply = vi.fn();
       const onBlockReply = vi.fn();
       const onReasoningStream = vi.fn();
       state.runEmbeddedAgentMock.mockImplementationOnce(async (params: AgentRunParams) => {
         expect(params.silentExpected).toBe(true);
-        await params.onReasoningStream?.({ text: "Reasoning:\nNO_REPLY" });
-        await params.onPartialReply?.({ text: "NO_REPLY" });
-        await params.onBlockReply?.({ text: "NO_REPLY" });
         return {
-          payloads: [{ text: "NO_REPLY" }],
+          payloads: [],
           meta: { finalAssistantRawText: "NO_REPLY", terminalReply: { disposition: "silent" } },
         };
       });
@@ -153,17 +150,48 @@ export function registerRequiredReplyCompletionCases({
     { text: "NO_", expected: "NO_" },
     { text: "NO_RE", expected: "NO_RE" },
     { text: "NO_REPLY\nHere is the answer.", expected: "Here is the answer." },
-    { text: "NO_REPLY.", expected: "NO_REPLY." },
-    { text: "NO_REPLY NO_REPLY", expected: "NO_REPLY NO_REPLY" },
-    { text: '{"action":"NO_REPLY"}', expected: '{"action":"NO_REPLY"}' },
   ])("delivers a non-silent terminal reply unchanged: $text", async ({ text, expected }) => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [{ text }],
-      meta: { finalAssistantRawText: text, finalAssistantVisibleText: text },
+      payloads: [{ text: expected }],
+      meta: {
+        finalAssistantRawText: text,
+        finalAssistantVisibleText: expected,
+        terminalReply: { disposition: "visible", text: expected },
+      },
     });
     const { run } = createMinimalRun();
     await expect(run()).resolves.toMatchObject({ text: expected });
   });
+
+  it.each(
+    (["required", "result-required"] as const).flatMap((terminalReplyExpectation) =>
+      ["NO_REPLY.", '"NO_REPLY"', "NO_REPLY NO_REPLY", '{"action":"NO_REPLY"}'].map((text) => ({
+        terminalReplyExpectation,
+        text,
+      })),
+    ),
+  )(
+    "keeps ordinary visible text for $terminalReplyExpectation: $text",
+    async ({ terminalReplyExpectation, text }) => {
+      state.runEmbeddedAgentMock.mockResolvedValueOnce({
+        payloads: [{ text }],
+        meta: {
+          finalAssistantRawText: text,
+          finalAssistantVisibleText: text,
+          terminalReply: { disposition: "visible", text },
+        },
+      });
+      const onBlockReply = vi.fn();
+      const onAgentRunTerminalOutcome = vi.fn();
+      const { run } = createMinimalRun({
+        runOverrides: { terminalReplyExpectation },
+        opts: { onBlockReply, onAgentRunTerminalOutcome },
+      });
+      await expect(run()).resolves.toMatchObject({ text });
+      expect(onBlockReply).not.toHaveBeenCalled();
+      expect(onAgentRunTerminalOutcome).not.toHaveBeenCalledWith("failed");
+    },
+  );
 
   it.each([
     { label: "empty output", payloads: [] },
@@ -284,9 +312,9 @@ export function registerRequiredReplyCompletionCases({
       pendingContinuation: false,
       expectation: "required",
       result: {
-        payloads: [{ text: "NO_REPLY" }],
+        payloads: [],
         meta: {
-          finalAssistantVisibleText: "NO_REPLY",
+          finalAssistantVisibleText: "",
           terminalReply: { disposition: "silent" },
         },
       },
@@ -297,9 +325,9 @@ export function registerRequiredReplyCompletionCases({
       pendingContinuation: false,
       expectation: "optional",
       result: {
-        payloads: [{ text: "NO_REPLY" }],
+        payloads: [],
         meta: {
-          finalAssistantVisibleText: "NO_REPLY",
+          finalAssistantVisibleText: "",
           terminalReply: { disposition: "silent" },
         },
       },

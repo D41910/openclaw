@@ -7,12 +7,11 @@ import {
 import { buildInboundMetaSystemPrompt } from "../../auto-reply/reply/inbound-meta.js";
 import { prepareReplyConversation } from "../../auto-reply/reply/prompt-session-context.js";
 import { resolveSessionStableReplyMode } from "../../auto-reply/reply/session-stable-reply-mode.js";
-import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { buildDeliveryFormatPrompt } from "../../infra/outbound/delivery-format-prompt.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../../routing/session-key.js";
-import { isSyntheticSourceReplyTurn, resolveCommandReplyExpectation } from "../reply-completion.js";
+import { isSyntheticSourceReplyTurn } from "../reply-completion.js";
 import type { AgentCommandOpts, AgentRunContext } from "./types.js";
 
 /** Reuse conversation guidance without borrowing the originating sender's authority. */
@@ -65,16 +64,6 @@ export async function prepareCommandConversationContext(params: {
         sessionAgentId,
         sessionKey,
       }),
-      silentToken:
-        resolveCommandReplyExpectation({
-          cfg,
-          opts,
-          sessionEntry,
-          sessionKey,
-          messageChannel: runContext.messageChannel,
-        }) !== "result-required"
-          ? SILENT_REPLY_TOKEN
-          : undefined,
     });
     if (sourceContext) {
       // Metadata describes the conversation; delivery preflight owns formatting.

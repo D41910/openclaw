@@ -30,7 +30,6 @@ import {
 
 vi.mock("../../agents/runtime-plan/build.js", () => ({
   buildAgentRuntimeDeliveryPlan: () => ({
-    isSilentPayload: () => false,
     resolveFollowupRoute: () => undefined,
   }),
 }));

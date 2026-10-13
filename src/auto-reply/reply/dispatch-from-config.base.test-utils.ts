@@ -3,7 +3,7 @@ import { AsyncResource } from "node:async_hooks";
 import { expectDefined } from "@openclaw/normalization-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { awaitGateBeforeSettlement, withinTest } from "../../../test/helpers/promise.js";
-import { buildAgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import {
   clearActiveEmbeddedRun,
   setActiveEmbeddedRun,
@@ -1492,7 +1492,7 @@ describe("dispatchReplyFromConfig", () => {
     const dispatcher = createDispatcher();
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       const runState = expectDefined(resolveReplyOperationRunState(opts), "reply run state");
-      const terminalReply = buildAgentRunTerminalReplySnapshot({});
+      const terminalReply = prepareAgentRunTerminalReply({}).terminalReply;
       runState.replyCompletion = resolveReplyCompletion(
         "optional",
         terminalReply.disposition === "visible" ? "ready" : terminalReply.disposition,
@@ -1556,7 +1556,7 @@ describe("dispatchReplyFromConfig", () => {
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       expect(replyRunRegistry.get(sessionKey)).toBeUndefined();
       const runState = expectDefined(resolveReplyOperationRunState(opts), "reply run state");
-      const terminalReply = buildAgentRunTerminalReplySnapshot({});
+      const terminalReply = prepareAgentRunTerminalReply({}).terminalReply;
       runState.replyCompletion = resolveReplyCompletion(
         "optional",
         terminalReply.disposition === "visible" ? "ready" : terminalReply.disposition,

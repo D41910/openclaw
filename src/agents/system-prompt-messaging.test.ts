@@ -41,11 +41,7 @@ describe("system prompt messaging routing", () => {
       runtimeInfo: { channel: testCase.channel, chatType: testCase.chatType },
     });
     expect(prompt.includes("## Silent Replies")).toBe(testCase.silent);
-    expect(
-      prompt.includes(
-        "NO_REPLY discards anything written this turn that was not sent, so send confirmations before ending silently.",
-      ),
-    ).toBe(testCase.silent);
+    expect(prompt.includes("Only that whole reply is silent.")).toBe(testCase.silent);
   });
 
   it("omits silence guidance for a private completion on an external channel", () => {

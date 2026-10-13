@@ -139,11 +139,6 @@ vi.mock("../../tts/tts.runtime.js", () => ({
   maybeApplyTtsToPayload: maybeApplyTtsToPayloadMock,
 }));
 
-vi.mock("./subagent-followup-hints.js", () => ({
-  expectsSubagentFollowup: vi.fn().mockReturnValue(false),
-  isLikelyInterimCronMessage: vi.fn().mockReturnValue(false),
-}));
-
 vi.mock("./subagent-followup.runtime.js", async () => {
   const actual =
     await vi.importActual<typeof import("./subagent-followup.js")>("./subagent-followup.js");
@@ -175,7 +170,6 @@ import {
 } from "./delivery-dispatch.test-fixtures.js";
 import { hasUnsettledCronDescendants } from "./delivery-subagent-registry.runtime.js";
 import { resolveDeliveryTarget } from "./delivery-target.js";
-import { expectsSubagentFollowup, isLikelyInterimCronMessage } from "./subagent-followup-hints.js";
 import * as realFollowup from "./subagent-followup.js";
 import {
   readDescendantSubagentFallbackReply,
@@ -264,8 +258,6 @@ describe("dispatchCronDelivery", () => {
       pendingEntry: null,
     });
     vi.mocked(hasUnsettledCronDescendants).mockResolvedValue(false);
-    vi.mocked(expectsSubagentFollowup).mockReturnValue(false);
-    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(false);
     vi.mocked(readDescendantSubagentFallbackReply).mockResolvedValue(undefined);
     vi.mocked(waitForDescendantSubagentSummary).mockResolvedValue(undefined);
     vi.mocked(retireSessionMcpRuntime).mockResolvedValue(true);
@@ -436,10 +428,10 @@ describe("dispatchCronDelivery", () => {
       ],
     },
     {
-      name: "silent metadata",
+      name: "literal metadata text",
       input: [{ text: SILENT_REPLY_TOKEN, channelData: buttons }],
       summary: SILENT_REPLY_TOKEN,
-      output: [{ channelData: buttons }],
+      output: [{ text: SILENT_REPLY_TOKEN, channelData: buttons }],
     },
   ])("normalizes $name direct payloads", async ({ input, summary, output }) => {
     const state = await dispatchCronDelivery(structuredParams(input, summary));
@@ -452,7 +444,6 @@ describe("dispatchCronDelivery", () => {
     vi.mocked(hasUnsettledCronDescendants)
       .mockResolvedValueOnce(true)
       .mockResolvedValue(bestEffort);
-    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(true);
 
     const params = makeBaseParams({
       synthesizedText: "on it, pulling everything together",
@@ -599,7 +590,12 @@ describe("dispatchCronDelivery", () => {
                 cleanup: "keep",
                 createdAt: runStartedAt,
                 execution: { status: "terminal", endedAt: settledAt, outcome: { status: "ok" } },
-                completion: { required: true, terminalReply },
+                completion: {
+                  required: true,
+                  terminalReply,
+                  resultText:
+                    terminalReply?.disposition === "visible" ? terminalReply.text : undefined,
+                },
               } as SubagentRunRecord,
             ],
       );
@@ -733,7 +729,6 @@ describe("dispatchCronDelivery", () => {
     const runStartedAt = 1_000;
     const agentSessionKey = "agent:main:cron:daily-monitor";
     const runSessionKey = "agent:main:cron:daily-monitor:run:test-session-id";
-    vi.mocked(isLikelyInterimCronMessage).mockReturnValue(true);
     vi.mocked(readDescendantSubagentFallbackReply).mockImplementation(async (params) =>
       params.sessionKey === runSessionKey
         ? "Run-scoped child result, everything finished successfully."
@@ -812,7 +807,7 @@ describe("dispatchCronDelivery", () => {
     expect(appendAssistantMessageToSessionTranscript).not.toHaveBeenCalled();
   });
 
-  it("strips a silent caption but retains its notification media", async () => {
+  it("preserves a literal trailing-token caption and its notification media", async () => {
     const params = makeBaseParams({});
     params.deliveryPayloads = [
       { mediaUrl: "https://example.com/image.png", text: "All done\n\nNO_REPLY" },
@@ -826,7 +821,7 @@ describe("dispatchCronDelivery", () => {
     expectDelivered(state);
     expect(deliverOutboundPayloads).toHaveBeenCalledTimes(1);
     expectDeliveryCall(0, {
-      payloads: [{ mediaUrl: "https://example.com/image.png", text: undefined }],
+      payloads: [{ mediaUrl: "https://example.com/image.png", text: "All done\n\nNO_REPLY" }],
     });
     expect(enqueueSystemEvent).not.toHaveBeenCalled();
   });
@@ -1276,8 +1271,7 @@ describe("dispatchCronDelivery", () => {
         runStartedAt: descendant ? 3_500 : 2_500,
       });
       if (descendant) {
-        vi.mocked(expectsSubagentFollowup).mockReturnValue(true);
-        vi.mocked(waitForDescendantSubagentSummary).mockResolvedValue("Final descendant reply");
+        vi.mocked(readDescendantSubagentFallbackReply).mockResolvedValue("Final descendant reply");
         params.synthesizedText = params.summary = params.outputText = "Example report";
         params.deliveryPayloads = [
           { text: "Example report", mediaUrl: "/tmp/allowed-media/report.png" },
@@ -1290,7 +1284,7 @@ describe("dispatchCronDelivery", () => {
       expect(state).toMatchObject({ delivered: true, deliveryAttempted: true });
       if (descendant) {
         expect(commitBackgroundResultToSessionMock.mock.calls.at(-1)?.[0]).toMatchObject({
-          text: "Final descendant reply",
+          text: expect.stringContaining("Final descendant reply"),
         });
       } else {
         expect(commitBackgroundResultToSessionMock).toHaveBeenCalledWith(
@@ -1300,7 +1294,10 @@ describe("dispatchCronDelivery", () => {
       }
       expectDeliveryCall(0, {
         payloads: descendant
-          ? [{ text: "Final descendant reply" }]
+          ? [
+              { text: "Example report", mediaUrl: "/tmp/allowed-media/report.png" },
+              { text: "Final descendant reply" },
+            ]
           : [{ mediaUrl: "https://example.com/report.png?token=redacted" }],
       });
     },
@@ -1441,15 +1438,15 @@ describe("dispatchCronDelivery", () => {
   );
 
   it.each([
-    ["control token", "ANNOUNCE_SKIP", true, false, true, false],
-    ["structured silent cleanup", SILENT_REPLY_TOKEN, true, true, false, false],
+    ["literal skip token", "ANNOUNCE_SKIP", true, false, true, true],
+    ["literal silent token", SILENT_REPLY_TOKEN, true, true, false, true],
     [
       "trailing text reply",
       "Nothing actionable found today.\n\nNO_REPLY",
       false,
       false,
       false,
-      false,
+      true,
     ],
     [
       "non-trailing mention",

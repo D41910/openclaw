@@ -408,7 +408,10 @@ export function registerYieldedRequesterSettlementCase(
             endedAt: Date.now(),
             terminalReply: { disposition: "visible", text: result },
           });
-          return { payloads: [{ text: result }], meta: { durationMs: 1 } };
+          return {
+            payloads: [{ text: result }],
+            meta: { durationMs: 1, terminalReply: { disposition: "visible", text: result } },
+          };
         });
         expectRecordFields((await getSubagentRunByChildSessionKey(childSessionKey))?.execution, {
           status: "running",

@@ -1,5 +1,4 @@
 import { isDeepStrictEqual } from "node:util";
-import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { captureSessionWatcherStorePaths } from "../../../config/sessions/session-store-path.js";
 import {
   getAgentEventLifecycleGeneration,
@@ -46,6 +45,7 @@ import {
 } from "./subagent-run-timeout.js";
 
 const MISSING_REQUIRED_FINAL_REPLY_ERROR = "subagent run ended before producing a final reply";
+const FRESH_CAPTURE_REQUIRED = "Subagent completion requires fresh result capture";
 
 const browserCleanupLoader = createLazyImportLoader(
   () => import("../../../browser-lifecycle-cleanup.js"),
@@ -212,11 +212,16 @@ export async function completeSubagentRunAttempt(
       capture:
         completeParams.recoverInterrupted ||
         context.newerGenerationOwnsSession(selected) ||
-        terminal.terminalReply ||
         (terminal.missingRequiredReply && terminal.completionOutcome.status === "ok") ||
         completeParams.completionSnapshot
           ? undefined
-          : await captureSubagentRunResult(context, selected, captureOutcome, assertCurrent),
+          : await captureSubagentRunResult(
+              context,
+              selected,
+              captureOutcome,
+              assertCurrent,
+              terminal.terminalReply,
+            ),
       collectorSession,
     };
     assertCurrent();
@@ -644,6 +649,18 @@ function planTerminalCompletion(
     completion.resultText = completeParams.completionSnapshot.resultText;
     completion.capturedAt = completeParams.completionSnapshot.capturedAt;
   }
+  const capture = prepared.capture;
+  if (
+    capture &&
+    (!isDeepStrictEqual(entry.execution.transcriptTarget, capture.transcriptTarget) ||
+      !isDeepStrictEqual(executionOutcome, capture.outcome))
+  ) {
+    throw new SubagentRegistryMutationRejectedError(FRESH_CAPTURE_REQUIRED);
+  }
+  if (terminalReply?.disposition !== "visible") {
+    completion.resultText = null;
+    completion.capturedAt = endedAt;
+  }
 
   if (
     terminalReply &&
@@ -653,10 +670,8 @@ function planTerminalCompletion(
     completion.terminalReply = terminalReply;
     completion.resultText =
       terminalReply.disposition === "visible"
-        ? terminalReply.text
-        : terminalReply.disposition === "silent"
-          ? SILENT_REPLY_TOKEN
-          : null;
+        ? (prepared.capture?.resultText ?? completion.resultText ?? null)
+        : null;
     completion.capturedAt = endedAt;
   }
 
@@ -683,15 +698,8 @@ function planTerminalCompletion(
       completion.resultText = null;
       completion.capturedAt = prepared.now;
     } else {
-      const capture = prepared.capture;
-      if (
-        !capture ||
-        !isDeepStrictEqual(entry.execution.transcriptTarget, capture.transcriptTarget) ||
-        !isDeepStrictEqual(executionOutcome, capture.outcome)
-      ) {
-        throw new SubagentRegistryMutationRejectedError(
-          "Subagent completion requires fresh result capture",
-        );
+      if (!capture) {
+        throw new SubagentRegistryMutationRejectedError(FRESH_CAPTURE_REQUIRED);
       }
       completion.resultText = capture.resultText;
       completion.capturedAt = capture.capturedAt;

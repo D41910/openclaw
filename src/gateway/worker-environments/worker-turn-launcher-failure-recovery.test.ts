@@ -792,7 +792,13 @@ describe("worker turn launcher failure recovery", () => {
             if (executionFailure) {
               throw new Error(executionFailure);
             }
-            return { payloads: [{ text: "remote work completed" }], meta: { durationMs: 1 } };
+            return {
+              payloads: [{ text: "remote work completed" }],
+              meta: {
+                durationMs: 1,
+                terminalReply: { disposition: "visible", text: "remote work completed" },
+              },
+            };
           },
         ),
       ).rejects.toMatchObject({
@@ -893,7 +899,13 @@ describe("worker turn launcher failure recovery", () => {
             if (executionFailure) {
               throw new Error(executionFailure);
             }
-            return { payloads: [{ text: "remote work completed" }], meta: { durationMs: 1 } };
+            return {
+              payloads: [{ text: "remote work completed" }],
+              meta: {
+                durationMs: 1,
+                terminalReply: { disposition: "visible", text: "remote work completed" },
+              },
+            };
           },
         ),
       ).rejects.toMatchObject({

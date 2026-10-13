@@ -31,7 +31,6 @@ import {
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import { isToolHistoryBlockType } from "../chat-display-projection.canvas.js";
 import { projectChatDisplayMessage } from "../chat-display-projection.js";
-import { isSuppressedControlReplyText } from "../control-reply-text.js";
 import { attachManagedOutgoingMediaToMessage } from "../managed-image-attachments.js";
 import { captureSessionMutationRouting } from "../session-sharing-preparation.js";
 import { formatForLog } from "../ws-log.js";
@@ -251,11 +250,7 @@ export function createChatSendReplyDispatch(params: {
           const answer = hasTools
             ? extractAssistantTextForPhase(message, { phase: "final_answer" })
             : extractAssistantPhaseText(message);
-          if (
-            !answer ||
-            isSuppressedControlReplyText(answer) ||
-            !extractAssistantPhaseText(projectChatDisplayMessage(message))
-          ) {
+          if (!answer || !extractAssistantPhaseText(projectChatDisplayMessage(message))) {
             continue;
           }
           const selected = resolveChatReplyDeliveryFromAnchors({
@@ -543,9 +538,7 @@ export function createChatSendReplyDispatch(params: {
                 ? prepareAssistantDisplayText
                 : sanitizeAssistantDisplayText;
             const text = displayText(reply.text, { preserveBoundaries: true });
-            return text && (replyInput.kind === "prepared" || !isSuppressedControlReplyText(text))
-              ? text
-              : "";
+            return text ?? "";
           });
           if (parts.at(-1)) {
             params.onCommandBlock(combineNonStreamingReplyParts(parts));

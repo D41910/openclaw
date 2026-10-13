@@ -32,7 +32,6 @@ import {
   resolveIncognitoOpenClawAgentSqlitePath,
 } from "../../state/openclaw-agent-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import { handleReplyAgentRunError } from "./agent-runner-core.js";
 import { createReplyOperation, type ReplyOperation } from "./reply-run-registry.js";
 import { createReplyRestartRecoveryClaimController } from "./restart-recovery-claim.js";
@@ -155,7 +154,7 @@ it("settles native-incognito recovery through hook checkpoints and restart readi
       },
       sessionCtx: {},
     });
-    expect(reply?.text).toBe(SILENT_REPLY_TOKEN);
+    expect(reply).toEqual({});
     expect(drains).toBe(1);
     expect(readEntry()).toMatchObject({
       sessionId: "old-session",
@@ -256,7 +255,7 @@ it.each([
           });
           expect(reply?.text).toBe(
             confirmed
-              ? SILENT_REPLY_TOKEN
+              ? undefined
               : "⚠️ Gateway is restarting. Please wait a few seconds and try again.",
           );
           expect(drains).toBe(1);

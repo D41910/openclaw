@@ -12,6 +12,7 @@ import {
   markReplyPayloadForSourceSuppressionDelivery,
   type ReplyPayload,
 } from "../reply-payload.js";
+import { isSilentReplyText } from "../tokens.js";
 import {
   rootDir,
   runEmbeddedAgentMock,
@@ -114,7 +115,7 @@ describe("runReplyAgent private message_tool_only final warning (#85714)", () =>
         stopReason: params.stopReason,
         yielded: params.pendingContinuation,
         finalAssistantRawText: params.finalAssistantRawText,
-        ...(params.finalAssistantRawText?.trim() === "NO_REPLY"
+        ...(isSilentReplyText(params.finalAssistantRawText)
           ? { terminalReply: { disposition: "silent" as const } }
           : {}),
       },

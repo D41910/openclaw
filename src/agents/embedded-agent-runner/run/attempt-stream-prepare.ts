@@ -1,5 +1,4 @@
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
-import { isSilentReplyTokenOnly } from "../../../auto-reply/reply/mixed-silent-reply-tokens.js";
 import type { ReplyToolAuthorityPreparation } from "../../../auto-reply/reply/reply-run-registry.contracts.js";
 import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { captureAgentRunLifecycleGeneration } from "../../../infra/agent-events.js";
@@ -16,6 +15,7 @@ import {
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import { getModelProviderRuntimePluginHandle } from "../../../plugins/provider-hook-runtime.js";
 import { projectNestedToolActivityForHooks } from "../../../sessions/nested-tool-activity.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import { countActiveToolExecutions } from "../../embedded-agent-subscribe.handlers.tools.start.js";
 import { subscribeEmbeddedAgentSession } from "../../embedded-agent-subscribe.js";
 import { cancelPendingAgentQuestionForSession } from "../../harness/gateway-question.js";
@@ -186,7 +186,8 @@ function prepareStream(
             hasCompletedClientToolCall ||
             state.yieldDetected ||
             (resolveReplyExpectation(attempt) !== "result-required" &&
-              isSilentReplyTokenOnly(lastAssistantMessage))
+              prepareAgentRunTerminalReply({ rawText: lastAssistantMessage }).terminalReply
+                .disposition === "silent")
           ) {
             return;
           }

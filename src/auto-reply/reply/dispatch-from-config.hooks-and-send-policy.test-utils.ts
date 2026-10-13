@@ -2821,7 +2821,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
         text: "💨Fast: auto-off(75s>=60s)",
         channelData: { openclawProgressKind: "fast-mode-auto" },
       });
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
     const ctx = buildTestCtx({ SessionKey: "test:session", ChatType: "channel" });
 
@@ -2856,7 +2856,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     } satisfies ReplyPayload;
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.(payload);
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
 
     const result = await dispatchReplyFromConfig({
@@ -2897,7 +2897,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
           text: "💨Fast: auto-off(75s>=60s)",
           channelData: { openclawProgressKind: "fast-mode-auto" },
         });
-        return { text: "NO_REPLY" } satisfies ReplyPayload;
+        return {} satisfies ReplyPayload;
       });
       const ctx = buildTestCtx({
         SessionKey: "test:session",
@@ -2938,7 +2938,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     const payload = { text: "Memory Search: release notes" } satisfies ReplyPayload;
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.(payload);
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
     const ctx = buildTestCtx({ SessionKey: "test:session", ChatType: "channel" });
 
@@ -3014,7 +3014,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
       const onToolResult = vi.fn(() => false);
       const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
         await opts?.onToolResult?.(payload);
-        return { text: "NO_REPLY" } satisfies ReplyPayload;
+        return {} satisfies ReplyPayload;
       });
 
       await dispatchReplyFromConfig({
@@ -3044,7 +3044,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     const dispatcher = createDispatcher();
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.({ text: "Exec: ruby sleep proof" });
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
     const ctx = buildTestCtx({ SessionKey: "test:session", ChatType: "channel" });
 
@@ -3079,7 +3079,7 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     const onToolResult = vi.fn(() => false);
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       await opts?.onToolResult?.({ text: "Exec: echo post-restart" });
-      return { text: "NO_REPLY" } satisfies ReplyPayload;
+      return {} satisfies ReplyPayload;
     });
     const ctx = buildTestCtx({ SessionKey: "test:session", ChatType: "channel" });
 

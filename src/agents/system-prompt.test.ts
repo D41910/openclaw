@@ -1,6 +1,5 @@
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from "@openclaw/ai/internal/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { CHANNEL_IDS } from "../channels/ids.js";
 import {
   clearMemoryPluginState,
@@ -586,9 +585,7 @@ describe("buildAgentSystemPrompt", () => {
       expect(prompt).toContain("Group/channel:");
       expect(prompt).toContain("current source is default target");
       expect(prompt).toContain("## Silent Replies");
-      expect(prompt).toContain(
-        `${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent`,
-      );
+      expect(prompt).toContain(`Only that whole reply is silent.`);
       expect(prompt).not.toContain("`send`: `target` + `message`.");
     },
   );

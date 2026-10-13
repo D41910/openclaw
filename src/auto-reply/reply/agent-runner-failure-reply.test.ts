@@ -16,6 +16,7 @@ import {
   buildMissingReplyPayload,
   buildExternalRunFailureReply,
   buildKnownAgentRunFailureReplyPayload,
+  markAgentRunFailureReplyPayload,
 } from "./agent-runner-failure-reply.js";
 import { resolveSourceReplyExpectation } from "./source-reply-delivery-mode.js";
 
@@ -61,6 +62,18 @@ describe("buildMissingReplyPayload", () => {
   ])("does not add an error for $expectation/$outcome", (completion) => {
     expect(buildMissingReplyPayload({ completion })).toBeUndefined();
   });
+});
+
+describe("markAgentRunFailureReplyPayload", () => {
+  it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
+    "preserves error flags independently of control-looking text: %s",
+    (text) => {
+      const payload = markAgentRunFailureReplyPayload({ text });
+      expect(payload).toEqual({ text, isError: true });
+      expect(getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression).toBe(true);
+      expect(markAgentRunFailureReplyPayload({ text, isError: true }).isError).toBe(true);
+    },
+  );
 });
 
 describe("buildExternalRunFailureReply", () => {

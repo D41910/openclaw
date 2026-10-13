@@ -55,10 +55,27 @@ describe("handleMessageEnd", () => {
       },
     });
     await endMessage(ctx, { message: textMessage("NO_REPLY") });
-    expect(finalizeAssistantTexts).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "NO_REPLY" }),
-    );
+    expect(finalizeAssistantTexts).toHaveBeenCalledWith(expect.objectContaining({ text: "" }));
     expect(JSON.stringify(onBlockReply.mock.calls)).not.toContain("<internal escalation note>");
+  });
+
+  it.each([
+    { parts: ["NO_REPLY\nNO_REPLY"], expected: "NO_REPLY" },
+    { parts: ["NO_", "REPLY\n", "NO_REPLY"], expected: "NO_REPLY" },
+    { parts: ["<final>NO_REPLY</final>"], expected: "NO_REPLY" },
+    { parts: ["NO_REPLY\n<final>Visible answer.</final>"], expected: "Visible answer." },
+  ])("renders a prepared raw final once: $parts", async ({ parts, expected }) => {
+    const finalizeAssistantTexts = vi.fn();
+    const ctx = createMessageEndContext({ finalizeAssistantTexts });
+    await endMessage(ctx, {
+      message: {
+        role: "assistant",
+        content: parts.map((text) => ({ type: "text", text })),
+      },
+    });
+    expect(finalizeAssistantTexts).toHaveBeenCalledWith(
+      expect.objectContaining({ text: expected }),
+    );
   });
 
   it("does not count transcript-only mirrored assistant messages", async () => {

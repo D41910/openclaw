@@ -1,6 +1,8 @@
 import { AgentHarnessProjectionSettlement } from "openclaw/plugin-sdk/agent-harness-attempt-runtime";
 import {
   classifyAgentHarnessTerminalOutcome,
+  prepareAgentRunTerminalReply,
+  sanitizeAgentRunTerminalReplyText,
   type AgentMessage,
   type EmbeddedRunAttemptParamsV2 as EmbeddedRunAttemptParams,
 } from "openclaw/plugin-sdk/agent-harness-runtime";
@@ -228,7 +230,29 @@ export abstract class CodexTurnProjection {
     // Close this turn's audit scope without inventing process completion. The
     // existing unknown-outcome diagnostic remains distinct from execution failure.
     this.nativeToolLifecycleProjector.finalizeActive(undefined, retainedCommands);
-    const assistantTexts = this.assistantProjection.collectAssistantTexts();
+    const rawAssistantTexts = this.assistantProjection.collectAssistantTexts();
+    const preparedReplies = rawAssistantTexts.map((rawText) =>
+      prepareAgentRunTerminalReply({ rawText }),
+    );
+    const visibleReplies = preparedReplies.filter(
+      (reply) => reply.terminalReply.disposition === "visible",
+    );
+    const assistantTexts = visibleReplies.map((reply) => reply.text);
+    const terminalText = assistantTexts.join("\n\n");
+    const preparedTerminalReply = visibleReplies.length
+      ? {
+          text: terminalText,
+          terminalReply: {
+            disposition: "visible" as const,
+            text: sanitizeAgentRunTerminalReplyText(terminalText),
+          },
+        }
+      : (preparedReplies.at(-1) ?? prepareAgentRunTerminalReply({}));
+    const rawTranscriptTexts = visibleReplies.length
+      ? rawAssistantTexts.filter(
+          (_, index) => preparedReplies[index]?.terminalReply.disposition === "visible",
+        )
+      : rawAssistantTexts;
     const asyncMessages = this.assistantProjection.collectAsyncMessages();
     const commentaryMessages = this.assistantProjection.collectCommentaryMessages();
     const reasoningText = this.reasoningProjection.reasoningText();
@@ -271,9 +295,9 @@ export abstract class CodexTurnProjection {
     };
     const lastAssistant = providerRefusal
       ? this.assistantProjection.createAssistantMessage("", assistantMessageOptions)
-      : assistantTexts.length
+      : rawTranscriptTexts.length
         ? this.assistantProjection.createAssistantMessage(
-            assistantTexts.join("\n\n"),
+            rawTranscriptTexts.join("\n\n"),
             assistantMessageOptions,
           )
         : undefined;
@@ -360,6 +384,7 @@ export abstract class CodexTurnProjection {
         : {}),
       messagesSnapshot,
       assistantTexts,
+      preparedTerminalReply,
       toolMetas,
       lastAssistant,
       currentAttemptAssistant,

@@ -51,7 +51,6 @@ import {
   shouldDropAssistantHistoryMessage,
 } from "./chat-display-projection.sanitize.js";
 import { stripEnvelopeFromMessages } from "./chat-sanitize.js";
-import { isSuppressedControlReplyText } from "./control-reply-text.js";
 import type {
   CurrentUserProfileDisplay,
   CurrentUserProfileDisplayResolver,
@@ -277,7 +276,7 @@ function hasVisibleAssistantDisplayContent(message: Record<string, unknown>): bo
     string,
     unknown
   >;
-  if (shouldDropAssistantHistoryMessage(sanitized)) {
+  if (shouldDropAssistantHistoryMessage(message)) {
     return false;
   }
   if (hasAssistantDisplayableNonTextContent(sanitized) || hasTranscriptMediaFacts(sanitized)) {
@@ -298,11 +297,7 @@ function hasVisibleAssistantReplyText(message: Record<string, unknown>): boolean
       return false;
     }
     const visible = text.trim();
-    return (
-      visible.length > 0 &&
-      visible !== STREAM_ERROR_FALLBACK_TEXT &&
-      !isSuppressedControlReplyText(visible)
-    );
+    return visible.length > 0 && visible !== STREAM_ERROR_FALLBACK_TEXT;
   });
 }
 

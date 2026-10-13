@@ -388,6 +388,7 @@ export function makeSubagentCompletion(
     outcome: { status: "ok" },
     reason: SUBAGENT_ENDED_REASON_COMPLETE,
     triggerCleanup: false,
+    terminalReply: { disposition: "visible", text: "final completion reply" },
     ...overrides,
   };
 }
@@ -502,7 +503,7 @@ export function registerNativeCompletionAuthorityTest({
         },
       });
       const pending = completeRun(controller, entry, {
-        terminalReply: undefined,
+        terminalReply: { disposition: "visible", text: "old result" },
         triggerCleanup: false,
         recoveryCurrent: {
           prepare: async () => true,

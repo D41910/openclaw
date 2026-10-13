@@ -352,8 +352,6 @@ native harnesses:
   for provider-aware tool schema policy
 - `runtimePlan.transcript.resolvePolicy(...)` for transcript sanitization and
   tool-call repair policy
-- `runtimePlan.delivery.isSilentPayload(...)` for shared `NO_REPLY` and media
-  delivery suppression
 - `runtimePlan.outcome.classifyRunResult(...)` for model fallback
   classification
 - `runtimePlan.observability` for resolved provider/model/harness metadata
@@ -361,6 +359,21 @@ native harnesses:
 Harnesses may use the plan for decisions that need to match OpenClaw behavior,
 but treat it as host-owned attempt state: do not mutate it or use it to switch
 providers/models inside a turn.
+
+Terminal reply preparation belongs to `agent-run-terminal-reply.ts`. Each terminal
+producer publishes `meta.terminalReply` and full prepared payloads; delivery and
+clients consume them without parsing text again. Only a whole final that trims
+to uppercase `NO_REPLY` is silent. Preparation strips one literal leading
+`NO_REPLY\n` and preserves the remainder as visible text, including a second
+`NO_REPLY`. Wrapped, lowercase, punctuated, and trailing forms remain visible.
+Internal result-required turns need an actual completed current-source final
+result; progress mirrors do not satisfy that obligation.
+
+The sole producer entrypoint is `prepareAgentRunTerminalReply`, returning
+`{ text, terminalReply }`. It classifies `rawText ?? visibleText` before stripping
+the leading control line. Delivery consumers do not call this function. Deliver
+`text`, which retains the full prepared bytes, rather than the bounded snapshot
+text. A recorded visible result stays visible even if its text is `NO_REPLY`.
 
 For model-visible reply policy, `buildHarnessVisibleReplyGuidance` from
 `openclaw/plugin-sdk/agent-harness-runtime` accepts the prepared delivery mode,

@@ -1,9 +1,9 @@
 import { flattenMarkdownToPlainText } from "@openclaw/normalization-core/markdown-plain-text";
 import { asOptionalRecord as readRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
+import { isSilentAssistantTranscriptMessage } from "../agents/embedded-agent-runner/message-visibility.js";
 import { stripEnvelope } from "../shared/chat-envelope.js";
 import { extractAssistantPhaseText } from "../shared/chat-message-content.js";
-import { isSuppressedControlReplyText } from "./control-reply-text.js";
 import type { SessionPreviewItem } from "./session-utils.types.js";
 
 const SESSION_LAST_MESSAGE_PREVIEW_DEFAULT_CHARS = 240;
@@ -58,7 +58,7 @@ export function projectSessionDisplayMessage(
   const extracted =
     role === "assistant" ? extractAssistantPhaseText(entry) : extractUserText(entry);
   let text = extracted?.trim();
-  if (!text || (role === "assistant" && isSuppressedControlReplyText(text))) {
+  if (!text || isSilentAssistantTranscriptMessage(entry)) {
     return null;
   }
   if (role === "user") {

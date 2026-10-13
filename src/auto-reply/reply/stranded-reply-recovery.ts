@@ -1,3 +1,4 @@
+import type { AgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.types.js";
 import { isRuntimeToolAllowed } from "../../agents/tool-policy-match.js";
 import { formatSystemTurnPrompt } from "../../sessions/system-turn-prompt.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
@@ -6,9 +7,7 @@ import {
   isReplyPayloadTerminalContent,
   markReplyPayloadForSourceSuppressionDelivery,
 } from "../reply-payload.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
-import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 import {
   classifyPrivateMessageToolFinal,
   shouldClassifyPrivateMessageToolFinal,
@@ -37,6 +36,7 @@ export function resolveStrandedReplyRecovery(params: {
   base: FollowupRun;
   payloads: readonly ReplyPayload[];
   finalText: string;
+  terminalReply?: AgentRunTerminalReplySnapshot;
   sourceReplyDeliveryMode: SourceReplyDeliveryMode | undefined;
   sendPolicyDenied: boolean;
   successfulSourceReplyDelivery: boolean;
@@ -45,7 +45,7 @@ export function resolveStrandedReplyRecovery(params: {
 }): StrandedReplyRecovery {
   // Host-owned payloads can still be awaiting transport when completion bookkeeping runs.
   if (
-    isSilentReplyTokenOnly(params.finalText, SILENT_REPLY_TOKEN) ||
+    params.terminalReply?.disposition === "silent" ||
     !shouldClassifyPrivateMessageToolFinal(params) ||
     params.payloads.some(
       (payload) =>

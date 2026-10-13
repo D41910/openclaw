@@ -1,6 +1,7 @@
 import path from "node:path";
 import { isIncognitoSessionKey } from "../../routing/session-key.js";
 import {
+  createVisibleAssistantResultEventMatcher,
   matchesTranscriptEvent,
   type SessionTranscriptEventMatch,
 } from "../../sessions/transcript-visible-record.js";
@@ -38,10 +39,14 @@ export function findTranscriptEventMatchingInDatabase(
   request: SessionTranscriptEventMatchRequest,
 ): { event: TranscriptEvent } | undefined {
   const { target, match } = request;
+  const matchesVisibleFinal =
+    match.kind === "visible-final"
+      ? createVisibleAssistantResultEventMatcher(match.runId)
+      : undefined;
   const matches = (event: TranscriptEvent) => {
     const entryId = readTranscriptEventId(event);
     return (
-      matchesTranscriptEvent(event, match) &&
+      (matchesVisibleFinal ? matchesVisibleFinal(event) : matchesTranscriptEvent(event, match)) &&
       (match.kind !== "active-assistant" ||
         Boolean(
           entryId &&

@@ -268,7 +268,7 @@ it.each([true, false])(
   },
 );
 
-it.each([undefined, " ", "NO_REPLY"])(
+it.each([undefined, " ", "NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
   "settles a continuation without manufacturing waiting text for %s",
   async (yieldAcknowledgment) => {
     const context = createContext();

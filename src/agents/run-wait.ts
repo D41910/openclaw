@@ -28,6 +28,7 @@ import { sleep } from "../utils/sleep.js";
 import { buildAgentRunTerminalOutcomeFromWaitResult } from "./agent-run-terminal-outcome.js";
 import { normalizeAgentRunTerminalReceipt } from "./agent-run-terminal-receipt.js";
 import { normalizeAgentRunTerminalReplySnapshot } from "./agent-run-terminal-reply.js";
+import { readTerminalSourceReplyDeliveryMirror } from "./embedded-agent-runner/message-visibility.js";
 import type { AgentWaitResult } from "./run-wait.types.js";
 import { extractStoredAssistantText, stripToolMessages } from "./tools/chat-history-text.js";
 import { bindAgentToolGatewayRequest } from "./tools/in-process-gateway.js";
@@ -147,8 +148,9 @@ function normalizePendingRunIds(runIds: Iterable<string>): Set<string> {
 // assistant rows; they keep their input provenance and are not replies.
 function isAssistantReplyTranscriptArtifact(message: unknown): boolean {
   return (
-    isTranscriptOnlyOpenClawAssistantMessage(message) ||
-    isOpenClawMessageToolMirrorAssistantMessage(message) ||
+    (!readTerminalSourceReplyDeliveryMirror(message) &&
+      (isTranscriptOnlyOpenClawAssistantMessage(message) ||
+        isOpenClawMessageToolMirrorAssistantMessage(message))) ||
     (isRecord(message) &&
       isRecord(message.provenance) &&
       (message.provenance.kind === "inter_session" ||
@@ -246,6 +248,8 @@ export async function waitForAgentRunReply(params: {
   runId: string;
   timeoutMs: number;
   callGateway?: GatewayCaller;
+  sessionKey?: string;
+  agentId?: string;
   untilTerminal?: true;
 }): Promise<AgentWaitResult & { replyText?: string }> {
   const scopeSignal = getAsyncWorkSignal();
@@ -274,7 +278,16 @@ export async function waitForAgentRunReply(params: {
     await delay(AGENT_RUN_WAIT_RETRY_DELAY_MS, undefined, { signal, ref: false });
   }
   return wait.status === "ok" && wait.terminalReply?.disposition === "visible"
-    ? { ...wait, replyText: wait.terminalReply.text }
+    ? {
+        ...wait,
+        replyText: params.sessionKey
+          ? await readLatestAssistantReply({
+              sessionKey: params.sessionKey,
+              agentId: params.agentId,
+              callGateway: params.callGateway,
+            })
+          : undefined,
+      }
     : wait;
 }
 

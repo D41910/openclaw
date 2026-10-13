@@ -222,8 +222,10 @@ describe("routeReply", () => {
     );
   });
 
-  it("drops silent token payloads", async () => {
-    await expectSlackNoDelivery({ text: SILENT_REPLY_TOKEN });
+  it("drops payloads with recorded silence", async () => {
+    await expectSlackNoDelivery(
+      setReplyPayloadMetadata({ text: SILENT_REPLY_TOKEN }, { silentReply: true }),
+    );
   });
 
   it("records a channel transform veto before transport or mirroring", async () => {

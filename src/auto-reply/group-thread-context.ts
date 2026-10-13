@@ -7,7 +7,6 @@ import type {
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import type { TurnAdoptionLifecycle } from "./get-reply-options.types.js";
 import type { FinalizedMsgContext } from "./templating.js";
-import { isSilentReplyPayloadText } from "./tokens.js";
 import type { ReplyPayload } from "./types.js";
 
 export type GroupThreadParticipant = { agentId: string; name: string };
@@ -82,7 +81,7 @@ export function finalizeGroupThreadToolReply(
     currentScope() &&
     (!capture.source || capture.source.matches(event, context))
   ) {
-    if (content?.trim() && !isSilentReplyPayloadText(content)) {
+    if (content?.trim()) {
       content = capture.source?.format(content) ?? content;
     }
     capture.observed = true;

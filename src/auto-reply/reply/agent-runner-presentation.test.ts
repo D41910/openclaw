@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeAgentAssistantMessage } from "../../agents/test-helpers/agent-message-fixtures.js";
 import { createStructuredOutboundPayloadPlan } from "../../infra/outbound/payloads.js";
 import { createDeferredCore } from "../../shared/deferred.js";
-import { appendReplyMediaFailures } from "../reply-payload.js";
+import { appendReplyMediaFailures, setReplyPayloadMetadata } from "../reply-payload.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import type { AgentTurnParams } from "./agent-runner-execution.types.js";
 import { createAgentTurnPresentation } from "./agent-runner-presentation.js";
@@ -52,9 +52,10 @@ function createPresentation(
 
 describe("agent runner streaming presentation", () => {
   it.each([
-    { name: "cleaned silent token", caption: "NO_REPLY", silent: true },
+    { name: "recorded silent caption", caption: "NO_REPLY", silent: true },
     { name: "JSON action caption", caption: '{"action":"NO_REPLY"}', silent: false },
     { name: "quoted token caption", caption: '"NO_REPLY"', silent: false },
+    { name: "punctuated token caption", caption: "NO_REPLY.", silent: false },
     { name: "ordinary code-literal caption", caption: "Use `NO_REPLY` literally.", silent: false },
   ])("preserves $name policy across attachment normalization", async ({ caption, silent }) => {
     const retainedMedia = "https://example.invalid/retained.png";
@@ -82,10 +83,15 @@ describe("agent runner streaming presentation", () => {
       throw new Error("expected the prepared block delivery handler");
     }
     try {
-      await handler({
-        text: `[tool calls omitted]\n${caption}`,
-        mediaUrls: ["https://example.invalid/failed.png", retainedMedia],
-      });
+      await handler(
+        setReplyPayloadMetadata(
+          {
+            text: `[tool calls omitted]\n${caption}`,
+            mediaUrls: ["https://example.invalid/failed.png", retainedMedia],
+          },
+          { silentReply: silent },
+        ),
+      );
       expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual([
         silent ? "" : `${caption}\n⚠️ Example: Delivery failed. Try sending this file again.`,
       ]);
@@ -99,8 +105,8 @@ describe("agent runner streaming presentation", () => {
     }
   });
 
-  it.each(["NO_REPLY", '{"action":"NO_REPLY"}', '"NO_REPLY"'])(
-    "only suppresses token-only blocks before coalesced prepared delivery: %s",
+  it.each(["NO_REPLY"])(
+    "suppresses producer-authored silence before coalesced prepared delivery: %s",
     async (silentText) => {
       const { createSubscribedSessionHarness } =
         await import("../../agents/embedded-agent-subscribe.e2e-harness.js");
@@ -188,9 +194,7 @@ describe("agent runner streaming presentation", () => {
         await dispatcher.waitForIdle();
 
         expect(blocks).toEqual(["First.", `[tool calls omitted]\n${silentText}`, "Last."]);
-        expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual([
-          silentText === "NO_REPLY" ? "First.\n\nLast." : `First.\n\n${silentText}\n\nLast.`,
-        ]);
+        expect(delivered.mock.calls.map(([payload]) => payload.text)).toEqual(["First.\n\nLast."]);
       } finally {
         subscription.unsubscribe();
         pipeline.stop();
@@ -391,13 +395,15 @@ describe("agent runner streaming presentation", () => {
         "N",
         "NO_",
         "NO_REPLY",
+        "NO_REPLY.",
+        '"NO_REPLY"',
+        '{"action":"NO_REPLY"}',
         "HEARTBEAT_",
-        "HEARTBEAT_OK",
-        " ",
-        "  ",
-        "  \n",
-        "[tool calls omitted]",
-      ].map((text) => ({ payload: { text }, expected: { skip: true } })),
+      ].map((text) => ({ payload: { text }, expected: { text, skip: false } })),
+      ...["HEARTBEAT_OK", " ", "  ", "  \n", "[tool calls omitted]"].map((text) => ({
+        payload: { text },
+        expected: { skip: true },
+      })),
       {
         payload: { text: "NO_REPLYVisible" },
         expected: { text: "NO_REPLYVisible", skip: false },
@@ -408,7 +414,7 @@ describe("agent runner streaming presentation", () => {
       },
       {
         payload: { text: "NO_REPLY\nVisible answer" },
-        expected: { text: "Visible answer", skip: false },
+        expected: { text: "NO_REPLY\nVisible answer", skip: false },
       },
       {
         payload: { mediaUrls: ["https://example.invalid/image.png"] },
@@ -444,14 +450,14 @@ describe("agent runner streaming presentation", () => {
     }
   });
 
-  it("holds punctuation-prefixed silent previews until they diverge or finish", async () => {
+  it("forwards prepared punctuation-prefixed text without control buffering", async () => {
     const onPartialReply = vi.fn<NonNullable<GetReplyOptions["onPartialReply"]>>();
     const presentation = createPresentation({ onPartialReply });
 
     for (const text of [".N", ". N", "- N", ".NO", ".NO_", ".NO_REPL", "*NO_", '"NO_', "（NO_"]) {
       await presentation.presentPartialReply({ text }, "cli");
     }
-    expect(onPartialReply).not.toHaveBeenCalled();
+    expect(onPartialReply).toHaveBeenCalledTimes(9);
     for (const text of [
       ".NOTE: real content",
       "- Note: real content",

@@ -44,7 +44,6 @@ import type { VisibleWorkSession } from "../get-reply-options.types.js";
 import { getReplyPayloadMetadata, type ReplyPayload } from "../reply-payload.js";
 import { normalizeVerboseLevel } from "../thinking.js";
 import type { VerboseLevel } from "../thinking.shared.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
   compactState,
   loadCronStoreMock,
@@ -709,7 +708,7 @@ describe("runReplyAgent auto-compaction token update", () => {
         }
         releaseFallback();
 
-        expectReplyText(await pending, SILENT_REPLY_TOKEN);
+        expect(await pending).toEqual({});
         expect(replyOperation.result).toEqual({ kind: "aborted", code: expectedCode });
         expect(
           loadSessionEntry({ storePath, sessionKey, readConsistency: "latest" }),

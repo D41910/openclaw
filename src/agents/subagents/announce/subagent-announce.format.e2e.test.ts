@@ -30,7 +30,7 @@ import {
   createChannelTestPluginBase,
   createTestRegistry,
 } from "../../../test-utils/channel-plugins.js";
-import { buildAgentRunTerminalReplySnapshot } from "../../agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   buildAnnounceIdFromChildRun,
   buildAnnounceIdempotencyKey,
@@ -167,7 +167,8 @@ function completedAnnounceRun(
     execution: { endedAt: 2, outcome: { status: "ok" } },
     completion: {
       required: true,
-      terminalReply: buildAgentRunTerminalReplySnapshot({ visibleText: text }),
+      terminalReply: prepareAgentRunTerminalReply({ rawText: text }).terminalReply,
+      resultText: text,
     },
   });
   subagentRegistryMock.latestRunForChild.mockImplementation((key) =>
@@ -789,42 +790,35 @@ describe("subagent announce formatting", () => {
       name: "required",
       childRunId: "run-direct-completion-no-reply",
       required: true,
-      fallbackReply: undefined,
       expected: "(no output)",
     },
     {
       name: "non-required",
       childRunId: "run-non-required-completion-no-reply",
       required: false,
-      fallbackReply: undefined,
       expected: undefined,
     },
     {
-      name: "wake fallback",
+      name: "wake silence",
       childRunId: "run-direct-completion-no-reply:wake",
       required: true,
-      fallbackReply: "final summary from prior completion",
-      expected: "final summary from prior completion",
+      expected: "(no output)",
     },
-  ])(
-    "handles $name NO_REPLY completion",
-    async ({ childRunId, required, fallbackReply, expected }) => {
-      expect(
-        await announceCompletion({
-          childRunId,
-          requesterOrigin: { channel: "slack", to: "channel:C123", accountId: "acct-1" },
-          expectsCompletionMessage: required,
-          roundOneReply: " NO_REPLY ",
-          fallbackReply,
-        }),
-      ).toBe("delivered");
-      expect(sendSpy).not.toHaveBeenCalled();
-      expect(agentSpy).toHaveBeenCalledTimes(expected === undefined ? 0 : 1);
-      if (expected !== undefined) {
-        expect(getAgentCallContext()).toContain(expected);
-      }
-    },
-  );
+  ])("handles $name NO_REPLY completion", async ({ childRunId, required, expected }) => {
+    expect(
+      await announceCompletion({
+        childRunId,
+        requesterOrigin: { channel: "slack", to: "channel:C123", accountId: "acct-1" },
+        expectsCompletionMessage: required,
+        terminalReply: { disposition: "silent" },
+      }),
+    ).toBe("delivered");
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(agentSpy).toHaveBeenCalledTimes(expected === undefined ? 0 : 1);
+    if (expected !== undefined) {
+      expect(getAgentCallContext()).toContain(expected);
+    }
+  });
 
   it.each([
     {
@@ -844,6 +838,7 @@ describe("subagent announce formatting", () => {
         childRunId: `run-restored-completion-${name}`,
         requesterOrigin: { channel: "slack", to: "channel:C123", accountId: "acct-1" },
         terminalReply,
+        roundOneReply: terminalReply.disposition === "visible" ? terminalReply.text : undefined,
       });
 
       expect(didAnnounce).toBe("delivered");

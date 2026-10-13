@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assert, expect, it, onTestFinished, vi, type Mock } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
-import { buildAgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.js";
+import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import type { RunEmbeddedAgentInternalParams } from "../../agents/embedded-agent-runner/run/internal-params.js";
 import type { EmbeddedAgentRunResult } from "../../agents/embedded-agent-runner/types.js";
 import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
@@ -127,12 +127,12 @@ export function registerWaitingStatusCases({
         taskLabel: "waiting image",
       });
       return {
-        payloads: silent ? [{ text: "NO_REPLY" }] : [],
+        payloads: [],
         meta: {
           durationMs: 0,
           continuationPending: true,
           ...(silent
-            ? { terminalReply: buildAgentRunTerminalReplySnapshot({ rawText: "NO_REPLY" }) }
+            ? { terminalReply: prepareAgentRunTerminalReply({ rawText: "NO_REPLY" }).terminalReply }
             : {}),
         },
       };

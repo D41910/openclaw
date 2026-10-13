@@ -7,7 +7,6 @@ import { withBeforeAgentReplyObserver } from "../../plugins/before-agent-reply.j
 import { getGatewayContextResolver } from "../../plugins/runtime/gateway-request-scope.js";
 import { readPendingUserTurnTranscriptAdmission } from "../../sessions/user-turn-transcript-admission.js";
 import { setReplyPayloadMetadata } from "../reply-payload.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
 import {
   resolveReplyRunDeliveryContext,
@@ -251,7 +250,7 @@ export async function executePreparedReplyAgentRun(
           activeSessionEntry = getActiveSessionEntry();
           return hookResult;
         }
-        const hookReply = hookResult.reply ?? { text: SILENT_REPLY_TOKEN };
+        const hookReply = hookResult.reply ?? {};
         const hookFinalDeliveryText = buildRecoverablePendingFinalDeliveryText([hookReply]);
         const normalizedHookReplies = normalizePendingFinalDeliveryPayloads([hookReply]);
         let hookCheckpoint: Parameters<typeof checkpointBeforeAgentReply>[0] = {
@@ -329,7 +328,7 @@ export async function executePreparedReplyAgentRun(
     });
   }
   if (operationSuperseded) {
-    return { text: SILENT_REPLY_TOKEN };
+    return {};
   }
   if (runOutcome.outcome.kind !== "settled") {
     if (runOutcome.outcome.kind === "rejected" && !replyOperation.result) {
@@ -341,7 +340,7 @@ export async function executePreparedReplyAgentRun(
             runOutcome.outcome.postCompactionModelFailure,
             runOutcome.outcome.payload,
           )
-        : { text: SILENT_REPLY_TOKEN },
+        : {},
     );
   }
 

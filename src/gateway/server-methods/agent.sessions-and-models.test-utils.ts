@@ -468,7 +468,10 @@ describe("gateway agent handler", () => {
             endedAt: Date.now(),
             terminalReply: { disposition: "visible", text: result },
           });
-          return { payloads: [{ text: result }], meta: { durationMs: 1 } };
+          return {
+            payloads: [{ text: result }],
+            meta: { durationMs: 1, terminalReply: { disposition: "visible", text: result } },
+          };
         });
         const context = makeContext();
         const baseClient = requireValue(backendGatewayClient(), "expected backend client");

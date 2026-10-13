@@ -8,10 +8,8 @@ import {
 import type { ProgressContinuationCapability } from "../../channels/progress-continuation.js";
 import type { OpenClawStateWorkerContext } from "../../state/openclaw-state-worker-context.types.js";
 import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-payload.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
 import type { PendingContinuationSettlement } from "./get-reply.types.js";
-import { isSilentReplyTokenOnly } from "./mixed-silent-reply-tokens.js";
 import { resolveReplyOperationAbortReason } from "./reply-operation-abort.js";
 import { replyRunRegistry, type ReplyOperation } from "./reply-run-registry.js";
 
@@ -34,8 +32,7 @@ export function buildWaitingStatusPayload(params: {
     params.completion.outcome !== "pending" ||
     (!params.yielded && !params.continuationPending) ||
     params.hasVisibleMessageDelivery ||
-    !acknowledgment ||
-    isSilentReplyTokenOnly(acknowledgment, SILENT_REPLY_TOKEN)
+    !acknowledgment
   ) {
     return undefined;
   }

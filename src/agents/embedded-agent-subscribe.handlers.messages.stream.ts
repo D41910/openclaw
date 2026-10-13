@@ -9,7 +9,10 @@ import {
   parseReplyDirectives,
   type ReplyDirectiveParseResult,
 } from "../auto-reply/reply/reply-directives.js";
-import { splitTrailingDirective } from "../auto-reply/reply/streaming-directives.js";
+import {
+  createStreamingDirectiveAccumulator,
+  splitTrailingDirective,
+} from "../auto-reply/reply/streaming-directives.js";
 import type { AssistantMessage } from "../llm/types.js";
 import {
   parseAssistantTextSignature,
@@ -27,10 +30,7 @@ import type {
   EmbeddedAgentSubscribeContext,
   EmbeddedAgentSubscribeState,
 } from "./embedded-agent-subscribe.handlers.types.js";
-import {
-  extractAssistantCommentaryText,
-  stripDowngradedToolCallText,
-} from "./embedded-agent-utils.js";
+import { stripDowngradedToolCallText } from "./embedded-agent-utils.js";
 import type { AgentMessage } from "./runtime/index.js";
 
 export function isSubscribeTranscriptOnlyOpenClawAssistantMessage(
@@ -185,7 +185,12 @@ export function emitAssistantCommentaryStreamData(
     }
   }
   for (const commentaryMessage of commentaryMessages) {
-    const text = extractAssistantCommentaryText(commentaryMessage);
+    const rawText = readAssistantTextBlocksForPhase(commentaryMessage, "commentary")
+      .map((block) => block.text)
+      .join("");
+    const accumulator = createStreamingDirectiveAccumulator();
+    accumulator.consume(rawText, { final: finalMessage });
+    const text = accumulator.sourceText;
     if (!text || (!finalMessage && isResponsesCommentary && ctx.state.deltaBuffer === text)) {
       continue;
     }
@@ -343,7 +348,6 @@ export function resolveStreamingReply(params: {
   if (
     params.evtType !== "text_end" &&
     params.parsedStreamDirectives &&
-    !params.parsedStreamDirectives.isSilent &&
     !hasReplyDirectiveMetadata(params.parsedStreamDirectives) &&
     !/(?:^|\n)[^\S\n]*MEDIA:\s*\S[^\n]*(?:\n|$)/i.test(params.visibleDelta) &&
     params.parsedStreamDirectives.text === params.visibleDelta &&
@@ -388,7 +392,6 @@ export function resolveStreamingReply(params: {
       params.appendDelta !== null &&
       source === params.rawDirectiveSource &&
       text === params.next &&
-      !parsed.isSilent &&
       !hasReplyDirectiveMetadata(parsed) &&
       !parsed.mediaUrls?.length
     ) {

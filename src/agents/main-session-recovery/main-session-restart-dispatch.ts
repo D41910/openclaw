@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { GatewayClientRequestError } from "../../../packages/gateway-client/src/index.js";
 import { isExecutionIdentityCollectionEnabled } from "../../audit/audit-config.js";
-import { sanitizePendingFinalDeliveryText } from "../../auto-reply/reply/pending-final-delivery-state.js";
 import type { InternalSessionEntry as SessionEntry } from "../../config/sessions.js";
 import {
   applySessionEntryReplacements,
@@ -81,13 +80,12 @@ function buildResumeMessage(
   forceRestartSafeTools?: boolean,
   childRecoveryRoster?: string,
 ): string {
-  const sanitizedPendingText = sanitizePendingFinalDeliveryText(pendingFinalDeliveryText);
   const instructions = forceRestartSafeTools
     ? `${RESTART_RECOVERY_RESUME_MESSAGE}\n\n${RESTART_SAFE_TOOLS_NOTICE}`
     : RESTART_RECOVERY_RESUME_MESSAGE;
   const base = childRecoveryRoster ? `${instructions}\n\n${childRecoveryRoster}` : instructions;
-  return sanitizedPendingText
-    ? `${base}\n\nNote: The interrupted final reply was captured: "${sanitizedPendingText}"`
+  return pendingFinalDeliveryText
+    ? `${base}\n\nNote: The interrupted final reply was captured: "${pendingFinalDeliveryText}"`
     : base;
 }
 
@@ -258,9 +256,7 @@ async function resumeMainSessionWithinAdmission(
   }
   const lifecycleGeneration = params.lifecycleGeneration ?? getAgentEventLifecycleGeneration();
   const sanitizedPendingText =
-    typeof params.pendingFinalDeliveryText === "string"
-      ? sanitizePendingFinalDeliveryText(params.pendingFinalDeliveryText)
-      : "";
+    typeof params.pendingFinalDeliveryText === "string" ? params.pendingFinalDeliveryText : "";
   const deliveryContext = resolveRestartRecoveryDeliveryContext({
     cfg: params.cfg,
     entry: params.entry,

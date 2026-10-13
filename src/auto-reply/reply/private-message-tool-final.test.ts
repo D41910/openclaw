@@ -30,14 +30,22 @@ describe("shouldWarnAboutPrivateMessageToolFinal", () => {
     ).toBe(false);
   });
 
-  it("does not flag silent sentinel variants (intentional silence)", () => {
-    expect(shouldWarnAboutPrivateMessageToolFinal({ ...base, finalText: "NO_REPLY" })).toBe(false);
-    expect(shouldWarnAboutPrivateMessageToolFinal({ ...base, finalText: "  no_reply  " })).toBe(
-      false,
-    );
+  it.each([
+    "NO_REPLY",
+    "  no_reply  ",
+    "NO_REPLY\n\nNO_REPLY",
+    "NO_REPLY.",
+    '"NO_REPLY"',
+    '{"action":"NO_REPLY"}',
+  ])("treats prepared ordinary text as a private final: %s", (finalText) => {
+    expect(classifyPrivateMessageToolFinal({ ...base, finalText })).toBe("short");
     expect(
-      shouldWarnAboutPrivateMessageToolFinal({ ...base, finalText: "NO_REPLY\n\nNO_REPLY" }),
-    ).toBe(false);
+      classifyPrivateMessageToolFinal({
+        ...base,
+        finalText,
+        terminalReply: { disposition: "silent" },
+      }),
+    ).toBe("none");
   });
 
   // Raw UTF-16 length misses substantive CJK replies; recovery needs estimated length (#115555).

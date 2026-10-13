@@ -153,7 +153,7 @@ describe("private subagent completion processing receipts", () => {
 
   async function processPrivateInput(input: unknown) {
     await recorder(input).persistApproved();
-    return { payloads: [{ text: "NO_REPLY", mediaUrl: null }], meta: { durationMs: 1 } };
+    return { payloads: [], meta: { durationMs: 1, terminalReply: { disposition: "silent" } } };
   }
 
   it("binds a settle handoff to the source accepted by pending-input replay", async () => {
@@ -185,7 +185,7 @@ describe("private subagent completion processing receipts", () => {
       expect(command.inputProvenance?.sourceSessionKey).toBe(sourceSessionKeys[1]);
       expect(command.trustedInternalHandoff?.sourceSessionKey).toBe(sourceSessionKeys[1]);
       await recorder(input).persistApproved();
-      return { payloads: [], meta: { durationMs: 1 } };
+      return { payloads: [], meta: { durationMs: 1, terminalReply: { disposition: "empty" } } };
     });
     try {
       const result = await runAnnounceAgentCall({
@@ -403,7 +403,7 @@ describe("private subagent completion processing receipts", () => {
     agentCommandMock.mockImplementationOnce(async (input) => {
       await recorder(input).persistApproved();
       processingCount += 1;
-      return { payloads: [{ text: "NO_REPLY", mediaUrl: null }], meta: { durationMs: 1 } };
+      return { payloads: [], meta: { durationMs: 1, terminalReply: { disposition: "silent" } } };
     });
     expect(await dispatch()).toMatchObject({ status: "ok", inputProcessingCompleted: true });
     expect(processingCount).toBe(1);
@@ -1010,7 +1010,7 @@ describe("private subagent completion processing receipts", () => {
       kernel.gatewayRequestContext.dedupe.delete(`agent:${runId}`);
       agentCommandMock.mockImplementationOnce(async (input) => {
         await recorder(input).persistApproved();
-        return { payloads: [], meta: { durationMs: 1 } };
+        return { payloads: [], meta: { durationMs: 1, terminalReply: { disposition: "empty" } } };
       });
       expect(await dispatch()).toMatchObject({ status: "ok", inputProcessingCompleted: true });
       expect(agentCommandMock).toHaveBeenCalledTimes(2);
