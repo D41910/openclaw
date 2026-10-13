@@ -227,7 +227,7 @@ describe("chat pane session access", () => {
     expect(container.querySelector(".chat-pane__sharing-menu")).toBeNull();
   });
 
-  it("keeps visibility controls available without member-list support", () => {
+  it("keeps visibility controls available without member-list support", async () => {
     const { pane, state } = createTestChatPane({
       client: {} as GatewayBrowserClient,
       sessions: createSessionCapabilityFixture(),
@@ -261,11 +261,11 @@ describe("chat pane session access", () => {
     expect(
       container.querySelector<HTMLButtonElement>(".chat-pane__sharing-trigger")?.disabled,
     ).toBe(false);
-    container.querySelector(".chat-pane__sharing-menu")?.dispatchEvent(new Event("wa-show"));
+    await Promise.resolve();
+    container.querySelector<HTMLButtonElement>(".chat-pane__sharing-trigger")?.click();
+    await Promise.resolve();
     flush();
-    expect(
-      container.querySelector('wa-dropdown-item[value="visibility:read-only"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-value="visibility:read-only"]')).not.toBeNull();
     expect(container.textContent).not.toContain("People");
   });
 });

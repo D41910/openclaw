@@ -2,6 +2,7 @@
 
 import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import { render } from "lit";
+import { flush } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GatewaySessionRow } from "../../api/types.ts";
 import { loadSettings } from "../../app/settings.ts";
@@ -9,6 +10,7 @@ import { t } from "../../i18n/index.ts";
 import { resolveSessionDisplayName } from "../../lib/session-display.ts";
 import { sessionsResult } from "../../lib/sessions/session-capability.test-support.ts";
 import { showToast } from "../../lib/toast.ts";
+import { openSubmenu } from "../../test-helpers/session-menu.ts";
 import { createMountedPanes, refreshPane } from "./chat-pane-mounted.test-support.ts";
 import {
   createGatewayBrowserClientFixture,
@@ -81,27 +83,25 @@ describe("chat pane session menu boundary", () => {
     draw();
     const menu = container.querySelector("openclaw-chat-header-session-menu")!;
     await menu.updateComplete;
-    menu.querySelector("wa-dropdown")!.dispatchEvent(new Event("wa-show"));
+    expect(menu.openMenu()).toBe(true);
+    flush();
     await menu.updateComplete;
-    const items = [...menu.querySelectorAll("wa-dropdown-item")];
+    const items = [...menu.querySelectorAll('[role^="menuitem"]')];
     expect(items.length).toBeGreaterThan(0);
-    await Promise.all(items.map((item) => item.updateComplete));
     await menu.updateComplete;
-    const dropdown = menu.querySelector("wa-dropdown")!;
+    const dropdown = menu.querySelector(".chat-header-session-menu__panel")!;
     const reasoning = menu.querySelector('[value="view:reasoning"]')!;
     const expectRetainedMenu = () => {
-      expect(menu.querySelector("wa-dropdown")).toBe(dropdown);
-      const currentItems = [...menu.querySelectorAll("wa-dropdown-item")];
+      expect(menu.querySelector(".chat-header-session-menu__panel")).toBe(dropdown);
+      const currentItems = [...menu.querySelectorAll('[role^="menuitem"]')];
       expect(currentItems).toHaveLength(items.length);
       for (const [index, item] of currentItems.entries()) {
         expect(item).toBe(items[index]);
       }
     };
-    const itemUpdates = items.map((item) => vi.spyOn(item, "requestUpdate"));
     draw();
     await menu.updateComplete;
     expectRetainedMenu();
-    expect(itemUpdates.every((spy) => spy.mock.calls.length === 0)).toBe(true);
     container.querySelector(".chat-pane__layout-menu")!.dispatchEvent(
       new CustomEvent("wa-select", {
         detail: { item: { value: "session-files" } },
@@ -128,21 +128,22 @@ describe("chat pane session menu boundary", () => {
     draw();
     await menu.updateComplete;
     expect(menu.querySelector('[value="view:reasoning"]')).toBe(reasoning);
-    expect(menu.querySelector('[value="view:reasoning"]')?.hasAttribute("checked")).toBe(
-      state.settings.chatShowThinking,
+    expect(menu.querySelector('[value="view:reasoning"]')?.getAttribute("aria-checked")).toBe(
+      String(state.settings.chatShowThinking),
     );
     const action = vi.spyOn(pane, "handleHeaderSessionAction").mockResolvedValue(undefined);
-    menu
-      .querySelector("wa-dropdown")!
-      .dispatchEvent(new CustomEvent("wa-select", { detail: { item: { value: "toggle-pin" } } }));
+    expect(menu.openMenu()).toBe(true);
+    flush();
+    menu.querySelector<HTMLButtonElement>('[value="toggle-pin"]')!.click();
+    await menu.updateComplete;
     expect(action).toHaveBeenCalledWith({ kind: "toggle-pin" }, session);
     expect(action.mock.calls[0]?.[1]).toBe(session);
     state.applySettings = vi.fn();
-    menu.querySelector("wa-dropdown")!.dispatchEvent(
-      new CustomEvent("wa-select", {
-        detail: { item: { value: "view:tool-calls" } },
-      }),
-    );
+    expect(menu.openMenu()).toBe(true);
+    flush();
+    await openSubmenu(dropdown, "View");
+    menu.querySelector<HTMLButtonElement>('[value="view:tool-calls"]')!.click();
+    await menu.updateComplete;
     expect(state.applySettings).toHaveBeenCalledWith({
       chatShowToolCalls: !state.settings.chatShowToolCalls,
     });
@@ -358,7 +359,8 @@ describe("chat pane session menu boundary", () => {
     const menu = container.querySelector("openclaw-chat-header-session-menu");
     expect(menu).not.toBeNull();
     await menu?.updateComplete;
-    menu?.querySelector("wa-dropdown")?.dispatchEvent(new Event("wa-show"));
+    expect(menu?.openMenu()).toBe(true);
+    flush();
     await menu?.updateComplete;
     if (fields.archived === undefined) {
       expect(menu?.querySelector('[value="toggle-pin"]')).toBeNull();
@@ -399,7 +401,8 @@ describe("chat pane session menu boundary", () => {
       );
       const menu = container.querySelector("openclaw-chat-header-session-menu");
       await menu?.updateComplete;
-      menu?.querySelector("wa-dropdown")?.dispatchEvent(new Event("wa-show"));
+      expect(menu?.openMenu()).toBe(true);
+      flush();
       await menu?.updateComplete;
       const deleteItem = menu?.querySelector<HTMLElement & { disabled: boolean }>(
         '[value="delete"]',

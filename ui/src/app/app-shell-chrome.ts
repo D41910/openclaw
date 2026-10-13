@@ -74,6 +74,7 @@ import {
   moveToastToNavDrawer,
   navDrawerFocusableElements,
   restoreToastFromNavDrawer,
+  shouldIgnoreSettingsEscape,
   visibleNavDrawerToggle,
 } from "./navigation-surface.ts";
 import { isHomePanelAvailable } from "./panel-availability.ts";
@@ -385,12 +386,17 @@ export class ShellChromeOwner {
     if (event.defaultPrevented || !matchesShortcutCombo(KEYBOARD_SHORTCUT_COMBOS.escape, event)) {
       return;
     }
-    if (host.navDrawerOpen && isMobileNavLayout() && !document.openClawModalLayers?.size) {
+    if (
+      host.navDrawerOpen &&
+      isMobileNavLayout() &&
+      !document.openClawModalLayers?.size &&
+      !registryFor(document).stack.at(-1)?.open
+    ) {
       event.preventDefault();
       host.closeNavDrawer({ restoreFocus: true });
     } else if (
       isSettingsTakeover(host.routeState.routeId) &&
-      !this.shouldIgnoreSettingsEscape(event)
+      !shouldIgnoreSettingsEscape(host, event)
     ) {
       event.preventDefault();
       host.exitSettings();
@@ -485,7 +491,7 @@ export class ShellChromeOwner {
         host.closeNavDrawer({ restoreFocus: true });
         return;
       }
-      if (event.eventPhase === Event.CAPTURING_PHASE || this.shouldIgnoreSettingsEscape(event)) {
+      if (event.eventPhase === Event.CAPTURING_PHASE || shouldIgnoreSettingsEscape(host, event)) {
         return;
       }
       event.preventDefault();
@@ -599,31 +605,6 @@ export class ShellChromeOwner {
     }
     this.requestLazyElement(KEYBOARD_SHORTCUTS_ELEMENT, descriptor);
   };
-
-  // Open controls own Escape. Slotted items hide their menu/listbox in shadow DOM,
-  // so recognize the open control host before Settings can consume the key.
-  shouldIgnoreSettingsEscape(event: KeyboardEvent): boolean {
-    const host = this.host;
-    const overlaySnapshot = host.context?.overlays.snapshot;
-    if (
-      host.commandPalette?.isOpen ||
-      host.querySelector<KeyboardShortcutsDialogElement>(KEYBOARD_SHORTCUTS_ELEMENT.tagName)
-        ?.isOpen ||
-      overlaySnapshot?.devicePairSetupOpen ||
-      host.approvalOverlay?.dialogOpen === true ||
-      document.openClawModalLayers?.size ||
-      registryFor(document).stack.at(-1)?.open
-    ) {
-      return true;
-    }
-    const target = event.target;
-    return (
-      target instanceof Element &&
-      target.closest(
-        "input, textarea, select, wa-select[open], wa-dropdown[open], [contenteditable], dialog, [role='dialog'], [role='menu'], [role='listbox']",
-      ) !== null
-    );
-  }
 
   get commandPaletteLoading() {
     return this.palette.loading;

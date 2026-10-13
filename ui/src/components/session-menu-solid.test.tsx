@@ -5,6 +5,8 @@ import {
   menuItem,
   menuItemLabels,
   mountMenu,
+  menuPanel,
+  openSubmenu,
   settleSessionMenu,
 } from "../test-helpers/session-menu.ts";
 import { createSessionOwnerMenuHarness } from "../test-helpers/session-owner-menu.ts";
@@ -20,17 +22,22 @@ it("updates registered menu props and retires its keyboard owner when unmounted"
     onAction: (action) => calls.push(action.kind),
   });
   await waitForSolid(() =>
-    expect(host.querySelector('[value="toggle-archived"]')?.textContent).toContain(
+    expect(host.querySelector('[data-value="toggle-archived"]')?.textContent).toContain(
       "Archive session",
     ),
   );
   host.session = { ...host.session, archived: true };
   await settleSessionMenu(host);
-  expect(host.querySelector('[value="toggle-archived"]')?.textContent).toContain("Restore session");
-  document.dispatchEvent(new KeyboardEvent("keydown", { key: "d", cancelable: true }));
+  expect(host.querySelector('[data-value="toggle-archived"]')?.textContent).toContain(
+    "Restore session",
+  );
+  const pin = menuItem(host, "Pin session");
+  pin.focus();
+  pin.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true, cancelable: true }));
   expect(calls).toEqual(["close", "delete"]);
   host.remove();
   await Promise.resolve();
+  pin.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true, cancelable: true }));
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "d", cancelable: true }));
   expect(calls).toEqual(["close", "delete"]);
 });
@@ -44,7 +51,6 @@ it("preserves focused rows and an open owner search across external updates", as
   });
   await waitForSolid(() => expect(menuItemLabels(host)).toContain("Assign to…"));
   const pin = menuItem(host, "Pin session");
-  await pin.updateComplete;
   pin.focus();
   host.session = { ...host.session, label: "Fresh title" };
   await settleSessionMenu(host);
@@ -52,9 +58,9 @@ it("preserves focused rows and an open owner search across external updates", as
   expect(document.activeElement).toBe(pin);
 
   const owner = menuItem(host, "Assign to…");
-  owner.click();
+  const ownerPanel = await openSubmenu(host, "Assign to…");
   await waitForSolid(() => expect(owner.getAttribute("aria-expanded")).toBe("true"));
-  const search = owner.querySelector<HTMLInputElement>('input[type="search"]')!;
+  const search = ownerPanel.querySelector<HTMLInputElement>('input[type="search"]')!;
   search.value = "Research";
   search.dispatchEvent(new InputEvent("input", { bubbles: true }));
   await waitForSolid(() => expect(menuItemLabels(owner)).toEqual(["Research"]));
@@ -65,7 +71,8 @@ it("preserves focused rows and an open owner search across external updates", as
   await waitForSolid(() => expect(menuItemLabels(host)).toContain("Open PR"));
   expect(menuItem(host, "Assign to…")).toBe(owner);
   expect(owner.getAttribute("aria-expanded")).toBe("true");
-  expect(owner.querySelector('input[type="search"]')).toBe(search);
+  expect(menuPanel(owner)).toBe(ownerPanel);
+  expect(ownerPanel.querySelector('input[type="search"]')).toBe(search);
   expect(search.value).toBe("Research");
   expect(document.activeElement).toBe(search);
   expect(menuItemLabels(host)).toContain("Mark as read");

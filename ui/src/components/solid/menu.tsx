@@ -17,6 +17,7 @@ export type MenuItem = {
   };
   icon?: JSX.Element;
   details?: JSX.Element;
+  labelClass?: string;
   disabled?: boolean;
   checked?: boolean;
   type?: "checkbox" | "radio";
@@ -25,6 +26,7 @@ export type MenuItem = {
   children?: readonly MenuEntry[];
   content?: JSX.Element;
   closeOnSelect?: boolean;
+  onBeforeShow?(event: Event): void;
 };
 export type MenuEntry = MenuItem | { kind: "content"; id: string; content: JSX.Element };
 
@@ -40,8 +42,8 @@ export type MenuProps = {
   panelClass?: string;
   triggerClass?: string;
   triggerAttributes?: Pick<
-    JSX.HTMLAttributes<HTMLButtonElement>,
-    "title" | "style" | "tabindex" | "aria-hidden"
+    JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+    "title" | "style" | "tabindex" | "aria-hidden" | "aria-keyshortcuts" | "value"
   > & {
     [name: `data-${string}`]: string | number | boolean | undefined;
   };
@@ -52,6 +54,7 @@ export type MenuProps = {
   onSelect?: (item: MenuItem, event: CustomEvent<MenuItem>) => void;
   onOpenChange?(open: boolean): void;
   onBeforeShow?(event: Event): void;
+  onEscape?(event: KeyboardEvent): boolean;
   onBeforeHide?(event: Event): void;
   ref?(handle: MenuHandle): void;
 };
@@ -103,6 +106,9 @@ export function Menu(props: BranchProps): JSX.Element {
       (intent === "last" ? items.at(-1) : (initial ?? items[0]))?.focus({ preventScroll: true });
     },
     onEscape(event) {
+      if (props.onEscape?.(event)) {
+        return true;
+      }
       const target = event.target;
       if (
         target instanceof HTMLInputElement &&
@@ -206,8 +212,21 @@ export function Menu(props: BranchProps): JSX.Element {
           control.checkVisibility({ checkVisibilityCSS: true }),
       );
       const index = controls.indexOf(target);
-      const next = controls[index + (event.shiftKey ? -1 : 1)];
-      if (index >= 0 && next) {
+      let next = index >= 0 ? controls[index + (event.shiftKey ? -1 : 1)] : undefined;
+      if (target.matches("input[data-search]") && !event.shiftKey) {
+        next = ownItems(overlay.surface).find((item) =>
+          Boolean(target.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING),
+        );
+      } else if (index === 0 && event.shiftKey) {
+        next = ownItems(overlay.surface).findLast((item) =>
+          Boolean(target.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_PRECEDING),
+        );
+      } else if (index < 0 && !event.shiftKey && target.matches('[role^="menuitem"]')) {
+        next = controls.find((control) =>
+          Boolean(target.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING),
+        );
+      }
+      if (next) {
         event.preventDefault();
         next.focus();
       } else {
@@ -304,6 +323,7 @@ export function Menu(props: BranchProps): JSX.Element {
                         type="button"
                         class={["oc-menu-item", item().class]}
                         data-value={item().id}
+                        value={item().id}
                         data-variant={item().variant}
                         role={itemRole(item().type)}
                         aria-label={item().label}
@@ -319,7 +339,9 @@ export function Menu(props: BranchProps): JSX.Element {
                         <Show when={item().icon}>
                           <span class="oc-menu-item__icon">{item().icon}</span>
                         </Show>
-                        <span class="oc-menu-item__label">{item().content ?? item().label}</span>
+                        <span class={["oc-menu-item__label", item().labelClass]}>
+                          {item().content ?? item().label}
+                        </span>
                         <Show when={item().details}>
                           <span class="oc-menu-item__details">{item().details}</span>
                         </Show>
@@ -331,14 +353,29 @@ export function Menu(props: BranchProps): JSX.Element {
                         id={`${identity.id}-${item().id}`}
                         label={item().label}
                         items={children()}
-                        trigger={item().label}
+                        trigger={
+                          <>
+                            <Show when={item().icon}>
+                              <span class="oc-menu-item__icon">{item().icon}</span>
+                            </Show>
+                            <span class={["oc-menu-item__label", item().labelClass]}>
+                              {item().label}
+                            </span>
+                            <Show when={item().details}>
+                              <span class="oc-menu-item__details">{item().details}</span>
+                            </Show>
+                          </>
+                        }
                         parent={overlay}
                         root={menuRoot}
                         parentBinding={binding}
                         dir={direction()}
                         disabled={item().disabled}
                         triggerClass={item().class}
+                        triggerAttributes={{ ...item().attributes, value: item().id }}
                         onSelect={props.onSelect}
+                        onBeforeShow={(event) => item().onBeforeShow?.(event)}
+                        onEscape={(event) => props.onEscape?.(event) ?? false}
                       >
                         {item().content}
                       </Menu>

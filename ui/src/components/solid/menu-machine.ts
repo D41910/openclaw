@@ -326,6 +326,25 @@ export function useMenuMachine(
             return;
           }
           if (
+            target.matches("input[data-search]") &&
+            !e.defaultPrevented &&
+            !e.isComposing &&
+            (e.key === "ArrowDown" || e.key === "Enter")
+          ) {
+            const first = [
+              ...overlay.surface.querySelectorAll<HTMLElement>('[role^="menuitem"]'),
+            ].find(
+              (item) =>
+                item.closest('[role="menu"]') === overlay.surface &&
+                !item.matches(":disabled") &&
+                item.getAttribute("aria-disabled") !== "true" &&
+                Boolean(target.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING),
+            );
+            e.preventDefault();
+            first?.focus({ preventScroll: true });
+            return;
+          }
+          if (
             e.key === "Tab" ||
             e.key === "Escape" ||
             target.matches("input,textarea,select,[data-form-control]")

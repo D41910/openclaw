@@ -828,7 +828,7 @@ suite.define(() => {
         suite,
         page,
         "sidebar-session-dropped-into-pinned.png",
-        page.locator('openclaw-session-menu > wa-dropdown [part="menu"]'),
+        page.locator("openclaw-session-menu .session-menu__panel"),
         [page.getByRole("menuitem", { name: "Unpin session" })],
       );
     } finally {

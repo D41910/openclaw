@@ -1,7 +1,6 @@
 import { expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { mountMenu } from "../test-helpers/session-menu.ts";
-import "@awesome.me/webawesome/dist/styles/themes/default.css";
 import "../test-helpers/load-styles.ts";
 
 it("opens the compact archive choices with the existing A shortcut", async () => {

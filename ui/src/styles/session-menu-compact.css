@@ -7,11 +7,12 @@
 }
 
 html[dir="rtl"] .session-menu__chevron,
-html[dir="rtl"] .session-menu__back > .session-menu__icon {
+html[dir="rtl"] .session-menu__back .session-menu__icon {
   transform: scaleX(-1);
 }
 
-wa-dropdown.session-menu--compact::part(menu) {
+wa-dropdown.session-menu--compact::part(menu),
+.session-menu--compact > .oc-menu {
   max-height: calc(100dvh - 16px);
   overflow-y: auto;
 }

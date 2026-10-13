@@ -218,6 +218,39 @@ describe("Solid menu navigation", () => {
     expect(document.activeElement).toBe(view.getByRole("button", { name: "After menu" }));
   });
 
+  it("moves between menu rows and embedded settings with Tab", async () => {
+    const view = mountMenu({
+      items: [
+        { id: "before", label: "Before settings" },
+        {
+          kind: "content",
+          id: "settings",
+          content: (
+            <>
+              <button data-form-control="">Send always</button>
+              <button data-form-control="">Receive always</button>
+            </>
+          ),
+        },
+        { id: "after", label: "After settings" },
+      ],
+    });
+    await openMenu();
+    const before = item("Before settings");
+    const send = view.getByRole("button", { name: "Send always" });
+    const receive = view.getByRole("button", { name: "Receive always" });
+    before.focus();
+    await userEvent.tab();
+    expect(document.activeElement).toBe(send);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(receive);
+    await userEvent.tab({ shift: true });
+    expect(document.activeElement).toBe(send);
+    await userEvent.tab({ shift: true });
+    expect(document.activeElement).toBe(before);
+    expect(surface().matches(":popover-open")).toBe(true);
+  });
+
   it("keeps Tab in the current menu when a descendant menu has visible controls", async () => {
     let veto = true;
     const view = render(() => (
