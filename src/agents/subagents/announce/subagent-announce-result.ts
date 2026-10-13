@@ -74,12 +74,15 @@ export async function readSubagentRunAnnounceResultUsing(
   }
   const isCurrent = captureAnnounceResultAuthority(child, deps.readSubagentRun);
   const capturedResult = resolveSubagentCompletionResultText(child);
-  if (child.completion?.terminalReply?.disposition !== "visible" || capturedResult !== undefined) {
-    return { text: capturedResult, isCurrent };
+  if (
+    child.completion?.terminalReply?.disposition === "silent" ||
+    child.completion?.terminalReply?.disposition === "empty"
+  ) {
+    return { text: undefined, isCurrent };
   }
   const childAgentId = resolveSubagentChildAgentId(child);
   if (!childAgentId) {
-    return { text: undefined, isCurrent };
+    return { text: capturedResult, isCurrent };
   }
   const target = child.execution.transcriptTarget;
   const agentId = target?.agentId ?? childAgentId;
@@ -109,7 +112,7 @@ export async function readSubagentRunAnnounceResultUsing(
       );
     }
     return {
-      text: isRecord(event) ? extractStoredAssistantText(event.message) : undefined,
+      text: isRecord(event) ? extractStoredAssistantText(event.message) : capturedResult,
       isCurrent,
     };
   });
@@ -180,9 +183,12 @@ export function buildChildCompletionFindings(
   const sections: string[] = [];
   for (const [index, child] of sorted.entries()) {
     const resultText =
-      child.completion?.terminalReply?.disposition === "visible"
-        ? (child.announceResult ?? resolveSubagentCompletionResultText(child))
-        : undefined;
+      child.completion?.terminalReply?.disposition === "silent" ||
+      child.completion?.terminalReply?.disposition === "empty"
+        ? undefined
+        : "announceResult" in child
+          ? child.announceResult
+          : resolveSubagentCompletionResultText(child);
     const outcome = describeSubagentOutcome(child);
     if (
       child.execution.outcome?.status === "ok" &&

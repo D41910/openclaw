@@ -169,11 +169,9 @@ export function isSilentAssistantTranscriptMessage(message: unknown): boolean {
   ) {
     return false;
   }
-  if (typeof record.content === "string") {
-    return isSilentReplyText(record.content);
-  }
-  if (record.content === undefined && typeof record.text === "string") {
-    return isSilentReplyText(record.text);
+  const inlineText = typeof record.text === "string" ? record.text : record.content;
+  if (typeof inlineText === "string") {
+    return isSilentReplyText(inlineText);
   }
   if (!Array.isArray(record.content)) {
     return false;

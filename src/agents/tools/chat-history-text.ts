@@ -7,7 +7,10 @@ import {
 import { sanitizeAssistantVisibleTextWithProfile } from "../../shared/text/assistant-visible-text.js";
 import { sanitizeUserFacingText } from "../embedded-agent-helpers/sanitize-user-facing-text.js";
 import { renderUserFacingText } from "../embedded-agent-helpers/user-facing-text.js";
-import { readTerminalSourceReplyDeliveryMirror } from "../embedded-agent-runner/message-visibility.js";
+import {
+  isSilentAssistantTranscriptMessage,
+  readTerminalSourceReplyDeliveryMirror,
+} from "../embedded-agent-runner/message-visibility.js";
 
 export function stripToolMessages(messages: unknown[]): unknown[] {
   return messages.filter((msg) => {
@@ -25,7 +28,7 @@ export function stripToolMessages(messages: unknown[]): unknown[] {
 
 export function extractStoredAssistantText(message: unknown): string | undefined {
   const entry = asOptionalObjectRecord(message);
-  if (entry?.role !== "assistant") {
+  if (entry?.role !== "assistant" || isSilentAssistantTranscriptMessage(entry)) {
     return undefined;
   }
   const inlineText = typeof entry.text === "string" ? entry.text : entry.content;

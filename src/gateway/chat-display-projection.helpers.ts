@@ -188,6 +188,7 @@ export function asRoleContentMessage(message: Record<string, unknown>): RoleCont
     return null;
   }
   return {
+    ...message,
     role,
     ...(message.content !== undefined
       ? { content: message.content }

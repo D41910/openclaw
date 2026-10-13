@@ -35,6 +35,30 @@ describe("extractStoredAssistantText", () => {
     }
   });
 
+  it.each(["NO_REPLY", " \tNO_REPLY\r\n"])(
+    "omits an exact raw silent final without requiring a stored disposition: %j",
+    (content) => {
+      expect(extractStoredAssistantText({ role: "assistant", content })).toBeUndefined();
+    },
+  );
+
+  it("uses the canonical text field before a legacy content string", () => {
+    expect(
+      extractStoredAssistantText({
+        role: "assistant",
+        text: "Visible answer",
+        content: "NO_REPLY",
+      }),
+    ).toBe("Visible answer");
+    expect(
+      extractStoredAssistantText({
+        role: "assistant",
+        text: "NO_REPLY",
+        content: "Visible answer",
+      }),
+    ).toBeUndefined();
+  });
+
   it.each([
     ["NO_REPLY\nVisible answer", "Visible answer"],
     ["NO_REPLY\nNO_REPLY", "NO_REPLY"],

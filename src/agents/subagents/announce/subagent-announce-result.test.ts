@@ -3,6 +3,7 @@ import { createDeferred } from "../../../../test/helpers/promise.js";
 import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import type { SubagentRunRecord } from "../registry/subagent-registry.types.js";
 import {
+  buildChildCompletionFindings,
   readSubagentRunAnnounceResultUsing,
   SubagentAnnouncePreparationConflictError,
 } from "./subagent-announce-result.js";
@@ -17,7 +18,16 @@ function completedChild(rawText: string): SubagentRunRecord {
     task: "Return the complete report",
     cleanup: "delete",
     createdAt: 1,
-    execution: { status: "terminal", outcome: { status: "ok" } },
+    execution: {
+      status: "terminal",
+      outcome: { status: "ok" },
+      transcriptTarget: {
+        agentId: "main",
+        sessionId: "completed-session",
+        sessionKey: "agent:main:subagent:completed",
+        storePath: "/unused/session-store",
+      },
+    },
     completion: {
       required: true,
       terminalReply: prepared.terminalReply,
@@ -32,12 +42,8 @@ function resultDeps(readSubagentRun: () => SubagentRunRecord | undefined) {
     getRuntimeConfig: () => ({}),
     resolveSessionStorePathCore: () => "/unused/session-store",
     readSubagentSessionEntry: async () => undefined,
-    findTranscriptEvent: async () => {
-      throw new Error("Prepared completion must not read transcript fallback");
-    },
-    findSessionTranscriptArchiveEventReadOnly: async () => {
-      throw new Error("Prepared completion must not read archive fallback");
-    },
+    findTranscriptEvent: async () => undefined,
+    findSessionTranscriptArchiveEventReadOnly: async () => undefined,
   };
 }
 
@@ -54,33 +60,49 @@ describe("prepared announcement results", () => {
     });
   });
 
-  it("delivers the full result rather than the bounded terminal snapshot", async () => {
-    const text = `${"report ".repeat(1_000)}required-tail`;
+  it("retrieves the full report instead of the released record's capped result", async () => {
+    const text = `${"report ".repeat(1_200)}\nrequired-field: complete`;
     const child = completedChild(text);
-    expect(child.completion?.terminalReply).not.toEqual({ disposition: "visible", text });
-    await expect(
-      readSubagentRunAnnounceResultUsing(
-        child,
-        resultDeps(() => child),
-      ),
-    ).resolves.toMatchObject({ text });
+    child.completion = { required: true, resultText: text.slice(0, 4_096) };
+    const prepared = await readSubagentRunAnnounceResultUsing(child, {
+      ...resultDeps(() => child),
+      findTranscriptEvent: async (scope, match) => {
+        expect(scope).toEqual({
+          agentId: "main",
+          sessionId: "completed-session",
+          sessionKey: child.childSessionKey,
+          storePath: "/unused/session-store",
+        });
+        expect(match).toEqual({ kind: "visible-final", runId: child.runId });
+        return { event: { message: { role: "assistant", content: text } } };
+      },
+    });
+    expect(text.length).toBeGreaterThan(8_000);
+    expect(prepared.text).toBe(text);
+    const findings = buildChildCompletionFindings([{ ...child, announceResult: prepared.text }]);
+    expect(findings).toContain("required-field: complete");
   });
 
-  it.each(["silent", "empty", "absent"] as const)(
+  it.each(["silent", "empty"] as const)(
     "does not resurrect stale output for a %s fact",
     async (disposition) => {
       const child = completedChild("old result");
       child.completion = {
         required: true,
-        terminalReply: disposition === "absent" ? undefined : { disposition },
+        terminalReply: { disposition },
         resultText: "stale result",
         fallbackResultText: "stale fallback",
       };
       await expect(
-        readSubagentRunAnnounceResultUsing(
-          child,
-          resultDeps(() => child),
-        ),
+        readSubagentRunAnnounceResultUsing(child, {
+          ...resultDeps(() => child),
+          findTranscriptEvent: async () => {
+            throw new Error("Recorded terminal disposition must not read the transcript");
+          },
+          findSessionTranscriptArchiveEventReadOnly: async () => {
+            throw new Error("Recorded terminal disposition must not read the archive");
+          },
+        }),
       ).resolves.toMatchObject({ text: undefined });
     },
   );
@@ -122,6 +144,65 @@ describe("prepared announcement results", () => {
       }),
     ).resolves.toMatchObject({ text });
   });
+
+  it.each([
+    { rawText: "NO_REPLY.", expected: "NO_REPLY." },
+    { rawText: '{"answer":"NO_REPLY"}', expected: '{"answer":"NO_REPLY"}' },
+    { rawText: " \nNO_REPLY\t", expected: undefined },
+    { rawText: "NO_REPLY\nNO_REPLY", expected: "NO_REPLY" },
+  ])("prepares the absent-fact raw row $rawText exactly once", async ({ rawText, expected }) => {
+    const child = completedChild(rawText);
+    child.completion = { required: true, resultText: "stale cached result" };
+    const prepared = await readSubagentRunAnnounceResultUsing(child, {
+      ...resultDeps(() => child),
+      findTranscriptEvent: async () => ({
+        event: { message: { role: "assistant", content: rawText } },
+      }),
+    });
+    expect(prepared.text).toBe(expected);
+    const findings = buildChildCompletionFindings([{ ...child, announceResult: prepared.text }]);
+    expect(findings).not.toContain("stale cached result");
+    expect(findings).toContain(expected ?? "(no output)");
+  });
+
+  it("retrieves the full archived report before accepting a visible cached prefix", async () => {
+    const text = `${"archived report ".repeat(700)}\nrequired-field: archived`;
+    const child = completedChild(text);
+    child.completion!.resultText = text.slice(0, 4_096);
+    const prepared = await readSubagentRunAnnounceResultUsing(child, {
+      ...resultDeps(() => child),
+      findSessionTranscriptArchiveEventReadOnly: async (scope, runId) => {
+        expect(scope).toEqual({
+          agentId: "main",
+          sessionId: "completed-session",
+          sessionKey: child.childSessionKey,
+          storePath: "/unused/session-store",
+        });
+        expect(runId).toBe(child.runId);
+        return { event: { message: { role: "assistant", content: text } } };
+      },
+    });
+    expect(prepared.text).toBe(text);
+  });
+
+  it.each([
+    { recordedFact: true, expected: "retained prepared result" },
+    { recordedFact: false, expected: undefined },
+  ])(
+    "preserves retained-result eligibility when recordedFact=$recordedFact and the transcript is unavailable",
+    async ({ recordedFact, expected }) => {
+      const child = completedChild("retained prepared result");
+      if (!recordedFact) {
+        child.completion!.terminalReply = undefined;
+      }
+      await expect(
+        readSubagentRunAnnounceResultUsing(
+          child,
+          resultDeps(() => child),
+        ),
+      ).resolves.toMatchObject({ text: expected });
+    },
+  );
 
   it.each(["silent replacement", "failed outcome", "transcript target", "retired run"] as const)(
     "rejects %s during full transcript retrieval",

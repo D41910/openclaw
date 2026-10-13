@@ -45,6 +45,7 @@ import {
 } from "./chat-display-projection.history.js";
 import { mapChatDisplayMessages } from "./chat-display-projection.map.js";
 import {
+  prepareAssistantHistoryMessage,
   sanitizeChatHistoryContentBlock,
   sanitizeChatHistoryMessage,
   sanitizeChatHistoryMessages,
@@ -444,7 +445,7 @@ export function prepareChatHistoryRecoveryMessages(
   options?: ChatHistoryRecoveryOptions,
 ) {
   const projectedMessages = messages.map((original) => {
-    const message = projectTranscriptImageArtifacts(original);
+    const message = projectTranscriptImageArtifacts(prepareAssistantHistoryMessage(original));
     const entry = asOptionalRecord(message);
     const failureRunId = readSessionTranscriptFailureRunId(entry);
     if (failureRunId) {
