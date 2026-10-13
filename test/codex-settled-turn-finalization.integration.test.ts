@@ -84,7 +84,8 @@ describe("registered Codex finalizer host silence contract", () => {
 
   it.each([
     { text: " NO_REPLY\n", expectation: "optional", allowEmpty: false, answered: true },
-    { text: "NO_REPLY", expectation: "required", allowEmpty: true, answered: false },
+    { text: "NO_REPLY", expectation: "required", allowEmpty: true, answered: true },
+    { text: "NO_REPLY", expectation: "result-required", allowEmpty: true, answered: false },
     { text: " ", expectation: "optional", allowEmpty: true, answered: false },
   ] as const)(
     "distinguishes $expectation $text output",
@@ -107,18 +108,15 @@ describe("registered Codex finalizer host silence contract", () => {
         expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
       } else {
         expect(result.attempt.terminal).toBe(input.initial.attempt.terminal);
-        expect(result.prepared.payloadsWithToolMedia).toEqual([
-          expect.objectContaining({
-            text: "The AI service is temporarily overloaded. Please try again in a moment.",
-          }),
-        ]);
+        expect(result.prepared.payloadsWithToolMedia ?? []).toEqual([]);
+        expect(result.attempt.terminal.kind).toBe("failed");
       }
       expect(fixture.mirror).not.toHaveBeenCalled();
     },
   );
 
   it.each(["failedTool", "timedOut", "cancelled"] as const)(
-    "does not hide an original failure with authored silence: %j",
+    "preserves tool failures and interruption ownership despite authored silence: %j",
     async (failure) => {
       const input = await createInput({
         failedTool: failure === "failedTool",
@@ -138,11 +136,16 @@ describe("registered Codex finalizer host silence contract", () => {
 
       const result = await prepareTerminalWithSettledTurnFinalization(input);
 
-      expect(fixture.runBounded).toHaveBeenCalledTimes(
-        failure === "timedOut" ? 0 : failure === "cancelled" ? 1 : 2,
+      expect(fixture.runBounded).toHaveBeenCalledTimes(failure === "timedOut" ? 0 : 1);
+      expect(result.finalizationOutcome).toBe(
+        failure === "timedOut" ? "not-attempted" : failure === "failedTool" ? "answered" : "failed",
       );
-      expect(result.finalizationOutcome).toBe(failure === "timedOut" ? "not-attempted" : "failed");
-      expect(result.attempt).toBe(input.initial.attempt);
+      if (failure === "failedTool") {
+        expect(result.attempt.assistantTexts).toEqual(["NO_REPLY"]);
+        expect(result.attempt.lastToolError).toEqual(input.initial.attempt.lastToolError);
+      } else {
+        expect(result.attempt).toBe(input.initial.attempt);
+      }
       if (failure === "timedOut") {
         expect(isEmbeddedRunTerminalTimeout(result.terminalState.outcome)).toBe(true);
         expect(result.prepared.timedOutDuringPrompt).toBe(true);

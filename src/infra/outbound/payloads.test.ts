@@ -150,13 +150,14 @@ describe("normalizeReplyPayloadsForDelivery", () => {
     ]);
   });
 
-  it("suppresses silent replies after removing citation control markers", () => {
+  it("suppresses only token-only replies after removing citation control markers", () => {
     expect(
       normalizeReplyPayloadsForDelivery([
         { text: "NO_REPLY citeturn2view0" },
         { text: '{"action":"NO_REPLY"} citeturn2view0' },
+        { text: '"NO_REPLY" citeturn2view0' },
       ]),
-    ).toStrictEqual([]);
+    ).toMatchObject([{ text: '{"action":"NO_REPLY"}' }, { text: '"NO_REPLY"' }]);
   });
 
   it("suppresses relay status placeholder payloads", () => {

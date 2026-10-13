@@ -187,9 +187,11 @@ describe("incomplete-turn payload resolution", () => {
       lastAssistant: undefined,
       toolMetas: [{ toolName: "bash", meta: "workspace" }],
     };
-    expect(warning(attempt)).toBe("No answer was returned.");
+    const expected =
+      "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.";
+    expect(warning(attempt)).toBe(expected);
     expect(warning(attempt, { aborted: true, externalAbort: true })).toBeNull();
-    expect(warning(attempt, { aborted: true })).toBe("No answer was returned.");
+    expect(warning(attempt, { aborted: true })).toBe(expected);
   });
 
   it("allows a same-prompt retry only for replay-safe missing assistant turns", () => {

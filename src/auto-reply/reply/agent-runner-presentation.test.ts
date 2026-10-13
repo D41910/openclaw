@@ -54,6 +54,7 @@ describe("agent runner streaming presentation", () => {
   it.each([
     { name: "cleaned silent token", caption: "NO_REPLY", silent: true },
     { name: "JSON action caption", caption: '{"action":"NO_REPLY"}', silent: false },
+    { name: "quoted token caption", caption: '"NO_REPLY"', silent: false },
     { name: "ordinary code-literal caption", caption: "Use `NO_REPLY` literally.", silent: false },
   ])("preserves $name policy across attachment normalization", async ({ caption, silent }) => {
     const retainedMedia = "https://example.invalid/retained.png";
@@ -98,7 +99,7 @@ describe("agent runner streaming presentation", () => {
     }
   });
 
-  it.each(["NO_REPLY", '{"action":"NO_REPLY"}'])(
+  it.each(["NO_REPLY", '{"action":"NO_REPLY"}', '"NO_REPLY"'])(
     "only suppresses token-only blocks before coalesced prepared delivery: %s",
     async (silentText) => {
       const { createSubscribedSessionHarness } =
@@ -397,9 +398,16 @@ describe("agent runner streaming presentation", () => {
         "  \n",
         "[tool calls omitted]",
       ].map((text) => ({ payload: { text }, expected: { skip: true } })),
-      { payload: { text: "NO_REPLYVisible" }, expected: { text: "Visible", skip: false } },
+      {
+        payload: { text: "NO_REPLYVisible" },
+        expected: { text: "NO_REPLYVisible", skip: false },
+      },
       {
         payload: { text: "NO_REPLYVisible answer" },
+        expected: { text: "NO_REPLYVisible answer", skip: false },
+      },
+      {
+        payload: { text: "NO_REPLY\nVisible answer" },
         expected: { text: "Visible answer", skip: false },
       },
       {

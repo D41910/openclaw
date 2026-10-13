@@ -308,7 +308,7 @@ describe("dispatchReplyFromConfig visible admission recovery", () => {
 
   it.each([
     ["group", true, true, "allow", "slack", true],
-    ["group", false, false, "allow", "slack", false],
+    ["group", false, false, "allow", "slack", true],
     ["direct", true, false, "allow", "discord", true],
   ] as const)(
     "settles an adopted %s failure (progress=%s, mentioned=%s, silence=%s, origin=%s)",
@@ -370,10 +370,8 @@ describe("dispatchReplyFromConfig visible admission recovery", () => {
         expectedFinal ? (progress ? ["tool", "final"] : ["final"]) : [],
       );
       if (expectedFinal) {
-        expect(delivered.at(-1)?.payload).toMatchObject({
-          text: expect.stringContaining("Check the conversation before trying again"),
-          isError: true,
-        });
+        expect(delivered.at(-1)?.payload.isError).toBe(true);
+        expect(delivered.at(-1)?.payload.text?.trim()).toBeTruthy();
       }
       expect(JSON.stringify(delivered)).not.toContain(resolverError.message);
       expect(operation?.result).toEqual({

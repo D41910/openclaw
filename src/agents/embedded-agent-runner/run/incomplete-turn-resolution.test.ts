@@ -115,7 +115,9 @@ describe("incomplete-turn terminal metadata", () => {
         timedOut: false,
         attempt,
       }),
-    ).toBe("No answer was returned.");
+    ).toBe(
+      "No answer was returned. Note: some tool actions may have already been executed — please verify before retrying.",
+    );
   });
 
   it("emits a silent cron reply from the trailing current-attempt tool result", () => {

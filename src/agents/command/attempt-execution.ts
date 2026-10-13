@@ -401,7 +401,7 @@ export async function runAgentAttempt(
     (agentHarnessPolicy.runtime === "openclaw" && agentHarnessPolicy.runtimeSource !== "implicit"
       ? "openclaw"
       : undefined);
-  const replyExpectation = resolveCommandReplyExpectation(params);
+  const expectation = resolveCommandReplyExpectation(params);
   // Read session fields at invocation time, after admitted CLI binding recovery.
   const buildCommonRunParams = () =>
     ({
@@ -462,10 +462,10 @@ export async function runAgentAttempt(
       onContextEngineTurnCandidate: params.onContextEngineTurnCandidate,
       suppressNextUserMessagePersistence: params.suppressPromptPersistenceOnRetry === true,
       disableTools,
-      terminalReplyExpectation: replyExpectation,
+      terminalReplyExpectation: expectation,
       silentReplyPromptMode:
         params.opts.silentReplyPromptMode ??
-        (replyExpectation === "result-required" ? "none" : undefined),
+        (expectation === "result-required" ? "none" : undefined),
       bootstrapPromptWarningSignaturesSeen,
       bootstrapPromptWarningSignature: bootstrapPromptWarningSignaturesSeen.at(-1),
     }) satisfies Partial<RunEmbeddedAgentInternalParams>;

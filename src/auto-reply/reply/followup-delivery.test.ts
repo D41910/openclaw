@@ -277,7 +277,8 @@ describe("resolveFollowupDeliveryDecision", () => {
   it.each(["required", "optional", "result-required"] as const)(
     "discards queued earlier answers after a %s silent final",
     async (expectation) => {
-      const turn = createTurn();
+      const { replyOperation, failMock } = createMockReplyOperation();
+      const turn = createTurn({ operation: replyOperation });
       turn.queued.run.terminalReplyExpectation = expectation;
       turn.queued.strandedReplyRetry = true;
       const execution = createSettledExecution();
@@ -294,7 +295,7 @@ describe("resolveFollowupDeliveryDecision", () => {
         accounting: createAccounting([{ text: "Earlier answer" }]),
       });
       expect(decision).toMatchObject({ kind: "suppress", reason: "silent" });
-      expect(turn.operation.fail).toHaveBeenCalledTimes(expectation === "result-required" ? 1 : 0);
+      expect(failMock).toHaveBeenCalledTimes(expectation === "result-required" ? 1 : 0);
     },
   );
 

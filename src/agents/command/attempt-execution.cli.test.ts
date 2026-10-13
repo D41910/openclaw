@@ -80,18 +80,13 @@ import {
   saveTestAuthProfiles,
 } from "./attempt-execution.cli.test-support.js";
 import { runAgentAttempt as runAgentAttemptImpl } from "./attempt-execution.js";
+import {
+  restrictedCompletionCases,
+  type RestrictedCompletion,
+} from "./attempt-execution.restricted-completion.test-fixtures.js";
 import { resolveClaudeCliProjectDirForWorkspace } from "./claude-cli-project-dir.js";
 import { resolveEmbeddedModelSelection } from "./model-selection.js";
 import { persistAcpTurnTranscript, persistCliTurnTranscript } from "./transcript-persistence.js";
-
-type TrustedHandoff = NonNullable<RunCliAgentParams["trustedInternalHandoff"]>;
-type RestrictedCompletion = {
-  name: string;
-  providerName?: string;
-  execHost?: "node";
-  seedChildLineage?: boolean;
-  forge?: (handoff: TrustedHandoff) => TrustedHandoff | undefined;
-};
 
 const runAgentAttempt = (params: RunAgentAttemptOverrides) => {
   const prepared = makeRunAgentAttemptParams(params);
@@ -2355,16 +2350,7 @@ describe("CLI attempt execution", () => {
       });
     },
   );
-  it.each([
-    { name: "a non-Claude CLI runtime", providerName: "google-gemini-cli", execHost: undefined },
-    { name: "a node-hosted Claude CLI requester", providerName: "claude-cli", execHost: "node" },
-    { name: "a missing capability", seedChildLineage: true, forge: () => undefined },
-    {
-      name: "a capability without persisted child lineage",
-      seedChildLineage: false,
-      forge: (handoff: TrustedHandoff) => handoff,
-    },
-  ] satisfies RestrictedCompletion[])(
+  it.each(restrictedCompletionCases)(
     "restricts completion tools for $name",
     async ({
       providerName = "claude-cli",

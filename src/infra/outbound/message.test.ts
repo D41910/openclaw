@@ -397,9 +397,18 @@ describe("sendMessage", () => {
       {
         name: "JSON NO_REPLY",
         content: '{\n  "action": "NO_REPLY"\n}',
-        expectedPayloads: [],
+        expectedPayloads: [{ text: '{\n  "action": "NO_REPLY"\n}', mediaUrl: null, mediaUrls: [] }],
         expectedMirror: {
           text: '{\n  "action": "NO_REPLY"\n}',
+          mediaUrls: undefined,
+        },
+      },
+      {
+        name: "quoted NO_REPLY",
+        content: '"NO_REPLY"',
+        expectedPayloads: [{ text: '"NO_REPLY"', mediaUrl: null, mediaUrls: [] }],
+        expectedMirror: {
+          text: '"NO_REPLY"',
           mediaUrls: undefined,
         },
       },

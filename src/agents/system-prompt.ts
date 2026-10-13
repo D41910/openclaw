@@ -849,8 +849,7 @@ export function buildAgentSystemPrompt(params: {
     !isMinimal &&
       silentReplyPromptMode !== "none" && [
         "## Silent Replies",
-        `Nothing to say: entire reply exactly ${SILENT_REPLY_TOKEN}`,
-        `Never append to real response or wrap in Markdown/code.`,
+        `Nothing to say: entire reply exactly ${SILENT_REPLY_TOKEN}, without Markdown or code wrapping.`,
         `${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
         "",
       ],

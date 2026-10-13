@@ -53,6 +53,7 @@ import {
 import { normalizeSessionDeliveryState } from "../../utils/delivery-context.shared.js";
 import type { TemplateContext } from "../templating.js";
 import { createReplyAgentRestartRecoveryController } from "./agent-runner-execute.js";
+import { successfulPolicyRetryCases } from "./agent-runner.policy-retry.test-fixtures.js";
 import { registerReasoningFallbackTests } from "./agent-runner.reasoning-fallback.test-support.js";
 import { registerReplyAdmissionCases } from "./agent-runner.runreplyagent.admission.cases.js";
 import { registerReplyCompactionCases } from "./agent-runner.runreplyagent.compaction.cases.js";
@@ -5317,36 +5318,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     },
   );
 
-  it.each([
-    {
-      label: "direct chats",
-      chatType: "direct" as const,
-      retryProvider: "openai",
-      retryModel: "gpt-daybreak-blue-latest",
-      expectedNotice: "↪️ Retried on Daybreak",
-    },
-    {
-      label: "group chats",
-      chatType: "group" as const,
-      retryProvider: "openai",
-      retryModel: "gpt-daybreak-blue-latest",
-      expectedNotice: "↪️ Retried on Daybreak",
-    },
-    {
-      label: "channels",
-      chatType: "channel" as const,
-      retryProvider: "openai",
-      retryModel: "gpt-daybreak-blue-latest",
-      expectedNotice: "↪️ Retried on Daybreak",
-    },
-    {
-      label: "custom retry targets",
-      chatType: "direct" as const,
-      retryProvider: "anthropic",
-      retryModel: "claude-opus-4-7",
-      expectedNotice: "↪️ Retried on anthropic/claude-opus-4-7",
-    },
-  ])(
+  it.each(successfulPolicyRetryCases)(
     "delivers successful policy retry notices to $label",
     async ({ chatType, retryProvider, retryModel, expectedNotice }) => {
       const { sessionEntry, sessionStore, storePath } = await makeSessionFixture({
