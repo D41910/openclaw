@@ -1,3 +1,4 @@
+import { expectDefined } from "@openclaw/normalization-core/expect";
 import { expect, it, vi, type Mock } from "vitest";
 import type { RunEmbeddedAgentInternalParams as AgentRunParams } from "../../agents/embedded-agent-runner/run/internal-params.js";
 import { getReplyPayloadMetadata, setReplyPayloadMetadata } from "../reply-payload.js";
@@ -230,7 +231,9 @@ export function registerRequiredReplyCompletionCases({
         isError: true,
         isStatusNotice: true,
       });
-      expect(getReplyPayloadMetadata(payloads[0])).toMatchObject({
+      expect(
+        getReplyPayloadMetadata(expectDefined(payloads[0], "missing-answer notice")),
+      ).toMatchObject({
         assistantTranscriptOwned: true,
         deliverDespiteSourceReplySuppression: true,
       });

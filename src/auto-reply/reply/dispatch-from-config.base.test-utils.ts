@@ -686,6 +686,7 @@ describe("dispatchReplyFromConfig", () => {
       () =>
         expectDefined(
           buildMissingReplyPayload({ completion: resolveReplyCompletion("required", "empty") }),
+          "missing-answer notice",
         ),
     ],
   ])("does not mirror %s finals with a runtime transcript owner", async (_name, payload) => {
@@ -1490,7 +1491,7 @@ describe("dispatchReplyFromConfig", () => {
     activeOperation.setPhase("running");
     const dispatcher = createDispatcher();
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
-      const runState = expectDefined(resolveReplyOperationRunState(opts));
+      const runState = expectDefined(resolveReplyOperationRunState(opts), "reply run state");
       const terminalReply = buildAgentRunTerminalReplySnapshot({});
       runState.replyCompletion = resolveReplyCompletion(
         "optional",
@@ -1554,7 +1555,7 @@ describe("dispatchReplyFromConfig", () => {
     const dispatcher = createDispatcher();
     const replyResolver = vi.fn(async (_ctx: MsgContext, opts?: GetReplyOptions) => {
       expect(replyRunRegistry.get(sessionKey)).toBeUndefined();
-      const runState = expectDefined(resolveReplyOperationRunState(opts));
+      const runState = expectDefined(resolveReplyOperationRunState(opts), "reply run state");
       const terminalReply = buildAgentRunTerminalReplySnapshot({});
       runState.replyCompletion = resolveReplyCompletion(
         "optional",
