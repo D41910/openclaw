@@ -5,7 +5,7 @@ import {
 } from "@openclaw/normalization-core/record-coerce";
 import { readStringValue } from "@openclaw/normalization-core/string-coerce";
 import { avoidTrailingHighSurrogateBreak } from "@openclaw/normalization-core/utf16-slice";
-import { isSilentAssistantTranscriptMessage } from "./openclaw-runtime-session.js";
+import { isSilentAssistantTranscriptMessage } from "./openclaw-runtime-session-visibility.js";
 import type { SessionResetRecallCutoff } from "./session-reset-recall.js";
 import type { MemoryEntryProvenance } from "./types.js";
 

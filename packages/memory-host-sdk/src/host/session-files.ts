@@ -8,6 +8,7 @@ import { normalizeComparablePath, readRegularFile, statRegularFile } from "./fs-
 import { hashText } from "./hash.js";
 import { createSubsystemLogger } from "./openclaw-runtime-io.js";
 import { isCronRunSessionKey } from "./openclaw-runtime-paths.js";
+import { isSilentAssistantTranscriptMessage } from "./openclaw-runtime-session-visibility.js";
 import {
   assertBoundIncognitoMemorySyncAccess,
   captureIncognitoMemoryReader,
@@ -24,7 +25,6 @@ import {
   isIncognitoOpenClawAgentSqlitePath,
   isIncognitoSessionKey,
   isSessionArchiveArtifactName,
-  isSilentAssistantTranscriptMessage,
   isUsageCountedSessionTranscriptFileName,
   materializeSessionArchiveForRead,
   parseUsageCountedSessionIdFromFileName,

@@ -423,7 +423,6 @@ export { isHeartbeatUserMessage } from "../../../../src/auto-reply/heartbeat-fil
 export { HEARTBEAT_PROMPT } from "../../../../src/auto-reply/heartbeat.js";
 export { stripInboundMetadata } from "../../../../src/auto-reply/reply/strip-inbound-meta.js";
 export { HEARTBEAT_TOKEN, SILENT_REPLY_TOKEN } from "../../../../src/auto-reply/tokens.js";
-export { isSilentAssistantTranscriptMessage } from "../../../../src/agents/embedded-agent-runner/message-visibility.js";
 export { getRuntimeConfig } from "../../../../src/config/config.js";
 export {
   isCompactionCheckpointTranscriptFileName,
