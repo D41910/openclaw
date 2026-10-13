@@ -145,6 +145,8 @@ If a required-reply turn ends after a fully settled tool batch without a compose
 
 An external turn that explicitly finishes with `NO_REPLY` does not need a finalization pass, even after a settled tool failure. The failure remains recorded. `NO_REPLY` discards anything written this turn that was not sent, so send confirmations before ending silently.
 
+Node worker turns use the same settled-tool recovery when the model returns an empty final. The worker makes one tool-free follow-up request. If that request also returns no answer, the turn reports a failure. A worker turn that starts background commands which are still running ends with an explicit status and their process session IDs; it does not claim their results are complete.
+
 A confirmed delivery prevents duplicate generation. Pending delivery or continuation work retains completion ownership without being marked delivered; rejected sends, unflushed deferred text, and missing delivery callbacks are not delivery proof. `NO_REPLY` does not retract text already delivered. Pending tools, accepted child runs, and yielded work keep their existing owners, and assistant errors and aborts are not intentional silence.
 
 Prompt-segment diagnostics attribute attachment/context blocks and generated inbound metadata separately from user text. A prompt containing only those blocks does not need trailing user text for reply processing to complete.

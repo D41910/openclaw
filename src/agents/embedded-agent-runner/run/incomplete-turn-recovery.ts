@@ -316,6 +316,7 @@ export function resolveSettledToolTerminalContinuationInstruction(
   const {
     assistant: toolBatchAssistant,
     allToolsProvenSettled,
+    parkedCodeModeRun,
     failedToolNames,
     hasUnsettledToolError,
     intentionalTermination,
@@ -352,6 +353,7 @@ export function resolveSettledToolTerminalContinuationInstruction(
       ? !allToolsProvenSettled
       : !emptyStopAfterSettledTools) ||
     intentionalTermination ||
+    parkedCodeModeRun ||
     hasUnsettledToolError ||
     hasAsyncActivity(attempt.toolMetas) ||
     hasAcceptedSessionSpawn(attempt.acceptedSessionSpawns) ||
