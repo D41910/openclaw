@@ -49,7 +49,7 @@ export type MenuProps = {
   lazy?: boolean;
   trigger?: JSX.Element;
   children?: JSX.Element;
-  class?: string;
+  class?: JSX.HTMLAttributes<HTMLDivElement>["class"];
   panelClass?: string;
   triggerClass?: string;
   triggerAttributes?: Pick<
@@ -66,6 +66,7 @@ export type MenuProps = {
   onOpenChange?(open: boolean): void;
   onBeforeShow?(event: Event): void;
   onEscape?(event: KeyboardEvent): boolean;
+  onAfterShow?(event: Event): void;
   onBeforeHide?(event: Event): void;
   ref?(handle: MenuHandle): void;
 };
@@ -312,6 +313,11 @@ export function Menu(props: BranchProps): JSX.Element {
         role="menu"
         aria-label={props.label}
         dir={direction()}
+        onOverlay-after-show={(event: Event) => {
+          if (event.target === surface) {
+            props.onAfterShow?.(event);
+          }
+        }}
       >
         <Show when={materialized()}>
           {props.children}

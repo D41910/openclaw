@@ -41,12 +41,14 @@ export function shouldIgnoreSettingsEscape(
     return true;
   }
   const target = event.target;
-  return (
-    target instanceof Element &&
-    target.closest(
-      "input, textarea, select, wa-select[open], wa-dropdown[open], [contenteditable], dialog, [role='dialog'], [role='menu'], [role='listbox']",
-    ) !== null
-  );
+  const control =
+    target instanceof Element
+      ? target.closest(
+          "input, textarea, select, wa-select[open], wa-dropdown[open], [contenteditable], dialog, [role='dialog'], [role='menu'], [role='listbox']",
+        )
+      : null;
+  // The drawer owns Escape; its own dialog role is not a nested modal.
+  return control !== null && control !== host.querySelector(".shell-nav");
 }
 
 export function navDrawerFocusableElements(drawer: HTMLElement): HTMLElement[] {
