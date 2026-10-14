@@ -3,10 +3,10 @@ import { subscribeGitHubIdentityChanges } from "../agents/github-read-identity.j
 import { onManagedGitHubProfileChanged } from "../agents/github-tool-identity.js";
 import type { PreparedGitHubPublicationIdentity } from "../agents/github-tool-identity.types.js";
 import {
-  captureIncognitoSessionBinding,
-  withAcquiredIncognitoSessionBinding,
-  type IncognitoSessionBinding,
-} from "../config/sessions/session-incognito-binding.js";
+  captureSessionActorStorageOwner,
+  runWithSessionActorStorage,
+  type CapturedSessionActorStorageOwner,
+} from "../config/sessions/session-actor-storage-binding.js";
 import type { GatewayScheduler } from "../infra/gateway-scheduler.js";
 import { LruCache } from "../infra/lru-cache.js";
 import { sessionChanges } from "../sessions/session-row-changes.js";
@@ -46,7 +46,7 @@ export function startGitHubPublicationDiscovery(params: {
   const sessions = new LruCache<{
     session: PublicationSessionIdentity;
     binding?: string;
-    incognito?: Pick<IncognitoSessionBinding["actor"], "path" | "identity">;
+    incognito?: Pick<CapturedSessionActorStorageOwner, "owner" | "agentId" | "path">;
     fact: PublicationFact;
     refreshAfterMs: number;
   }>(256);
@@ -73,17 +73,37 @@ export function startGitHubPublicationDiscovery(params: {
               ...current.session,
               assertCurrent: () => !scheduler.signal.aborted && sessions.peek(key) === current,
             });
-          const fact = await (current.incognito
-            ? withAcquiredIncognitoSessionBinding(
-                { ...current.session, storePath: current.incognito.path },
-                { assertCurrent: () => scheduler.signal.throwIfAborted() },
-                async ({ actor }) =>
-                  actor.identity.incarnation === current.incognito?.identity.incarnation
-                    ? prepare()
-                    : undefined,
-                { signal: scheduler.signal },
-              )
-            : prepare());
+          let fact: PublicationFact | undefined;
+          if (current.incognito) {
+            // Discovery belongs to the Gateway, independently of the borrowing turn.
+            const assertCurrent = () => scheduler.signal.throwIfAborted();
+            try {
+              const actor = await current.incognito.owner?.acquireExisting(
+                current.session.sessionKey,
+                { assertCurrent, assertReadable: assertCurrent },
+              );
+              if (actor) {
+                try {
+                  fact = await runWithSessionActorStorage(
+                    {
+                      actor,
+                      agentId: current.incognito.agentId,
+                      path: current.incognito.path,
+                      authority: { assertCurrent, authorize: assertCurrent },
+                    },
+                    prepare,
+                  );
+                } finally {
+                  await actor.release();
+                }
+              }
+            } catch {
+              // Closed memory owners retire discovery without creating a replacement.
+              fact = undefined;
+            }
+          } else {
+            fact = await prepare();
+          }
           if (!scheduler.signal.aborted && sessions.peek(key) === current) {
             current.fact = fact ?? unavailable;
           }
@@ -98,7 +118,10 @@ export function startGitHubPublicationDiscovery(params: {
     if (!current || current.session.sessionId !== session.sessionId) {
       current = {
         session: { ...session },
-        incognito: captureIncognitoSessionBinding(session)?.actor,
+        incognito: captureSessionActorStorageOwner(session, {
+          assertCurrent: () => scheduler.signal.throwIfAborted(),
+          authorize() {},
+        }),
         fact: unavailable,
         refreshAfterMs: 0,
       };

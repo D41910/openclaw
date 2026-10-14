@@ -59,7 +59,6 @@ vi.mock("../../agents/worktrees/registry-read.js", async (importOriginal) => ({
   readLiveRegistryWorktreeByOwner: async (_context: unknown, kind: string, id: string) =>
     mocks.worktreeRead(kind, id),
 }));
-vi.mock("../session-utils.js", () => ({ loadGatewaySessionEntryReadOnly: mocks.session }));
 vi.mock("../../config/sessions/session-entry-read-runtime.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../config/sessions/session-entry-read-runtime.js")>()),
   withSessionEntryReadOnlyInWorker: async <T>(
@@ -113,6 +112,38 @@ vi.mock("../session-utils-store-worker.js", async (importOriginal) => ({
     return loaded;
   },
 }));
+vi.mock("../../config/sessions/session-entry-read-facts.js", async (original) => {
+  const actual =
+    await original<typeof import("../../config/sessions/session-entry-read-facts.js")>();
+  return {
+    ...actual,
+    readRetainedSessionEntryFacts: ((database, request, owner) => {
+      if (
+        database.agentId !== session.agentId ||
+        database.path !== "/synthetic/admitted.sqlite" ||
+        !request.sessionKeys?.includes(session.sessionKey)
+      ) {
+        return actual.readRetainedSessionEntryFacts(database, request, owner);
+      }
+      return {
+        kind: "session-exact-entries",
+        source: {
+          ...sessionReadSource,
+          path: database.path,
+          databaseIdentity: "worker-github-binding-fixture",
+        },
+        databaseIdentity: {
+          identity: "worker-github-binding-fixture",
+          incarnation: "synthetic",
+          filename: database.path,
+          canonicalPath: database.path,
+        },
+        entries: [{ sessionKey: session.sessionKey, entry: mocks.session().entry }],
+        lifecycleTimestamps: {},
+      };
+    }) satisfies typeof actual.readRetainedSessionEntryFacts,
+  };
+});
 vi.mock("../../state/session-repository-workspaces.js", () => ({
   getSessionRepositoryWorkspaceStore: () => ({
     prepare: async () => ({
@@ -128,7 +159,13 @@ vi.mock("../../process/exec.js", () => ({ runCommandBuffered: mocks.nativeToken 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 const profileId = "ghp_11111111111111111111111111111111";
 const token = "synthetic-worker-github-binding-token";
+const sessionStorePath = "/worker-github-binding/sessions.sqlite";
 const session = { sessionId: "worker-session", sessionKey: "agent:main:worker", agentId: "main" };
+const sessionReadSource = {
+  agentId: session.agentId,
+  path: sessionStorePath,
+  databaseIdentity: "synthetic-worker-github-binding",
+};
 const worktree = {
   id: "worker-worktree",
   path: "/repo/worktree",
