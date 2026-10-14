@@ -9,11 +9,6 @@ import { SessionHovercard } from "./session-hovercard-solid.tsx";
 
 it("refreshes retained hovercard labels and age without replacing its focused link", async () => {
   const restoreI18n = captureI18nStateForTesting();
-  let unmount: (() => void) | undefined;
-  onTestFinished(async () => {
-    unmount?.();
-    await restoreI18n();
-  });
   await i18n.setLocale("en");
   const row: SidebarSessionHovercardRow = {
     label: "Example session",
@@ -33,7 +28,10 @@ it("refreshes retained hovercard labels and age without replacing its focused li
   const view = mountSolid(() => (
     <SessionHovercard row={row} automationLink={{ href: "/automations", navigate: () => {} }} />
   ));
-  unmount = view.unmount;
+  onTestFinished(async () => {
+    view.unmount();
+    await restoreI18n();
+  });
   await waitForSolid(() =>
     expect(view.container.querySelector(".session-hovercard__automation-link")).not.toBeNull(),
   );
