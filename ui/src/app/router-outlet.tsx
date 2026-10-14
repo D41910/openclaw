@@ -8,9 +8,10 @@ import { AgentStartupState, LazyViewError } from "../components/solid/lazy-view-
 import { LoadingState } from "../components/solid/loading-state.tsx";
 import { isAgentDatabaseInspectionPendingError } from "../lib/gateway-availability.ts";
 import { t } from "../lib/reactive/i18n.ts";
-import { LitContent, SolidContentPresentation } from "../lit/solid-content.tsx";
+import { SolidContentPresentation } from "../lit/solid-content.tsx";
 import type { ApplicationContext } from "./context.ts";
 import type { ControlUiReadinessOutlet } from "./control-ui-readiness.ts";
+import { LitRouteHost } from "./lit-route-host.tsx";
 import { RouterOutletController, selectRenderedRouteMatch } from "./router-outlet-controller.ts";
 import {
   isStaleChunkImportError,
@@ -209,52 +210,65 @@ function RoutePresentation(props: {
     const current = value();
     return "state" in current ? current.state : undefined;
   };
-  const legacy = () => {
-    const current = value();
-    return "legacy" in current ? current.legacy : undefined;
-  };
-  const page = (
-    <SolidContentPresentation value={() => props.presented !== false}>
-      <Show
-        when={native()}
-        fallback={
-          <Show when={legacy() != null}>
-            <LitContent value={legacy()} />
-          </Show>
-        }
+  const isLegacy = () => "legacy" in value();
+  const SolidPage = () => {
+    const page = (
+      <>
+        <Show when={native()}>
+          {(current) => (
+            <SolidContentPresentation value={() => props.presented !== false}>
+              <Show when={current().render} keyed>
+                {(View) => (
+                  <View
+                    data={current().props.data}
+                    loaderPending={current().props.loaderPending}
+                    presented={current().props.presented}
+                  />
+                )}
+              </Show>
+            </SolidContentPresentation>
+          )}
+        </Show>
+        <Show when={error()}>{(current) => <RouteError {...current()} />}</Show>
+        <Show when={state() === "startup"}>
+          <AgentStartupState />
+        </Show>
+        <Show when={state() === "loading"}>
+          <LoadingState />
+        </Show>
+      </>
+    );
+    return props.presentation ? (
+      <openclaw-route-presentation
+        style={{ display: props.presented ? "contents" : "none" }}
+        hidden={!props.presented}
+        inert={!props.presented}
+        aria-hidden={props.presented ? "false" : "true"}
       >
+        {page}
+      </openclaw-route-presentation>
+    ) : (
+      <openclaw-route-fragment style={{ display: "contents" }}>{page}</openclaw-route-fragment>
+    );
+  };
+  return (
+    <Show when={isLegacy()} fallback={<SolidPage />}>
+      <LitRouteHost
+        presentation={props.presentation}
+        presented={props.presented}
+        renderValue={() => {
+          const current = value();
+          return "legacy" in current ? current.legacy : null;
+        }}
+      />
+      <Show when={error()}>
         {(current) => (
-          <Show when={current().render} keyed>
-            {(View) => (
-              <View
-                data={current().props.data}
-                loaderPending={current().props.loaderPending}
-                presented={current().props.presented}
-              />
-            )}
-          </Show>
+          <openclaw-route-fragment style={{ display: "contents" }}>
+            <RouteError {...current()} />
+          </openclaw-route-fragment>
         )}
       </Show>
-      <Show when={error()}>{(current) => <RouteError {...current()} />}</Show>
-      <Show when={state() === "startup"}>
-        <AgentStartupState />
-      </Show>
-      <Show when={state() === "loading"}>
-        <LoadingState />
-      </Show>
-    </SolidContentPresentation>
-  );
-  return props.presentation ? (
-    <openclaw-route-presentation
-      style={{ display: props.presented ? "contents" : "none" }}
-      hidden={!props.presented}
-      inert={!props.presented}
-      aria-hidden={props.presented ? "false" : "true"}
-    >
-      {page}
-    </openclaw-route-presentation>
-  ) : (
-    <openclaw-route-fragment style={{ display: "contents" }}>{page}</openclaw-route-fragment>
+    </Show>
   );
 }
 
