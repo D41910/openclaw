@@ -13,7 +13,8 @@ export function resolveSilentReplyPromptMode(params: {
   runtimeInfo?: SystemPromptRuntimeInfo;
   silentReplyPromptMode?: SilentReplyPromptMode;
 }): SilentReplyPromptMode {
-  return params.promptSurface === "subagent" ||
+  return params.sourceReplyDeliveryMode === "message_tool_only" ||
+    params.promptSurface === "subagent" ||
     !isDeliverableMessageChannel(normalizeMessageChannel(params.runtimeInfo?.channel) ?? "")
     ? "none"
     : (params.silentReplyPromptMode ?? "generic");
@@ -72,7 +73,7 @@ export function buildMessagingSection(params: {
   const hasSessionsSpawn = params.availableTools.has("sessions_spawn");
   const hasSubagents = params.availableTools.has("subagents");
   const hasSessionsYield = params.availableTools.has("sessions_yield");
-  const suppressSilentTokenGuidance = params.silentReplyPromptMode === "none";
+  const suppressSilentTokenGuidance = messageToolOnly || params.silentReplyPromptMode === "none";
   const completionEventGuidance = suppressSilentTokenGuidance
     ? "- Completion event requesting update: rewrite in normal voice; send. Never forward raw metadata or silent placeholder."
     : `- Completion event requesting update: rewrite in normal voice; send. Never forward raw metadata or default to ${SILENT_REPLY_TOKEN}.`;
@@ -111,14 +112,12 @@ export function buildMessagingSection(params: {
             ? `- No source default: proactive send needs \`channel\`; ids: ${params.messageChannelOptions}.`
             : "- Set `channel` only outside current/default source.",
           messageToolOnly
-            ? suppressSilentTokenGuidance
-              ? "- Visible `message(send)` content: never repeat in final."
-              : `- Visible \`message(send)\` content: never repeat in final; end with only uppercase ${SILENT_REPLY_TOKEN}.`
+            ? "- Visible `message(send)` content: never repeat in final."
             : suppressSilentTokenGuidance
               ? "- Follow turn delivery: private final => visible via `message(send)`; otherwise normal reply once."
               : `- After visible \`message(send)\`, final ONLY uppercase ${SILENT_REPLY_TOKEN}, with no punctuation or quotes.`,
           !suppressSilentTokenGuidance
-            ? `Only the entire exact ${SILENT_REPLY_TOKEN} reply is silent. Send confirmations before ending silently.`
+            ? `Only the entire exact ${SILENT_REPLY_TOKEN} reply is silent. ${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`
             : "",
           "- A confirmed final message or added final reaction to the current source completes the reply; never repeat it in text.",
           showGenericInlineButtonHint

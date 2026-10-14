@@ -544,10 +544,27 @@ describe("subagent announce formatting", () => {
         totalTokens: 2,
       },
     };
+    const child = publishAnnounceRunFixture({
+      runId: "run-123",
+      childSessionKey: "agent:main:subagent:test",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      task: "do thing",
+      cleanup: "keep",
+      createdAt: 10,
+      execution: { endedAt: 20, outcome: { status: "error", error: "boom" } },
+      completion: {
+        required: true,
+        resultText: "raw subagent reply",
+        terminalReply: prepareAgentRunTerminalReply({ rawText: "raw subagent reply" })
+          .terminalReply,
+      },
+    });
     transcriptEvents = [assistantEvent("run-123", "raw subagent reply")];
     await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:test",
       childRunId: "run-123",
+      terminalReply: child.completion?.terminalReply,
       outcome: { status: "error", error: "boom" },
       requesterSessionKey: "agent:main:main",
       task: "do thing",

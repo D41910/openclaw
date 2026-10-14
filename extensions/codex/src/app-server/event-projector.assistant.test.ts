@@ -76,15 +76,22 @@ describe("CodexAppServerEventProjector assistant projection", () => {
   );
 
   it.each([
-    { coda: "NO_REPLY", expected: ["Completed answer."] },
-    { coda: "NO_REPLY\nNO_REPLY", expected: ["Completed answer.", "NO_REPLY"] },
+    { answer: "Completed answer.", coda: "NO_REPLY", expected: ["Completed answer."] },
     {
+      answer: "Completed answer.",
+      coda: "NO_REPLY\nNO_REPLY",
+      expected: ["Completed answer.", "NO_REPLY"],
+    },
+    {
+      answer: "Completed answer.",
       coda: "NO_REPLY\n<final></final>",
       expected: ["Completed answer.", "<final></final>"],
     },
-  ])("preserves completed answers before final coda $coda", async ({ coda, expected }) => {
+    { answer: "NO_REPLY\nNO_REPLY", coda: "NO_REPLY", expected: ["NO_REPLY"] },
+    { answer: "NO_REPLY\nNO_REPLY\nAnswer", coda: "NO_REPLY", expected: ["NO_REPLY\nAnswer"] },
+  ])("preserves completed answers before final coda $coda", async ({ answer, coda, expected }) => {
     const projector = await createProjector(await createParams());
-    await streamFinalAnswer(projector, "answer", "Completed answer.");
+    await streamFinalAnswer(projector, "answer", answer);
     await streamFinalAnswer(projector, "coda", coda);
     await projector.handleNotification(turnCompleted([finalItem("coda", coda)]));
     const result = projector.buildResult(buildEmptyToolTelemetry());
@@ -92,6 +99,25 @@ describe("CodexAppServerEventProjector assistant projection", () => {
     expect(result.preparedTerminalReply).toEqual({
       text: expected.join("\n\n"),
       terminalReply: { disposition: "visible", text: expected.join("\n\n") },
+    });
+  });
+
+  it("bounds combined terminal snapshots without truncating either delivered answer", async () => {
+    const projector = await createProjector(await createParams());
+    const answer = "a".repeat(4_000);
+    const coda = "b".repeat(200);
+    await streamFinalAnswer(projector, "answer", answer);
+    await streamFinalAnswer(projector, "coda", `NO_REPLY\n${coda}`);
+    await projector.handleNotification(turnCompleted([finalItem("coda", `NO_REPLY\n${coda}`)]));
+
+    const result = projector.buildResult(buildEmptyToolTelemetry());
+    expect(result.assistantTexts).toEqual([answer, coda]);
+    expect(result.preparedTerminalReply).toEqual({
+      text: `${answer}\n\n${coda}`,
+      terminalReply: {
+        disposition: "visible",
+        text: `${answer}\n\n${"b".repeat(93)}…`,
+      },
     });
   });
 

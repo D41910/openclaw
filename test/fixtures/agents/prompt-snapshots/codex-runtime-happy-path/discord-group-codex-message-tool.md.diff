@@ -1,4 +1,4 @@
---- telegram-direct-codex-message-tool.md	sha256=9f17ba712c4b2f4ccd0b4de683c4ee2cbbf13586b95a6a5074e70b73e7ccbd3d
+--- telegram-direct-codex-message-tool.md	sha256=e9773c82aa8aa7403cf1e57d58297c2a1b68a828c598fd209cfcf3ffa5ba358b
 +++ discord-group-codex-message-tool.md	sha256=5fe0105cd5536eafad841db3a65536be51d0ca23bbb8e839555c020735608251
 @@ -1,1 +1,1 @@
 -# Telegram Direct Codex Message Tool Turn
@@ -37,18 +37,18 @@
 +    "chars": 72627,
 +    "roughTokens": 18157
 @@ -263,2 +263,2 @@
--    "chars": 3482,
--    "roughTokens": 871
+-    "chars": 3194,
+-    "roughTokens": 799
 +    "chars": 4430,
 +    "roughTokens": 1108
 @@ -271,2 +271,2 @@
--    "chars": 27858,
--    "roughTokens": 6965
+-    "chars": 27570,
+-    "roughTokens": 6893
 +    "chars": 29175,
 +    "roughTokens": 7294
 @@ -275,2 +275,2 @@
--    "chars": 99889,
--    "roughTokens": 24973
+-    "chars": 99601,
+-    "roughTokens": 24901
 +    "chars": 101804,
 +    "roughTokens": 25451
 @@ -279,2 +279,2 @@
@@ -66,7 +66,7 @@
 +  "surface": "discord",
 +  "chat_type": "group"
 @@ -515,1 +515,3 @@
--You are in a Telegram direct conversation. Normal final replies are private and are not automatically sent to this conversation. To post visible output here, use the message tool with action=send; the target defaults to this conversation. If no visible direct response is needed, do not call message(action=send). Your normal final answer stays private and will not be posted to the conversation. If no text reply is needed, including after a reaction or other action, reply with exactly "NO_REPLY" as the entire final answer, without commentary, punctuation, or formatting. NO_REPLY discards anything written this turn that was not sent, so send confirmations before ending silently.
+-You are in a Telegram direct conversation. Normal final replies are private and are not automatically sent to this conversation. To post visible output here, use the message tool with action=send; the target defaults to this conversation. If no visible direct response is needed, do not call message(action=send). Your normal final answer stays private and will not be posted to the conversation.
 +You are in a Discord group chat. Normal final replies are private and are not automatically sent to this group chat. To post visible output here, use the message tool with action=send; the target defaults to this group chat. Be a good group participant: mostly lurk and follow the conversation; reply only when directly addressed or you can add clear value. Emoji reactions are welcome when available. Write like a human. Avoid Markdown tables. Minimize empty lines and use normal chat conventions, not document-style spacing. Don't type literal \n sequences; use real line breaks sparingly. If addressed to someone else, stay silent unless invited or correcting key facts. Discord: wrap bare URLs like <https://example.com> to suppress embeds. When subagent or session-spawn tools are available and a directly requested group-chat task will require several tool calls, prefer delegating bounded side investigations early so the channel gets a responsive path forward. Keep the critical path local, avoid subagents for simple one-step work, and only surface concise group-visible updates when they add value. If no visible group response is needed, do not call message(action=send). If no text reply is needed, including after a reaction or other action, reply with exactly "NO_REPLY" as the entire final answer, without commentary, punctuation, or formatting. NO_REPLY discards anything written this turn that was not sent, so send confirmations before ending silently.
 +
 +Activation: trigger-only (you are invoked only when explicitly mentioned; recent context may be included). Address the specific sender noted in the message context.

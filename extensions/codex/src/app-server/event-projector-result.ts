@@ -2,12 +2,12 @@ import { AgentHarnessProjectionSettlement } from "openclaw/plugin-sdk/agent-harn
 import {
   classifyAgentHarnessTerminalOutcome,
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
   type AgentMessage,
   type EmbeddedRunAttemptParamsV2 as EmbeddedRunAttemptParams,
 } from "openclaw/plugin-sdk/agent-harness-runtime";
 import type { AgentHarnessToolResultTelemetry } from "openclaw/plugin-sdk/agent-harness-tool-runtime";
 import { resolveCodexTtsProvenanceTransfer } from "openclaw/plugin-sdk/codex-mcp-projection";
+import { truncateUtf16Safe } from "openclaw/plugin-sdk/text-utility-runtime";
 import {
   attemptTerminal,
   type AttemptFailureSource,
@@ -31,6 +31,8 @@ import type { CodexTurn, JsonValue } from "./protocol.js";
 import { CodexTranscriptCheckpoint } from "./transcript-checkpoint.js";
 import { attachCodexAssistantItemIds } from "./upstream-prompt-provenance.js";
 import { resolveCodexPromptError } from "./usage-limit-error.js";
+
+const TERMINAL_REPLY_SNAPSHOT_MAX_CHARS = 4_096;
 
 export type CodexAppServerToolTelemetry = Partial<
   Omit<AgentHarnessToolResultTelemetry, "confirmedMediaDeliveries">
@@ -247,12 +249,23 @@ export abstract class CodexTurnProjection {
     );
     const assistantTexts = visibleReplies.map((reply) => reply.text);
     const terminalText = assistantTexts.join("\n\n");
+    const terminalSnapshotText = preparedReplies
+      .flatMap(({ terminalReply }) =>
+        terminalReply.disposition === "visible" ? terminalReply.text : [],
+      )
+      .join("\n\n");
     const preparedTerminalReply = visibleReplies.length
       ? {
           text: terminalText,
           terminalReply: {
             disposition: "visible" as const,
-            text: sanitizeAgentRunTerminalReplyText(terminalText),
+            text:
+              terminalSnapshotText.length > TERMINAL_REPLY_SNAPSHOT_MAX_CHARS
+                ? `${truncateUtf16Safe(
+                    terminalSnapshotText,
+                    TERMINAL_REPLY_SNAPSHOT_MAX_CHARS - 1,
+                  ).trimEnd()}…`
+                : terminalSnapshotText,
           },
         }
       : (preparedReplies.at(-1) ?? prepareAgentRunTerminalReply({}));

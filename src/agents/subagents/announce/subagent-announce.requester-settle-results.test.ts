@@ -39,7 +39,7 @@ describe("maybeWakeRequesterAfterAllChildrenSettled results", () => {
                 },
         }),
     );
-    const visibleChild = expectDefined(children[3]);
+    const visibleChild = expectDefined(children[3], "visible child");
     registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue(children);
     sessionStore[visibleChild.childSessionKey] = { sessionId: "child-3-session" };
     findTranscriptEventMock.mockImplementation(async ({ sessionId }, match) => {

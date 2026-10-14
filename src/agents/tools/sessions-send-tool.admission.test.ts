@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { awaitGateBeforeSettlement } from "../../../test/helpers/promise.js";
 import { createReplyTurnParticipants } from "../../auto-reply/reply/reply-run-registry.tool-authority.js";
 import { setRuntimeConfigSnapshot } from "../../config/config.js";
-import { replaceSessionEntry } from "../../config/sessions/session-accessor.js";
+import {
+  appendTranscriptMessage,
+  replaceSessionEntry,
+} from "../../config/sessions/session-accessor.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   captureGatewayDeviceRevocation,
@@ -383,14 +386,24 @@ describe("sessions_send dispatch admission", () => {
             return { sessions: [{ key: targetSessionKey, agentId: "main", kind: "direct" }] };
           }
           if (request.method === "agent.wait") {
+            if (!isRecord(request.params) || typeof request.params.runId !== "string") {
+              throw new Error("Expected agent wait run ID");
+            }
+            await appendTranscriptMessage(
+              { agentId: "main", sessionKey: targetSessionKey, sessionId: "target-session" },
+              {
+                message: {
+                  role: "assistant",
+                  __openclaw: { runId: request.params.runId },
+                  phase: "final_answer",
+                  stopReason: "stop",
+                  content: [{ type: "text", text: "Task complete" }],
+                },
+              },
+            );
             return {
               status: "ok",
               terminalReply: { disposition: "visible", text: "Task complete" },
-            };
-          }
-          if (request.method === "chat.history") {
-            return {
-              messages: [{ role: "assistant", content: [{ type: "text", text: "Task complete" }] }],
             };
           }
           if (request.method === "agent") {
@@ -517,13 +530,24 @@ describe("sessions_send dispatch admission", () => {
             );
             return { runId };
           case "agent.wait":
+            if (!isRecord(request.params) || typeof request.params.runId !== "string") {
+              throw new Error("Expected agent wait run ID");
+            }
+            await appendTranscriptMessage(
+              { agentId: "main", sessionKey, sessionId: entry.sessionId },
+              {
+                message: {
+                  role: "assistant",
+                  __openclaw: { runId: request.params.runId },
+                  phase: "final_answer",
+                  stopReason: "stop",
+                  content: [{ type: "text", text: "Task complete" }],
+                },
+              },
+            );
             return {
               status: "ok",
               terminalReply: { disposition: "visible", text: "Task complete" },
-            };
-          case "chat.history":
-            return {
-              messages: [{ role: "assistant", content: [{ type: "text", text: "Task complete" }] }],
             };
           case "send":
             return { messageId: "final-reply" };

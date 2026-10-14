@@ -164,7 +164,6 @@ function buildDirectChatContext(params: {
       : [
           "Your replies are automatically sent to this conversation unless the current-turn context says final replies stay private.",
         ]),
-    `If no text reply is needed, including after a reaction or other action, reply with exactly "${SILENT_REPLY_TOKEN}" as the entire final answer, without commentary, punctuation, or formatting. ${SILENT_REPLY_TOKEN} discards anything written this turn that was not sent, so send confirmations before ending silently.`,
   ].join(" ");
 }
 

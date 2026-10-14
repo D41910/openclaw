@@ -106,15 +106,14 @@ describe("group runtime loading", () => {
     vi.doUnmock("./groups.runtime.js");
   });
 
-  it("builds direct chat context with fixed silent-token guidance", () => {
+  it("keeps silent-token guidance out of direct chat context", () => {
     const context = groups.buildSourceConversationContext({
       sessionCtx: { ChatType: "direct", Provider: "telegram" },
     });
     expect(context).toContain(
       "You are in a Telegram direct conversation. Your replies are automatically sent to this conversation unless the current-turn context says final replies stay private.",
     );
-    expect(context).toContain('reply with exactly "NO_REPLY" as the entire final answer');
-    expect(context).toContain("send confirmations before ending silently");
+    expect(context).not.toContain("NO_REPLY");
 
     const toolOnlyContext = groups.buildSourceConversationContext({
       sessionCtx: { ChatType: "direct", Provider: "telegram" },
@@ -123,7 +122,7 @@ describe("group runtime loading", () => {
     expect(toolOnlyContext).toContain("Normal final replies are private");
     expect(toolOnlyContext).toContain("message tool with action=send");
     expect(toolOnlyContext).toContain("do not call message(action=send)");
-    expect(toolOnlyContext).toContain('reply with exactly "NO_REPLY" as the entire final answer');
+    expect(toolOnlyContext).not.toContain("NO_REPLY");
     expect(toolOnlyContext).not.toContain("Your replies are automatically sent");
   });
 

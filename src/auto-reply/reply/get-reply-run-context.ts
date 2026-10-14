@@ -247,7 +247,12 @@ export async function prepareReplyRunContext(params: RunPreparedReplyParams) {
       : {}),
   };
   const silentReplyPromptMode: SilentReplyPromptMode =
-    isInternalPromptChannel || terminalReplyExpectation === "result-required" ? "none" : "generic";
+    isInternalPromptChannel ||
+    terminalReplyExpectation === "result-required" ||
+    sessionStableConversationContext ||
+    sourceReplyDeliveryMode === "message_tool_only"
+      ? "none"
+      : "generic";
   const baseBody = sessionCtx.agentText ?? "";
   const rawBodyTrimmed = (ctx.commandText ?? "").trim();
   const baseBodyTrimmedRaw = baseBody.trim();

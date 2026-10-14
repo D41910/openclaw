@@ -111,10 +111,11 @@ flow:
         - set: waited
           value:
             expr: "await env.gateway.call('agent.wait', { runId: emptyRun.runId, timeoutMs: 10000 }, { timeoutMs: 15000 })"
+        # agent.wait projects the terminal failure summary, not the channel notice.
         - assert:
-            expr: "waited.status === 'error' && String(waited.error ?? '').includes(config.expectedNotice)"
+            expr: "waited.status === 'error' && typeof waited.error === 'string' && waited.error.trim().length > 0 && waited.stopReason === 'error' && waited.livenessState === 'abandoned' && waited.terminalReply?.disposition === 'empty' && waited.terminalReceipt?.terminalDisposition === 'not-visible'"
             message:
-              expr: "`child run did not retain its incomplete-answer error: ${JSON.stringify(waited)}`"
+              expr: "`child run did not retain its failed empty terminal facts: ${JSON.stringify(waited)}`"
         - call: waitForCondition
           saveAs: requesterAcknowledgements
           args:

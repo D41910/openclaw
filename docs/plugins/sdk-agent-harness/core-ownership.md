@@ -374,6 +374,8 @@ returning `{ text, terminalReply }`. It classifies the raw text before stripping
 the leading control line. Delivery consumers do not call this function. Deliver
 `text`, which retains the full prepared bytes, rather than the bounded snapshot
 text. A recorded visible result stays visible even if its text is `NO_REPLY`.
+Harnesses combining multiple visible answers combine their prepared snapshots
+and cap the aggregate metadata separately; never reparse the joined delivery text.
 
 For model-visible reply policy, `buildHarnessVisibleReplyGuidance` from
 `openclaw/plugin-sdk/agent-harness-runtime` accepts the prepared delivery mode,
