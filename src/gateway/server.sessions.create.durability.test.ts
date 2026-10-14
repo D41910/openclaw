@@ -64,7 +64,9 @@ vi.mock("./server-methods/chat-send-diagnostics.js", async (importOriginal) => {
     startChatSendDiagnostics: (...args: Parameters<typeof actual.startChatSendDiagnostics>) => {
       const real = actual.startChatSendDiagnostics(...args);
       const recorder = chatDiagnostics.current;
-      if (!recorder) return real;
+      if (!recorder) {
+        return real;
+      }
       const request = ++recorder.requests;
       const phases = new Set([
         "authority",
@@ -83,7 +85,9 @@ vi.mock("./server-methods/chat-send-diagnostics.js", async (importOriginal) => {
         "dispatch",
       ]);
       const record = (event: string, scope?: number, phase?: string) => {
-        if (recorder !== chatDiagnostics.current) return;
+        if (recorder !== chatDiagnostics.current) {
+          return;
+        }
         if (recorder.events.length === 64) {
           recorder.events.shift();
           recorder.dropped += 1;
@@ -103,7 +107,9 @@ vi.mock("./server-methods/chat-send-diagnostics.js", async (importOriginal) => {
         // request/scope calls and never substitutes their ownership or timing.
         scope: (...scopeArgs: Parameters<typeof real.scope>) => {
           const owned = real.scope(...scopeArgs);
-          if (!owned) return owned;
+          if (!owned) {
+            return owned;
+          }
           const scope = ++recorder.scopes;
           record("scope", scope, scopeArgs[0]);
           return {
@@ -797,15 +803,14 @@ test.for([
           idempotencyKey: `followup-${id}`,
         })
           .catch((error: unknown) => {
-            console.log(
-              "[chat-send-phase]",
-              JSON.stringify({
+            process.stderr.write(
+              `[chat-send-phase] ${JSON.stringify({
                 ...recorder,
                 started: undefined,
                 elapsedMs: Math.round(performance.now() - recorder.started),
                 dispatches: dispatch.start.mock.calls.length,
                 activeRoots: getActiveGatewayRootWorkCount({ excludeCurrent: true }),
-              }),
+              })}\n`,
             );
             throw error;
           })

@@ -40,7 +40,7 @@ test("delivers a recovered artifact once while preserving its inter-session tran
   onTestFinished,
 }) => {
   const started = performance.now();
-  let phase = "gateway-start";
+  let phase = "test-enter";
   let reported = false;
   let providerRequests = 0;
   let updateDelivered = false;
@@ -54,14 +54,11 @@ test("delivers a recovered artifact once while preserving its inter-session tran
   const markerResponses: boolean[] = [];
   let overloads = 0;
   const marker = `QA-RECOVERED-ARTIFACT-${randomUUID()}`;
-  const report = () => {
-    if (reported) {
-      return;
-    }
-    reported = true;
-    console.log(
-      "[qa-phase]",
-      JSON.stringify({
+  // Raw stderr remains visible under the E2E configuration silent mode.
+  const emitPhase = (event: "enter" | "failure") => {
+    process.stderr.write(
+      `[qa-phase] ${JSON.stringify({
+        event,
         phase,
         elapsedMs: Math.round(performance.now() - started),
         providerRequests,
@@ -71,12 +68,25 @@ test("delivers a recovered artifact once while preserving its inter-session tran
         writes: writeCalls.length,
         finalizers: finalizers.length,
         overloads,
-      }),
+      })}\n`,
     );
+  };
+  const enterPhase = (next: string) => {
+    phase = next;
+    emitPhase("enter");
+  };
+  const report = () => {
+    if (reported) {
+      return;
+    }
+    reported = true;
+    emitPhase("failure");
   };
   signal.addEventListener("abort", report, { once: true });
   onTestFailed(report);
   onTestFinished(() => signal.removeEventListener("abort", report));
+  emitPhase("enter");
+  enterPhase("mock-start");
   const mock = await startQaMockOpenAiServer();
 
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
@@ -161,7 +171,7 @@ test("delivers a recovered artifact once while preserving its inter-session tran
               event.type === "response.output_text.done" && String(event.text).includes(marker),
           )
         ) {
-          markerResponses.push(Boolean(finalizer));
+          markerResponses.push(finalizer);
         }
       }
       res.writeHead(upstream.status, {
@@ -183,8 +193,12 @@ test("delivers a recovered artifact once while preserving its inter-session tran
       const document = form.get("document");
       expect(document).toBeInstanceOf(File);
       const file = document as File;
+      const chatId = form.get("chat_id");
+      if (typeof chatId !== "string") {
+        throw new Error("Telegram document delivery requires a string chat_id");
+      }
       documents.push({
-        chatId: String(form.get("chat_id")),
+        chatId,
         name: file.name,
         content: await file.text(),
       });
@@ -232,19 +246,23 @@ test("delivers a recovered artifact once while preserving its inter-session tran
   };
 
   try {
+    enterPhase("http-start");
     await withServer(
       (req, res) => {
         void handleRequest(req, res).catch((error: unknown) => {
           writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
         });
       },
-      async (apiRoot) =>
-        await withTempDir("openclaw-recovered-artifact-", async (workspace) => {
+      async (apiRoot) => {
+        enterPhase("temp-dir-start");
+        return await withTempDir("openclaw-recovered-artifact-", async (workspace) => {
           const owner = createQaGatewayChild();
           await runQaGatewayFixture(
             async () => {
               const repoRoot = path.resolve(import.meta.dirname, "../../../..");
+              enterPhase("gateway-start");
               const gateway = await owner.start({
+                onListening: () => enterPhase("gateway-listening"),
                 repoRoot,
                 command: createQaPreparedRepoCliCommand(repoRoot),
                 forcedRuntime: "codex",
@@ -292,7 +310,8 @@ test("delivers a recovered artifact once while preserving its inter-session tran
                   return cfg;
                 },
               });
-              phase = "route-seed";
+              enterPhase("gateway-ready");
+              enterPhase("route-seed");
               const sessions = async () =>
                 (await gateway.call("sessions.list", {
                   agentId: "qa",
@@ -322,7 +341,7 @@ test("delivers a recovered artifact once while preserving its inter-session tran
                 )
                 .toBe(false);
               expect(documents).toHaveLength(0);
-              phase = "turn";
+              enterPhase("turn");
               const receipt = (await gateway.call("chat.send", {
                 sessionKey,
                 message: `Empty response after write recovery QA check: write ${FILE_NAME}, then reply with exact marker: \`${marker}\nMEDIA:./${FILE_NAME}\`.`,
@@ -343,7 +362,7 @@ test("delivers a recovered artifact once while preserving its inter-session tran
                 ),
               ).toMatchObject({ status: "ok" });
               await expect.poll(() => documents.length, { timeout: 30_000 }).toBe(1);
-              phase = "delivery-observed";
+              enterPhase("delivery-observed");
               const history = (await gateway.call("chat.history", { sessionKey, limit: 30 })) as {
                 messages: Array<{ role: string; content: unknown }>;
               };
@@ -362,7 +381,7 @@ test("delivers a recovered artifact once while preserving its inter-session tran
                 )
                 .toBe(false);
               expect(await readFile(path.join(workspace, FILE_NAME), "utf8")).toBe(FILE_CONTENT);
-              phase = "cleanup";
+              enterPhase("cleanup");
               // Freeze delivery evidence only after the admitted run settles and its
               // Gateway exits; the provider and Telegram endpoint remain available.
               await stopQaGatewayFixture(owner);
@@ -381,14 +400,18 @@ test("delivers a recovered artifact once while preserving its inter-session tran
                 { chatId: String(CHAT_ID), name: FILE_NAME, content: FILE_CONTENT },
               ]);
             },
-            () => stopQaGatewayFixture(owner),
+            () => {
+              enterPhase("cleanup");
+              return stopQaGatewayFixture(owner);
+            },
             () => {
               for (const poll of pendingPolls) {
                 poll.destroy();
               }
             },
           );
-        }),
+        });
+      },
     );
   } finally {
     await mock.stop();

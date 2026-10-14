@@ -42,13 +42,6 @@ suite.define(() => {
           await sidebar.waitFor({ state: "visible" });
           await expect.poll(() => selected.getAttribute("data-navigation-view")).toBe(view);
           await button.click();
-          if (view === "online") {
-            // Users stays open on repeat selection; the collapse shortcut still
-            // hides the panel and preserves its selected view.
-            expect(await sidebar.isVisible()).toBe(true);
-            await expect.poll(() => selected.getAttribute("data-navigation-view")).toBe(view);
-            await page.keyboard.press("ControlOrMeta+B");
-          }
           await sidebar.waitFor({ state: "hidden" });
           await expect.poll(() => selected.count()).toBe(0);
           await expect
