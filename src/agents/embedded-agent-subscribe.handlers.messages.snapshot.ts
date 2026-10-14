@@ -275,6 +275,11 @@ export function reconcileBlockReplySnapshot(
   const replacedPreparedSource = ctx.resetPreparedBlockReplySource({
     wholeMessage: !nextScope.valid,
   });
+  if (replacedPreparedSource) {
+    // Cancellation removes every prepared chunk in the scope, including unchanged prefixes.
+    restartIndex = Math.min(restartIndex, nextScope.valid ? nextScope.index : 0);
+    restartPrefix = prefixAt(next, restartIndex);
+  }
   if (
     retainedPrefix &&
     nextText.length < consumed &&

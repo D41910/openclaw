@@ -127,15 +127,16 @@ describe("assistant message final-line silence", () => {
     expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
   });
 
-  it.each([false, true])(
-    "discards earlier text blocks without suppressing the following message (phased: %s)",
-    async (phased) => {
+  it.each([undefined, "final_answer", "commentary"] as const)(
+    "discards earlier text blocks without suppressing the following message (last phase: %s)",
+    async (lastPhase) => {
+      const phased = lastPhase !== undefined;
       const h = setup();
       const reasoning = "No additional reply is needed for this group discussion.";
       h.start();
       h.delta(reasoning);
       const silent = makeAgentAssistantMessage({
-        api: "ollama",
+        api: phased ? "openai-responses" : "ollama",
         content: [
           {
             type: "text",
@@ -148,7 +149,7 @@ describe("assistant message final-line silence", () => {
             type: "text",
             text: "NO_REPLY",
             ...(phased
-              ? { textSignature: JSON.stringify({ v: 1, id: "answer-1", phase: "final_answer" }) }
+              ? { textSignature: JSON.stringify({ v: 1, id: "answer-1", phase: lastPhase }) }
               : {}),
           },
         ],
@@ -177,6 +178,54 @@ describe("assistant message final-line silence", () => {
       expect(h.publishedText().some((text) => text.includes(reasoning))).toBe(false);
     },
   );
+
+  it("keeps commentary after a leading silent final-answer block", async () => {
+    const h = setup();
+    const commentary = "I will inspect the attachment.";
+    const blocks = [
+      {
+        type: "text" as const,
+        text: "NO_REPLY",
+        textSignature: JSON.stringify({ v: 1, id: "answer", phase: "final_answer" }),
+      },
+      {
+        type: "text" as const,
+        text: commentary,
+        textSignature: JSON.stringify({ v: 1, id: "progress", phase: "commentary" }),
+      },
+    ];
+    h.emit({
+      type: "message_start",
+      message: makeAgentAssistantMessage({ api: "openai-responses", content: [] }),
+    });
+    for (const [contentIndex, block] of blocks.entries()) {
+      const message = makeAgentAssistantMessage({
+        api: "openai-responses",
+        content: blocks.slice(0, contentIndex + 1),
+      });
+      h.emit({
+        type: "message_update",
+        message,
+        assistantMessageEvent: {
+          type: "text_delta",
+          contentIndex,
+          delta: block.text,
+          partial: message,
+        },
+      });
+    }
+    expect(h.onAgentEvent).not.toHaveBeenCalled();
+    h.emit({
+      type: "message_end",
+      message: makeAgentAssistantMessage({ api: "openai-responses", content: blocks }),
+    });
+    await h.subscription.waitForPendingEvents();
+    const preambles = h.onAgentEvent.mock.calls
+      .filter(([event]) => event.stream === "item" && event.data.kind === "preamble")
+      .map(([event]) => event.data.progressText);
+    expect(preambles).toEqual([commentary]);
+    expect(h.publishedText().filter(Boolean)).toEqual([]);
+  });
 
   it("replaces a prepared source correction without losing reserved tool media", async () => {
     const h = setup();

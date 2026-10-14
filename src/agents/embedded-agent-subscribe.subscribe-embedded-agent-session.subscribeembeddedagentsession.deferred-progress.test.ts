@@ -80,8 +80,16 @@ describe("subscribeEmbeddedAgentSession deferred progress", () => {
           expect(firstMessage).toMatchObject({ text: "Before tool.", itemId: expect.any(String) });
           expect(firstMessage?.itemId).not.toBe("");
         }
-        expect(finalizedPayloads.some((payload) => payload.text?.includes(firstBlock))).toBe(false);
-        expect(finalizedPayloads.some((payload) => payload.text?.includes(lastBlock))).toBe(false);
+        expect(
+          finalizedPayloads.some(
+            (payload) => typeof payload.text === "string" && payload.text.includes(firstBlock),
+          ),
+        ).toBe(false);
+        expect(
+          finalizedPayloads.some(
+            (payload) => typeof payload.text === "string" && payload.text.includes(lastBlock),
+          ),
+        ).toBe(false);
         const secondItemId = expectDefined(finalizedPayloads.at(-1), "second message final").itemId;
         expect(secondItemId).toEqual(expect.any(String));
         expect(secondItemId).not.toBe("");

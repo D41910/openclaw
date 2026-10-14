@@ -51,7 +51,7 @@ function renderedOrder(state: TestState) {
   return [...renderedText(state).matchAll(/Step (\d+):/gu)].map((match) => Number(match[1]));
 }
 
-it("restores only the unowned tail with bounded commentary replay and continues live deltas", async () => {
+it("restores only the unowned tail with bounded commentary replay and settles buffered continuation", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
   vi.setSystemTime(new Date("2026-05-09T00:00:00.000Z"));
   vi.stubGlobal("window", globalThis);
@@ -216,17 +216,24 @@ it("restores only the unowned tail with bounded commentary replay and continues 
     const restored = createState(history);
     clients.push(restored);
     await loadChatHistory(restored);
-    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22, 23]);
-    expect(restored.chatStream).toBe(pending);
+    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22]);
+    expect(renderedOrder(live)).toEqual(Array.from({ length: 22 }, (_, index) => index + 1));
 
     vi.advanceTimersByTime(250);
-    updateText(`${pending} Continuing after switch-back.`, " Continuing after switch-back.");
+    const continued = `${pending} Continuing after switch-back.`;
+    updateText(continued, " Continuing after switch-back.");
+    await subscription.waitForPendingEvents();
+    await unsubscribe.drain();
+    expect(renderedOrder(live)).toEqual(Array.from({ length: 22 }, (_, index) => index + 1));
+    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22]);
+
+    emit({ type: "message_end", message: textMessage(continued) });
     await subscription.waitForPendingEvents();
     await unsubscribe.drain();
     vi.advanceTimersByTime(250);
     expect(renderedOrder(live)).toEqual(Array.from({ length: 23 }, (_, index) => index + 1));
     expect(renderedOrder(restored)).toEqual([19, 20, 21, 22, 23]);
-    expect(restored.chatStream).toBe(`${pending} Continuing after switch-back.`);
+    expect(restored.chatStream).toBe(continued);
     expect(restored.chatRunId).toBe(runId);
   } finally {
     subscription.unsubscribe();

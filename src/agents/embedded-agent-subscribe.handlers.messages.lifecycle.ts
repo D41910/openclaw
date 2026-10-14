@@ -165,7 +165,13 @@ export function handleMessageEnd(
   const pendingAudioAsVoice = ctx.state.pendingAssistantReplyDirectives?.audioAsVoice === true;
   const previousAudioDirectiveCount = ctx.state.lastAssistantAudioDirectiveCount;
   ctx.resetPartialReplyDirectives();
-  const parsedText = parseReplyDirectives(text);
+  // Silence belongs to the whole message, including text excluded by phase selection.
+  const messageText = messageToolText === undefined ? getRawText() : text;
+  const messageReply = parseReplyDirectives(messageText);
+  const parsedText =
+    messageReply.hasSilentIntent || messageText === text
+      ? messageReply
+      : parseReplyDirectives(text);
   const cleanedText = parsedText.text;
   const { mediaUrls } = resolveSendableOutboundReplyParts(parsedText, { text: "" });
   const managedMediaUrls = resolveManagedStreamMediaUrls(ctx.state, mediaUrls);
@@ -181,6 +187,13 @@ export function handleMessageEnd(
     ctx.state.lastAssistantStreamContentIndex,
     ctx.state.lastAssistantStreamItemId,
   );
+  if (
+    lastIndex < 0 &&
+    (ctx.state.lastAssistantStreamContentIndex !== undefined ||
+      ctx.state.lastAssistantStreamItemId !== undefined)
+  ) {
+    ctx.resetPreparedBlockReplySource({ wholeMessage: true });
+  }
   // Draining hidden reasoning or NO_REPLY consumes source without preparing a
   // visible reply. A final replacement must rebuild that logical reply in full.
   if (ctx.state.lastBlockReplyText == null) {
@@ -281,7 +294,7 @@ export function handleMessageEnd(
   const chunkerHasBuffered = Boolean(ctx.params.onBlockReply) && ctx.blockChunker.hasBuffered();
   ctx.finalizeAssistantTexts({
     text: finalAssistantText,
-    hasSilentIntent: parsedText.hasSilentIntent,
+    hasSilentIntent: messageReply.hasSilentIntent,
     addedDuringMessage,
     chunkerHasBuffered,
   });
@@ -344,7 +357,7 @@ export function handleMessageEnd(
     // streamReasoning rendering setting (gated inside emitReasoningStream).
     ctx.emitReasoningStream(rawThinking);
   }
-  ctx.settleAssistantMessageDelivery({ silent: parsedText.hasSilentIntent });
+  ctx.settleAssistantMessageDelivery({ silent: messageReply.hasSilentIntent });
 
   if (
     !ctx.params.silentExpected &&

@@ -23,7 +23,7 @@ it.each([
     name: "preview without line breaks",
     batchedPreview: true,
     separator: "",
-    expected: "Checking files.Reading config.Checking files.Done.",
+    expected: "Checking files.\nReading config.\nChecking files.Done.",
   },
   {
     name: "preview with line breaks",

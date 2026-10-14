@@ -148,7 +148,7 @@ describe("native snapshot reconciliation", () => {
       blocks: h.texts(),
       assistantTexts: h.subscription.assistantTexts,
     }).toMatchObject({
-      events: [{ stream: "assistant", data: { text: "Corrected", delta: "" } }],
+      events: [{ stream: "assistant", data: { text: "Corrected", delta: "Corrected" } }],
       blocks: ["Corrected"],
       assistantTexts: ["Corrected"],
     });
@@ -222,10 +222,11 @@ describe("native snapshot reconciliation", () => {
     const delivered = h.texts();
     expect(delivered.length).toBeGreaterThan(1);
     const bodies = delivered.map((chunk) => {
-      expect(chunk.startsWith("```txt\n")).toBe(true);
-      expect(chunk.endsWith("\n```")).toBe(true);
+      const lines = chunk.trimEnd().split("\n");
+      expect(lines[0]).toBe("```txt");
+      expect(lines.at(-1)).toBe("```");
       expect(chunk.length).toBeLessThanOrEqual(20);
-      return chunk.slice("```txt\n".length, -"\n```".length).replaceAll("\n", "");
+      return lines.slice(1, -1).join("");
     });
     expect(bodies.join("")).toBe("abcdefghijklmnopqrstuvwxyz");
     expect(h.onBlockReply).toHaveBeenCalledTimes(delivered.length);
