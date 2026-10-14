@@ -311,23 +311,8 @@ suite.define(() => {
         await page.mouse.move(1100, 700);
         await expect.poll(() => workspaceMenu.count()).toBe(0);
         await workspace.focus();
-        await Promise.all([
-          sidebar.evaluate(
-            (element) =>
-              new Promise<void>((resolve) => {
-                const onShown = (event: Event) => {
-                  if (event.target !== element.querySelector(".sidebar-agent-menu")) {
-                    return;
-                  }
-                  element.removeEventListener("overlay-after-show", onShown, true);
-                  resolve();
-                };
-                // Completed overlay events do not bubble; observe this menu in capture.
-                element.addEventListener("overlay-after-show", onShown, true);
-              }),
-          ),
-          workspace.hover(),
-        ]);
+        await workspace.hover();
+        await expect.poll(() => workspaceMenu.getAttribute("data-phase")).toBe("open");
         expect(await workspace.evaluate((element) => element === document.activeElement)).toBe(
           true,
         );
