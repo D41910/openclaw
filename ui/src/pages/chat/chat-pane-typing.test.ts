@@ -482,7 +482,7 @@ describe("chat pane typing presence", () => {
       );
       expect(
         container.querySelectorAll(
-          ".chat-message-avatar-anchor > :is(.chat-avatar, .chat-avatar-slot)",
+          ".chat-message-avatar-anchor :is(.chat-avatar, .chat-avatar-slot)",
         ),
       ).toHaveLength(placement === "gutter" ? 1 : 0);
       expect(container.querySelectorAll(".chat-group-footer .chat-author-avatar")).toHaveLength(

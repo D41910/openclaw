@@ -148,7 +148,9 @@ it.each(["assistant", "local", "profile"] as const)(
       <ChatAvatar
         role={kind === "assistant" ? "assistant" : "user"}
         assistant={
-          kind === "assistant" ? { agentId: "ada", avatar: url, textAvatar: "A" } : undefined
+          kind === "assistant"
+            ? { agentId: "ada", name: "Ada", avatar: url, textAvatar: "A" }
+            : undefined
         }
         user={kind === "local" ? { name: "Ada", avatar: url } : undefined}
         sender={kind === "profile" ? { id: "ada", name: "Ada", profileAvatarUrl: url } : undefined}
@@ -330,7 +332,10 @@ describe("renderChatAvatar", () => {
     )!;
     setCurrentThemeBranding(resolveThemeBranding(undefined));
     const view = mountSolid(() => (
-      <ChatAvatar role="assistant" assistant={{ agentId, avatar: "blob:portrait" }} />
+      <ChatAvatar
+        role="assistant"
+        assistant={{ agentId, name: "Assistant", avatar: "blob:portrait" }}
+      />
     ));
     try {
       expect(view.container.querySelector(".chat-avatar-slot > .identity-avatar__hat")).toBeNull();
