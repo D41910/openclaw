@@ -503,7 +503,7 @@ describe("provider terminal reply delivery", () => {
               emptyRows.filter((row) => {
                 const message = asOptionalObjectRecord(asOptionalObjectRecord(row)?.message);
                 return (
-                  message?.role === "assistant" &&
+                  assistantText(message)?.trim() &&
                   asOptionalObjectRecord(message.openclawDeliveryMirror)?.kind !== "model-fallback"
                 );
               }),
