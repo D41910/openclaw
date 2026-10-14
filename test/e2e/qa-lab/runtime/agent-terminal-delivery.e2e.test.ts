@@ -178,19 +178,28 @@ describe("provider terminal reply delivery", () => {
         inspect();
         return withinTest(ready.promise, signal).finally(() => eventWaiters.delete(inspect));
       };
-      const scripts = [
-        "silent",
-        "suffix",
-        "punctuation",
-        "json",
-        "prose",
-        "trimmed",
-        "lowercase",
-        "quoted",
-        "literal",
-        "crlf",
-        "indented",
-      ].map(createScript);
+      const cases = [
+        { id: "silent", raw: "NO_REPLY", expected: undefined },
+        {
+          id: "suffix",
+          raw: "NO_REPLY\nNO_REPLY\nI started the watcher.",
+          expected: "NO_REPLY\nI started the watcher.",
+        },
+        { id: "punctuation", raw: "NO_REPLY.", expected: "NO_REPLY." },
+        { id: "json", raw: '{"action":"NO_REPLY"}', expected: '{"action":"NO_REPLY"}' },
+        {
+          id: "prose",
+          raw: "I started the watcher. NO_REPLY",
+          expected: "I started the watcher. NO_REPLY",
+        },
+        { id: "trimmed", raw: " \tNO_REPLY\n", expected: undefined },
+        { id: "lowercase", raw: "no_reply", expected: "no_reply" },
+        { id: "quoted", raw: '"NO_REPLY"', expected: '"NO_REPLY"' },
+        { id: "literal", raw: "NO_REPLY\nNO_REPLY", expected: "NO_REPLY" },
+        { id: "crlf", raw: "NO_REPLY\r\nAnswer", expected: "NO_REPLY\r\nAnswer" },
+        { id: "indented", raw: " NO_REPLY\nAnswer", expected: " NO_REPLY\nAnswer" },
+      ];
+      const scripts = cases.map(({ id }) => createScript(id));
       let emptyFinals = false;
       const emptyNoticeDelivered = createDeferred();
       const requests: unknown[] = [];
@@ -315,27 +324,6 @@ describe("provider terminal reply delivery", () => {
         });
         client.start();
         await withinTest(connected.promise, signal);
-        const cases = [
-          { id: "silent", raw: "NO_REPLY", expected: undefined },
-          {
-            id: "suffix",
-            raw: "NO_REPLY\nNO_REPLY\nI started the watcher.",
-            expected: "NO_REPLY\nI started the watcher.",
-          },
-          { id: "punctuation", raw: "NO_REPLY.", expected: "NO_REPLY." },
-          { id: "json", raw: '{"action":"NO_REPLY"}', expected: '{"action":"NO_REPLY"}' },
-          {
-            id: "prose",
-            raw: "I started the watcher. NO_REPLY",
-            expected: "I started the watcher. NO_REPLY",
-          },
-          { id: "trimmed", raw: " \tNO_REPLY\n", expected: undefined },
-          { id: "lowercase", raw: "no_reply", expected: "no_reply" },
-          { id: "quoted", raw: '"NO_REPLY"', expected: '"NO_REPLY"' },
-          { id: "literal", raw: "NO_REPLY\nNO_REPLY", expected: "NO_REPLY" },
-          { id: "crlf", raw: "NO_REPLY\r\nAnswer", expected: "NO_REPLY\r\nAnswer" },
-          { id: "indented", raw: " NO_REPLY\nAnswer", expected: " NO_REPLY\nAnswer" },
-        ];
         const sessionKeys = cases.map(({ id }) => `agent:qa:qa:terminal-${id}`);
         const deliveredTexts = (target: string) =>
           deliveries.filter((delivery) => delivery.to === target).map((delivery) => delivery.text);
