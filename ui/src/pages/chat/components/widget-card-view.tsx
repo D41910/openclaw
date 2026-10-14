@@ -1,3 +1,4 @@
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
   createEffect,
   createMemo,
@@ -140,11 +141,10 @@ const widgetFrameResize = new WeakMap<HTMLIFrameElement, (height: number) => voi
 const widgetSizeListenerWindows = new WeakSet<Window>();
 
 function handleWidgetPromptMessage(frame: HTMLIFrameElement, data: unknown) {
-  const payload = data as { type?: unknown; prompt?: unknown } | null;
-  if (!payload || payload.type !== WIDGET_PROMPT_MESSAGE_TYPE) {
+  if (!isRecord(data) || data.type !== WIDGET_PROMPT_MESSAGE_TYPE) {
     return;
   }
-  void dispatchWidgetPrompt(frame, payload.prompt, frame.getAttribute("src") ?? "");
+  void dispatchWidgetPrompt(frame, data.prompt, frame.getAttribute("src") ?? "");
 }
 
 // Prompt authority is a MessagePort OFFERED by the trusted bridge script that
@@ -189,8 +189,8 @@ function installWidgetPromptOfferListener() {
   }
   widgetPromptOfferListenerWindows.add(window);
   window.addEventListener("message", (event: MessageEvent) => {
-    const data = event.data as { type?: unknown } | null;
-    if (!data || data.type !== WIDGET_PROMPT_OFFER_MESSAGE_TYPE) {
+    const data: unknown = event.data;
+    if (!isRecord(data) || data.type !== WIDGET_PROMPT_OFFER_MESSAGE_TYPE) {
       return;
     }
     const source = event.source;
@@ -226,9 +226,9 @@ function installWidgetSizeListener() {
   }
   widgetSizeListenerWindows.add(window);
   window.addEventListener("message", (event: MessageEvent) => {
-    const data = event.data as { type?: unknown; height?: unknown } | null;
+    const data: unknown = event.data;
     if (
-      !data ||
+      !isRecord(data) ||
       data.type !== WIDGET_SIZE_MESSAGE_TYPE ||
       typeof data.height !== "number" ||
       !Number.isFinite(data.height)
@@ -481,37 +481,59 @@ function handleWidgetExportAction(
     });
 }
 
-function widgetActionsPlacementRef() {
+function widgetActionsPlacementRef(
+  enabled: () => boolean,
+  options: () => WidgetCardOptions | undefined,
+) {
   const presented = useContext(SolidContentPresentation);
+  const active = createMemo(() => presented() && enabled());
   let element: HTMLElement | undefined;
-  createEffect(presented, (active) => {
-    if (!active || !element || typeof ResizeObserver === "undefined") {
-      return undefined;
-    }
-    const target = element;
-    let observer: ResizeObserver | undefined;
-    // Observe after insertion, outside a resize delivery from the transcript.
-    const frame = requestAnimationFrame(() => {
-      const thread = target.closest<HTMLElement>(".chat-thread");
-      if (!thread) {
-        return;
+  createEffect(
+    () => [active(), options()] as const,
+    ([isActive]) => {
+      if (!isActive || !element || typeof ResizeObserver === "undefined") {
+        return undefined;
       }
-      observer = new ResizeObserver(() => {
-        const clipRight =
-          thread.getBoundingClientRect().left + thread.clientLeft + thread.clientWidth;
-        target.toggleAttribute(
-          "data-widget-actions-above",
-          clipRight - target.getBoundingClientRect().right < 40,
-        );
+      const target = element;
+      let thread: HTMLElement | null = null;
+      let frame: number | undefined;
+      // Keep layout writes out of resize delivery, including transcript rerenders.
+      const observer = new ResizeObserver(() => {
+        if (frame !== undefined) {
+          return;
+        }
+        frame = requestAnimationFrame(() => {
+          frame = undefined;
+          if (!thread) {
+            return;
+          }
+          const clipRight =
+            thread.getBoundingClientRect().left + thread.clientLeft + thread.clientWidth;
+          target.toggleAttribute(
+            "data-widget-actions-above",
+            clipRight - target.getBoundingClientRect().right < 40,
+          );
+        });
       });
-      observer.observe(target);
-      observer.observe(thread);
-    });
-    return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
-    };
-  });
+      // Content updates can arrive during resize delivery. Reattach after insertion
+      // in the next frame so the shallower thread cannot become a skipped delivery.
+      frame = requestAnimationFrame(() => {
+        frame = undefined;
+        thread = target.closest<HTMLElement>(".chat-thread");
+        if (!thread) {
+          return;
+        }
+        observer.observe(target);
+        observer.observe(thread);
+      });
+      return () => {
+        if (frame !== undefined) {
+          cancelAnimationFrame(frame);
+        }
+        observer.disconnect();
+      };
+    },
+  );
   return (next: HTMLDivElement) => {
     element = next;
   };
@@ -522,7 +544,6 @@ function CanvasPreview(props: {
   surface: string;
   options?: WidgetCardOptions;
 }) {
-  const placementRef = widgetActionsPlacementRef();
   const sandbox = () =>
     resolveEmbedSandbox(props.options?.embedSandboxMode ?? "scripts", props.preview.sandbox);
   const provider = () => props.options?.boardProvider;
@@ -555,6 +576,7 @@ function CanvasPreview(props: {
   const canExportImage = () => !props.preview.mcpApp && isInternalCanvasEntryUrl(props.preview.url);
   const hasMenu = () => canExportImage() || Boolean(props.options?.rawText);
   const hasActions = () => Boolean(canPin() || hasMenu());
+  const placementRef = widgetActionsPlacementRef(hasActions, () => props.options);
   const pinLabel = () =>
     t(pinned() ? "chat.toolCards.pinnedToDashboard" : "chat.toolCards.pinToDashboard");
   return (

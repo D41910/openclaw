@@ -686,14 +686,16 @@ describe("tool-card outcomes", () => {
     for (const expanded of [false, true]) {
       pluginSurface.mockClear();
       await mountCard(card, { expanded });
-      expect(pluginSurface.mock.calls.map(([, props]) => props)).toEqual([
-        expect.objectContaining({
+      expect(pluginSurface).toHaveBeenCalled();
+      for (const [, props] of pluginSurface.mock.calls) {
+        expect(props).toMatchObject({
           toolName: "tool_call",
           toolCallId: "search-release",
           input,
+          expanded,
           output: expect.objectContaining({ text: "Found the release notes." }),
-        }),
-      ]);
+        });
+      }
     }
   });
 

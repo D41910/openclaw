@@ -500,6 +500,7 @@ describe("widget-card presentation", () => {
           <ToolPreview
             preview={{ ...canvasPreview, url: "about:blank", sandbox: "strict" }}
             surface="chat_message"
+            options={{ rawText: "Widget details" }}
           />
         </div>
       </SolidContentPresentation>
