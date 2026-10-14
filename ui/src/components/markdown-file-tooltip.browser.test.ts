@@ -50,7 +50,7 @@ describe("file path tooltip", () => {
     await page.getByRole("button", { name: "Outside", exact: true }).hover();
     await page.elementLocator(anchor()).hover();
     await expect.element(copyButton()).toBeVisible();
-    await expect.poll(() => card()?.textContent).toBe(filePath);
+    await expect.poll(() => card()?.textContent?.trim()).toBe(filePath);
     await page.elementLocator(anchor()).click();
     expect(open).toHaveBeenCalledOnce();
     expect(card()).toBeNull();
