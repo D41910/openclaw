@@ -57,7 +57,9 @@ export function SidebarSessionFilterPopover(props: SidebarSessionFilterPopoverPr
   };
   return (
     <openclaw-sidebar-session-filter-popover
-      ref={host}
+      ref={(element) => {
+        host = element;
+      }}
       class={props.class}
       style={{ display: "contents" }}
     >
