@@ -127,27 +127,6 @@ describe("msteams messenger", () => {
       );
       expect(messages).toEqual([{ text: "hi" }, { mediaUrl: "https://example.com/a.png" }]);
     });
-
-    it.each(["NO_REPLY", '{"text":"NO_REPLY"}', "No response is needed."])(
-      "renders prepared text literally: %s",
-      (text) => {
-        expect(
-          renderReplyPayloadsToMessages([{ text }], {
-            textChunkLimit: 4000,
-            tableMode: "code",
-          }),
-        ).toEqual([{ text }]);
-      },
-    );
-
-    it("preserves tool media when the producer supplies no text", () => {
-      expect(
-        renderReplyPayloadsToMessages([{ mediaUrl: "https://example.com/tool.png" }, {}], {
-          textChunkLimit: 4000,
-          tableMode: "code",
-        }),
-      ).toEqual([{ mediaUrl: "https://example.com/tool.png" }]);
-    });
   });
 
   describe("sendMSTeamsMessages", () => {

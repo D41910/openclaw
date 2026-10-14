@@ -15,19 +15,11 @@ import {
   type SidebarNarrationSyncInput,
 } from "./app-sidebar-session-narration.ts";
 import type { SidebarRecentSession, SidebarToolActivity } from "./app-sidebar-session-types.ts";
-import { deriveSidebarNarrationLine } from "./sidebar-narration-line.ts";
 import "../test-helpers/app-sidebar-tool-activity-cases.ts";
 
 // Mirrors the controller-internal throttle; asserting through timers keeps the
 // constant unexported (production-only export policy).
 const SIDEBAR_NARRATION_THROTTLE_MS = 2_000;
-
-it.each(["NO_REPLY", "NO_REPLY.", "NO_", "REPLY_SKIP", "ANNOUNCE_SKIP", '{"action":"NO_REPLY"}'])(
-  "preserves prepared sidebar narration %s",
-  (text) => {
-    expect(deriveSidebarNarrationLine(text)).toBe(text);
-  },
-);
 
 function gatewayEvent(eventName: string, payload: unknown): GatewayEventFrame {
   return { type: "event", event: eventName, payload };

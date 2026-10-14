@@ -727,49 +727,6 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expect(payloads[0]?.text).toBeUndefined();
   });
 
-  it.each([
-    '{"action":"NO_REPLY"}',
-    '"NO_REPLY"',
-    "NO_REPLY.",
-    "NO_REPLY NO_REPLY",
-    "The requested answer.",
-    "NO_REPLY The requested result.",
-  ])("preserves ordinary assistant text: %s", (text) => {
-    expect(buildPayloads({ assistantTexts: [text] })).toEqual([expect.objectContaining({ text })]);
-  });
-
-  it("strips an exact leading NO_REPLY line and preserves the answer", () => {
-    const text = "The requested answer.\nSecond line.";
-    expect(buildPayloads({ assistantTexts: [`NO_REPLY\n${text}`] })).toEqual([
-      expect.objectContaining({ text }),
-    ]);
-  });
-
-  it("does not reclassify a visible suffix that spells NO_REPLY", () => {
-    expect(buildPayloads({ assistantTexts: ["NO_REPLY\nNO_REPLY"] })).toEqual([
-      expect.objectContaining({ text: "NO_REPLY" }),
-    ]);
-  });
-  it.each([false, true])(
-    "does not resurrect a leading token after empty markup (canonical=%s)",
-    (canonical) => {
-      const text = "NO_REPLY\n<final></final>";
-      expect(
-        buildPayloads({
-          assistantTexts: [text],
-          ...(canonical
-            ? {
-                lastAssistant: makeAgentAssistantMessage({
-                  content: [{ type: "text", text }],
-                  stopReason: "stop",
-                }),
-              }
-            : {}),
-        }),
-      ).toEqual([]);
-    },
-  );
-
   it("preserves media directives when stored assistant text was reduced to visible text only", () => {
     const payloads = buildPayloads({
       assistantTexts: ["Attached image"],

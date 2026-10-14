@@ -13,6 +13,8 @@ import {
   clearRuntimeConfigSnapshot,
   setRuntimeConfigSnapshot,
 } from "../config/runtime-snapshot.js";
+import { createSessionEntryWithTranscript } from "../config/sessions/session-accessor.js";
+import { resolveSqliteTargetFromSessionStorePath } from "../config/sessions/session-sqlite-target.js";
 import * as transcriptRuntime from "../config/sessions/session-transcript-match.js";
 import * as gatewayCallRuntime from "../gateway/call.js";
 import * as sessionStoreLookup from "../gateway/session-utils-store-lookup.js";
@@ -21,6 +23,11 @@ import {
   resetGatewayWorkAdmission,
 } from "../process/gateway-work-admission.js";
 import { AsyncWorkScope } from "../shared/async-work-scope.js";
+import { registerOpenClawAgentDatabase } from "../state/openclaw-agent-db-registry.js";
+import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
+const findStoredTranscriptEvent = transcriptRuntime.findTranscriptEvent;
+const resolveStoredSessionTarget =
+  sessionStoreLookup.resolveGatewaySessionStoreTargetWithStoreAsync;
 const callGatewayMock = vi.spyOn(gatewayCallRuntime, "callGateway");
 const resolveSessionTargetMock = vi.spyOn(
   sessionStoreLookup,
@@ -426,138 +433,75 @@ describe("waitForAgentRunReply", () => {
     findTranscriptEventMock.mockReset();
   });
 
-  it("reads the waited run's full reply even after another run completes in the same session", async () => {
-    const answers = new Map([
-      ["run-visible-terminal-reply", "full authoritative reply"],
-      ["newer-run", "another run's reply"],
-    ]);
-    findTranscriptEventMock.mockImplementation(async (_scope, match) => {
-      if (match.kind !== "visible-final") {
-        throw new Error("expected a final reply lookup");
-      }
-      const text = answers.get(match.runId);
-      return text ? { event: { type: "message", message: textAssistant(text) } } : undefined;
-    });
-    callGatewayMock.mockResolvedValue({
-      status: "ok",
-      startedAt: 100,
-      endedAt: 200,
-      stopReason: "completed",
-      yielded: true,
-      providerStarted: true,
-      terminalReply: { disposition: "visible", text: "authoritative reply" },
-    });
-    await expect(
-      waitForAgentRunReply({
-        runId: "newer-run",
-        timeoutMs: 1_000,
-        sessionKey: "agent:main:main",
-      }),
-    ).resolves.toMatchObject({ replyText: "another run's reply" });
-
-    const result = await waitForAgentRunReply({
-      runId: "run-visible-terminal-reply",
-      timeoutMs: 1_000,
-      sessionKey: "agent:main:main",
-    });
-
-    expect(result).toEqual({
-      status: "ok",
-      startedAt: 100,
-      endedAt: 200,
-      stopReason: "completed",
-      yielded: true,
-      providerStarted: true,
-      terminalReply: { disposition: "visible", text: "authoritative reply" },
-      replyText: "full authoritative reply",
-    });
-    expect(findTranscriptEventMock).toHaveBeenCalledWith(
-      {
-        agentId: "main",
-        storePath: "/registered-alternate/openclaw.sqlite",
+  it("returns each waited run's own full SQLite result from its registered alternate store", async () => {
+    await withOpenClawTestState({ label: "wait-run-alternate-store" }, async (state) => {
+      const scope = {
+        agentId: "retired",
+        sessionKey: "agent:retired:main",
         sessionId: "shared-session",
-        sessionKey: "agent:main:main",
-      },
-      { kind: "visible-final", runId: "run-visible-terminal-reply" },
-    );
-    expect(callGatewayMock.mock.calls.map(([request]) => request.method)).toEqual([
-      "agent.wait",
-      "agent.wait",
-    ]);
-  });
-
-  it("delivers literal NO_REPLY under an explicit visible fact", async () => {
-    callGatewayMock.mockResolvedValue({
-      status: "ok",
-      terminalReply: { disposition: "visible", text: "NO_REPLY" },
-    });
-    findTranscriptEventMock.mockResolvedValue({
-      event: { type: "message", message: { ...textAssistant("NO_REPLY"), display: true } },
-    });
-    await expect(
-      waitForAgentRunReply({
-        runId: "run-visible-marker",
-        sessionKey: "agent:main:main",
-        timeoutMs: 1_000,
-      }),
-    ).resolves.toMatchObject({ replyText: "NO_REPLY" });
-  });
-
-  it.each(["NO_REPLY", "NO_REPLY\nexample"])(
-    "reads the latest final tool source reply %j instead of an older answer",
-    async (text) => {
-      callGatewayMock.mockResolvedValue({
-        status: "ok",
-        terminalReply: { disposition: "visible", text },
-      });
-      findTranscriptEventMock.mockResolvedValue({
-        event: {
-          type: "message",
-          message: {
-            ...textAssistant(text),
-            provider: "openclaw",
-            model: "delivery-mirror",
-            __openclaw: { runId: "run-tool-final" },
-            openclawMessageToolMirror: {
-              toolName: "message",
-              toolCallId: "call-source-final",
-            },
-            openclawDeliveryMirror: {
-              kind: "message-tool-source-reply",
-              sourceTurnId: "run-tool-final",
-              toolCallId: "call-source-final",
-              final: true,
-            },
-          },
+        storePath: state.path("alternate.json"),
+      };
+      setRuntimeConfigSnapshot({
+        session: { store: scope.storePath },
+        agents: {
+          entries: { main: {}, retired: {} },
+          defaults: { sessionStore: { agentId: "main" } },
         },
       });
-
-      await expect(
+      const older = "Full earlier answer " + "complete ".repeat(800) + "required-tail";
+      const answer = (runId: string, text: string, display?: true) => ({
+        type: "message",
+        id: `${runId}-${text === "NO_REPLY" ? "silent" : "answer"}`,
+        message: {
+          ...textAssistant(text),
+          stopReason: "stop",
+          __openclaw: { runId },
+          ...(display ? { display } : {}),
+        },
+      });
+      registerOpenClawAgentDatabase({
+        agentId: scope.agentId,
+        path: resolveSqliteTargetFromSessionStorePath(scope.storePath).path,
+        env: state.env,
+      });
+      await createSessionEntryWithTranscript(scope, () => ({
+        ok: true,
+        entry: { sessionId: scope.sessionId, updatedAt: 1 },
+        transcriptEvents: [
+          answer("earlier-run", older, true),
+          answer("newer-run", "Newer run's own answer"),
+          answer("earlier-run", "NO_REPLY"),
+          answer("silent-run", "Unsent stale answer"),
+          answer("silent-run", "NO_REPLY"),
+        ].map((event, index, events) =>
+          Object.assign(event, { parentId: events[index - 1]?.id ?? null }),
+        ),
+      }));
+      resolveSessionTargetMock.mockImplementation(resolveStoredSessionTarget);
+      findTranscriptEventMock.mockImplementation(findStoredTranscriptEvent);
+      callGatewayMock.mockResolvedValue({
+        status: "ok",
+        terminalReply: { disposition: "visible", text: "bounded snapshot" },
+      });
+      const wait = (runId: string) =>
         waitForAgentRunReply({
-          runId: "run-tool-final",
-          sessionKey: "agent:main:main",
+          runId,
+          sessionKey: scope.sessionKey,
           timeoutMs: 1_000,
-        }),
-      ).resolves.toMatchObject({ replyText: text });
-    },
-  );
-
-  it.each([
-    { name: "silent", terminalReply: { disposition: "silent" } },
-    { name: "empty", terminalReply: { disposition: "empty" } },
-  ])("does not resurrect history for a $name terminal reply", async ({ terminalReply }) => {
-    callGatewayMock.mockImplementation(async (request) => {
-      if (request.method !== "agent.wait") {
-        throw new Error("history must not override terminal reply evidence");
-      }
-      return { status: "ok", terminalReply };
+        });
+      await expect(wait("newer-run")).resolves.toMatchObject({
+        replyText: "Newer run's own answer",
+      });
+      await expect(wait("earlier-run")).resolves.toMatchObject({ replyText: older });
+      await expect(
+        findStoredTranscriptEvent(scope, { kind: "visible-final", runId: "silent-run" }),
+      ).resolves.toBeUndefined();
+      callGatewayMock.mockResolvedValueOnce({
+        status: "ok",
+        terminalReply: { disposition: "silent" },
+      });
+      await expect(wait("silent-run")).resolves.not.toHaveProperty("replyText");
     });
-
-    const result = await waitForAgentRunReply({ runId: "run-no-reply", timeoutMs: 1_000 });
-
-    expect(result).toEqual({ status: "ok", terminalReply });
-    expect(result.replyText).toBeUndefined();
-    expect(callGatewayMock.mock.calls.map(([request]) => request.method)).toEqual(["agent.wait"]);
   });
 
   it.each([

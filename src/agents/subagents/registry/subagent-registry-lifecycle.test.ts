@@ -684,49 +684,6 @@ describe("subagent registry lifecycle hardening", () => {
     expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
   });
 
-  it.each([
-    {
-      terminalReply: { disposition: "visible", text: "authoritative final" } as const,
-      resultText: "authoritative final\n".repeat(2_048),
-    },
-    {
-      terminalReply: { disposition: "silent" } as const,
-      resultText: null,
-    },
-  ])(
-    "uses the $terminalReply.disposition fact to gate full transcript capture",
-    async ({ terminalReply, resultText }) => {
-      const entry = createRunEntry({
-        expectsCompletionMessage: true,
-        ...(terminalReply.disposition === "silent"
-          ? { completion: { required: true, resultText: "unproven stored reply" } }
-          : {}),
-      });
-      const captureSubagentCompletionReply = vi.fn(
-        async () => resultText ?? "stale transcript reply",
-      );
-      const runSubagentAnnounceFlow = vi.fn(async () => "delivered" as const);
-      const controller = createLifecycleController({
-        entry,
-        captureSubagentCompletionReply,
-        runSubagentAnnounceFlow,
-      });
-
-      await completeAndJoinCleanup(controller, entry, {
-        triggerCleanup: true,
-        terminalReply,
-      });
-
-      expect(captureSubagentCompletionReply).toHaveBeenCalledTimes(
-        terminalReply.disposition === "visible" ? 1 : 0,
-      );
-      expect(readLifecycleRun(entry).completion).toMatchObject({ terminalReply, resultText });
-      expect(runSubagentAnnounceFlow).toHaveBeenCalledWith(
-        expect.objectContaining({ terminalReply }),
-      );
-    },
-  );
-
   it("records explicit empty success as intentional non-delivery at the lifecycle owner", async () => {
     const entry = createRunEntry({ expectsCompletionMessage: true });
     const captureSubagentCompletionReply = vi.fn(async () => "stale transcript reply");

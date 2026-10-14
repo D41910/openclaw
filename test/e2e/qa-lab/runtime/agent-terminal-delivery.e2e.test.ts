@@ -1,6 +1,7 @@
 import { createServer, type ServerResponse } from "node:http";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { asOptionalObjectRecord } from "@openclaw/normalization-core/record-coerce";
 import { GatewayClient } from "openclaw/plugin-sdk/gateway-runtime";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,7 +22,10 @@ import { prepareSubagentRunsByRunIds } from "../../../../src/agents/subagents/re
 import type { SubagentRunRecord } from "../../../../src/agents/subagents/registry/subagent-registry.types.js";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../../../../src/config/config.js";
 import { resolveSessionStorePathCore } from "../../../../src/config/sessions/paths.js";
-import { findTranscriptEvent } from "../../../../src/config/sessions/session-accessor.js";
+import {
+  findTranscriptEvent,
+  loadTranscriptEventsSync,
+} from "../../../../src/config/sessions/session-accessor.js";
 import { deleteSessionEntryLifecycle } from "../../../../src/config/sessions/session-accessor.sqlite-lifecycle.js";
 import { pruneAllSessionTranscriptArchivesToHighWater } from "../../../../src/config/sessions/session-history-archive-pruning.js";
 import { resolveSqliteTargetFromSessionStorePath } from "../../../../src/config/sessions/session-sqlite-target.js";
@@ -29,8 +33,9 @@ import { captureEnv, setTestEnvValue } from "../../../../src/test-utils/env.js";
 import { createDeferred, withinTest } from "../../../helpers/promise.js";
 import { stopQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 
-const MODEL = "mock-openai/gpt-5.6-luna";
+const MODEL = "mock-openai/terminal-primary";
 const PREFIX = "NO_REPLY";
+const MISSING_REPLY_NOTICE = "No answer was returned. Ask again if you still need one.";
 const RETENTION_WARNING = "[truncated-by-retention: complete child answer unavailable]";
 
 type Event = {
@@ -107,7 +112,7 @@ function createScript(id: string) {
         delta: barrier,
       });
     },
-    finish() {
+    finish(incomplete = false) {
       const completed = { ...message, content: [{ type: "output_text", text, annotations: [] }] };
       writeEvent(response, {
         type: "response.output_text.done",
@@ -123,10 +128,11 @@ function createScript(id: string) {
         item: { ...reasoning, summary: [{ type: "summary_text", text: progress }] },
       });
       writeEvent(response, {
-        type: "response.completed",
+        type: incomplete ? "response.incomplete" : "response.completed",
         response: {
           id: `response-${id}`,
-          status: "completed",
+          status: incomplete ? "incomplete" : "completed",
+          ...(incomplete ? { incomplete_details: { reason: "max_output_tokens" } } : {}),
           output: [
             completed,
             { ...reasoning, summary: [{ type: "summary_text", text: progress }] },
@@ -187,7 +193,11 @@ describe("provider terminal reply delivery", () => {
         inspect();
         return withinTest(ready.promise, signal).finally(() => eventWaiters.delete(inspect));
       };
-      const scripts = ["silent", "suffix", "punctuation", "retained"].map(createScript);
+      const scripts = ["silent", "suffix", "punctuation", "retained", "json", "prose"].map(
+        createScript,
+      );
+      let emptyFinals = false;
+      const emptyNoticeDelivered = createDeferred();
       const requests: unknown[] = [];
       const transportErrors: Error[] = [];
       const server = createServer((request, response) => {
@@ -200,8 +210,19 @@ describe("provider terminal reply delivery", () => {
             ? JSON.parse(Buffer.concat(chunks).toString("utf8"))
             : {};
           if (request.url === "/v1/responses") {
-            const script = scripts[requests.length];
+            const index = requests.length;
             requests.push(body);
+            if (emptyFinals) {
+              expect(deliveries.filter((delivery) => delivery.to === "dm:terminal-empty")).toEqual(
+                [],
+              );
+              const empty = createScript(`empty-${index}`);
+              empty.open(response);
+              // A provider-declared output limit permits fallback; the final model exhausts empty.
+              empty.finish(asOptionalObjectRecord(body)?.model === "terminal-primary");
+              return;
+            }
+            const script = scripts[index];
             if (!script) {
               throw new Error("Unscripted provider turn");
             }
@@ -212,6 +233,9 @@ describe("provider terminal reply delivery", () => {
           if (request.url === "/v1/outbound/message") {
             const delivery = body as Delivery;
             deliveries.push(delivery);
+            if (delivery.to === "dm:terminal-empty") {
+              emptyNoticeDelivered.resolve();
+            }
             response.end(
               JSON.stringify({ message: { ...delivery, id: `outbound-${deliveries.length}` } }),
             );
@@ -225,7 +249,14 @@ describe("provider terminal reply delivery", () => {
             return;
           }
           if (request.method === "GET" && request.url === "/v1/models") {
-            response.end(JSON.stringify({ data: [{ id: "gpt-5.6-luna", object: "model" }] }));
+            response.end(
+              JSON.stringify({
+                data: ["terminal-primary", "terminal-fallback"].map((id) => ({
+                  id,
+                  object: "model",
+                })),
+              }),
+            );
             return;
           }
           throw new Error(`Unexpected transport request: ${request.method} ${request.url}`);
@@ -252,7 +283,7 @@ describe("provider terminal reply delivery", () => {
           providerBaseUrl: `${baseUrl}/v1`,
           providerMode: "mock-openai",
           primaryModel: MODEL,
-          alternateModel: MODEL,
+          alternateModel: "mock-openai/terminal-fallback",
           transportBaseUrl: baseUrl,
           transport: createQaChannelTransport(createQaBusState()),
           controlUiEnabled: false,
@@ -301,6 +332,12 @@ describe("provider terminal reply delivery", () => {
             id: "retained",
             raw: `${"retained child report ".repeat(500)}required-tail`,
             expected: undefined,
+          },
+          { id: "json", raw: '{"action":"NO_REPLY"}', expected: '{"action":"NO_REPLY"}' },
+          {
+            id: "prose",
+            raw: "I started the watcher. NO_REPLY",
+            expected: "I started the watcher. NO_REPLY",
           },
         ];
         const sessionKeys = cases.map(({ id }) =>
@@ -403,6 +440,49 @@ describe("provider terminal reply delivery", () => {
             expected,
           );
         }
+        expect(requests).toHaveLength(cases.length);
+        const firstEmptyRequest = requests.length;
+        const emptyRunId = "terminal-empty";
+        const emptySessionKey = "agent:qa:qa:terminal-empty";
+        emptyFinals = true;
+        await client.request("agent", {
+          sessionKey: emptySessionKey,
+          message: "Return the scripted empty result.",
+          channel: "qa-channel",
+          replyChannel: "qa-channel",
+          replyTo: "dm:terminal-empty",
+          deliver: true,
+          idempotencyKey: emptyRunId,
+        });
+        expect(
+          await client.request(
+            "agent.wait",
+            { runId: emptyRunId, timeoutMs: 30_000 },
+            { timeoutMs: 35_000 },
+          ),
+        ).toMatchObject({ status: "error" });
+        await withinTest(emptyNoticeDelivered.promise, signal);
+        expect(deliveredTexts("dm:terminal-empty")).toEqual([MISSING_REPLY_NOTICE]);
+        expect([
+          ...new Set(
+            requests
+              .slice(firstEmptyRequest)
+              .map((request) => asOptionalObjectRecord(request)?.model),
+          ),
+        ]).toEqual(["terminal-primary", "terminal-fallback"]);
+        const emptyHistory = await client.request<{ sessionId: string; messages: unknown[] }>(
+          "chat.history",
+          {
+            sessionKey: emptySessionKey,
+            limit: 20,
+          },
+        );
+        // Model-switch traces remain valid; the missing-answer notice is never an assistant row.
+        expect(
+          emptyHistory.messages
+            .map(assistantText)
+            .filter((text) => text?.includes(MISSING_REPLY_NOTICE)),
+        ).toEqual([]);
 
         await client.stopAndWait();
         client = undefined;
@@ -431,6 +511,17 @@ describe("provider terminal reply delivery", () => {
               agentId: "qa",
               env: runtimeEnv,
             });
+            const emptyRows = loadTranscriptEventsSync({
+              agentId: "qa",
+              storePath,
+              sessionKey: emptySessionKey,
+              sessionId: emptyHistory.sessionId,
+            });
+            expect(
+              emptyRows
+                .flatMap((row) => assistantText(asOptionalObjectRecord(row)?.message) ?? [])
+                .filter((text) => text.includes(MISSING_REPLY_NOTICE)),
+            ).toEqual([]);
             const childSessionKey = sessionKeys[3]!;
             const childTarget = {
               agentId: "qa",
@@ -514,7 +605,10 @@ describe("provider terminal reply delivery", () => {
           }
         });
         // A fresh Gateway process cannot satisfy history from the first process's caches.
-        for (const [index, testCase] of cases.slice(0, 3).entries()) {
+        for (const [index, testCase] of cases.entries()) {
+          if (testCase.id === "retained") {
+            continue;
+          }
           const history = (await gateway.call("chat.history", {
             sessionKey: sessionKeys[index],
             limit: 20,
@@ -540,7 +634,6 @@ describe("provider terminal reply delivery", () => {
         expect(
           requesterHistory.messages.map(assistantText).filter((text) => text !== undefined),
         ).toEqual([cases[1]!.expected, retainedWarning]);
-        expect(requests).toHaveLength(4);
         expect(transportErrors).toEqual([]);
       } finally {
         try {

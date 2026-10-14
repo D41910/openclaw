@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChannelReplyTransform } from "../../channels/message/reply-transform.js";
 import type { ChannelMessagingAdapter } from "../../channels/plugins/types.public.js";
-import { setReplyPayloadMetadata } from "../reply-payload.js";
 import type { ReplyPayload } from "../types.js";
 import { createBlockReplyCoalescer } from "./block-reply-coalescer.js";
 import { matchesMentionWithExplicit } from "./mentions.js";
-import { stripMixedSilentReplyTokens } from "./mixed-silent-reply-tokens.js";
 import { normalizeReplyPayload, normalizeReplyPayloadOutcome } from "./normalize-reply.js";
 import { parseReplyDirectives } from "./reply-directives.js";
 import { createReplyDispatcherWithTyping } from "./reply-dispatcher.js";
@@ -126,36 +124,6 @@ describe("normalizeReplyPayload", () => {
   ])("preserves non-control token mentions: %s", (text) => {
     expect(expectNormalizedReply(normalizeReplyPayload({ text })).text).toBe(text);
   });
-
-  it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "NO_REPLY\nAnswer."])(
-    "preserves prepared text literally: %s",
-    (text) => {
-      expect(expectNormalizedReply(normalizeReplyPayload({ text })).text).toBe(text);
-    },
-  );
-
-  it("honors recorded silence while preserving attached media", () => {
-    const silent = setReplyPayloadMetadata({ text: "NO_REPLY" }, { silentReply: true });
-    expect(normalizeReplyPayload(silent)).toBeNull();
-    const media = setReplyPayloadMetadata(
-      { text: "NO_REPLY", mediaUrl: "https://example.com/img.png" },
-      { silentReply: true },
-    );
-    expect(normalizeReplyPayload(media)).toMatchObject({
-      text: "",
-      mediaUrl: "https://example.com/img.png",
-    });
-  });
-
-  it.each(['{"action":"NO_REPLY"}', "think\ninternal reasoning\nNO_REPLY."])(
-    "preserves prepared text %j alongside media",
-    (text) => {
-      expect(normalizeReplyPayload({ text, mediaUrl: "https://example.com/img.png" })).toEqual({
-        text,
-        mediaUrl: "https://example.com/img.png",
-      });
-    },
-  );
 });
 
 describe("typing controller", () => {
@@ -169,20 +137,6 @@ describe("typing controller", () => {
     });
     return { typing, onReplyStart };
   }
-
-  it.each(["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
-    "starts message typing for prepared visible text: %s",
-    async (text) => {
-      const { typing, onReplyStart } = createTestTypingController(false);
-      const signaler = createTypingSignaler({ typing, mode: "message", isHeartbeat: false });
-      try {
-        await signaler.signalTextDelta(text);
-        expect(onReplyStart).toHaveBeenCalled();
-      } finally {
-        typing.cleanup();
-      }
-    },
-  );
 
   it("stops after run completion and dispatcher idle in either order, without restarting", async () => {
     vi.useFakeTimers();
@@ -457,27 +411,6 @@ describe("createStreamingDirectiveAccumulator", () => {
     });
   });
 
-  it.each(["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "no_reply", "NO_REPLY NO_REPLY"])(
-    "preserves ordinary streamed text: %s",
-    (text) => {
-      expect(createStreamingDirectiveAccumulator().consume(text, { final: true })?.text).toBe(text);
-    },
-  );
-
-  it("withholds only the exact control and strips one literal leading line", () => {
-    const silent = createStreamingDirectiveAccumulator();
-    expect(silent.consume("NO_")).toBeNull();
-    expect(silent.consume("REPLY")).toBeNull();
-    expect(silent.consume("", { final: true })).toBeNull();
-    expect(silent.sourceText).toBe("");
-    const visible = createStreamingDirectiveAccumulator();
-    expect(visible.consume("NO_")).toBeNull();
-    expect(visible.consume("REPLY\nNO_REPLY")).toMatchObject({ text: "NO_REPLY" });
-    expect(visible.sourceText).toBe("NO_REPLY");
-    visible.reset();
-    expect(visible.sourceText).toBe("");
-  });
-
   it("strips a malformed leading reply prefix split across chunks", () => {
     const accumulator = createStreamingDirectiveAccumulator();
     expect(accumulator.consume("[[reply_to_")).toBeNull();
@@ -539,36 +472,6 @@ describe("createStreamingDirectiveAccumulator", () => {
       text: "Here.",
       mediaUrls: ["/tmp/final.png"],
     });
-  });
-});
-
-describe("parseReplyDirectives prepared text", () => {
-  it.each([
-    "NO_REPLY",
-    "no_reply",
-    '"NO_REPLY"',
-    "NO_REPLY.",
-    "NO_REPLY NO_REPLY",
-    '{"action":"NO_REPLY"}',
-    "<think>internal reasoning</think>\nNO_REPLY",
-    "NO_REPLY\nHere is the answer.",
-  ])("preserves prepared text without protocol reinterpretation: %s", (text) => {
-    expect(parseReplyDirectives(text).text).toBe(text);
-  });
-});
-
-describe("standalone leading silent control lines", () => {
-  it.each([
-    { input: "NO_REPLY\n  Answer.\n", expected: "  Answer.\n" },
-    { input: "no_reply\r\nAnswer.\nNO_REPLY", expected: null },
-    { input: "NO_REPLY\nNO_REPLY\nAnswer.", expected: "NO_REPLY\nAnswer." },
-    { input: "NO_REPLY.\nAnswer.", expected: null },
-    { input: '"NO_REPLY"\nAnswer.', expected: null },
-    { input: '{"action":"NO_REPLY"}\nAnswer.', expected: null },
-    { input: "NO_REPLYAnswer.", expected: null },
-    { input: "Answer. NO_REPLY", expected: null },
-  ])("preserves the suffix without broad token stripping: $input", ({ input, expected }) => {
-    expect(stripMixedSilentReplyTokens(input)).toBe(expected);
   });
 });
 

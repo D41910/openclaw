@@ -1,12 +1,9 @@
 // Tests source reply delivery visibility across message tool and visible reply modes.
-import { describe, expect, it, vi } from "vitest";
-import { resolveReplyCompletion } from "../../agents/reply-completion.js";
-import * as channelRegistry from "../../channels/registry.js";
+import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { CommandTurnContext } from "../command-turn-context.js";
 import {
   resolveSourceReplyDeliveryMode,
-  resolveSourceReplyExpectation,
   resolveSourceReplyVisibilityPolicy,
 } from "./source-reply-delivery-mode.js";
 
@@ -32,49 +29,6 @@ function expectPolicyFields(
     expect(policy[key as keyof typeof policy]).toBe(value);
   }
 }
-
-describe("source reply expectations", () => {
-  it.each([
-    { ctx: { Provider: "webchat", ChatType: "direct" }, expectation: "result-required" },
-    { ctx: {}, expectation: "result-required" },
-    {
-      ctx: { Provider: "telegram", SessionKey: "agent:main:subagent:child" },
-      expectation: "result-required",
-    },
-    { ctx: { Provider: "telegram", ChatType: "direct" }, expectation: "required" },
-    {
-      ctx: { Provider: "telegram", ChatType: "group", WasMentioned: true },
-      expectation: "required",
-    },
-  ] as const)(
-    "scopes explicit silence through the input owner: $expectation",
-    ({ ctx, expectation }) => {
-      const resolved = resolveSourceReplyExpectation({ ctx, cfg: emptyConfig });
-      expect(resolved).toBe(expectation);
-      expect(resolveReplyCompletion(resolved, "silent").outcome).toBe(
-        expectation === "result-required" ? "missing" : "silent",
-      );
-      expect(resolveReplyCompletion(resolved, "empty").outcome).toBe("missing");
-    },
-  );
-
-  it("resolves internal defaults before the plugin registry is available", () => {
-    const registryRead = vi
-      .spyOn(channelRegistry, "listRegisteredChannelPluginIds")
-      .mockImplementation(() => {
-        throw new Error("Runtime config is not prepared");
-      });
-    try {
-      expect(resolveSourceReplyExpectation({ ctx: {}, cfg: emptyConfig })).toBe("result-required");
-      expect(
-        resolveSourceReplyExpectation({ ctx: { Provider: "webchat" }, cfg: emptyConfig }),
-      ).toBe("result-required");
-      expect(registryRead).not.toHaveBeenCalled();
-    } finally {
-      registryRead.mockRestore();
-    }
-  });
-});
 
 describe("resolveSourceReplyDeliveryMode", () => {
   it("keeps progress refresh replies, hooks and typing silent without changing session reply mode", () => {

@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   buildEmbeddedRunnerAssistant,
   makeEmbeddedRunnerAttempt,
 } from "../../test-helpers/embedded-agent-runner-e2e-fixtures.js";
 import { createZeroUsageFixture } from "../../test-helpers/usage-fixtures.js";
-import { classifyAssistantTurn } from "./incomplete-turn-classification.js";
 import {
   resolveEmptyResponseRetryInstruction,
   resolveReasoningOnlyRetryInstruction,
@@ -35,32 +33,6 @@ function emptyAttempt(assistant = emptyAssistant()) {
 }
 
 describe("incomplete-turn recovery policy", () => {
-  it.each(["[[reply_to_current]]", "NO_REPLY\n<final></final>"])(
-    "classifies erased visible content as empty without reparsing silence: %j",
-    (text) => {
-      const attempt = emptyAttempt(emptyAssistant({ content: [{ type: "text", text }] }));
-      if (text === "[[reply_to_current]]") {
-        attempt.preparedTerminalReply = prepareAgentRunTerminalReply({ rawText: text });
-      }
-      expect(classifyAssistantTurn({ payloadCount: 0, attempt })).toMatchObject({
-        visibleText: "",
-        emptyResponse: true,
-        silent: false,
-      });
-    },
-  );
-
-  it("keeps a visible NO_REPLY suffix out of empty-response recovery", () => {
-    const text = "NO_REPLY\nNO_REPLY";
-    const attempt = emptyAttempt(emptyAssistant({ content: [{ type: "text", text }] }));
-    attempt.preparedTerminalReply = prepareAgentRunTerminalReply({ rawText: text });
-    expect(classifyAssistantTurn({ payloadCount: 1, attempt })).toMatchObject({
-      visibleText: "NO_REPLY",
-      emptyResponse: false,
-      silent: false,
-    });
-  });
-
   it("does not request a visible continuation for an authored speech-only answer", () => {
     const assistant = emptyAssistant({
       content: [

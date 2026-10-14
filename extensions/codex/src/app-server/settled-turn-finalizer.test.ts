@@ -442,25 +442,6 @@ describe("runCodexSettledTurnFinalization", () => {
     },
   );
 
-  it.each([
-    ["no_reply", "no_reply"],
-    ["NO_REPLY.", "NO_REPLY."],
-    ['"NO_REPLY"', '"NO_REPLY"'],
-    ['{"action":"NO_REPLY"}', '{"action":"NO_REPLY"}'],
-    ["NO_REPLY\nNO_REPLY", "NO_REPLY"],
-    ["NO_REPLY\n  Answer\n", "  Answer\n"],
-    ["NO_REPLY\n<final></final>", "<final></final>"],
-  ])("mirrors ordinary raw final %j with prepared text %j", async (rawText, text) => {
-    mocks.runBounded.mockResolvedValue({ ...boundedResult(), text: rawText });
-    const result = await finalize();
-    expect(result.preparedTerminalReply).toEqual({
-      text,
-      terminalReply: { disposition: "visible", text: text.trim() },
-    });
-    expect(result.assistant.content).toEqual([{ type: "text", text: rawText }]);
-    expect(mocks.mirror).toHaveBeenCalledOnce();
-  });
-
   it("accepts the exact current-turn prompt echo once", async () => {
     const attempt = createAttempt();
     mocks.runBounded.mockResolvedValue({

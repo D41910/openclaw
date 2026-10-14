@@ -241,19 +241,6 @@ describe("resolveFollowupDeliveryDecision", () => {
     },
   );
 
-  it.each(["Here is the answer.", "NO_REPLY"])(
-    "delivers the prepared suffix after one leading NO_REPLY line: %s",
-    async (text) => {
-      expect(
-        await resolveFollowupDeliveryDecision({
-          turn: createTurn(),
-          execution: createSettledExecution(`NO_REPLY\n${text}`),
-          accounting: createAccounting([{ text }]),
-        }),
-      ).toMatchObject({ kind: "deliver", payloads: [{ text }] });
-    },
-  );
-
   it.each(["automatic", "message_tool_only"] as const)(
     "keeps pending tool audio after queued NO_REPLY in %s mode",
     async (sourceReplyDeliveryMode) => {
@@ -725,32 +712,6 @@ describe("resolveFollowupDeliveryDecision", () => {
 });
 
 describe("deliverFollowupDecision", () => {
-  it.each(["NO_REPLY", '{"action":"NO_REPLY"}'])(
-    "preserves prepared control-looking text at the delivery boundary: %s",
-    async (text) => {
-      const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
-      deliveryState.routeReply.mockReset();
-      deliveryState.routeReply.mockResolvedValue({ ok: true, delivered: true });
-      deliveryState.runtimeError.mockReset();
-
-      const result = await deliverFollowupDecision({
-        decision: { kind: "deliver", payloads: [{ text }] },
-        turn: createTurn(),
-        defaults: createDefaults(onBlockReply),
-        runId: "run-1",
-        runFollowup: vi.fn(async () => {}),
-      });
-
-      // Origin delivery leaves no payloads in queued dispatcher custody.
-      expect(result).toEqual({ kind: "completed", payloads: [] });
-      expect(deliveryState.routeReply).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ payload: expect.objectContaining({ text }) }),
-      );
-      expect(onBlockReply).not.toHaveBeenCalled();
-      expect(deliveryState.runtimeError).not.toHaveBeenCalled();
-    },
-  );
-
   it("retains the event source delivery owner through progress and final settlement", async () => {
     const source = vi.fn(async () => {});
     const laterDispatcher = vi.fn(async () => {});

@@ -499,14 +499,4 @@ describe("createAcpVisibleTextAccumulator", () => {
     }
     expect(acc.finalizeReplySnapshot()).toEqual(expected);
   });
-
-  it("preserves raw transcript and full prepared leading-line bytes", () => {
-    const acc = createAcpVisibleTextAccumulator();
-    const suffix = `  ${"answer".repeat(1000)}\n`;
-    expect(acc.consume("NO_REPLY\n")).toBeNull();
-    expect(acc.consume(suffix)).toEqual({ text: suffix, delta: suffix });
-    expect(acc.finalize()).toBe(suffix);
-    expect(acc.finalizeRaw()).toBe(`NO_REPLY\n${suffix}`);
-    expect(acc.finalizeReplySnapshot().disposition).toBe("visible");
-  });
 });

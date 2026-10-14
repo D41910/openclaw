@@ -453,15 +453,24 @@ export function registerCliReplyCompletionTests({
     expect(supervisorSpawnMock).toHaveBeenCalledOnce();
   });
 
-  it.each(["NO_REPLY.", "NO_REPLY The requested result."])(
-    "preserves ordinary token-like text on an external required turn: %s",
-    async (text) => {
-      supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
-      const result = await run(createContext({ terminalReplyExpectation: "required" }));
-      expect(result.meta.error).toBeUndefined();
-      expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
-      expect(result.payloads).toEqual([{ text }]);
-      expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+  it.each([
+    { raw: "NO_REPLY.", text: "NO_REPLY.", replacements: [] },
+    {
+      raw: "NO_REPLY\nPRIVATE_MARKER",
+      text: "NO_REPLY",
+      replacements: [{ from: /PRIVATE_MARKER/g, to: "NO_REPLY" }],
     },
-  );
+    { raw: "NO_REPLY", text: "", replacements: [{ from: /NO_REPLY/g, to: "visible replacement" }] },
+  ])("classifies raw CLI output before rendering $raw", async ({ raw, text, replacements }) => {
+    const context = createContext({ terminalReplyExpectation: "required" });
+    context.backendResolved.textTransforms = { output: replacements };
+    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: raw }));
+    const result = await run(context);
+    expect(result.meta.error).toBeUndefined();
+    if (text) {
+      expect(result.payloads).toEqual([{ text }]);
+    } else {
+      expect(result.payloads).toBeUndefined();
+    }
+  });
 }

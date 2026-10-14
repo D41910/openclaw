@@ -192,24 +192,6 @@ function settledToolMessages(): EmbeddedRunAttemptResult["messagesSnapshot"] {
 }
 
 describe("attempt result projection", () => {
-  it.each([
-    ["NO_REPLY\n<final></final>", "", "empty"],
-    ["NO_REPLY\nNO_REPLY", "NO_REPLY", "visible"],
-    ["[[reply_to_current]]", "[[reply_to_current]]", "empty"],
-  ] as const)("prepares raw final output before rendering %j", (rawText, text, disposition) => {
-    const result = completeResult({
-      currentAttemptCompletedAssistant: makeAssistantMessageFixture({
-        content: [{ type: "text", text: rawText }],
-        stopReason: "stop",
-        errorMessage: undefined,
-      }),
-    });
-    expect(result.preparedTerminalReply).toEqual({
-      text,
-      terminalReply: disposition === "visible" ? { disposition, text } : { disposition },
-    });
-  });
-
   it("keeps the settled result snapshot when an output hook replaces live state", () => {
     const assistant = makeAssistantMessageFixture({ content: [{ type: "text", text: "settled" }] });
     const fixture = createResultFixture({

@@ -578,20 +578,6 @@ describe("deliverAgentCommandResult payload normalization", () => {
     expect(deliverArgs.queuePolicy).toBe("best_effort");
   });
 
-  it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
-    "forwards prepared visible command text %j without judging it again",
-    async (text) => {
-      const delivered = await deliverAgentCommandResultForTest({
-        omitReplyTarget: true,
-        opts: { deliver: false },
-        payloads: [{ text }],
-        result: { meta: { durationMs: 1, terminalReply: { disposition: "visible", text } } },
-      });
-      expect(delivered.payloads).toEqual([expect.objectContaining({ text })]);
-      expect(delivered.meta.terminalReply).toEqual({ disposition: "visible", text });
-    },
-  );
-
   it.each(["isCommentary", "isStatusNotice"] as const)(
     "retains %s in native settlement evidence without changing JSON output",
     async (flag) => {

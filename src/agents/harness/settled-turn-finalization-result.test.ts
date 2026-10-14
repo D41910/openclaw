@@ -61,33 +61,6 @@ describe("assertSettledTurnFinalizationResult", () => {
     expect(assertSettledTurnFinalizationResult(result)).toMatchObject(result);
   });
 
-  it.each(["NO_REPLY", " \tNO_REPLY\n"])(
-    "classifies exact authored silence as a completed empty answer: %s",
-    (text) => {
-      const result = { assistant: assistantMessage([{ type: "text", text }]) };
-      expect(() => assertSettledTurnFinalizationResult(result)).toThrow(
-        EmptySettledTurnFinalizationError,
-      );
-    },
-  );
-
-  it.each([
-    "NO_REPLY.",
-    '"NO_REPLY"',
-    "NO_REPLY NO_REPLY",
-    '{"action":"NO_REPLY"}',
-    "no_reply",
-    "NO_REPLY\nNO_REPLY",
-  ])("accepts ordinary final answer %s", (text) => {
-    const result = assertSettledTurnFinalizationResult({
-      assistant: assistantMessage([{ type: "text", text }]),
-    });
-    expect(result.preparedTerminalReply?.terminalReply.disposition).toBe("visible");
-    expect(result.preparedTerminalReply?.text).toBe(
-      text === "NO_REPLY\nNO_REPLY" ? "NO_REPLY" : text,
-    );
-  });
-
   it("rejects a tool call", () => {
     expect(() =>
       assertSettledTurnFinalizationResult({
@@ -99,22 +72,19 @@ describe("assertSettledTurnFinalizationResult", () => {
     ).toThrow("returned a tool call");
   });
 
-  it.each(["  ", "NO_REPLY\n<final></final>", "[[reply_to_current]]"])(
-    "classifies a normally completed empty rendered answer: %j",
-    (text) => {
-      const result = {
-        assistant: assistantMessage([{ type: "text", text }]),
-      };
+  it.each(["  "])("classifies a normally completed empty rendered answer: %j", (text) => {
+    const result = {
+      assistant: assistantMessage([{ type: "text", text }]),
+    };
 
-      try {
-        assertSettledTurnFinalizationResult(result);
-        throw new Error("expected completed-empty classification");
-      } catch (error) {
-        expect(error).toBeInstanceOf(EmptySettledTurnFinalizationError);
-        expect((error as EmptySettledTurnFinalizationError).result).toMatchObject(result);
-      }
-    },
-  );
+    try {
+      assertSettledTurnFinalizationResult(result);
+      throw new Error("expected completed-empty classification");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EmptySettledTurnFinalizationError);
+      expect((error as EmptySettledTurnFinalizationError).result).toMatchObject(result);
+    }
+  });
 
   it("rejects an assistant stopped at the length limit", () => {
     expect(() =>

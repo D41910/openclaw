@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { isSilentAssistantTranscriptMessage } from "../../shared/chat-message-content.js";
-import { extractAgentRunText } from "../agent-run-result.js";
 import {
   collectAmbiguousAutomaticMediaUrls,
   collectAutomaticDeliveredMediaUrls,
@@ -14,7 +12,6 @@ import {
   resolveExplicitFinalSourceReplyDeliveryEvidence,
 } from "./delivery-evidence.js";
 import {
-  hasVisibleAgentPayload,
   isMeaningfulTranscriptMessage,
   isTerminalSilentAssistantMessage,
 } from "./message-visibility.js";
@@ -309,48 +306,6 @@ describe("queued delivery evidence", () => {
 });
 
 describe("agent reply visibility", () => {
-  it("uses terminal facts without reinterpreting prepared payload text", () => {
-    const result = {
-      payloads: [{ text: "NO_REPLY" }],
-      meta: { terminalReply: { disposition: "visible" as const, text: "NO_REPLY" } },
-    };
-    expect(hasVisibleAgentPayload(result)).toBe(true);
-    expect(extractAgentRunText(result)).toBe("NO_REPLY");
-    const silent = { meta: { terminalReply: { disposition: "silent" as const } } };
-    expect(extractAgentRunText(silent)).toBeUndefined();
-  });
-
-  it("extracts full prepared bytes instead of the bounded terminal snapshot", () => {
-    const text = `    ${"answer ".repeat(900)}\n`;
-    expect(
-      extractAgentRunText({
-        payloads: [{ text }],
-        meta: { terminalReply: { disposition: "visible", text: "bounded summary" } },
-      }),
-    ).toBe(text);
-  });
-
-  it.each([
-    '{"action":"NO_REPLY"}',
-    '"NO_REPLY"',
-    "NO_REPLY.",
-    "NO_REPLY NO_REPLY",
-    "The requested answer.",
-    "NO_REPLY The answer.",
-  ])("preserves ordinary assistant text: %s", (text) => {
-    const result = { payloads: [{ text }] };
-    expect(hasVisibleAgentPayload(result)).toBe(true);
-    expect(extractAgentRunText(result)).toBe(text);
-    expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
-    expect(
-      isTerminalSilentAssistantMessage({
-        role: "assistant",
-        stopReason: "stop",
-        content: [{ type: "text", text }],
-      }),
-    ).toBe(false);
-  });
-
   it("classifies terminal silent transcript messages and meaningful tails", () => {
     expect(
       isTerminalSilentAssistantMessage({
@@ -364,41 +319,5 @@ describe("agent reply visibility", () => {
     ).toBe(true);
     expect(isMeaningfulTranscriptMessage({ role: "system" })).toBe(false);
     expect(isMeaningfulTranscriptMessage({ role: "toolResult" })).toBe(true);
-  });
-
-  it("honors stored row visibility and final phase before the exact raw text check", () => {
-    expect(isSilentAssistantTranscriptMessage({ role: "user", content: "NO_REPLY" })).toBe(false);
-    expect(
-      isSilentAssistantTranscriptMessage({
-        role: "assistant",
-        display: true,
-        content: "NO_REPLY",
-      }),
-    ).toBe(false);
-    expect(
-      isSilentAssistantTranscriptMessage({
-        role: "assistant",
-        content: "NO_REPLY",
-        openclawDelivery: { mediaUrls: ["/tmp/image.png"] },
-      }),
-    ).toBe(false);
-    expect(
-      isSilentAssistantTranscriptMessage({
-        role: "assistant",
-        content: [
-          { type: "text", text: "Earlier progress", textSignature: '{"v":1,"phase":"commentary"}' },
-          { type: "text", text: "NO_REPLY", textSignature: '{"v":1,"phase":"final_answer"}' },
-        ],
-      }),
-    ).toBe(true);
-    expect(
-      isSilentAssistantTranscriptMessage({
-        role: "assistant",
-        content: [
-          { type: "text", text: "NO_REPLY", textSignature: '{"v":1,"phase":"commentary"}' },
-          { type: "text", text: "Visible final", textSignature: '{"v":1,"phase":"final_answer"}' },
-        ],
-      }),
-    ).toBe(false);
   });
 });

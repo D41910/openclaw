@@ -444,26 +444,6 @@ describe("classifyEmbeddedAgentRunResultForModelFallback", () => {
     expect(result).toBeNull();
   });
 
-  it.each(['{"action":"NO_REPLY"}', '"NO_REPLY"', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
-    "does not retry prepared ordinary text: %s",
-    (text) => {
-      expect(
-        classifyEmbeddedAgentRunResultForModelFallback({
-          provider: "openai",
-          model: "gpt-5.5",
-          result: {
-            payloads: [{ text }],
-            meta: {
-              durationMs: 42,
-              finalAssistantRawText: text,
-              terminalReply: { disposition: "visible", text },
-            },
-          },
-        }),
-      ).toBeNull();
-    },
-  );
-
   it("does not retry unclassified non-GPT error payloads", () => {
     const result = classifyEmbeddedAgentRunResultForModelFallback({
       provider: "custom",

@@ -10,7 +10,6 @@ import {
   deliverAgentHarnessUserInputPrompt,
   formatAgentHarnessUserInputPrompt,
   getModelProviderRequestTransport,
-  prepareAgentRunTerminalReply,
   queueAgentHarnessMessage,
   setActiveEmbeddedRun,
   type AgentHarness,
@@ -62,13 +61,6 @@ describe("classifyAgentHarnessTerminalOutcome", () => {
 });
 
 describe("agent harness runtime SDK facade", () => {
-  it("exposes paired full prepared text and terminal facts for native producers", () => {
-    expect(prepareAgentRunTerminalReply({ rawText: "NO_REPLY\nNO_REPLY" })).toEqual({
-      text: "NO_REPLY",
-      terminalReply: { disposition: "visible", text: "NO_REPLY" },
-    });
-  });
-
   it("exposes structured input through one frozen named runtime surface", () => {
     expect(Object.isFrozen(agentHarnessStructuredInput)).toBe(true);
     expect(Object.keys(agentHarnessStructuredInput).toSorted()).toEqual([

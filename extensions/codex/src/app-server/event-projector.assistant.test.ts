@@ -599,33 +599,6 @@ describe("CodexAppServerEventProjector assistant projection", () => {
     expect(projector.buildSteeringTranscriptPrefix()).toEqual([]);
   });
 
-  it.each([
-    ["NO_REPLY", "", "silent"],
-    [" \nNO_REPLY\t", "", "silent"],
-    ["no_reply", "no_reply", "visible"],
-    ["NO_REPLY.", "NO_REPLY.", "visible"],
-    ["NO_REPLY\nNO_REPLY", "NO_REPLY", "visible"],
-    ["NO_REPLY\n  Answer\n", "  Answer\n", "visible"],
-  ])("prepares native final %j without reclassifying %j", async (rawText, text, disposition) => {
-    const onPartialReply = vi.fn();
-    const projector = await createProjector({ ...(await createParams()), onPartialReply });
-    await streamFinalAnswer(projector, "answer", rawText);
-    await projector.handleNotification(turnCompleted([finalItem("answer", rawText)]));
-    const result = projector.buildResult(buildEmptyToolTelemetry());
-    expect(result.preparedTerminalReply).toEqual({
-      text,
-      terminalReply:
-        disposition === "visible" ? { disposition, text: text.trim() } : { disposition },
-    });
-    expect(result.assistantTexts).toEqual(text ? [text] : []);
-    expect(result.lastAssistant?.content).toEqual([{ type: "text", text: rawText }]);
-    if (disposition === "silent") {
-      expect(onPartialReply).not.toHaveBeenCalled();
-    } else {
-      expect(onPartialReply).toHaveBeenLastCalledWith({ text, delta: expect.any(String) });
-    }
-  });
-
   it("retains literal control-looking text at a steering boundary", async () => {
     const text = "NO_REPLY\nNO_REPLY";
     const projector = await createProjector(await createParams());

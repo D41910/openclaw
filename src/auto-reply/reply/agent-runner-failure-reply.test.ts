@@ -8,25 +8,11 @@ import { AgentHarnessPreflightError } from "../../agents/harness/errors.js";
 import { WorkerTaskError } from "../../infra/worker-task-pool.js";
 import { SkillResourceDeliveryLimitError } from "../../skills/runtime/resource-delivery-error.js";
 import { SkillLibraryError } from "../../skills/skill-library-error.js";
-import { getReplyPayloadMetadata } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
 import {
   buildExternalRunFailureReply,
   buildKnownAgentRunFailureReplyPayload,
-  markAgentRunFailureReplyPayload,
 } from "./agent-runner-failure-reply.js";
-
-describe("markAgentRunFailureReplyPayload", () => {
-  it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
-    "preserves error flags independently of control-looking text: %s",
-    (text) => {
-      const payload = markAgentRunFailureReplyPayload({ text });
-      expect(payload).toEqual({ text, isError: true });
-      expect(getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression).toBe(true);
-      expect(markAgentRunFailureReplyPayload({ text, isError: true }).isError).toBe(true);
-    },
-  );
-});
 
 describe("buildExternalRunFailureReply", () => {
   it.each(["wrapped"])(

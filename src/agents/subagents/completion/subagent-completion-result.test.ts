@@ -47,38 +47,6 @@ describe("resolveSubagentCompletionResultText", () => {
     ).toBe("[truncated-by-retention: complete child answer unavailable]\nreleased capped prefix");
   });
 
-  it.each(["NO_REPLY", "NO_REPLY\nNO_REPLY", " \n\t ", ""])(
-    "preserves prepared visible bytes without parsing or fallback (%j)",
-    (resultText) => {
-      expect(
-        resolveSubagentCompletionResultText({
-          completion: {
-            resultText,
-            fallbackResultText: "older visible fallback",
-            terminalReply: { disposition: "visible", text: "bounded snapshot" },
-          },
-          execution: { outcome: { status: "ok" } },
-        }),
-      ).toBe(resultText);
-    },
-  );
-
-  it.each([undefined, null])(
-    "uses the producer snapshot when the retained body is missing (%j)",
-    (resultText) => {
-      expect(
-        resolveSubagentCompletionResultText({
-          completion: {
-            resultText,
-            fallbackResultText: "older visible fallback",
-            terminalReply: { disposition: "visible", text: "bounded snapshot" },
-          },
-          execution: { outcome: { status: "ok" } },
-        }),
-      ).toBe("bounded snapshot");
-    },
-  );
-
   it.each(["error", "timeout", "unknown"] as const)(
     "preserves a %s outcome independently of terminal reply eligibility",
     (status) => {

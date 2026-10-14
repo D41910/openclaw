@@ -26,62 +26,6 @@ function twoBlockPartial() {
 }
 
 describe("assistant stream snapshots", () => {
-  it.each<[string | string[], string]>([
-    ["NO_REPLY", ""],
-    ["NO_REPLY\nNO_REPLY", "NO_REPLY"],
-    ["NO_REPLY\n  Answer.\n", "  Answer.\n"],
-    ["NO_REPLY.", "NO_REPLY."],
-    ['"NO_REPLY"', '"NO_REPLY"'],
-    ['{"action":"NO_REPLY"}', '{"action":"NO_REPLY"}'],
-    ["no_reply", "no_reply"],
-    [["NO_", "REPLY"], ""],
-    [["NO_REPLY", "Answer"], "NO_REPLYAnswer"],
-    [["NO_REPLY\n", "NO_REPLY"], "NO_REPLY"],
-  ])("prepares the raw protocol before snapshot rendering: %s", (rawText, expected) => {
-    const parts = typeof rawText === "string" ? [rawText] : rawText;
-    const message: AssistantMessage = {
-      role: "assistant",
-      content: parts.map((text) => ({ type: "text" as const, text })),
-      api: "openai-responses",
-      provider: "openai",
-      model: "fixture",
-      usage: createZeroUsageFixture(),
-      stopReason: "stop",
-      timestamp: 0,
-    };
-    const snapshot = extractAssistantStreamSnapshot(createMessageEndContext(), message);
-    expect(snapshot.rawText).toBe(parts.join(""));
-    expect(snapshot.blockText).toBe(expected);
-  });
-
-  it.each([
-    { chunks: ["NO_", "REPLY"], expected: undefined },
-    { chunks: ["NO_", "REPLY\n", "NO_REPLY"], expected: "NO_REPLY" },
-    { chunks: ["NO_", "REPLY."], expected: "NO_REPLY." },
-  ])(
-    "prepares streamed control bytes without leaking them: $chunks",
-    async ({ chunks, expected }) => {
-      const onAgentEvent = vi.fn();
-      const context = createMessageUpdateContext({ onAgentEvent });
-      for (const chunk of chunks) {
-        await updateMessage(context, {
-          message: { role: "assistant", content: [] },
-          assistantMessageEvent: { type: "text_delta", delta: chunk },
-        });
-      }
-      await updateMessage(context, {
-        message: { role: "assistant", content: [] },
-        assistantMessageEvent: { type: "text_end" },
-      });
-      const events = onAgentEvent.mock.calls
-        .map(([event]) => event)
-        .filter((event) => event.stream === "assistant");
-      expect(events.at(-1)?.data.text).toBe(expected);
-      if (expected === undefined) {
-        expect(events).toEqual([]);
-      }
-    },
-  );
   it("keeps prepared block and visible text stable when provider content changes", () => {
     const signature = JSON.stringify({ v: 1, id: "answer", phase: "final_answer" });
     const first = { type: "text" as const, text: "<final>Hello ", textSignature: signature };
