@@ -6,7 +6,6 @@ import type { ConfigUiHints } from "../api/types.ts";
 import { t } from "../i18n/index.ts";
 import { isEnvPlaceholder, REDACTED_SENTINEL } from "../lib/config-form-utils.ts";
 import { formatUnknownText } from "../lib/format.ts";
-import type { emptyLegacyContent, LegacyTemplateResult } from "../lit/solid-content.tsx";
 import { formatConfigFormNumber } from "./config-form.numeric.ts";
 import { resolveConfigFieldMeta, type ConfigSearchCriteria } from "./config-form.search.ts";
 import {
@@ -57,9 +56,6 @@ export type ConfigNodeRenderParams = {
 };
 
 export type ConfigNodeRenderer = (params: Accessor<ConfigNodeRenderParams>) => JSX.Element;
-export type LegacyNodeRenderer = (
-  params: ConfigNodeRenderParams,
-) => LegacyTemplateResult | typeof emptyLegacyContent;
 
 export function configChildRenderOptions(params: ConfigNodeRenderParams) {
   return {
