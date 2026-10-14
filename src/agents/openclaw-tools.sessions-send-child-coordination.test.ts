@@ -145,25 +145,20 @@ function mockGatewayReply(
     terminalReply: { disposition: "visible", text: "Requested result" },
   },
 ) {
+  let targetSessionKey: string | undefined;
   callGatewayMock.mockImplementation(async (request: GatewayCall) => {
     calls.push(request);
     if (request.method === "agent") {
+      targetSessionKey = String(request.params?.sessionKey);
       return { runId: "coordination-run", status: "accepted" };
     }
-    if (request.method === "chat.history") {
-      return {
-        messages: [
-          {
-            role: "assistant",
-            runId: "coordination-run",
-            phase: "final_answer",
-            stopReason: "stop",
-            content: [{ type: "text", text: "Requested result" }],
-          },
-        ],
-      };
+    if (request.method === "agent.wait") {
+      if (waitResult.status === "ok" && targetSessionKey) {
+        await writeFinal(targetSessionKey, "coordination-run", "Requested result");
+      }
+      return waitResult;
     }
-    return request.method === "agent.wait" ? waitResult : {};
+    return {};
   });
 }
 function agentParams(call: GatewayCall): AgentCallParams {
@@ -222,7 +217,7 @@ async function writeEntry(sessionKey: string, entry: SessionEntry, storePath?: s
 }
 
 async function writeFinal(sessionKey: string, runId: string, text: string) {
-  const target = resolveGatewaySessionStoreTargetWithStore({
+  const target = await resolveGatewaySessionStoreTargetWithStoreAsync({
     cfg: config,
     key: sessionKey,
     readOnly: true,
@@ -893,7 +888,7 @@ describe("sessions_send child coordination", () => {
       // The separate lookup can observe another entry snapshot; classification must
       // join its metadata against the entry already selected by sessions_send.
       readAcpSessionMetaMock.mockImplementation(
-        (params: Parameters<typeof metadata.readAcpSessionEntry>[0]) =>
+        (params: Parameters<typeof metadata.readAcpSessionEntryAsync>[0]) =>
           metadataRead.readAcpSessionMetaForEntryAsync({
             ...params,
             databasePath,

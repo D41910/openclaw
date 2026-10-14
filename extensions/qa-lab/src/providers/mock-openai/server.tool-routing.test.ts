@@ -911,7 +911,9 @@ describe("subagent-handoff", () => {
           user(QA_SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION),
         ],
       });
-      expect(outputText(finalization)).toBe("");
+      expect(outputText(finalization)).toBe(
+        "The file qa-terminal-empty-side-effect.txt was written successfully. I did not repeat the write.",
+      );
       expect(outputItems(finalization).some((item) => item.type === "function_call")).toBe(false);
     });
   });

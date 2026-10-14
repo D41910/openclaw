@@ -151,10 +151,14 @@ export function createRequesterSettleCases() {
         expectedFinalText: finalText,
       },
     ),
-    settleCase("preserves an ordinary non-yielded direct settle turn", undefined, {
-      requireVisibleReply: false,
-      expected: deliveredRequesterFinal,
-    }),
+    settleCase(
+      "preserves an ordinary non-yielded direct settle turn",
+      { payloads: [], meta: { terminalReply: { disposition: "silent" } } },
+      {
+        requireVisibleReply: false,
+        expected: deliveredRequesterFinal,
+      },
+    ),
     settleCase("rejects a yielded turn without a result", undefined, localOnly),
     ...[
       { name: "error", payload: { text: "tool failed", isError: true } },

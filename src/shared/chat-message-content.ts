@@ -265,3 +265,22 @@ export function isSilentAssistantTranscriptMessage(message: unknown): boolean {
     finalBlocks.length ? finalBlocks.map((block) => block.text).join("") : text.join(""),
   );
 }
+
+/** Applies raw stored-row visibility before preparing one leading silence line. */
+export function prepareAssistantTranscriptText(
+  message: unknown,
+  text: string | undefined,
+): string | undefined {
+  const record = asOptionalObjectRecord(message);
+  if (record?.role !== "assistant") {
+    return text;
+  }
+  if (isSilentAssistantTranscriptMessage(message)) {
+    return undefined;
+  }
+  return record.display !== true &&
+    !readTerminalSourceReplyDeliveryMirror(message) &&
+    text?.startsWith("NO_REPLY\n")
+    ? text.slice("NO_REPLY\n".length)
+    : text;
+}

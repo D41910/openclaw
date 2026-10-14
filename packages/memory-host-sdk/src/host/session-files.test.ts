@@ -334,6 +334,20 @@ describe("buildSessionEntry", () => {
           final: true,
         },
       },
+      { role: "assistant", content: "NO_REPLY\nAnswer" },
+      { role: "assistant", content: "NO_REPLY\nNO_REPLY" },
+      { role: "assistant", content: [{ type: "text", text: "NO_REPLY\nNO_REPLY" }] },
+      { role: "assistant", content: "NO_REPLY\nNO_REPLY", display: true },
+      {
+        role: "assistant",
+        content: "NO_REPLY\nNO_REPLY",
+        openclawDeliveryMirror: {
+          kind: "message-tool-source-reply",
+          sourceTurnId: "source-run",
+          final: true,
+        },
+      },
+      { role: "user", content: "NO_REPLY\nNO_REPLY" },
     ];
     const filePath = path.join(tmpDir, "literal-text.jsonl");
     fsSync.writeFileSync(
@@ -350,9 +364,15 @@ describe("buildSessionEntry", () => {
         "Assistant: Done NO_REPLY",
         "Assistant: NO_REPLY",
         "Assistant: NO_REPLY",
+        "Assistant: Answer",
+        "Assistant: NO_REPLY",
+        "Assistant: NO_REPLY",
+        "Assistant: NO_REPLY NO_REPLY",
+        "Assistant: NO_REPLY NO_REPLY",
+        "User: NO_REPLY NO_REPLY",
       ].join("\n"),
     );
-    expect(entry.lineMap).toEqual([1, 3, 4, 5, 6, 7, 8]);
+    expect(entry.lineMap).toEqual([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
 
     const sessionId = "literal-text";
     const sessionKey = "agent:main:chat:literal-text";

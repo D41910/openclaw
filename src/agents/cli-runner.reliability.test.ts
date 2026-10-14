@@ -70,7 +70,6 @@ import { hashCliReseedPrompt } from "./cli-runner/reseed-envelope.js";
 import { captureCliRunStartTime, type PreparedCliRunContext } from "./cli-runner/types.js";
 import { persistCliSessionBindingResult } from "./cli-session-store.js";
 import * as cliTranscript from "./command/attempt-execution.helpers.js";
-import { isIntermediateAssistantTranscriptMessage } from "./embedded-agent-runner/message-visibility.js";
 import { runAgentHarnessBeforeMessageWriteHook } from "./harness/hook-helpers.js";
 import { MAX_AGENT_HOOK_HISTORY_MESSAGES } from "./harness/hook-history.js";
 import { SessionManager } from "./sessions/session-manager.js";
@@ -1309,14 +1308,10 @@ describe("runCliAgent reliability", () => {
       },
     });
     const messages = await readTranscriptMessages(sessionTarget);
-    expect(messages).toEqual([
-      expect.objectContaining({
-        role: "assistant",
-        content: [{ type: "text", text: SILENT_REPLY_TOKEN }],
-        idempotencyKey: `cli-assistant:${requesterTurnRunId}`,
-      }),
-    ]);
-    expect(isIntermediateAssistantTranscriptMessage(messages[0])).toBe(true);
+    expect(messages).toEqual([]);
+    expect(result.payloads).toBeUndefined();
+    expect(result.meta.terminalReply).toEqual({ disposition: "silent" });
+    expect(result.meta.finalAssistantRawText).toBe(SILENT_REPLY_TOKEN);
   });
 
   it("keeps raw assistant output separate from transformed visible CLI output", async () => {

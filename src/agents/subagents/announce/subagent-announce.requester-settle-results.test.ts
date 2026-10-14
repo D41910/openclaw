@@ -1,3 +1,4 @@
+import { expectDefined } from "@openclaw/normalization-core";
 import { describe, expect, it } from "vitest";
 import { matchesTranscriptEvent } from "../../../sessions/transcript-visible-record.js";
 import {
@@ -38,8 +39,9 @@ describe("maybeWakeRequesterAfterAllChildrenSettled results", () => {
                 },
         }),
     );
+    const visibleChild = expectDefined(children[3]);
     registryRuntimeMock.listSubagentRunsForRequester.mockReturnValue(children);
-    sessionStore[children[3].childSessionKey] = { sessionId: "child-3-session" };
+    sessionStore[visibleChild.childSessionKey] = { sessionId: "child-3-session" };
     findTranscriptEventMock.mockImplementation(async ({ sessionId }, match) => {
       const event = {
         type: "message",
@@ -48,7 +50,7 @@ describe("maybeWakeRequesterAfterAllChildrenSettled results", () => {
           display: true,
           stopReason: "stop",
           content: [{ type: "text", text: "blocked fetch" }],
-          __openclaw: { runId: children[3].runId },
+          __openclaw: { runId: visibleChild.runId },
         },
       };
       return sessionId === "child-3-session" && matchesTranscriptEvent(event, match)

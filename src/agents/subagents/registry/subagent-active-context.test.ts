@@ -295,7 +295,11 @@ describe("buildActiveSubagentRuntimeContext", () => {
         requesterSessionKey: "agent:main:main",
         task: "deliver the report",
         execution: { status: "terminal", endedAt },
-        completion: { required: true, resultText: "child result" },
+        completion: {
+          required: true,
+          resultText: "child result",
+          terminalReply: { disposition: "visible", text: "child result" },
+        },
         delivery: { status },
         cleanupCompletedAt: cleaned ? endedAt + 1_000 : undefined,
         requesterSettleWake: wake

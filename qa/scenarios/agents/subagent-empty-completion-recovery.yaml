@@ -24,7 +24,7 @@ scenario:
   successCriteria:
     - The child performs exactly one real write before returning empty assistant output.
     - The requester receives one visible parent acknowledgement.
-    - Required finalization produces a truthful fallback that reaches the parent completion turn.
+    - Required finalization produces a truthful assistant result that reaches the parent completion turn.
     - The requester receives exactly one terminal recovery message, with no repeated action or replay after Gateway restart.
   docsRefs:
     - docs/tools/subagents.md
@@ -43,7 +43,7 @@ scenario:
       requiredProviderMode: mock-openai
       metadataSentinel: QA-SUBAGENT-TERMINAL-INTERNAL-MUST-NOT-LEAK
       recoveryMarker: QA-SUBAGENT-TERMINAL-EMPTY-REPRESENTED
-      fallbackReply: The tool run finished, but no final summary was produced. I did not repeat any completed actions.
+      recoveredReply: The file qa-terminal-empty-side-effect.txt was written successfully. I did not repeat the write.
       sideEffectFile: qa-terminal-empty-side-effect.txt
       sideEffectContents: "empty terminal QA side effect completed\n"
 
@@ -122,7 +122,7 @@ flow:
             expr: "emptyOutboundHistory.filter((message) => String(message.text ?? '').trim() === config.recoveryMarker)"
         - set: recoveryRequests
           value:
-            expr: "emptyRequests.filter((request) => String(request.raw ?? '').includes('[Internal task completion event]') && String(request.raw ?? '').includes(config.fallbackReply))"
+            expr: "emptyRequests.filter((request) => String(request.raw ?? '').includes('[Internal task completion event]') && String(request.raw ?? '').includes(config.recoveredReply))"
         - assert:
             expr: "requesterAcknowledgements.length === 1"
             message:
@@ -156,7 +156,11 @@ flow:
         - assert:
             expr: "recoveryRequests.length > 0"
             message:
-              expr: "`parent completion did not receive the truthful finalization fallback: ${JSON.stringify(emptyRequests)}`"
+              expr: "`parent completion did not receive the truthful assistant finalization result: ${JSON.stringify(emptyRequests)}`"
+        - assert:
+            expr: "childTranscript.finalText === config.recoveredReply"
+            message:
+              expr: "`child finalization did not persist the exact assistant result: ${JSON.stringify(childTranscript)}`"
         - assert:
             expr: "emptyOutboundHistory.every((message) => !String(message.text ?? '').includes(config.metadataSentinel) && !String(message.text ?? '').includes('BEGIN_OPENCLAW_INTERNAL_CONTEXT') && String(message.text ?? '').trim() !== 'NO_REPLY')"
             message:
@@ -214,6 +218,10 @@ flow:
             message:
               expr: "`Gateway restart repeated or changed the completed write: before=${JSON.stringify(childWriteEvents)} transcript=${JSON.stringify(restoredChildTranscript)} file=${JSON.stringify(restoredSideEffectContents)}`"
         - assert:
+            expr: "restoredChildTranscript.finalText === config.recoveredReply"
+            message:
+              expr: "`Gateway restart changed the recovered assistant result: ${JSON.stringify(restoredChildTranscript)}`"
+        - assert:
             expr: "restoredRun?.runId === emptyRun.runId && restoredRun?.execution.status === 'terminal' && restoredRun.execution.outcome?.status === 'ok' && restoredRun.delivery?.status === 'delivered'"
             message:
               expr: "`recovered completion lost its terminal state after restart: ${JSON.stringify({ expectedRunId: emptyRun.runId, runId: restoredRun?.runId, status: restoredRun?.execution.status, terminalOutcome: restoredRun?.execution.outcome?.status, deliveryStatus: restoredRun?.delivery?.status })}`"
@@ -221,4 +229,4 @@ flow:
             expr: "postRestartCompletionRequests.length === 0 && postRestartOutbound.filter((message) => message.text.trim() === config.recoveryMarker).length === 1 && postRestartOutbound.some((message) => message.id === emptyTerminalOutbound[0].id && message.text.trim() === config.recoveryMarker) && postRestartOutbound.every((message) => !message.text.includes(config.metadataSentinel) && !message.text.includes('BEGIN_OPENCLAW_INTERNAL_CONTEXT') && message.text.trim() !== 'NO_REPLY')"
             message:
               expr: "`Gateway restart replayed or lost recovered completion: requests=${JSON.stringify(postRestartRequests)} outbound=${JSON.stringify(postRestartOutbound)}`"
-      detailsExpr: "JSON.stringify({ runId: emptyRun.runId, execution: emptyRun.execution, delivery: emptyRun.delivery, inputDisposition: 'empty-after-side-effect', requesterAcknowledgementCount: requesterAcknowledgements.length, fallbackReply: config.fallbackReply, successfulWriteEvents: childWriteEvents, restoredSuccessfulWriteEvents: restoredChildWriteEvents, sideEffectFile: config.sideEffectFile, sideEffectContents, expectedTerminalSendCount: 1, actualTerminalSendCount: emptyTerminalOutbound.length, auxiliaryChannelEvents: emptyOutboundHistory.map((message) => String(message.text ?? '')), postRestartProviderRequestCount: postRestartRequests.length, postRestartCompletionRequestCount: postRestartCompletionRequests.length, providerMode: env.providerMode, pass: true }, null, 2)"
+      detailsExpr: "JSON.stringify({ runId: emptyRun.runId, execution: emptyRun.execution, delivery: emptyRun.delivery, inputDisposition: 'empty-after-side-effect', requesterAcknowledgementCount: requesterAcknowledgements.length, recoveredReply: config.recoveredReply, successfulWriteEvents: childWriteEvents, restoredSuccessfulWriteEvents: restoredChildWriteEvents, sideEffectFile: config.sideEffectFile, sideEffectContents, expectedTerminalSendCount: 1, actualTerminalSendCount: emptyTerminalOutbound.length, auxiliaryChannelEvents: emptyOutboundHistory.map((message) => String(message.text ?? '')), postRestartProviderRequestCount: postRestartRequests.length, postRestartCompletionRequestCount: postRestartCompletionRequests.length, providerMode: env.providerMode, pass: true }, null, 2)"

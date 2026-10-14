@@ -2,9 +2,8 @@ import { asOptionalObjectRecord } from "@openclaw/normalization-core/record-coer
 import { NESTED_TOOL_ACTIVITY_CUSTOM_TYPE } from "../../sessions/nested-tool-activity.js";
 import {
   extractAssistantPhaseText,
-  isSilentAssistantTranscriptMessage,
+  prepareAssistantTranscriptText,
   readAssistantTextBlocksForPhase,
-  readTerminalSourceReplyDeliveryMirror,
 } from "../../shared/chat-message-content.js";
 import { sanitizeAssistantVisibleTextWithProfile } from "../../shared/text/assistant-visible-text.js";
 import { sanitizeUserFacingText } from "../embedded-agent-helpers/sanitize-user-facing-text.js";
@@ -26,7 +25,7 @@ export function stripToolMessages(messages: unknown[]): unknown[] {
 
 export function extractStoredAssistantText(message: unknown): string | undefined {
   const entry = asOptionalObjectRecord(message);
-  if (entry?.role !== "assistant" || isSilentAssistantTranscriptMessage(entry)) {
+  if (entry?.role !== "assistant") {
     return undefined;
   }
   const inlineText = typeof entry.text === "string" ? entry.text : entry.content;
@@ -38,12 +37,7 @@ export function extractStoredAssistantText(message: unknown): string | undefined
     const blocks = finalBlocks.length ? finalBlocks : readAssistantTextBlocksForPhase(entry);
     rawText = blocks.length ? blocks.map((block) => block.text).join("") : undefined;
   }
-  const preparedText =
-    entry.display !== true &&
-    !readTerminalSourceReplyDeliveryMirror(entry) &&
-    rawText?.startsWith("NO_REPLY\n")
-      ? rawText.slice("NO_REPLY\n".length)
-      : rawText;
+  const preparedText = prepareAssistantTranscriptText(entry, rawText);
   const joined =
     preparedText === undefined
       ? undefined

@@ -15,8 +15,6 @@ import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeStringEntries } from "@openclaw/normalization-core/string-normalization";
 import { GatewayClientRequestError } from "../../packages/gateway-client/src/request-error.js";
 import { getRuntimeConfig } from "../config/config.js";
-import { resolveSessionStorePathCore } from "../config/sessions/paths.js";
-import { readSessionEntryReadOnlyInWorker } from "../config/sessions/session-entry-read-runtime.js";
 import { findTranscriptEvent } from "../config/sessions/session-transcript-match.js";
 import type { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
@@ -26,6 +24,7 @@ import { parseAgentSessionKey } from "../routing/session-key.js";
 import { normalizeBlockedLivenessWaitStatus } from "../shared/agent-liveness.js";
 import { getAsyncWorkSignal } from "../shared/async-work-scope.js";
 import { readTerminalSourceReplyDeliveryMirror } from "../shared/chat-message-content.js";
+import { createLazyImportLoader } from "../shared/lazy-promise.js";
 import {
   isOpenClawMessageToolMirrorAssistantMessage,
   isTranscriptOnlyOpenClawAssistantMessage,
@@ -43,6 +42,11 @@ export type { AgentWaitResult };
 type GatewayCaller = typeof callGateway;
 
 const AGENT_RUN_WAIT_RETRY_DELAY_MS = 100;
+
+// Gateway store discovery depends on the agent registry; defer it to avoid an initialization cycle.
+const sessionStoreLookupLoader = createLazyImportLoader(
+  () => import("../gateway/session-utils-store-lookup.js"),
+);
 
 function resolveRunWaitTimeoutMs(value: number | undefined): number {
   return clampTimerTimeoutMs(parseFiniteNumber(value) ?? 1) ?? 1;
@@ -219,14 +223,25 @@ async function readAgentRunReply(params: {
   if (!sessionKey || !agentId) {
     return undefined;
   }
-  const storePath = resolveSessionStorePathCore(getRuntimeConfig().session?.store, { agentId });
-  const scope = { agentId, storePath, sessionKey };
-  const entry = await readSessionEntryReadOnlyInWorker(scope);
+  const { resolveGatewaySessionStoreTargetWithStoreAsync } = await sessionStoreLookupLoader.load();
+  const target = await resolveGatewaySessionStoreTargetWithStoreAsync({
+    cfg: getRuntimeConfig(),
+    key: sessionKey,
+    agentId,
+    readOnly: true,
+    exactRead: true,
+  });
+  const entry = target.store[target.canonicalKey];
   if (!entry?.sessionId) {
     return undefined;
   }
   const found = await findTranscriptEvent(
-    { ...scope, sessionId: entry.sessionId },
+    {
+      agentId: target.agentId,
+      storePath: target.storePath,
+      sessionKey: target.canonicalKey,
+      sessionId: entry.sessionId,
+    },
     { kind: "visible-final", runId: params.runId },
   );
   return isRecord(found?.event) ? extractStoredAssistantText(found.event.message) : undefined;

@@ -1,7 +1,13 @@
 // sessions_send A2A tests cover reply delivery, same-session replies, delayed
 // run-owned replies, and channel target/account routing.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRuntimeConfigSnapshot,
+  setRuntimeConfigSnapshot,
+} from "../../config/runtime-snapshot.js";
+import * as transcriptRuntime from "../../config/sessions/session-transcript-match.js";
 import type { CallGatewayOptions } from "../../gateway/call.js";
+import * as sessionStoreLookup from "../../gateway/session-utils-store-lookup.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createSessionConversationTestRegistry } from "../../test-utils/session-conversation-registry.js";
 import { runAgentStep } from "./agent-step.js";
@@ -62,12 +68,42 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
   let transcriptRunId: string;
 
   beforeEach(() => {
+    setRuntimeConfigSnapshot({});
     setActivePluginRegistry(createSessionConversationTestRegistry());
     gatewayCalls = [];
     sessionListRows = [];
     transcriptReply = "Test reply";
     transcriptRunId = "run-test";
     callGatewayMock.mockReset();
+    // Keep transport and routing isolated while serving the canonical run-keyed reader.
+    vi.spyOn(
+      sessionStoreLookup,
+      "resolveGatewaySessionStoreTargetWithStoreAsync",
+    ).mockImplementation(async ({ key, agentId }) => ({
+      agentId: agentId ?? "main",
+      storePath: "/registered-alternate/openclaw.sqlite",
+      canonicalKey: key,
+      storeKeys: [key],
+      store: { [key]: { sessionId: "target-session", updatedAt: 1 } },
+    }));
+    vi.spyOn(transcriptRuntime, "findTranscriptEvent").mockImplementation(async (scope, match) => {
+      expect(scope.sessionId).toBe("target-session");
+      expect(match).toEqual({ kind: "visible-final", runId: transcriptRunId });
+      return transcriptReply
+        ? {
+            event: {
+              type: "message",
+              message: {
+                role: "assistant",
+                content: [{ type: "text", text: transcriptReply }],
+                phase: "final_answer",
+                stopReason: "stop",
+                __openclaw: { runId: transcriptRunId },
+              },
+            },
+          }
+        : undefined;
+    });
     const callGateway = async <T = Record<string, unknown>>(
       opts: CallGatewayOptions,
     ): Promise<T> => {
@@ -83,22 +119,6 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
         }
         transcriptRunId = params.runId;
         return await agentWaitMock(opts);
-      }
-      if (opts.method === "chat.history") {
-        gatewayCalls.push(opts);
-        return {
-          messages: transcriptReply
-            ? [
-                {
-                  role: "assistant",
-                  content: [{ type: "text", text: transcriptReply }],
-                  phase: "final_answer",
-                  stopReason: "stop",
-                  __openclaw: { runId: transcriptRunId },
-                },
-              ]
-            : [],
-        } as T;
       }
       gatewayCalls.push(opts);
       if (opts.method === "sessions.describe") {
@@ -131,6 +151,7 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    clearRuntimeConfigSnapshot();
   });
 
   it("passes threadId through to gateway send for Telegram forum topics", async () => {
@@ -329,7 +350,7 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
     });
 
     expect(runAgentStep).not.toHaveBeenCalled();
-    expect(gatewayCalls.map((call) => call.method)).toEqual(["chat.history"]);
+    expect(gatewayCalls).toEqual([]);
   });
 
   it("delivers an internal delayed reply once without bouncing it back to the target", async () => {

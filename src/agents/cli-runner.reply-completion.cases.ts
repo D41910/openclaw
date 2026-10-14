@@ -453,7 +453,7 @@ export function registerCliReplyCompletionTests({
         expect(result.meta.executionTrace?.attempts?.map((attempt) => attempt.result)).toEqual([
           "error",
         ]);
-        expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
+        expect(result.meta.terminalReply).toEqual({ disposition: "empty" });
       }
     },
   );

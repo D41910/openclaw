@@ -544,6 +544,7 @@ describe("subagent announce formatting", () => {
         totalTokens: 2,
       },
     };
+    transcriptEvents = [assistantEvent("run-123", "raw subagent reply")];
     await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:test",
       childRunId: "run-123",
@@ -782,13 +783,11 @@ describe("subagent announce formatting", () => {
         sessionId: "requester-session",
       },
     };
-    chatHistoryMock.mockResolvedValueOnce({
-      messages: [{ role: "assistant", content: [{ type: "text", text: "final answer: 2" }] }],
-    });
-    readLatestAssistantReplyMock.mockResolvedValue("");
+    transcriptEvents = [assistantEvent("run-direct-completion", "final answer: 2")];
 
     const didAnnounce = await announceCompletion({
       childRunId: "run-direct-completion",
+      roundOneReply: "final answer: 2",
     });
 
     expect(didAnnounce).toBe("delivered");

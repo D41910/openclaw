@@ -13,21 +13,24 @@ import {
   clearRuntimeConfigSnapshot,
   setRuntimeConfigSnapshot,
 } from "../config/runtime-snapshot.js";
-import * as sessionEntryRuntime from "../config/sessions/session-entry-read-runtime.js";
 import * as transcriptRuntime from "../config/sessions/session-transcript-match.js";
 import * as gatewayCallRuntime from "../gateway/call.js";
+import * as sessionStoreLookup from "../gateway/session-utils-store-lookup.js";
 import {
   markGatewayRestartDraining,
   resetGatewayWorkAdmission,
 } from "../process/gateway-work-admission.js";
 import { AsyncWorkScope } from "../shared/async-work-scope.js";
 const callGatewayMock = vi.spyOn(gatewayCallRuntime, "callGateway");
-const readSessionEntryMock = vi.spyOn(sessionEntryRuntime, "readSessionEntryReadOnlyInWorker");
+const resolveSessionTargetMock = vi.spyOn(
+  sessionStoreLookup,
+  "resolveGatewaySessionStoreTargetWithStoreAsync",
+);
 const findTranscriptEventMock = vi.spyOn(transcriptRuntime, "findTranscriptEvent");
 afterAll(() => {
   callGatewayMock.mockRestore();
   clearRuntimeConfigSnapshot();
-  readSessionEntryMock.mockRestore();
+  resolveSessionTargetMock.mockRestore();
   findTranscriptEventMock.mockRestore();
 });
 
@@ -413,9 +416,13 @@ describe("waitForAgentRunReply", () => {
   beforeEach(() => {
     callGatewayMock.mockReset();
     setRuntimeConfigSnapshot({});
-    readSessionEntryMock
-      .mockReset()
-      .mockResolvedValue({ sessionId: "shared-session", updatedAt: 1 });
+    resolveSessionTargetMock.mockReset().mockImplementation(async ({ key, agentId }) => ({
+      agentId: agentId ?? "main",
+      storePath: "/registered-alternate/openclaw.sqlite",
+      canonicalKey: key,
+      storeKeys: [key],
+      store: { [key]: { sessionId: "shared-session", updatedAt: 1 } },
+    }));
     findTranscriptEventMock.mockReset();
   });
 
@@ -465,7 +472,12 @@ describe("waitForAgentRunReply", () => {
       replyText: "full authoritative reply",
     });
     expect(findTranscriptEventMock).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "shared-session", sessionKey: "agent:main:main" }),
+      {
+        agentId: "main",
+        storePath: "/registered-alternate/openclaw.sqlite",
+        sessionId: "shared-session",
+        sessionKey: "agent:main:main",
+      },
       { kind: "visible-final", runId: "run-visible-terminal-reply" },
     );
     expect(callGatewayMock.mock.calls.map(([request]) => request.method)).toEqual([

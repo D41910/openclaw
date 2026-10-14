@@ -941,10 +941,9 @@ async function buildResponsesPayload(
       }
       return buildAssistantEvents(visibleRepresentation);
     }
-    // The direct delivery fallback owns visible, restart, and sanitized fallback
-    // results. Use explicit silence so generic empty-response recovery cannot
-    // replay the historical spawn before that fallback runs.
-    return buildAssistantEvents("NO_REPLY");
+    // Empty output exercises direct fallback. Exact NO_REPLY is intentional
+    // silence and must not be used as a missing-answer fixture.
+    return buildAssistantEvents("");
   }
   const terminalWorkerCase = terminalTurn?.kind === "worker" ? terminalTurn.caseName : undefined;
   if (terminalWorkerCase) {
@@ -957,6 +956,11 @@ async function buildResponsesPayload(
     return buildAssistantEvents("NO_REPLY");
   }
   if (terminalWorkerCase === "empty") {
+    if (hasEmptyResponseRetryInstruction && completedToolName === "write") {
+      return buildAssistantEvents(
+        "The file qa-terminal-empty-side-effect.txt was written successfully. I did not repeat the write.",
+      );
+    }
     if (!hasCompletedToolOutput && canCallScenarioTool(toolDeclarationBody, "write")) {
       return buildToolCallEventsWithArgs("write", {
         path: "qa-terminal-empty-side-effect.txt",

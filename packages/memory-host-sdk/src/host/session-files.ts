@@ -8,7 +8,7 @@ import { normalizeComparablePath, readRegularFile, statRegularFile } from "./fs-
 import { hashText } from "./hash.js";
 import { createSubsystemLogger } from "./openclaw-runtime-io.js";
 import { isCronRunSessionKey } from "./openclaw-runtime-paths.js";
-import { isSilentAssistantTranscriptMessage } from "./openclaw-runtime-session-visibility.js";
+import { prepareAssistantTranscriptText } from "./openclaw-runtime-session-visibility.js";
 import {
   assertBoundIncognitoMemorySyncAccess,
   captureIncognitoMemoryReader,
@@ -859,14 +859,14 @@ async function buildSessionEntryFromSource(
       ) {
         continue;
       }
-      if (
-        ("display" in message && message.display === false) ||
-        isSilentAssistantTranscriptMessage(message)
-      ) {
+      if ("display" in message && message.display === false) {
         continue;
       }
-      const rawText = collectRawSessionText(message.content);
-      if (rawText === null) {
+      const rawText = prepareAssistantTranscriptText(
+        message,
+        collectRawSessionText(message.content) ?? undefined,
+      );
+      if (rawText === undefined) {
         continue;
       }
 

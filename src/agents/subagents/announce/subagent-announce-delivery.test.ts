@@ -742,7 +742,15 @@ describe("deliverSubagentAnnouncement active requester steering", () => {
       }),
     );
     testing.setDepsForTest({
-      callGateway: createGatewayMock(),
+      callGateway: createGatewayMock({
+        status: "ok",
+        result: {
+          payloads: [{ text: "Requester received child result" }],
+          meta: {
+            terminalReply: { disposition: "visible", text: "Requester received child result" },
+          },
+        },
+      }),
       getRequesterSessionActivity: () => ({ sessionId: "paperclip-session", isActive: true }),
       queueEmbeddedAgentMessageWithOutcome,
       getRuntimeConfig: () => ({ messages: { queue: { mode: "followup" } } }),
@@ -1493,20 +1501,42 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
       },
     },
     {
-      name: "accepts non-subagent session-only completion handoff when the in-process agent intentionally replies NO_REPLY",
+      name: "rejects non-subagent session-only completion without the required result after NO_REPLY",
       result: { payloads: [], meta: { terminalReply: { disposition: "silent" } } },
       sourceTool: "agent_harness_task",
+      expected: {
+        delivered: false,
+        path: "direct",
+        reason: "visible_reply_missing",
+        error: "completion agent did not produce a visible reply",
+      },
     },
     {
-      name: "accepts session-only completion with committed session spawn",
+      name: "rejects session-only completion without a result after committed session spawn",
       result: { payloads: [], ...committedSessionSpawnEvidence },
+      expected: {
+        delivered: false,
+        path: "direct",
+        reason: "visible_reply_missing",
+        error: "completion agent did not produce a visible reply",
+      },
     },
     {
-      name: "accepts session-only completion with committed cron add",
+      name: "rejects session-only completion without a result after committed cron add",
       result: { payloads: [], successfulCronAdds: 1 },
+      expected: {
+        delivered: false,
+        path: "direct",
+        reason: "visible_reply_missing",
+        error: "completion agent did not produce a visible reply",
+      },
     },
   ])("$name", async ({ result: gatewayResult, sourceTool, expected }) => {
-    const dispatchGatewayMethodInProcess = createInProcessGatewayMock({ result: gatewayResult });
+    const dispatchGatewayMethodInProcess = createInProcessGatewayMock({
+      status: "ok",
+      inputProcessingCompleted: true,
+      result: gatewayResult,
+    });
     testing.setDepsForTest({
       dispatchGatewayMethodInProcess,
       getRequesterSessionActivity: () => ({

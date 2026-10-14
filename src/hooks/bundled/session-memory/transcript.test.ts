@@ -65,6 +65,39 @@ describe("session-memory transcript extraction", () => {
     },
   );
 
+  it.each([
+    { row: { role: "assistant", content: "NO_REPLY\nAnswer" }, expected: "Answer" },
+    { row: { role: "assistant", content: "NO_REPLY\nNO_REPLY" }, expected: "NO_REPLY" },
+    {
+      row: { role: "assistant", content: [{ type: "text", text: "NO_REPLY\nNO_REPLY" }] },
+      expected: "NO_REPLY",
+    },
+    {
+      row: { role: "assistant", content: "NO_REPLY\nNO_REPLY", display: true },
+      expected: "NO_REPLY\nNO_REPLY",
+    },
+    {
+      row: {
+        role: "assistant",
+        content: "NO_REPLY\nNO_REPLY",
+        openclawDeliveryMirror: {
+          kind: "message-tool-source-reply",
+          sourceTurnId: "source-run",
+          final: true,
+        },
+      },
+      expected: "NO_REPLY\nNO_REPLY",
+    },
+    { row: { role: "user", content: "NO_REPLY\nNO_REPLY" }, expected: "NO_REPLY\nNO_REPLY" },
+  ] as const)(
+    "prepares raw leading silence lines without reclassifying $row",
+    ({ row, expected }) => {
+      expect(getRecentSessionContentFromEvents([{ type: "message", message: row }])).toBe(
+        sessionMemoryRecord(row.role, expected),
+      );
+    },
+  );
+
   it("keeps user silence markers and explicit visible assistant rows", () => {
     const visible = {
       ...message("assistant", "NO_REPLY"),

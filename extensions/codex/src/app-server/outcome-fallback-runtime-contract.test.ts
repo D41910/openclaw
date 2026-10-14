@@ -9,6 +9,7 @@ import {
   openFileBackedSessionManagerForTest,
   OUTCOME_FALLBACK_RUNTIME_CONTRACT,
 } from "openclaw/plugin-sdk/agent-runtime-test-contracts";
+import { expectDefined } from "openclaw/plugin-sdk/expect-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readAttemptTerminal } from "./attempt-terminal.test-helper.js";
 import { createCodexDynamicToolBridge } from "./dynamic-tools.js";
@@ -71,7 +72,11 @@ function forCurrentTurn(
 }
 
 function classifyProjectedAttemptResult(result: ProjectedAttemptResult) {
-  const finalAssistantText = result.preparedTerminalReply.text;
+  const preparedTerminalReply = expectDefined(
+    result.preparedTerminalReply,
+    "Codex projected terminal reply",
+  );
+  const finalAssistantText = preparedTerminalReply.text;
   return classifyEmbeddedAgentRunResultForModelFallback({
     provider: "codex",
     model: OUTCOME_FALLBACK_RUNTIME_CONTRACT.primaryModel,
@@ -81,7 +86,7 @@ function classifyProjectedAttemptResult(result: ProjectedAttemptResult) {
         durationMs: 1,
         aborted: readAttemptTerminal(result).aborted,
         agentHarnessResultClassification: result.agentHarnessResultClassification,
-        terminalReply: result.preparedTerminalReply.terminalReply,
+        terminalReply: preparedTerminalReply.terminalReply,
         finalAssistantRawText: finalAssistantText || undefined,
         finalAssistantVisibleText: finalAssistantText || undefined,
       },

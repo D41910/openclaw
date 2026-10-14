@@ -7,7 +7,10 @@ import {
   clearRuntimeConfigSnapshot,
   setRuntimeConfigSnapshot,
 } from "../../config/runtime-snapshot.js";
-import { upsertSessionEntryCore } from "../../config/sessions/session-accessor.js";
+import {
+  persistSessionTranscriptTurn,
+  upsertSessionEntryCore,
+} from "../../config/sessions/session-accessor.js";
 import {
   getOwnedSessionTranscriptWriterFence,
   withOwnedSessionTranscriptWrites,
@@ -996,24 +999,33 @@ describe("sessions_send gating", () => {
           };
         }
         if (request.method === "chat.history") {
-          return {
-            messages: hasText
-              ? [
-                  {
-                    role: "assistant",
-                    phase: "final_answer",
-                    stopReason: "stop",
-                    __openclaw: { runId: "run-source-reply" },
-                    content: [{ type: "text", text: "Already delivered to the source" }],
-                  },
-                ]
-              : [],
-          };
+          return { messages: [] };
         }
         if (request.method === "agent") {
           return { runId: "run-source-reply", acceptedAt: 123 };
         }
         if (request.method === "agent.wait") {
+          if (hasText) {
+            await persistSessionTranscriptTurn(
+              { agentId: "main", sessionKey: targetSessionKey, sessionId: targetSessionKey },
+              {
+                runId: "run-source-reply",
+                expectedSessionId: targetSessionKey,
+                touchSessionEntry: false,
+                updateMode: "none",
+                messages: [
+                  {
+                    message: {
+                      role: "assistant",
+                      phase: "final_answer",
+                      stopReason: "stop",
+                      content: [{ type: "text", text: "Already delivered to the source" }],
+                    },
+                  },
+                ],
+              },
+            );
+          }
           return {
             runId: "run-source-reply",
             status: "ok",
@@ -1022,7 +1034,7 @@ describe("sessions_send gating", () => {
               : { disposition: "empty" },
             terminalReceipt: {
               runId: "run-source-reply",
-              sessionId: "target-session",
+              sessionId: targetSessionKey,
               turnId: "target-turn",
               requested: { provider: "provider", model: "model" },
               effective: { provider: "provider", model: "model", responseModel: "model" },
@@ -1059,7 +1071,7 @@ describe("sessions_send gating", () => {
       }
       expect(
         callGatewayMock.mock.calls.some(([request]) => request.method === "chat.history"),
-      ).toBe(hasText);
+      ).toBe(false);
     },
   );
 

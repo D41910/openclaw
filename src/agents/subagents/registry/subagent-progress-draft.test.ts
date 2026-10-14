@@ -149,7 +149,22 @@ it.each([
         }),
         sessionKey: requesterKey,
       },
-      { deliveryContext: requesterOrigin },
+      {
+        delivery: {
+          kind: "external",
+          route: {
+            channel: requesterOrigin.channel,
+            accountId: requesterOrigin.accountId,
+            target: { to: requesterOrigin.to },
+          },
+          context: requesterOrigin,
+          origin: {
+            provider: requesterOrigin.channel,
+            to: requesterOrigin.to,
+            accountId: requesterOrigin.accountId,
+          },
+        },
+      },
     );
   }
   const spawns = await yieldCohort("parent-turn", ["a", "b"], requesterOrigin);

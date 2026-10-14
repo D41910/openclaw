@@ -3,7 +3,7 @@ import { classifySessionMessageOrigin } from "../../../../packages/memory-host-s
 import type { MemoryOriginClass } from "../../../../packages/memory-host-sdk/src/host/types.js";
 import { sanitizeModelSpecialTokens } from "../../../security/external-content.js";
 import { hasInterSessionUserProvenance } from "../../../sessions/input-provenance.js";
-import { isSilentAssistantTranscriptMessage } from "../../../shared/chat-message-content.js";
+import { prepareAssistantTranscriptText } from "../../../shared/chat-message-content.js";
 import { isOpenClawDeliveryMirrorAssistantMessage } from "../../../shared/transcript-only-openclaw-assistant.js";
 
 const SESSION_MEMORY_TOOL_DIRECTIVE_PREFIX = String.raw`(?:(?:\|DSML\|)|(?:\uFF5CDSML\uFF5C))?`;
@@ -88,10 +88,13 @@ function renderSessionMemoryRecords(events: readonly unknown[]): SessionMemoryRe
     if (role === "user" && hasInterSessionUserProvenance(record.message)) {
       continue;
     }
-    if (record.message.display === false || isSilentAssistantTranscriptMessage(record.message)) {
+    if (record.message.display === false) {
       continue;
     }
-    const text = extractTextMessageContent(record.message.content);
+    const text = prepareAssistantTranscriptText(
+      record.message,
+      extractTextMessageContent(record.message.content),
+    );
     const sanitized = text ? sanitizeSessionMemoryTranscriptText(text) : null;
     if (!sanitized) {
       continue;

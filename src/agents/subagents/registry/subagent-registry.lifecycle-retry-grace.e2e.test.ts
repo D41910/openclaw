@@ -13,6 +13,7 @@ import {
   type OpenClawTestState,
 } from "../../../test-utils/openclaw-test-state.js";
 import "../spawn/subagent-spawn-model.mocks.shared.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import { loadAgentRuntimePluginRegistryHandle } from "../../runtime-plugins.js";
 import { maybeSpawnVisibleSession } from "../../tools/sessions-spawn-visible.js";
 import { createSessionsYieldTool } from "../../tools/sessions-yield-tool.js";
@@ -870,18 +871,19 @@ describe("subagent registry lifecycle error grace", () => {
 
   it("regression, captures frozen completion output with 100KB cap and retains it for keep-mode cleanup", async () => {
     await registerCompletionRun("run-capped", "capped", "capped result test", undefined, false);
-    setAssistantOutput("agent:main:subagent:capped", "x".repeat(120 * 1024), "run-capped");
+    const resultText = "x".repeat(120 * 1024);
+    setAssistantOutput("agent:main:subagent:capped", resultText, "run-capped");
 
     emitLifecycleEvent("run-capped", {
       phase: "end",
       endedAt: Date.now(),
-      terminalReply: { disposition: "visible", text: "x".repeat(4_096) },
+      terminalReply: prepareAgentRunTerminalReply({ rawText: resultText }).terminalReply,
     });
     await flushAsync();
     await agentCallWaits.settle();
 
-    const run = await waitForFrozenResult("run-capped", (resultText) =>
-      resultText.includes("[truncated: frozen completion output exceeded 100KB"),
+    const run = await waitForFrozenResult("run-capped", (capturedText) =>
+      capturedText.includes("[truncated: frozen completion output exceeded 100KB"),
     );
     expect(getAgentCalls()).toHaveLength(0);
     expect(run.runId).toBe("run-capped");
