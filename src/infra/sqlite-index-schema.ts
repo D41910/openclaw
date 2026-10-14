@@ -14,6 +14,7 @@ import {
   getCanonicalSqliteNamedIndexContracts,
   getCanonicalSqliteTableNames,
   type CanonicalSqliteNamedIndexContract,
+  type SqliteSchemaSource,
 } from "./sqlite-schema-contract.js";
 import { quoteSqliteIdentifier } from "./sqlite-schema-sql.js";
 import { runSqliteImmediateTransactionSync } from "./sqlite-transaction.js";
@@ -38,7 +39,7 @@ type RepairCanonicalSqliteIndexesOptions = {
 export function verifyAndRepairCanonicalSqliteIndexes(
   db: DatabaseSync,
   databaseLabel: string,
-  schemaSql: string,
+  schemaSql: SqliteSchemaSource,
   options: Omit<RepairCanonicalSqliteIndexesOptions, "verifyPhysicalIntegrity"> = {},
 ): string[] {
   return runSqliteIntegrityOperationSync(
@@ -49,7 +50,7 @@ export function verifyAndRepairCanonicalSqliteIndexes(
 export function* verifyAndRepairCanonicalSqliteIndexSteps(
   db: DatabaseSync,
   databaseLabel: string,
-  schemaSql: string,
+  schemaSql: SqliteSchemaSource,
   options: Omit<RepairCanonicalSqliteIndexesOptions, "verifyPhysicalIntegrity"> & {
     diagnostics?: SqliteIntegrityDiagnostics;
     reuseIntegrity?: boolean;
@@ -83,7 +84,7 @@ export function* verifyAndRepairCanonicalSqliteIndexSteps(
 export function repairCanonicalSqliteIndexes(
   db: DatabaseSync,
   databaseLabel: string,
-  schemaSql: string,
+  schemaSql: SqliteSchemaSource,
   options: RepairCanonicalSqliteIndexesOptions = {},
 ): string[] {
   const indexes = getCanonicalSqliteNamedIndexContracts(schemaSql);

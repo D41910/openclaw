@@ -7,6 +7,8 @@ export const SQLITE_PRIMITIVE_OWNERS: readonly string[] = [
   "src/infra/sqlite-user-version.ts",
   // SQLite archive-format owner: catalog capture and offline restoration of migration table scopes.
   "src/infra/sqlite-migration-scoped-snapshot.ts",
+  // SQLite admission catalogs own native schema/PRAGMA facts; PostgreSQL has its own catalog owner.
+  "src/infra/sqlite-schema-catalog.ts",
 ];
 export type DialectMatch = {
   construct: string;

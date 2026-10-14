@@ -12,7 +12,7 @@ import {
   stageSessionPendingInput,
 } from "../config/sessions/session-accessor.pending-inputs.js";
 import { openNodeSqliteDatabase } from "../infra/node-sqlite.js";
-import { assertSqliteSchemaContains } from "../infra/sqlite-schema-contract.js";
+import { assertSqliteSchemaContains } from "../infra/sqlite-schema-contract.test-support.js";
 import { admitSqliteSchema } from "../infra/sqlite-schema-facts.js";
 import { runSqliteImmediateTransactionSync } from "../infra/sqlite-transaction.js";
 import { useSessionStoreTempDirs } from "../test-utils/session-state-cleanup.js";

@@ -1,3 +1,4 @@
+import type { SqliteColumnCatalog, SqliteForeignKeyCatalog } from "./sqlite-schema-catalog.js";
 import {
   findSqlCharacter,
   findSqlClosingParenthesis,
@@ -58,6 +59,8 @@ export type SqliteTableDefinition = {
 
 export type SqliteTableContract = {
   definition: SqliteTableDefinition | null;
+  columns: readonly SqliteColumnCatalog[];
+  foreignKeys: readonly SqliteForeignKeyCatalog[];
   indexes: SqliteIndexContract[];
   strict: number;
   triggers: Array<{ name: string; sql: string | null }>;
@@ -70,7 +73,9 @@ export function createSqliteTableContract(
   table: SqliteSchemaRow,
   tableList: SqliteTableListRow,
   indexes: SqliteIndexContract[],
-  triggers: SqliteSchemaRow[],
+  triggers: readonly SqliteSchemaRow[],
+  columns: readonly SqliteColumnCatalog[],
+  foreignKeys: readonly SqliteForeignKeyCatalog[],
 ): SqliteTableContract {
   const normalizedTriggers = triggers.map((trigger) => ({
     name: trigger.name,
@@ -86,6 +91,8 @@ export function createSqliteTableContract(
   return {
     definition: isVirtualTable ? null : parseSqliteTableDefinition(table.sql, tableName),
     indexes,
+    columns,
+    foreignKeys,
     strict: tableList.strict,
     triggers: normalizedTriggers,
     virtualTableSql: isVirtualTable ? normalizedTableSql : null,
@@ -96,7 +103,7 @@ export function createSqliteTableContract(
 export function createSqliteIndexContract(
   index: SqliteIndexListRow,
   schemaSql: string | null,
-  rows: SqliteIndexTermRow[],
+  rows: readonly SqliteIndexTermRow[],
 ): SqliteIndexContract {
   const terms = rows.map<SqliteIndexTermContract>(({ cid, coll, desc, key, name, seqno }) => ({
     coll,

@@ -178,6 +178,9 @@ describe("PostgreSQL schema generation", () => {
         "portability-report.md",
         "state.postgres.sql",
         "runtime.ts",
+        "sqlite-catalogs.ts",
+        "sqlite-state-catalogs.ts",
+        "sqlite-agent-catalogs.ts",
       ].toSorted(),
     );
     expect(

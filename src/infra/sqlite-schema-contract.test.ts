@@ -5,12 +5,14 @@ import { describe, expect, it } from "vitest";
 import { observeMainThreadReads } from "../test-utils/main-thread-sql-spies.test-support.js";
 import { enableNodeSqliteKyselyStatementCache } from "./kysely-sync.js";
 import {
-  assertSqliteSchemaContains,
-  assertSqliteSchemaTablesPresent,
   collectSqliteNamedIndexContract,
-  collectSqliteSchemaIssues,
   createSqliteTableContractReader,
 } from "./sqlite-schema-contract.js";
+import {
+  assertSqliteSchemaContains,
+  assertSqliteSchemaTablesPresent,
+  collectSqliteSchemaIssues,
+} from "./sqlite-schema-contract.test-support.js";
 
 const [nodeMajor = 0, nodeMinor = 0] = process.versions.node.split(".").map(Number);
 // Node added the public SQLite query diagnostic event in 26.8.0.
@@ -85,7 +87,45 @@ describe.each([false, true])("assertSqliteSchemaContains (statement cache: %s)",
     return database;
   }
 
-  it("compares the real agent schema with five catalog reads and detects drift", () => {
+  it("inspects declared views without resolving unrelated broken views", () => {
+    const schema = `
+      CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT);
+      CREATE VIEW record_values AS SELECT id, value FROM records;
+    `;
+    const database = createDatabase(schema);
+    try {
+      database.exec("CREATE VIEW unrelated_view AS SELECT * FROM missing_table;");
+      expect(collectSqliteSchemaIssues(database, schema)).toEqual([]);
+      expect(
+        collectSqliteSchemaIssues(database, schema, {}, createSqliteTableContractReader(database)),
+      ).toEqual([]);
+      database.exec(`
+        DROP VIEW record_values;
+        CREATE VIEW record_values AS SELECT id, value || 'changed' AS value FROM records;
+      `);
+      expect(collectSqliteSchemaIssues(database, schema)).toMatchObject([
+        { code: "missing-or-drifted-view", objectName: "record_values" },
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("inspects user table names beginning with sqlite without an underscore", () => {
+    const schema = "CREATE TABLE sqlitecompat (id INTEGER PRIMARY KEY, value TEXT);";
+    const database = createDatabase(schema);
+    try {
+      expect(collectSqliteSchemaIssues(database, schema)).toEqual([]);
+      database.exec("ALTER TABLE sqlitecompat ADD COLUMN extra TEXT;");
+      expect(collectSqliteSchemaIssues(database, schema)).toMatchObject([
+        { code: "unexpected-column", objectName: "sqlitecompat.extra" },
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("compares the real agent schema with six catalog reads and detects drift", () => {
     const schema = readFileSync(
       new URL("../state/openclaw-agent-schema.sql", import.meta.url),
       "utf8",
@@ -99,8 +139,8 @@ describe.each([false, true])("assertSqliteSchemaContains (statement cache: %s)",
       const inspect = () => {
         reads.clear();
         const issues = collectSqliteSchemaIssues(database, schema);
-        // Five metadata queries plus the PRAGMA that pins the read snapshot.
-        expect(reads.count()).toBe(6);
+        // Six metadata queries plus the PRAGMA that pins the read snapshot.
+        expect(reads.count()).toBe(7);
         return issues.map(({ code, objectName }) => ({ code, objectName }));
       };
       try {

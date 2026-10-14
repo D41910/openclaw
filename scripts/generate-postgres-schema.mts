@@ -32,6 +32,7 @@ import {
   assertPostgresTriggers,
   translatePostgresTriggers,
 } from "./lib/postgres-schema-triggers.mts";
+import { generateSqliteSchemaCatalogs } from "./lib/sqlite-schema-generation.mts";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const MINIMUM_POSTGRES_VERSION = 16;
@@ -220,6 +221,17 @@ export async function generatePostgresSchemas(
     }
     files[`${name}.postgres.sql`] =
       `${["-- Generated runtime DDL; the owner supplies search_path and the transaction.", ...tableStatements(data)].join("\n\n")}\n`;
+  }
+  if (!options.reportOnly) {
+    const inputs =
+      root === ROOT
+        ? (await import("./lib/sqlite-schema-inputs.mts")).listSqliteSchemaInputs()
+        : (["state", "agent"] as const).map((store) => ({
+            id: store,
+            store,
+            sql: fs.readFileSync(path.join(root, `src/state/openclaw-${store}-schema.sql`), "utf8"),
+          }));
+    Object.assign(files, await generateSqliteSchemaCatalogs(inputs, ROOT));
   }
   const pendingCapabilities = Object.entries(catalogs).flatMap(([database, data]) =>
     data.objects

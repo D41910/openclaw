@@ -9,6 +9,7 @@ import {
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import { openNodeSqliteDatabase } from "../infra/node-sqlite.js";
 import { classifySqliteMutation } from "../infra/sqlite-schema-mutation.js";
+import { extractSqliteTableSchema } from "../infra/sqlite-schema-sql.js";
 import * as maintenance from "../infra/state-database-maintenance.js";
 import { closeOpenClawStateDatabaseByPathAsync } from "./openclaw-state-db-cache.js";
 import { OPENCLAW_STATE_SCHEMA_VERSION } from "./openclaw-state-db-contract.js";
@@ -23,7 +24,10 @@ import { ensureUserPreferencesSchema } from "./user-preferences.store.js";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 const recordSchema = "CREATE TABLE records (id INTEGER PRIMARY KEY, value TEXT NOT NULL) STRICT;";
-const contract = { schemaSql: recordSchema, operationLabel: "retained writer test" };
+const contract = {
+  schemaSql: extractSqliteTableSchema(OPENCLAW_STATE_SCHEMA_SQL, "config_machine_state"),
+  operationLabel: "retained writer test",
+};
 const schemaInventorySql =
   /\b(?:sqlite_schema|sqlite_master|(?:pragma_)?(?:table|index)_(?:list|info|xinfo))\b/iu;
 
@@ -40,9 +44,7 @@ function fixture(fullSchema = false) {
         meta_key TEXT PRIMARY KEY, role TEXT, schema_version INTEGER,
         created_at INTEGER, updated_at INTEGER
       );
-      CREATE TABLE config_machine_state (
-        state_key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at_ms INTEGER NOT NULL
-      );
+      ${contract.schemaSql}
     `,
     );
     database.exec(`
@@ -89,7 +91,6 @@ describe("retained existing-state writer", () => {
         options,
         {
           ...contract,
-          schemaSql: recordSchema.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"),
           initializeAdditiveSchema: true,
         },
       );
@@ -325,8 +326,8 @@ describe("retained existing-state writer", () => {
   it.each([
     {
       change: "foreign schema",
-      sql: "ALTER TABLE records ADD COLUMN foreign_value TEXT",
-      error: /column definitions differ for records/iu,
+      sql: "ALTER TABLE config_machine_state ADD COLUMN foreign_value TEXT",
+      error: /column definitions differ for config_machine_state/iu,
       markersChange: true,
     },
     {
