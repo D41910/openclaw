@@ -27,7 +27,16 @@ it("refreshes retained hovercard labels and age without replacing its focused li
     },
   };
   const view = mountSolid(() => (
-    <SessionHovercard row={row} automationLink={{ href: "/automations", navigate: () => {} }} />
+    <SessionHovercard
+      row={row}
+      automationLink={{
+        gateway: null,
+        sessionKey: "agent:main:example",
+        agentId: "main",
+        href: "/automations",
+        navigate: () => {},
+      }}
+    />
   ));
   onTestFinished(async () => {
     view.unmount();
