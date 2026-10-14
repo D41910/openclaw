@@ -4,8 +4,11 @@
  * Keeping `server-start` behind dynamic import lets light-weight callers import
  * server types and helpers without paying the full startup dependency graph.
  */
-import { AsyncLocalStorage } from "node:async_hooks";
 import { measureGatewayBootstrapStep } from "../cli/startup-trace.js";
+import {
+  getDatabaseEngineSelection,
+  withDatabaseEngineInput,
+} from "../infra/database-engine/context.js";
 import { supportsSpawnBrokerCommandTransport } from "../process/spawn-broker/pipe.js";
 import { resolveOpenClawStateSqlitePath } from "../state/openclaw-state-db.paths.js";
 import type { GatewayServer, GatewayServerOptions } from "./server-public.js";
@@ -76,7 +79,12 @@ export async function startGatewayServer(
             closeServer({ reason: String(reason) }),
           );
         }
-        return { ...server, close: AsyncLocalStorage.bind(close) };
+        const databaseEngineInput = getDatabaseEngineSelection()?.input;
+        return {
+          ...server,
+          close: (options) =>
+            withDatabaseEngineInput(databaseEngineInput, () => closeServer(options)),
+        };
       } catch (error) {
         detachOwner?.();
         if (!close && !(error instanceof GatewayStartupCleanupError)) {

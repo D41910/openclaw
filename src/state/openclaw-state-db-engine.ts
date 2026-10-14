@@ -1,6 +1,6 @@
 import { getEnvironmentData } from "node:worker_threads";
-import type { PostgresSchemaFragment } from "../infra/database-engine/contract.js";
 import { getDatabaseEngineSelection } from "../infra/database-engine/context.js";
+import type { PostgresSchemaFragment } from "../infra/database-engine/contract.js";
 import { openEngineStore } from "../infra/database-engine/open.js";
 import {
   admitPostgresPhysicalFacts,

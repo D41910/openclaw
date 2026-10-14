@@ -32,7 +32,10 @@ import {
   isLoopbackHost,
   resolveGatewayBindHost,
 } from "../../gateway/net.js";
-import { withGatewayDatabaseEngine } from "../../gateway/server-database-engine.js";
+import {
+  recordGatewayDatabaseBoot,
+  withGatewayDatabaseEngine,
+} from "../../gateway/server-database-engine.js";
 import { isGatewayEffectiveConfigConflictError } from "../../gateway/server-runtime-config.js";
 import { GatewayStartupCleanupError } from "../../gateway/server-shutdown.js";
 import { isChannelStartupSuppressedByEnvironment } from "../../gateway/server-sidecar-startup-mode.js";
@@ -40,16 +43,12 @@ import type { GatewayWsLogStyle } from "../../gateway/ws-logging.js";
 import { setGatewayWsLogStyle } from "../../gateway/ws-logging.js";
 import { setVerbose } from "../../globals.js";
 import { isAbortError } from "../../infra/abort-signal.js";
-import { withEngineStoreAdmission } from "../../infra/database-engine/admission-scope.js";
 import { collectNestedErrorCandidates } from "../../infra/error-graph-internal.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import {
   completeGatewayBootLifecycle,
   GATEWAY_CRASH_LOOP_BREAKER_REASON,
   formatGatewayCrashLoopManualChannelStartHint,
-  GATEWAY_CRASH_LOOP_RECOVERED_REASON,
-  inspectGatewayCrashLoopBreaker,
-  recordGatewayBootStart,
   type GatewayCrashLoopBreakerDecision,
   type GatewayBootLifecycleCompletion,
 } from "../../infra/gateway-boot-lifecycle.js";
@@ -833,21 +832,9 @@ async function runGatewayCommandOnce(opts: GatewayRunOpts, hooks: GatewayRunRunt
     const beginBoot = async (startedAtMs: number) => {
       // run-loop calls beginBoot before every startGatewayServer invocation, so
       // in-process restarts re-evaluate breaker state instead of reusing stale mode.
-      crashLoopDecision = withEngineStoreAdmission(() =>
-        inspectGatewayCrashLoopBreaker(process.env, startedAtMs),
-      );
-      const bootStartReason = crashLoopDecision.tripped
-        ? crashLoopDecision.shouldWriteStabilityBundle
-          ? GATEWAY_CRASH_LOOP_BREAKER_REASON
-          : undefined
-        : crashLoopDecision.recovered
-          ? GATEWAY_CRASH_LOOP_RECOVERED_REASON
-          : undefined;
-      // Shared-state schema failures make this write fail open, so no lifecycle
-      // row exists for Doctor to reconcile after it repairs the schema.
-      activeBootId = withEngineStoreAdmission(() =>
-        recordGatewayBootStart(process.env, startedAtMs, bootStartReason),
-      );
+      const boot = recordGatewayDatabaseBoot(process.env, startedAtMs);
+      crashLoopDecision = boot.decision;
+      activeBootId = boot.id;
       bootRecorded = activeBootId !== undefined;
       channelAutostartSuppression = undefined;
       tryRecoverChannelAutostartSuppression = undefined;
