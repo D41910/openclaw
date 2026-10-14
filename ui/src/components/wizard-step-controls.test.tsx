@@ -40,10 +40,11 @@ describe("WizardStepControls", () => {
 
   it("retains an uncommitted channel draft through validation updates and submits its DOM value", () => {
     const [validationError, setValidationError] = createSignal<string>();
+    const [stepId, setStepId] = createSignal("account");
     const answer = vi.fn();
     const { container } = mountSolid(() => (
       <WizardStepControls
-        step={{ id: "account", type: "text", message: "Account name" }}
+        step={{ id: stepId(), type: "text", message: "Account name" }}
         value=""
         busy={false}
         inputId="wizard-account"
@@ -63,6 +64,13 @@ describe("WizardStepControls", () => {
     expect(input.getAttribute("aria-describedby")).toBe("account-error");
     input.form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(answer).toHaveBeenCalledExactlyOnceWith("typed account");
+
+    setStepId("workspace");
+    flush();
+    const nextInput = container.querySelector<HTMLInputElement>("input")!;
+    expect(nextInput.value).toBe("");
+    nextInput.form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(answer).toHaveBeenLastCalledWith("");
   });
 
   it("keeps a sensitive answer and its native cancel action across reveal changes", () => {

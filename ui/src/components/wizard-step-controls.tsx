@@ -483,7 +483,9 @@ export function WizardStepControls(props: WizardStepControlsProps): JSX.Element 
   return (
     <Switch>
       <Match when={props.step.type === "text"}>
-        <TextStep {...props} />
+        <Show when={props.step.id} keyed>
+          {(_stepId) => <TextStep {...props} />}
+        </Show>
       </Match>
       <Match when={props.step.type === "select" || props.step.type === "multiselect"}>
         <OptionsStep {...props} />
