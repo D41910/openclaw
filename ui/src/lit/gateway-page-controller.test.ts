@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../api/gateway.ts";
 import type { ApplicationGateway, ApplicationGatewaySnapshot } from "../app/context.ts";
-import { TestHost } from "./controller.test-support.ts";
+import { TestHost } from "../lib/controller.test-support.ts";
 import { GatewayPageController } from "./gateway-page-controller.ts";
 
 function snapshot(

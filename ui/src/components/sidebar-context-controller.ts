@@ -1,5 +1,5 @@
 import type { ReactiveController } from "lit";
-import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
+import { SubscriptionsController } from "../lib/subscriptions-controller.ts";
 import type { AppSidebarSessionNavigationElement } from "./app-sidebar-session-navigation.ts";
 import { equalSidebarContext, selectSidebarContext } from "./sidebar-context-state.ts";
 

@@ -1,4 +1,3 @@
-import type { ReactiveController } from "lit";
 import type { SessionCatalog } from "../../../packages/gateway-protocol/src/index.ts";
 import type { GatewayBrowserClient } from "../api/gateway.ts";
 import type { GatewaySessionRow, SessionsListResult } from "../api/types.ts";
@@ -11,7 +10,8 @@ import type { CatalogSessionContinuedDetail } from "../lib/sessions/catalog-key.
 import { childSessionListQuery } from "../lib/sessions/child-session-data.ts";
 import type { SessionCapability } from "../lib/sessions/index.ts";
 import { normalizeAgentId } from "../lib/sessions/session-key.ts";
-import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
+import { SubscriptionsController } from "../lib/subscriptions-controller.ts";
+import type { SolidController } from "../lit/solid-controller-host.ts";
 import {
   discardEmptyChildSessionSnapshot,
   hydrateSidebarChildSessions,
@@ -69,7 +69,7 @@ type ChildSessionQuery = {
 };
 
 /** Gateway-backed session-list and external-catalog data ownership. */
-export class SessionDataController implements ReactiveController, SessionCatalogDataOwner {
+export class SessionDataController implements SolidController, SessionCatalogDataOwner {
   sessionCatalogs: SessionCatalog[] = [];
   pendingCatalogArchives: ReadonlySet<string> = new Set();
   sessionCatalogRefreshStatus: PanelRefreshStatus = createPanelRefreshStatus();

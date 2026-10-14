@@ -19,8 +19,8 @@ import type { CatalogProjectGrouping } from "../lib/sessions/catalog-project-gro
 import "./mcp-app-catalog.tsx";
 import "./sidebar-agent-card.tsx";
 import "./sidebar-attention.tsx";
+import { SubscriptionsController } from "../lib/subscriptions-controller.ts";
 import { showToast } from "../lib/toast.ts";
-import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
 import "./theme-mode-toggle.ts";
 import "./tooltip.ts";
 import { renderAppSidebarOnline, sidebarOnlineOrder } from "./app-sidebar-online.tsx";

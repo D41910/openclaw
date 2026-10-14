@@ -50,12 +50,12 @@ import {
   subscribeModelCatalogChanges,
 } from "../../lib/model-catalog-store.ts";
 import { parseAgentSessionKey } from "../../lib/sessions/session-key.ts";
-import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import {
   ControllerHost,
   SubscriptionsController,
   viewState,
-} from "../../lit/subscriptions-controller.ts";
+} from "../../lib/subscriptions-controller.ts";
+import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import {
   loadAgentFileContent,
   overwriteAgentFile,
