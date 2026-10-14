@@ -218,8 +218,6 @@ A truncated response or an unfinished tool turn is not a successful silent endin
 
 The terminal producer prepares the reply once and records whether it is visible or silent. Delivery and clients consume that fact and the full prepared payload without interpreting the text again; an explicit visible fact stays visible even when its text is `NO_REPLY`. Lowercase `no_reply`, `NO_REPLY.`, `"NO_REPLY"`, `{"action":"NO_REPLY"}`, and tokens attached to or trailing ordinary prose are visible text, not silent endings. Stored assistant history uses existing display and final-result facts first, then the same exact check on raw assistant text; user text is never treated as a silence instruction.
 
-Waiting for a completed run reads that run's stored final using its session and run identity, not a newer reply from the same conversation. A recorded visible completion keeps its full answer if that run later ends with `NO_REPLY`.
-
 Conversation policy still controls admission and default reply expectations:
 
 - Direct and accepted group/channel requests normally receive answers. An explicit token-only `NO_REPLY` can end either silently.

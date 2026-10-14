@@ -14,17 +14,12 @@ import {
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeStringEntries } from "@openclaw/normalization-core/string-normalization";
 import { GatewayClientRequestError } from "../../packages/gateway-client/src/request-error.js";
-import { getRuntimeConfig } from "../config/config.js";
-import { findTranscriptEvent } from "../config/sessions/session-transcript-match.js";
 import type { callGateway } from "../gateway/call.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { hasRetryableConnectionErrorCode } from "../infra/retryable-network-errors.js";
 import { getGatewayRestartDrainSignal } from "../process/gateway-work-admission.js";
-import { parseAgentSessionKey } from "../routing/session-key.js";
 import { normalizeBlockedLivenessWaitStatus } from "../shared/agent-liveness.js";
 import { getAsyncWorkSignal } from "../shared/async-work-scope.js";
-import { readTerminalSourceReplyDeliveryMirror } from "../shared/chat-message-content.js";
-import { createLazyImportLoader } from "../shared/lazy-promise.js";
 import {
   isOpenClawMessageToolMirrorAssistantMessage,
   isTranscriptOnlyOpenClawAssistantMessage,
@@ -42,11 +37,6 @@ export type { AgentWaitResult };
 type GatewayCaller = typeof callGateway;
 
 const AGENT_RUN_WAIT_RETRY_DELAY_MS = 100;
-
-// Gateway store discovery depends on the agent registry; defer it to avoid an initialization cycle.
-const sessionStoreLookupLoader = createLazyImportLoader(
-  () => import("../gateway/session-utils-store-lookup.js"),
-);
 
 function resolveRunWaitTimeoutMs(value: number | undefined): number {
   return clampTimerTimeoutMs(parseFiniteNumber(value) ?? 1) ?? 1;
@@ -157,9 +147,8 @@ function normalizePendingRunIds(runIds: Iterable<string>): Set<string> {
 // assistant rows; they keep their input provenance and are not replies.
 function isAssistantReplyTranscriptArtifact(message: unknown): boolean {
   return (
-    (!readTerminalSourceReplyDeliveryMirror(message) &&
-      (isTranscriptOnlyOpenClawAssistantMessage(message) ||
-        isOpenClawMessageToolMirrorAssistantMessage(message))) ||
+    isTranscriptOnlyOpenClawAssistantMessage(message) ||
+    isOpenClawMessageToolMirrorAssistantMessage(message) ||
     (isRecord(message) &&
       isRecord(message.provenance) &&
       (message.provenance.kind === "inter_session" ||
@@ -213,40 +202,6 @@ export async function readLatestAssistantReply(params: {
   return undefined;
 }
 
-async function readAgentRunReply(params: {
-  sessionKey?: string;
-  agentId?: string;
-  runId: string;
-}): Promise<string | undefined> {
-  const sessionKey = params.sessionKey;
-  const agentId = params.agentId ?? parseAgentSessionKey(sessionKey)?.agentId;
-  if (!sessionKey || !agentId) {
-    return undefined;
-  }
-  const { resolveGatewaySessionStoreTargetWithStoreAsync } = await sessionStoreLookupLoader.load();
-  const target = await resolveGatewaySessionStoreTargetWithStoreAsync({
-    cfg: getRuntimeConfig(),
-    key: sessionKey,
-    agentId,
-    readOnly: true,
-    exactRead: true,
-  });
-  const entry = target.store[target.canonicalKey];
-  if (!entry?.sessionId) {
-    return undefined;
-  }
-  const found = await findTranscriptEvent(
-    {
-      agentId: target.agentId,
-      storePath: target.storePath,
-      sessionKey: target.canonicalKey,
-      sessionId: entry.sessionId,
-    },
-    { kind: "visible-final", runId: params.runId },
-  );
-  return isRecord(found?.event) ? extractStoredAssistantText(found.event.message) : undefined;
-}
-
 export async function waitForAgentRun(params: {
   runId: string;
   timeoutMs: number;
@@ -291,8 +246,6 @@ export async function waitForAgentRunReply(params: {
   runId: string;
   timeoutMs: number;
   callGateway?: GatewayCaller;
-  sessionKey?: string;
-  agentId?: string;
   untilTerminal?: true;
 }): Promise<AgentWaitResult & { replyText?: string }> {
   const scopeSignal = getAsyncWorkSignal();
@@ -321,10 +274,7 @@ export async function waitForAgentRunReply(params: {
     await delay(AGENT_RUN_WAIT_RETRY_DELAY_MS, undefined, { signal, ref: false });
   }
   return wait.status === "ok" && wait.terminalReply?.disposition === "visible"
-    ? {
-        ...wait,
-        replyText: params.sessionKey ? await readAgentRunReply(params) : undefined,
-      }
+    ? { ...wait, replyText: wait.terminalReply.text }
     : wait;
 }
 

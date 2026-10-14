@@ -108,8 +108,6 @@ export async function runSessionsSendA2AFlow(params: {
         runId: params.runId,
         timeoutMs: Math.min(params.replyTimeoutMs, 60_000),
         callGateway: gatewayCall,
-        sessionKey: params.targetSessionKey,
-        agentId: params.targetAgentId,
         untilTerminal: true,
       }));
     if (wait.status !== "ok") {

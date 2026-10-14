@@ -352,13 +352,7 @@ export async function finishSessionsSendReply(params: {
       ? undefined
       : completion
         ? await completion.take(timeoutMs)
-        : await waitForAgentRunReply({
-            runId,
-            timeoutMs,
-            callGateway: replyContext.callGateway,
-            sessionKey: acceptedTargetSessionKey,
-            agentId: replyContext.targetAgentId,
-          });
+        : await waitForAgentRunReply({ runId, timeoutMs, callGateway: replyContext.callGateway });
   if (!result) {
     await startReplyFlow(true);
     return accepted();
