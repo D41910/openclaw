@@ -146,6 +146,16 @@ describe("normalizeReplyPayload", () => {
       mediaUrl: "https://example.com/img.png",
     });
   });
+
+  it.each(['{"action":"NO_REPLY"}', "think\ninternal reasoning\nNO_REPLY."])(
+    "preserves prepared text %j alongside media",
+    (text) => {
+      expect(normalizeReplyPayload({ text, mediaUrl: "https://example.com/img.png" })).toEqual({
+        text,
+        mediaUrl: "https://example.com/img.png",
+      });
+    },
+  );
 });
 
 describe("typing controller", () => {

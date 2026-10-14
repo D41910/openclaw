@@ -56,6 +56,10 @@ describe("isSilentReplyText", () => {
     "NO_REPLY\nAnswer",
     "I will stay quiet here. NO_REPLY",
     "<think>internal reasoning</think>\nNO_REPLY",
+    ...[".", "!", "?"].map((punctuation) => `think\ninternal reasoning\nNO_REPLY${punctuation}`),
+    "think\nThe runtime context confirms another continuation event -- same inbound (msg 24682), and my reply already went out successfully (msg 24683).\n\nThe correct move: NO_REPLY. The user already has my response. Adding more text would be noise.\n\nNO_REPLY.",
+    "analysis\nMeeting moved to 3 pm. The NO_REPLY token is a control marker.\nNO_REPLY",
+    "think\nThe user asked me to reply NO_REPLY only when there is nothing new.\nHere is the answer: 2+2=4.\nNO_REPLY",
   ])("preserves ordinary text %j", (text) => {
     expect(isSilentReplyText(text)).toBe(false);
   });
