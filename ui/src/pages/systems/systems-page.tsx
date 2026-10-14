@@ -8,15 +8,14 @@ import { registerSystemsEnglish } from "../../i18n/locales/en-systems.ts";
 import { formatByteSize, formatTimeAgo } from "../../lib/format.ts";
 import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
 import { registerEnglishCatalog, t } from "../../lib/reactive/i18n.ts";
-import { projectSource } from "../../lib/reactive/projection.ts";
+import { projectOwner } from "../../lib/reactive/projection.ts";
 import {
   resolveSessionPreferredFace,
   sessionNavigationTarget,
 } from "../../lib/sessions/route-navigation.ts";
 import type { SparklineSample } from "../../lib/sparkline-types.ts";
-import { defineSolidBridge, type SolidBridgeElement } from "../../lit/solid-bridge.ts";
 import { SystemsBackups } from "./systems-backups.tsx";
-import type { SystemsController, SystemsRouteData } from "./systems-controller.ts";
+import type { SystemsController } from "./systems-controller.ts";
 import type { SystemsInventoryRow } from "./systems-data.ts";
 import { systemKind, systemName, systemPlatform, systemStatus } from "./systems-sidebar.tsx";
 import {
@@ -145,32 +144,21 @@ function SystemMeasurements(props: { row: SystemsInventoryRow; controller: Syste
   );
 }
 
-type SystemsPageProps = { routeData?: SystemsRouteData; presented: boolean };
-type SystemsPageElement = SolidBridgeElement<SystemsPageProps>;
-
-function SystemsPageContent(props: SystemsPageProps, host: SystemsPageElement) {
-  const projection = createMemo(() => {
-    const controller = props.routeData?.controller;
-    return controller
-      ? projectSource(controller, {
-          read: (value) => value,
-          subscribe: (value, notify) => value.subscribe(notify),
-          equality: "revision",
-        })
-      : null;
-  });
-  const controller = () => projection()?.read();
+export function SystemsPage(props: { controller: SystemsController; presented: boolean }) {
+  let host!: HTMLElement;
+  const projection = createMemo(() => projectOwner(props.controller, (value) => value));
+  const controller = () => projection().read();
   createEffect(
-    () => ({ controller: props.routeData?.controller, presented: props.presented }),
+    () => ({ controller: props.controller, presented: props.presented }),
     ({ controller: active, presented }) => {
-      active?.setPresented(presented);
-      return () => active?.setPresented(false);
+      active.setPresented(presented);
+      return () => active.setPresented(false);
     },
   );
   onSettled(() => {
     const tick = () => {
       const active = controller();
-      if (!props.presented || !active) {
+      if (!props.presented) {
         return;
       }
       if (active.needsInventoryRefresh) {
@@ -194,7 +182,7 @@ function SystemsPageContent(props: SystemsPageProps, host: SystemsPageElement) {
     };
     const desktopToggle = (event: Event) => {
       const active = controller();
-      if (!props.presented || !active?.current || !(event instanceof CustomEvent)) {
+      if (!props.presented || !active.current || !(event instanceof CustomEvent)) {
         return;
       }
       const detail = isRecord(event.detail) ? event.detail : {};
@@ -223,16 +211,18 @@ function SystemsPageContent(props: SystemsPageProps, host: SystemsPageElement) {
     };
   });
   return (
-    <Show
-      when={controller()?.current}
-      fallback={
-        <p class="systems-state" role="status">
-          {t("systems.loading")}
-        </p>
-      }
-    >
-      <SystemsWorkspace controller={controller()!} presented={props.presented} />
-    </Show>
+    <openclaw-systems-page ref={host}>
+      <Show
+        when={controller().current}
+        fallback={
+          <p class="systems-state" role="status">
+            {t("systems.loading")}
+          </p>
+        }
+      >
+        <SystemsWorkspace controller={controller()} presented={props.presented} />
+      </Show>
+    </openclaw-systems-page>
   );
 }
 
@@ -563,17 +553,4 @@ function SystemsWorkspace(props: { controller: SystemsController; presented: boo
       </div>
     </section>
   );
-}
-
-defineSolidBridge<SystemsPageProps>("openclaw-systems-page", SystemsPageContent, {
-  properties: {
-    routeData: { default: undefined, attribute: false },
-    presented: { default: true, type: Boolean },
-  },
-});
-
-declare global {
-  interface HTMLElementTagNameMap {
-    "openclaw-systems-page": SystemsPageElement;
-  }
 }
