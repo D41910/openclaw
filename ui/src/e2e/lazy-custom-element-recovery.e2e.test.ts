@@ -931,6 +931,7 @@ suite.define(() => {
 
         const reloaded = page.waitForEvent("domcontentloaded");
         await error.getByRole("button", { name: "Retry", exact: true }).click();
+        await error.waitFor({ state: "hidden" });
         releaseProbe();
         await reloaded;
         const toolbar = page.locator(".macos-titlebar-controls");
