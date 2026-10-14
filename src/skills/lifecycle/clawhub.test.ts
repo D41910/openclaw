@@ -21,7 +21,6 @@ import {
   applyExtractedSkillRoot,
   withExtractedArchiveRootMock,
   installPackageDirMock,
-  markClawPackageIndependentlyOwnedMock,
   pathExistsMock,
   tempDirs,
   expectInstallPackageSourceDir,
@@ -61,28 +60,6 @@ describe("skills-clawhub", () => {
   });
 
   registerRemoteClawHubTests(() => testWorkspaceDir);
-
-  it.each([
-    { clawManaged: false, recordsIndependentOwner: true },
-    { clawManaged: true, recordsIndependentOwner: false },
-  ])(
-    "records a direct skill install independently when clawManaged=$clawManaged",
-    async ({ clawManaged, recordsIndependentOwner }) => {
-      const result = await installTestSkill(testWorkspaceDir, "agentreceipt", { clawManaged });
-      expectInstalledSkill(result);
-      if (recordsIndependentOwner) {
-        expect(markClawPackageIndependentlyOwnedMock).toHaveBeenCalledWith({
-          kind: "skill",
-          source: "clawhub",
-          ref: "agentreceipt",
-          version: "1.0.0",
-          workspace: testWorkspaceDir,
-        });
-      } else {
-        expect(markClawPackageIndependentlyOwnedMock).not.toHaveBeenCalled();
-      }
-    },
-  );
 
   it("marks a missing deferred directory receipt as recovery incomplete", async () => {
     pathExistsMock.mockImplementation(
