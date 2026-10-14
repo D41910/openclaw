@@ -24,6 +24,7 @@ packages/gateway-protocol/src/failover-reasons.ts
 packages/gateway-protocol/src/plugin-ui-capabilities.ts
 packages/gateway-protocol/src/protocol-validator.ts
 packages/gateway-protocol/src/protocol-value-normalization.ts
+packages/gateway-protocol/src/schema/approval-id.ts
 packages/gateway-protocol/src/schema/closed-object.ts
 packages/gateway-protocol/src/schema/failover-reason.ts
 packages/gateway-protocol/src/schema/plugin-declared-surface-groups.ts
@@ -384,10 +385,12 @@ src/agents/worktrees/template-cache.ts
 src/agents/worktrees/template-registry-async.ts
 src/agents/worktrees/template-registry.ts
 src/agents/worktrees/template-registry.worker.ts
+src/auto-reply/reply-payload.ts
 src/auto-reply/reply/delivery-hints.ts
 src/auto-reply/reply/display-text-sanitize.ts
 src/auto-reply/reply/history-limit.ts
 src/auto-reply/reply/inbound-context-marker.ts
+src/auto-reply/reply/reply-directives-core.ts
 src/auto-reply/reply/strip-inbound-meta.ts
 src/auto-reply/thinking.shared.ts
 src/auto-reply/tokens.ts
@@ -1245,6 +1248,7 @@ src/infra/worker-transfer-bytes.ts
 src/infra/wsl.ts
 src/infra/zstd-codec.ts
 src/logger.ts
+src/interactive/payload.ts
 src/logging/config.ts
 src/logging/console.ts
 src/logging/diagnostic-support-redaction.ts

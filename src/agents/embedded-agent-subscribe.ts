@@ -282,6 +282,7 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
       state.acceptedSessionSpawns.length > 0 ||
       state.visibleBlockReplyCount > 0;
     assistantTexts.length = 0;
+    state.assistantMessageTextBaseline = 0;
     state.answerSegments.length = 0;
     state.inputAnswer = undefined;
     state.keptAnswer = undefined;

@@ -169,6 +169,7 @@ describe("native provider reasoning subscription", () => {
               event.type === "message_update" &&
               event.assistantMessageEvent.type === "thinking_delta"
             ) {
+              expect(thinking).toEqual([]);
               firstDeltaConsumed.resolve();
             }
           },
@@ -185,7 +186,6 @@ describe("native provider reasoning subscription", () => {
         );
         expect(requestCount).toBe(1);
         expect(thinking).toEqual([
-          ...(consumption === "incremental" ? [{ text: "before", delta: "before" }] : []),
           { text: "[Reasoning redacted] after", delta: "[Reasoning redacted] after" },
         ]);
       } finally {

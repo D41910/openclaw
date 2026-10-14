@@ -378,10 +378,10 @@ async function runPreparedCliAgentOwned(
       runParams: params,
       modelId: context.modelId,
     });
-    const assistantReply = sourceReplyMirror.delivered
-      ? { text: sourceReplyMirror.visibleText ?? "", hasContent: true }
-      : prepareCliAssistantReply(output);
-    const assistantText = assistantReply.text;
+    const assistantReply = prepareCliAssistantReply(output);
+    const assistantText = sourceReplyMirror.delivered
+      ? (sourceReplyMirror.visibleText ?? "")
+      : assistantReply.text;
     if (
       !assistantReply.hasContent &&
       resolveSourceReplyDelivery(output) === "missing" &&

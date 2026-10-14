@@ -127,41 +127,56 @@ describe("assistant message final-line silence", () => {
     expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
   });
 
-  it("discards earlier text blocks without suppressing the following message", async () => {
-    const h = setup();
-    const reasoning = "No additional reply is needed for this group discussion.";
-    h.start();
-    h.delta(reasoning);
-    const silent = makeAgentAssistantMessage({
-      api: "ollama",
-      content: [
-        { type: "text", text: reasoning },
-        { type: "text", text: "NO_REPLY" },
-      ],
-    });
-    h.emit({
-      type: "message_update",
-      message: silent,
-      assistantMessageEvent: {
-        type: "text_delta",
-        delta: "NO_REPLY",
-        contentIndex: 1,
-        partial: silent,
-      },
-    });
-    h.emit({ type: "message_end", message: silent });
-    await h.subscription.waitForPendingEvents();
-    expect(h.publishedText().filter(Boolean)).toEqual([]);
-    expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
-    h.start();
-    h.delta("Here is the requested answer.");
-    h.end("Here is the requested answer.");
-    await h.subscription.waitForPendingEvents();
-    expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ text: "Here is the requested answer." }),
-    );
-    expect(h.publishedText().some((text) => text.includes(reasoning))).toBe(false);
-  });
+  it.each([false, true])(
+    "discards earlier text blocks without suppressing the following message (phased: %s)",
+    async (phased) => {
+      const h = setup();
+      const reasoning = "No additional reply is needed for this group discussion.";
+      h.start();
+      h.delta(reasoning);
+      const silent = makeAgentAssistantMessage({
+        api: "ollama",
+        content: [
+          {
+            type: "text",
+            text: reasoning,
+            ...(phased
+              ? { textSignature: JSON.stringify({ v: 1, id: "answer-0", phase: "final_answer" }) }
+              : {}),
+          },
+          {
+            type: "text",
+            text: "NO_REPLY",
+            ...(phased
+              ? { textSignature: JSON.stringify({ v: 1, id: "answer-1", phase: "final_answer" }) }
+              : {}),
+          },
+        ],
+      });
+      h.emit({
+        type: "message_update",
+        message: silent,
+        assistantMessageEvent: {
+          type: "text_delta",
+          delta: "NO_REPLY",
+          contentIndex: 1,
+          partial: silent,
+        },
+      });
+      h.emit({ type: "message_end", message: silent });
+      await h.subscription.waitForPendingEvents();
+      expect(h.publishedText().filter(Boolean)).toEqual([]);
+      expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
+      h.start();
+      h.delta("Here is the requested answer.");
+      h.end("Here is the requested answer.");
+      await h.subscription.waitForPendingEvents();
+      expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ text: "Here is the requested answer." }),
+      );
+      expect(h.publishedText().some((text) => text.includes(reasoning))).toBe(false);
+    },
+  );
 
   it("replaces a prepared source correction without losing reserved tool media", async () => {
     const h = setup();

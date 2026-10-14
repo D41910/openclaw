@@ -732,13 +732,10 @@ it.each(["immediate", "paced", "slow"])(
           .filter((data) => data?.text || data?.delta),
       ).toEqual([
         { itemId, text: "foo", delta: "foo" },
-        ...(mode === "immediate"
-          ? [
-              { itemId, text: replacement, delta: "baz" },
-              { itemId, delta: "baz" },
-            ]
-          : [{ itemId, text: `${replacement}baz`, delta: "bazbaz" }]),
+        { itemId, delta: "baz" },
+        { itemId, delta: "baz" },
       ]);
+      expect(chatDeltaText(frames)).toBe(`${replacement}baz`);
     } finally {
       try {
         await dispose();

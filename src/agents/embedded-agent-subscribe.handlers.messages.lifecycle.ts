@@ -52,6 +52,7 @@ export function handleMessageStart(
   // Only message_start opens another message's stream and block replies.
   ctx.resetAssistantMessageState(ctx.state.assistantTexts.length);
   ctx.state.assistantMessageStartIndex = ctx.state.assistantMessageIndex;
+  ctx.state.assistantMessageTextBaseline = ctx.state.assistantTextBaseline;
   // Use assistant message_start as the earliest "writing" signal for typing.
   emitAssistantMessageStart(ctx);
 }

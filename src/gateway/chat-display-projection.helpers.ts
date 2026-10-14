@@ -4,7 +4,7 @@ import {
   asOptionalRecord as readRecord,
 } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
-import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
+import { parseReplyDirectivesFromMedia } from "../auto-reply/reply/reply-directives-core.js";
 import { isMeaningfulMediaFact, readPersistedMediaFacts } from "../media/media-facts.js";
 import { isRelativeAssistantMediaReference, splitMediaOutput } from "../media/parse-output.js";
 import { normalizeInputProvenance } from "../sessions/input-provenance.js";
@@ -125,7 +125,7 @@ export function extractAssistantReplyDirectives(message: unknown) {
   }
   const content = typeof entry.text === "string" ? entry.text : entry.content;
   if (typeof content === "string") {
-    return parseReplyDirectives(content);
+    return parseReplyDirectivesFromMedia(splitMediaOutput(content));
   }
   if (!Array.isArray(content) || content.length === 0) {
     return undefined;
@@ -145,7 +145,9 @@ export function extractAssistantReplyDirectives(message: unknown) {
     }
     texts.push(typed.text);
   }
-  return texts.length > 0 ? parseReplyDirectives(texts.join("\n")) : undefined;
+  return texts.length > 0
+    ? parseReplyDirectivesFromMedia(splitMediaOutput(texts.join("\n")))
+    : undefined;
 }
 
 /** Applies one message's silent completion before display splits or caps its text. */

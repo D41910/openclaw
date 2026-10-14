@@ -83,8 +83,8 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       deliverSettledMessage(deliver, silent);
     }
   };
-  const discardPendingBlockReplies = () => {
-    const prefix = `block:${state.assistantMessageIndex}:`;
+  const discardPendingBlockReplies = (options?: { wholeMessage?: boolean }) => {
+    const prefix = options?.wholeMessage ? "block:" : `block:${state.assistantMessageIndex}:`;
     const stale = [...messageDeliveries].filter(([key]) => key.startsWith(prefix));
     if (stale.length === 0) {
       return false;
@@ -93,6 +93,9 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     for (const [key, { onDiscard }] of stale.toReversed()) {
       messageDeliveries.delete(key);
       onDiscard?.();
+    }
+    if (options?.wholeMessage) {
+      state.assistantTextBaseline = state.assistantMessageTextBaseline;
     }
     assistantTexts.splice(state.assistantTextBaseline);
     state.lastAssistantTextTrimmed = undefined;
@@ -265,8 +268,10 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       if (messageIndex === state.assistantMessageStartIndex && display.text !== finalText) {
         display.prefix = display.text = finalText;
         assistantProjection = { itemId: assistantItemId, text: finalText, replace: true };
-        // HTTP consumers retain append-only raw text. Only the Gateway display
-        // transfers provisional text to commentary, including deferred frames.
+        // Reclassified text is still private; retire its queued answer frame before
+        // publishing commentary or a later authoritative answer.
+        messageDeliveries.delete(`stream:${assistantItemId}`);
+        discardPendingBlockReplies();
         for (const scope of [streamScope, ...deferredAssistantScopes]) {
           const delivery = scope.delivery;
           if (
@@ -274,7 +279,7 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
             delivery.blockIndex >= messageIndex &&
             delivery.data.phase !== "final_answer"
           ) {
-            delivery.assistantProjection = assistantProjection;
+            scope.delivery = undefined;
           }
         }
       }
@@ -657,6 +662,7 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     // Replace timeout-salvaged text on completion; retain it when message_end
     // never arrives after a hard run-budget abort.
     if (args.hasSilentIntent) {
+      state.assistantTextBaseline = state.assistantMessageTextBaseline;
       replaceCurrentAssistantText(SILENT_REPLY_TOKEN);
       state.hasFlushedPartialText = false;
     } else if (state.hasFlushedPartialText) {

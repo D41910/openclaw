@@ -169,7 +169,7 @@ it("hands paced native reasoning to stable durable identity despite rewritten po
     update("Checking", "Checking", true);
     const first = update("Checking facts", " facts");
     await unlisten.drain();
-    expect(thoughts()).toHaveLength(1);
+    expect(thoughts()).toHaveLength(0);
     const source = readAgentAssistantSource(first);
     expect(source?.itemId).toEqual(expect.any(String));
     if (!source) {
@@ -190,10 +190,9 @@ it("hands paced native reasoning to stable durable identity despite rewritten po
     });
     await unlisten.drain();
     expect(thoughts().map((event) => ({ runId: event.runId, data: event.data }))).toEqual([
-      { runId: clientRunId, data: { text: "Checking", delta: "Checking", itemId: source.itemId } },
       {
         runId: clientRunId,
-        data: { text: "Checking facts", delta: " facts", itemId: source.itemId },
+        data: { text: "Checking facts", delta: "Checking facts", itemId: source.itemId },
       },
       {
         runId: clientRunId,
@@ -219,13 +218,17 @@ it("hands paced native reasoning to stable durable identity despite rewritten po
       message: { __openclaw: { id: messageId, runId, seq: 7 } },
     });
     vi.advanceTimersByTime(100);
-    expect(thoughts()).toHaveLength(3);
+    expect(thoughts()).toHaveLength(2);
 
     const second = update("Checking facts", "Checking facts", true);
     await unlisten.drain();
     const nextSource = readAgentAssistantSource(second);
     expect(nextSource?.itemId).toEqual(expect.any(String));
     expect(nextSource?.itemId).not.toBe(source.itemId);
+    expect(thoughts()).toHaveLength(2);
+    emit({ type: "message_end", message: second });
+    await subscription.waitForPendingEvents();
+    await unlisten.drain();
     gateway.chatRunState.flushPendingText(clientRunId);
     expect(thoughts().at(-1)?.data).toEqual({
       text: "Checking facts",

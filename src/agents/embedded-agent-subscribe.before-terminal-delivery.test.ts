@@ -534,21 +534,26 @@ describe("deferred reply supersession", () => {
       }
       await h.drain();
     }
+    expect(h.onBlockReply).not.toHaveBeenCalled();
+    expect(h.assistantEvents()).toEqual([]);
+    expect(
+      h.onAgentEvent.mock.calls.some(
+        ([event]) => event.stream === "item" && event.data.kind === "preamble",
+      ),
+    ).toBe(false);
+    h.end([media, commentary, final]);
+    await h.drain();
     const events = h.onAgentEvent.mock.calls.map(([event]) => event);
     const preamble = events.findIndex(
       (event) => event.stream === "item" && event.data.kind === "preamble",
     );
-    expect(
+    expect(preamble).toBeGreaterThan(
       events.findIndex((event) => event.stream === "item" && event.data.kind === "tool"),
-    ).toBeGreaterThan(preamble);
-    expect(h.onBlockReply).not.toHaveBeenCalled();
-    expect(h.assistantEvents()).toEqual([]);
+    );
     expect(h.onAgentEvent).toHaveBeenCalledWith({
       stream: "item",
       data: expect.objectContaining({ kind: "preamble", progressText: "Checking current state." }),
     });
-    h.end([media, commentary, final]);
-    await h.drain();
     const replies = h.onBlockReply.mock.calls.map(([payload]) => payload);
     const mediaReplies = replies.filter((payload) => payload.mediaUrls?.length);
     expect(mediaReplies).toHaveLength(1);
@@ -632,7 +637,7 @@ it("exposes accepted child completion custody to the natural-stop decision", asy
 
 describe("block reply flush boundaries", () => {
   it.each(["text_end", "message_end"] as const)(
-    "waits for async block replies before the %s flush",
+    "waits for completed async block replies before the %s flush",
     async (blockReplyBreak) => {
       const delivered: string[] = [];
       const snapshots: string[][] = [];
@@ -652,14 +657,21 @@ describe("block reply flush boundaries", () => {
       });
       emit({ type: "message_start", message: { role: "assistant" } });
       emitAssistantTextDelta({ emit, delta: "Short chunk." });
-      emit(
-        blockReplyBreak === "text_end"
-          ? { type: "tool_execution_start", toolName: "bash", toolCallId: "flush", args: {} }
-          : { type: "message_end", message: textAssistant("Short chunk.") },
-      );
+      if (blockReplyBreak === "text_end") {
+        emit({ type: "tool_execution_start", toolName: "bash", toolCallId: "held", args: {} });
+        await subscription.waitForPendingEvents();
+        expect(delivered).toEqual([]);
+        expect(snapshots).toEqual([[]]);
+      }
+      emit({ type: "message_end", message: textAssistant("Short chunk.") });
+      if (blockReplyBreak === "text_end") {
+        emit({ type: "tool_execution_start", toolName: "bash", toolCallId: "flush", args: {} });
+      }
       await subscription.waitForPendingEvents();
       expect(delivered).toEqual(["Short chunk."]);
-      expect(snapshots).toEqual([["Short chunk."]]);
+      expect(snapshots).toEqual(
+        blockReplyBreak === "text_end" ? [[], ["Short chunk."]] : [["Short chunk."]],
+      );
       subscription.unsubscribe();
     },
   );

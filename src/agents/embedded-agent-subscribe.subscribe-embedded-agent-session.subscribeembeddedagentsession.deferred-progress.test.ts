@@ -74,24 +74,20 @@ describe("subscribeEmbeddedAgentSession deferred progress", () => {
         await subscription.waitForPendingEvents();
 
         const finalizedPayloads = assistantPayloads();
-        expect(finalizedPayloads).toHaveLength(deferred ? 3 : 4);
+        expect(finalizedPayloads).toHaveLength(deferred ? 1 : 2);
         const firstMessage = deferred ? undefined : finalizedPayloads[0];
         if (!deferred) {
           expect(firstMessage).toMatchObject({ text: "Before tool.", itemId: expect.any(String) });
           expect(firstMessage?.itemId).not.toBe("");
         }
-        const streamed = finalizedPayloads.slice(deferred ? 0 : 1, -1);
-        expect(streamed.map((payload) => payload.text)).toEqual([
-          firstBlock,
-          `${firstBlock}\n${lastBlock}`,
-        ]);
-        const secondItemId = expectDefined(streamed[0], "second message preview").itemId;
+        expect(finalizedPayloads.some((payload) => payload.text?.includes(firstBlock))).toBe(false);
+        expect(finalizedPayloads.some((payload) => payload.text?.includes(lastBlock))).toBe(false);
+        const secondItemId = expectDefined(finalizedPayloads.at(-1), "second message final").itemId;
         expect(secondItemId).toEqual(expect.any(String));
         expect(secondItemId).not.toBe("");
         if (firstMessage) {
           expect(secondItemId).not.toBe(firstMessage.itemId);
         }
-        expect(streamed.every((payload) => payload.itemId === secondItemId)).toBe(true);
         expect(finalizedPayloads.at(-1)).toMatchObject({ text: finalText, itemId: secondItemId });
 
         emit({
@@ -177,7 +173,7 @@ it.each<FlushCase>([
       { final, expected: final ? [final] : [] },
     ],
   })),
-])("flushPartialAssistantText preserves $name", ({ enforceFinalTag, chunked, steps }) => {
+])("flushPartialAssistantText preserves $name", async ({ enforceFinalTag, chunked, steps }) => {
   const onBlockReply = vi.fn<BlockReply>();
   const { emit, subscription } = createSubscribedSessionHarness({
     runId: "run",
@@ -221,6 +217,11 @@ it.each<FlushCase>([
     expect(subscription.assistantTexts).toEqual(expected);
   }
   if (chunked) {
-    expect(onBlockReply).toHaveBeenCalled();
+    expect(onBlockReply).not.toHaveBeenCalled();
+    emit({ type: "agent_end", messages: [], willRetry: false });
+    await subscription.waitForPendingEvents();
+    expect(onBlockReply.mock.calls.map(([payload]) => payload.text).join(" ")).toBe(
+      "Hello world. Next sentence.",
+    );
   }
 });

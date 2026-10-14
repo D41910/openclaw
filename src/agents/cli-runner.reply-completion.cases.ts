@@ -131,52 +131,61 @@ export function registerCliReplyCompletionTests({
   it.each([
     { name: "final source reply", target: "chat123", final: true, expected: "success" },
     { name: "source progress", target: "chat123", final: false, expected: "error" },
-    { name: "another conversation", target: "elsewhere", final: true, expected: "error" },
-  ] as const)(
-    "settles NO_REPLY after $name without replaying a send",
-    async ({ target, final, expected }) => {
-      supervisorSpawnMock.mockImplementationOnce(async (input) => {
-        completeToolCall(
-          {
-            captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
-            toolName: "message",
-            args: {
-              action: "send",
-              channel: "telegram",
-              target,
-              message: "sent without a terminal reply",
-              final,
-            },
-          },
-          { status: "sent" },
-        );
-        input.onStdout?.(
-          `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
-        );
-        return makeManagedRun();
-      });
-      const context = createContext({
-        sessionKey: "agent:main:telegram:direct:chat123",
-        runId: "run-required-source-delivery",
-        sourceReplyDeliveryMode: "message_tool_only",
-        messageChannel: "telegram",
-        currentChannelId: "chat123",
-        terminalReplyExpectation: "required",
-      });
-      context.backendResolved.config.output = "jsonl";
-
-      const result = await run(context);
-
-      expect(result.didSendViaMessagingTool).toBe(true);
-      expect(result.meta.executionTrace?.attempts?.[0]?.result).toBe(expected);
-      expect(result.payloads).toEqual(
-        target === "chat123" && !final
-          ? [{ text: "The reply stopped after sending progress. Please try again.", isError: true }]
-          : undefined,
-      );
-      expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+    {
+      name: "source progress with silent prose",
+      target: "chat123",
+      final: false,
+      expected: "error",
+      response: "The progress was already sent.\nNO_REPLY",
     },
-  );
+    { name: "another conversation", target: "elsewhere", final: true, expected: "error" },
+  ] as const)("settles NO_REPLY after $name without replaying a send", async (testCase) => {
+    const { target, final, expected } = testCase;
+    supervisorSpawnMock.mockImplementationOnce(async (input) => {
+      completeToolCall(
+        {
+          captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
+          toolName: "message",
+          args: {
+            action: "send",
+            channel: "telegram",
+            target,
+            message: "sent without a terminal reply",
+            final,
+          },
+        },
+        { status: "sent" },
+      );
+      input.onStdout?.(
+        `${JSON.stringify({
+          type: "result",
+          session_id: "claude-session",
+          result: "response" in testCase ? testCase.response : SILENT_REPLY_TOKEN,
+        })}\n`,
+      );
+      return makeManagedRun();
+    });
+    const context = createContext({
+      sessionKey: "agent:main:telegram:direct:chat123",
+      runId: "run-required-source-delivery",
+      sourceReplyDeliveryMode: "message_tool_only",
+      messageChannel: "telegram",
+      currentChannelId: "chat123",
+      terminalReplyExpectation: "required",
+    });
+    context.backendResolved.config.output = "jsonl";
+
+    const result = await run(context);
+
+    expect(result.didSendViaMessagingTool).toBe(true);
+    expect(result.meta.executionTrace?.attempts?.[0]?.result).toBe(expected);
+    expect(result.payloads).toEqual(
+      target === "chat123" && !final
+        ? [{ text: "The reply stopped after sending progress. Please try again.", isError: true }]
+        : undefined,
+    );
+    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+  });
 
   it.each([
     { name: "final", final: true, interSession: false, expected: "success" },

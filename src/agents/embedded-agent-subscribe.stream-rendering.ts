@@ -18,7 +18,7 @@ import {
   emitAgentEventWithAssistantSourceIfCurrent,
   readAgentAssistantSource,
 } from "../infra/agent-events.js";
-import { findFinalTagMatches } from "../shared/text/final-tags.js";
+import { findFinalTagMatches, stripFinalTags } from "../shared/text/final-tags.js";
 import { hasOrphanReasoningCloseBoundary } from "../shared/text/reasoning-tags.js";
 import {
   createTextProjection,
@@ -117,7 +117,7 @@ type StreamRenderingParams = {
   flushAssistantStream: EmbeddedAgentSubscribeContext["flushAssistantStream"];
   deferAssistantMessageDelivery: EmbeddedAgentSubscribeContext["deferAssistantMessageDelivery"];
   pendingBlockReplyTasks: Set<Promise<void>>;
-  discardPendingBlockReplies: () => boolean;
+  discardPendingBlockReplies: (options?: { wholeMessage?: boolean }) => boolean;
   pushAssistantText: (text: string, normalizedText?: string) => void;
   shouldSkipAssistantText: (text: string, normalizedText?: string) => boolean;
 };
@@ -277,7 +277,7 @@ export function createStreamRendering({
     if (!params.enforceFinalTag) {
       stateLocal.inlineCode = finalCodeSpans.inlineState;
       stateLocal.fence = finalCodeSpans.fenceState;
-      return stripFinalTagsOutsideCodeSpans(processed, finalCodeSpans.isInside);
+      return stripFinalTags(processed, finalCodeSpans.isInside);
     }
 
     let result = "";
@@ -331,23 +331,9 @@ export function createStreamRendering({
     stateLocal.fence = finalCodeSpans.fenceState;
     stateLocal.finalInlineCode = inFinal ? resultCodeSpans.inlineState : undefined;
     stateLocal.finalFence = inFinal ? resultCodeSpans.fenceState : undefined;
-    return stripFinalTagsOutsideCodeSpans(result, resultCodeSpans.isInside);
+    return stripFinalTags(result, resultCodeSpans.isInside);
   };
 
-  const stripFinalTagsOutsideCodeSpans = (text: string, isInside: (index: number) => boolean) => {
-    let output = "";
-    let lastIndex = 0;
-    for (const match of findFinalTagMatches(text)) {
-      const idx = match.index;
-      if (isInside(idx)) {
-        continue;
-      }
-      output += text.slice(lastIndex, idx);
-      lastIndex = idx + match.text.length;
-    }
-    output += text.slice(lastIndex);
-    return output;
-  };
   const emitBlockChunk: EmbeddedAgentSubscribeContext["emitBlockChunk"] = (text, options) => {
     if (
       state.suppressBlockChunks ||
@@ -698,16 +684,22 @@ export function createStreamRendering({
     });
   };
 
-  const resetPreparedBlockReplySource = () => {
-    if (!discardPendingBlockReplies()) {
-      return false;
-    }
-    coveredBlockSources.delete(state.assistantMessageIndex);
-    acceptedBlockSourceGenerations.delete(state.assistantMessageIndex);
-    state.lastBlockReplyText = undefined;
-    state.lastDeliveredBlockReplyText = undefined;
-    return true;
-  };
+  const resetPreparedBlockReplySource: EmbeddedAgentSubscribeContext["resetPreparedBlockReplySource"] =
+    (options) => {
+      if (!discardPendingBlockReplies(options)) {
+        return false;
+      }
+      if (options?.wholeMessage) {
+        coveredBlockSources.clear();
+        acceptedBlockSourceGenerations.clear();
+      } else {
+        coveredBlockSources.delete(state.assistantMessageIndex);
+        acceptedBlockSourceGenerations.delete(state.assistantMessageIndex);
+      }
+      state.lastBlockReplyText = undefined;
+      state.lastDeliveredBlockReplyText = undefined;
+      return true;
+    };
 
   const resetAssistantMessageState = (nextAssistantTextBaseline: number) => {
     flushAssistantStream();

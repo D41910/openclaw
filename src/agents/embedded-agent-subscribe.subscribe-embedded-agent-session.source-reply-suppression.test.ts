@@ -287,7 +287,7 @@ describe("subscribeEmbeddedAgentSession", () => {
       message: { role: "assistant", content: [{ type: "thinking", thinking: "private" }] },
       assistantMessageEvent: { type: "thinking_delta", delta: "private" },
     });
-    expect(onReasoningStream).toHaveBeenCalledTimes(1);
+    expect(onReasoningStream).not.toHaveBeenCalled();
 
     await emitMessageToolLifecycle({
       emit,
@@ -299,6 +299,7 @@ describe("subscribeEmbeddedAgentSession", () => {
     emitAssistantMessageEnd(emit, "Private final output.");
     await Promise.resolve();
 
+    expect(onReasoningStream).not.toHaveBeenCalled();
     expect(onReasoningEnd).not.toHaveBeenCalled();
   });
 

@@ -1,24 +1,11 @@
 import { trySafeFileURLToPath } from "@openclaw/fs-safe/advanced";
 import { splitMediaFromOutput } from "../../media/parse.js";
 import {
-  parseInlineDirectives,
-  stripInlineDirectiveTagsForDelivery,
-} from "../../utils/directive-tags.js";
-import { appendReplyMediaFailures, type ReplyMediaFailure } from "../reply-payload.js";
-import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../tokens.js";
+  parseReplyDirectivesFromMedia,
+  type ReplyDirectiveParseResult,
+} from "./reply-directives-core.js";
 
-export type ReplyDirectiveParseResult = {
-  text: string;
-  mediaUrls?: string[];
-  mediaFailures?: ReplyMediaFailure[];
-  replyToId?: string;
-  replyToCurrent?: boolean;
-  replyToTag: boolean;
-  audioAsVoice?: boolean;
-  isSilent: boolean;
-  /** Silent authored text can still produce a visible attachment failure. */
-  hasSilentIntent: boolean;
-};
+export type { ReplyDirectiveParseResult } from "./reply-directives-core.js";
 
 export function parseReplyDirectives(
   raw: string,
@@ -31,48 +18,10 @@ export function parseReplyDirectives(
     onAudioDirective?: () => void;
   } = {},
 ): ReplyDirectiveParseResult {
-  const split = splitMediaFromOutput(raw, {
-    extractMarkdownImages: options.extractMarkdownImages,
-    extractMediaDirectives: options.extractMediaDirectives,
-    preserveTrailingWhitespace: options.preserveTrailingWhitespace,
-    onAudioDirective: options.onAudioDirective,
-  });
-  let text = split.text ?? "";
-
-  const replyParsed = text.includes("[[")
-    ? parseInlineDirectives(text, {
-        currentMessageId: options.currentMessageId,
-        stripAudioTag: false,
-        preserveTrailingWhitespace: options.preserveTrailingWhitespace,
-      })
-    : undefined;
-
-  text = stripInlineDirectiveTagsForDelivery(replyParsed?.hasReplyTag ? replyParsed.text : text, {
-    preserveTrailingWhitespace: options.preserveTrailingWhitespace,
-  }).text;
-
-  const silentToken = options.silentToken ?? SILENT_REPLY_TOKEN;
-  const isSilent = isSilentReplyPayloadText(text, silentToken);
-  const mediaFailures = Array.from(
-    { length: split.rejectedMediaCount ?? 0 },
-    (): ReplyMediaFailure => ({
-      code: "invalid-reference",
-      kind: "document",
-      label: "Media not attached",
-    }),
-  );
-
+  const parsed = parseReplyDirectivesFromMedia(splitMediaFromOutput(raw, options), options);
   return {
-    // Silent payloads must not leak the control token into channel delivery.
-    text: appendReplyMediaFailures(isSilent ? "" : text, mediaFailures) ?? "",
-    // Keep native path conversion outside the browser-shared parser and before reply policy.
-    mediaUrls: split.mediaUrls?.map((source) => trySafeFileURLToPath(source) ?? source),
-    ...(mediaFailures.length ? { mediaFailures } : {}),
-    replyToId: replyParsed?.replyToId,
-    replyToCurrent: replyParsed?.replyToCurrent || undefined,
-    replyToTag: replyParsed?.hasReplyTag ?? false,
-    audioAsVoice: split.audioAsVoice,
-    isSilent: isSilent && !mediaFailures.length,
-    hasSilentIntent: isSilent,
+    ...parsed,
+    // Native loaders own file URL decoding; browser display preserves source spelling.
+    mediaUrls: parsed.mediaUrls?.map((source) => trySafeFileURLToPath(source) ?? source),
   };
 }

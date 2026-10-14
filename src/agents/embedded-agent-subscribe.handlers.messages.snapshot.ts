@@ -272,7 +272,9 @@ export function reconcileBlockReplySnapshot(
     }
   }
   // These ranges are prepared, not delivered. Retire them before rebuilding the changed source.
-  const replacedPreparedSource = ctx.resetPreparedBlockReplySource();
+  const replacedPreparedSource = ctx.resetPreparedBlockReplySource({
+    wholeMessage: !nextScope.valid,
+  });
   if (
     retainedPrefix &&
     nextText.length < consumed &&

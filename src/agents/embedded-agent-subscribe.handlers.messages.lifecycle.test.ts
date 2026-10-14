@@ -256,7 +256,12 @@ describe("handleMessageEnd", () => {
         usage: { input: 10, output: 5, total: 15 },
       },
     });
-    expect(onAgentEvent).not.toHaveBeenCalled();
+    expect(onAgentEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        stream: "assistant",
+        data: expect.objectContaining({ text: "", delta: "" }),
+      }),
+    );
     expect(onBlockReply).not.toHaveBeenCalled();
     expect(ctx.state.assistantTexts).toEqual([]);
     expect(ctx.finalizeAssistantTexts).toHaveBeenCalledWith(expect.objectContaining({ text: "" }));

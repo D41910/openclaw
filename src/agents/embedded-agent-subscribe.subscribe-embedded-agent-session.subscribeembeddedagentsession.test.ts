@@ -366,9 +366,7 @@ describe("subscribeEmbeddedAgentSession", () => {
     emitAssistantTextDelta(emit, "Generated 1 image.\n");
     await subscription.waitForPendingEvents();
 
-    expectBlockReplyPayload(onBlockReply, {
-      text: "Generated 1 image.",
-    });
+    expect(onBlockReply).not.toHaveBeenCalled();
     const earlyMediaPayloads = onBlockReply.mock.calls
       .map(([payload]) => payload)
       .filter((payload) => payload.mediaUrls?.length);
@@ -394,6 +392,9 @@ describe("subscribeEmbeddedAgentSession", () => {
       .map(([payload]) => payload)
       .filter((payload) => payload.mediaUrls?.includes("/tmp/generated.png"));
     expect(mediaPayloads).toHaveLength(1);
+    expect(onBlockReply.mock.calls.map(([payload]) => payload.text).filter(Boolean)).toEqual([
+      "Generated 1 image.",
+    ]);
     expect(subscription.hasToolMediaBlockReply()).toBe(true);
   });
 
@@ -510,6 +511,17 @@ describe("subscribeEmbeddedAgentSession", () => {
       onReasoningStream,
     });
     emitThinkingEvent(emit, "Checking files", { type: "thinking_delta", delta: "Checking files" });
+    expect(onReasoningStream).not.toHaveBeenCalled();
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "Checking files" },
+          { type: "text", text: "Final answer" },
+        ],
+      },
+    });
     if (enabled) {
       expect(onReasoningStream).toHaveBeenCalledWith({
         text: "Checking files",
@@ -582,6 +594,11 @@ describe("subscribeEmbeddedAgentSession", () => {
 
     emitAssistantTextDelta(emit, " files</think>\nFinal answer");
 
+    expect(onReasoningEnd).not.toHaveBeenCalled();
+    emit({
+      type: "message_end",
+      message: textAssistant("<think>Checking files</think>\nFinal answer"),
+    });
     expect(onReasoningEnd).toHaveBeenCalledTimes(1);
   });
 
@@ -666,7 +683,7 @@ describe("subscribeEmbeddedAgentSession", () => {
             );
           }
           await subscription.waitForPendingEvents();
-          expect(onBlockReply.mock.calls.map(([reply]) => reply.text)).toEqual([priorText]);
+          expect(onBlockReply).not.toHaveBeenCalled();
         }
         emit(
           createOpenAiResponsesTextEvent({
@@ -676,7 +693,7 @@ describe("subscribeEmbeddedAgentSession", () => {
             signaturePhase: "final_answer",
           }),
         );
-        expect(onBlockReply).toHaveBeenCalledTimes(priorText ? 1 : 0);
+        expect(onBlockReply).not.toHaveBeenCalled();
         const checkpoint = {
           text: `${replyToId ? `[[reply_to:${replyToId}]] ` : ""}${text}`,
           id: "answer",
@@ -696,6 +713,8 @@ describe("subscribeEmbeddedAgentSession", () => {
           emit({ type: "message_end", message });
         } else {
           emit(createOpenAiResponsesTextEvent({ type: "text_end", ...checkpoint }));
+          expect(onBlockReply).not.toHaveBeenCalled();
+          emit({ type: "message_end", message: createOpenAiResponsesPartial(checkpoint) });
         }
         await subscription.waitForPendingEvents();
 

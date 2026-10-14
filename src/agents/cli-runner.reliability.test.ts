@@ -69,7 +69,6 @@ import { hashCliReseedPrompt } from "./cli-runner/reseed-envelope.js";
 import { captureCliRunStartTime, type PreparedCliRunContext } from "./cli-runner/types.js";
 import { persistCliSessionBindingResult } from "./cli-session-store.js";
 import * as cliTranscript from "./command/attempt-execution.helpers.js";
-import { isIntermediateAssistantTranscriptMessage } from "./embedded-agent-runner/message-visibility.js";
 import { runAgentHarnessBeforeMessageWriteHook } from "./harness/hook-helpers.js";
 import { MAX_AGENT_HOOK_HISTORY_MESSAGES } from "./harness/hook-history.js";
 import { SessionManager } from "./sessions/session-manager.js";
@@ -1315,6 +1314,8 @@ describe("runCliAgent reliability", () => {
         { runId: childRunId, childSessionKey, expectsCompletionMessage: true },
       ],
       meta: {
+        finalAssistantVisibleText: "",
+        finalAssistantRawText: SILENT_REPLY_TOKEN,
         yielded: true,
         livenessState: "paused",
         stopReason: "end_turn",
@@ -1326,14 +1327,7 @@ describe("runCliAgent reliability", () => {
       },
     });
     const messages = await readTranscriptMessages(sessionTarget);
-    expect(messages).toEqual([
-      expect.objectContaining({
-        role: "assistant",
-        content: [{ type: "text", text: SILENT_REPLY_TOKEN }],
-        idempotencyKey: `cli-assistant:${requesterTurnRunId}`,
-      }),
-    ]);
-    expect(isIntermediateAssistantTranscriptMessage(messages[0])).toBe(true);
+    expect(messages).toEqual([]);
   });
 
   it("keeps raw assistant output separate from transformed visible CLI output", async () => {
@@ -1973,7 +1967,9 @@ describe("runCliAgent reliability", () => {
 
       expect(result.payloads).toEqual([{ text: SILENT_REPLY_TOKEN }]);
       expect(result.meta.executionTrace?.fallbackUsed).toBe(false);
-      expect(hookRunner.runLlmOutput).toHaveBeenCalledTimes(text.trim() ? 1 : 0);
+      expect(result.meta.finalAssistantVisibleText).toBe("");
+      expect(result.meta.finalAssistantRawText).toBe(text.trim() || undefined);
+      expect(hookRunner.runLlmOutput).not.toHaveBeenCalled();
     },
   );
 

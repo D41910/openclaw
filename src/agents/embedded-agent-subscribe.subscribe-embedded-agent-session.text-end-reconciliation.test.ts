@@ -67,24 +67,42 @@ function setup(options: Options = {}) {
 const sentenceChunking = { minChars: 10, maxChars: 16, breakPreference: "sentence" as const };
 
 describe("native snapshot reconciliation", () => {
-  it("restarts after a vanished native scope", async () => {
+  it.each([false, true])("restarts after a vanished native scope (phased: %s)", async (phased) => {
     const h = setup();
+    const frame = (texts: string[]): NativeMessage => ({
+      ...assistant(texts),
+      ...(phased ? { api: "openai-responses" } : {}),
+      content: texts.map((text, index) => ({
+        type: "text",
+        text,
+        ...(phased
+          ? {
+              textSignature: JSON.stringify({
+                v: 1,
+                id: `answer-${index}`,
+                phase: "final_answer",
+              }),
+            }
+          : {}),
+      })),
+    });
     h.start();
     const original = ["First", "Second"];
     for (const [index, delta] of original.entries()) {
       const texts = original.slice(0, index + 1);
-      h.delta(texts, index, delta);
-      h.end(texts, index);
+      h.nativeEvent("text_delta", frame(texts), index, delta);
+      h.nativeEvent("text_end", frame(texts), index, delta);
       await h.subscription.waitForPendingEvents();
-      expect(h.texts()).toEqual(texts);
+      expect(h.texts()).toEqual([]);
     }
-    h.end(["First", ""], 1);
+    h.nativeEvent("text_end", frame(["First", ""]), 1, "");
     await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual(original);
-    h.emit({ type: "message_end", message: assistant(["Replacement"]) });
+    expect(h.texts()).toEqual([]);
+    h.emit({ type: "message_end", message: frame(["Replacement"]) });
     await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual([...original, "Replacement"]);
-    expect(h.onBlockReply).toHaveBeenCalledTimes(3);
+    expect(h.texts()).toEqual(["Replacement"]);
+    expect(h.subscription.assistantTexts).toEqual(["Replacement"]);
+    expect(h.onBlockReply).toHaveBeenCalledTimes(1);
   });
 
   it("preserves an orphan-close replacement after a drained raw prefix", async () => {
@@ -93,22 +111,19 @@ describe("native snapshot reconciliation", () => {
     const answer = "This is the complete visible answer.";
     let raw = "";
     h.start();
-    for (const [index, delta] of ["private chain. ", `</mm:think>${answer}`].entries()) {
+    for (const delta of ["private chain. ", `</mm:think>${answer}`]) {
       raw += delta;
       h.delta([raw], 0, delta);
       await h.subscription.waitForPendingEvents();
-      if (index === 0) {
-        expect(h.texts()).toEqual(["private chain."]);
-      }
+      expect(h.texts()).toEqual([]);
     }
     h.end([raw], 0);
     await h.subscription.waitForPendingEvents();
-    const delivered = h.texts();
-    expect(delivered[0]).toBe("private chain.");
-    expect(delivered.slice(1).join(" ")).toBe(answer);
+    expect(h.texts()).toEqual([]);
     h.emit({ type: "message_end", message: assistant([raw]) });
     await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual(delivered);
+    expect(h.texts().join(" ")).toBe(answer);
+    expect(h.texts().join(" ")).not.toContain("private chain");
     expect(onAgentEvent.mock.calls.at(-1)?.[0]).toMatchObject({
       stream: "assistant",
       data: { text: answer },
@@ -121,19 +136,19 @@ describe("native snapshot reconciliation", () => {
     const draft = "```text\n[[reply_to:example-id]]\n```\n\nThe original draft continues here.";
     h.start();
     h.delta([draft], 0);
-    expect(onAgentEvent.mock.calls.at(-1)?.[0]).toMatchObject({
-      stream: "assistant",
-      data: { text: draft },
-    });
-    onAgentEvent.mockClear();
-    h.end(["[[reply_to:replacement]]Corrected"], 0);
+    expect(onAgentEvent.mock.calls.filter(([event]) => event.stream === "assistant")).toEqual([]);
+    const corrected = "[[reply_to:replacement]]Corrected";
+    h.end([corrected], 0);
+    await h.subscription.waitForPendingEvents();
+    expect(h.texts()).toEqual([]);
+    h.emit({ type: "message_end", message: assistant([corrected]) });
     await h.subscription.waitForPendingEvents();
     expect({
       events: onAgentEvent.mock.calls.map(([event]) => event),
       blocks: h.texts(),
       assistantTexts: h.subscription.assistantTexts,
     }).toMatchObject({
-      events: [{ stream: "assistant", data: { text: "Corrected", delta: "", replace: true } }],
+      events: [{ stream: "assistant", data: { text: "Corrected", delta: "" } }],
       blocks: ["Corrected"],
       assistantTexts: ["Corrected"],
     });
@@ -145,41 +160,48 @@ describe("native snapshot reconciliation", () => {
   });
 
   it.each([
-    { name: "shortened", checkpoint: "Hello world. Next sentence.", tail: [] },
+    {
+      name: "shortened",
+      checkpoint: "Hello world. Next sentence.",
+      expected: ["First block.", "Hello world.", "Next sentence."],
+    },
     {
       name: "corrected identical tail",
       checkpoint: "Hello world. Hello world.",
-      tail: ["Hello world."],
+      expected: ["First block.", "Hello world.", "Hello world."],
     },
-  ])("preserves delivered sentence chunks at a $name checkpoint", async ({ checkpoint, tail }) => {
-    const h = setup({ blockReplyChunking: sentenceChunking });
-    const first = "First block.";
-    const delivered = [first, "Hello world.", "Next sentence."];
-    h.start();
-    h.delta([first], 0);
-    h.end([first], 0);
-    await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual([first]);
-    let second = "";
-    for (const delta of ["Hello world. ", "Next sentence. ", "Tail"]) {
-      second += delta;
-      h.delta([first, second], 1, delta);
-    }
-    await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual(delivered);
-    expect(h.subscription.assistantTexts).toEqual(delivered);
-    h.end([first, checkpoint], 1);
-    await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual([...delivered, ...tail]);
-    expect(h.subscription.assistantTexts).toEqual([...delivered, ...tail]);
-    expect(h.onBlockReply).toHaveBeenCalledTimes(delivered.length + tail.length);
-  });
+  ])(
+    "delivers authoritative sentence chunks at a $name checkpoint",
+    async ({ checkpoint, expected }) => {
+      const h = setup({ blockReplyChunking: sentenceChunking });
+      const first = "First block.";
+      h.start();
+      h.delta([first], 0);
+      h.end([first], 0);
+      await h.subscription.waitForPendingEvents();
+      expect(h.texts()).toEqual([]);
+      let second = "";
+      for (const delta of ["Hello world. ", "Next sentence. ", "Tail"]) {
+        second += delta;
+        h.delta([first, second], 1, delta);
+      }
+      await h.subscription.waitForPendingEvents();
+      expect(h.texts()).toEqual([]);
+      h.end([first, checkpoint], 1);
+      await h.subscription.waitForPendingEvents();
+      expect(h.texts()).toEqual([]);
+      h.emit({ type: "message_end", message: assistant([first, checkpoint]) });
+      await h.subscription.waitForPendingEvents();
+      expect(h.texts()).toEqual(expected);
+      expect(h.subscription.assistantTexts).toEqual(expected);
+      expect(h.onBlockReply).toHaveBeenCalledTimes(expected.length);
+    },
+  );
 
   it("keeps native code continuation fenced after a shortened open-fence checkpoint", async () => {
     const h = setup({ blockReplyChunking: { minChars: 1, maxChars: 20 } });
     const shortened = "```txt\nabc";
     const continuation = "defghijklmnopqrstuvwxyz\n```";
-    const firstChunk = "```txt\nabcdefghi\n```";
     h.start();
     let text = "";
     for (const delta of ["`", "``txt\n", "abc", "def", "ghi", "jklmnop"]) {
@@ -187,26 +209,25 @@ describe("native snapshot reconciliation", () => {
       h.delta([text], 0, delta);
     }
     await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual([firstChunk]);
+    expect(h.texts()).toEqual([]);
     h.end([shortened], 0);
     await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual([firstChunk]);
-    expect(h.onBlockReply).toHaveBeenCalledTimes(1);
+    expect(h.texts()).toEqual([]);
     h.delta([shortened, continuation], 1);
     h.end([shortened, continuation], 1);
     await h.subscription.waitForPendingEvents();
+    expect(h.texts()).toEqual([]);
+    h.emit({ type: "message_end", message: assistant([shortened, continuation]) });
+    await h.subscription.waitForPendingEvents();
     const delivered = h.texts();
-    expect(delivered[0]).toBe(firstChunk);
-    const bodies = delivered.slice(1).map((chunk) => {
+    expect(delivered.length).toBeGreaterThan(1);
+    const bodies = delivered.map((chunk) => {
       expect(chunk.startsWith("```txt\n")).toBe(true);
       expect(chunk.endsWith("\n```")).toBe(true);
       expect(chunk.length).toBeLessThanOrEqual(20);
       return chunk.slice("```txt\n".length, -"\n```".length).replaceAll("\n", "");
     });
-    expect(bodies.join("")).toBe("defghijklmnopqrstuvwxyz");
-    h.emit({ type: "message_end", message: assistant([shortened, continuation]) });
-    await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual(delivered);
+    expect(bodies.join("")).toBe("abcdefghijklmnopqrstuvwxyz");
     expect(h.onBlockReply).toHaveBeenCalledTimes(delivered.length);
   });
 
@@ -217,7 +238,7 @@ describe("native snapshot reconciliation", () => {
     h.delta(["Same"], 0);
     h.end(["Same"], 0);
     await h.subscription.waitForPendingEvents();
-    expect(h.texts()).toEqual(["Same"]);
+    expect(h.texts()).toEqual([]);
     expect(h.subscription.assistantTexts).toEqual(["Same"]);
     h.emit({ type: "message_end", message: assistant(["Same", "Same"]) });
     await h.subscription.waitForPendingEvents();
@@ -249,18 +270,19 @@ describe("native snapshot reconciliation", () => {
       h.nativeEvent("text_delta", partial, index, text);
       h.nativeEvent("text_end", partial, index, text);
       await h.subscription.waitForPendingEvents();
-      expect(h.texts()).toEqual(expected);
+      expect(h.texts()).toEqual([]);
       expect(h.subscription.assistantTexts).toEqual(expected);
-      expect(onAgentEvent.mock.calls.at(-1)?.[0]).toMatchObject({
-        stream: "assistant",
-        data: { text: expected.join("\n") },
-      });
+      expect(onAgentEvent.mock.calls.filter(([event]) => event.stream === "assistant")).toEqual([]);
     }
     h.emit({ type: "message_end", message: partial });
     await h.subscription.waitForPendingEvents();
     expect(h.texts()).toEqual(["First", "Second"]);
     expect(h.subscription.assistantTexts).toEqual(["First", "Second"]);
     expect(h.onBlockReply).toHaveBeenCalledTimes(2);
+    expect(onAgentEvent.mock.calls.at(-1)?.[0]).toMatchObject({
+      stream: "assistant",
+      data: { text: "First\nSecond" },
+    });
   });
 
   it.each([
@@ -294,18 +316,16 @@ describe("native snapshot reconciliation", () => {
       h.start();
       for (const [index, delta] of chunks.entries()) {
         h.delta(chunks.slice(0, index + 1), index, delta);
-        expect(visibleUpdates()).toEqual(index === chunks.length - 1 ? expected : []);
+        expect(visibleUpdates()).toEqual([]);
       }
       h.end(chunks, chunks.length - 1);
       await h.subscription.waitForPendingEvents();
-      expect({
-        events: visibleUpdates(),
-        blocks: h.texts(),
-        assistantTexts: h.subscription.assistantTexts,
-      }).toEqual({ events: expected, blocks: expected, assistantTexts: expected });
+      expect(visibleUpdates()).toEqual([]);
+      expect(h.texts()).toEqual([]);
       h.emit({ type: "message_end", message: assistant(chunks) });
       await h.subscription.waitForPendingEvents();
       expect(visibleUpdates()).toEqual(expected);
+      expect(h.texts()).toEqual(expected);
       expect(h.subscription.assistantTexts).toEqual(expected);
       expect(h.onBlockReply).toHaveBeenCalledTimes(expected.length);
     },
@@ -318,7 +338,12 @@ describe("text_end replay and tool handoff", () => {
     emitAssistantTextDelta({ emit: h.emit, delta: "Hello world" });
     emitAssistantTextEnd({ emit: h.emit, content: "world" });
     await h.subscription.waitForPendingEvents();
+    expect(h.texts()).toEqual([]);
+    expect(h.subscription.assistantTexts).toEqual(["Hello world"]);
+    h.emit({ type: "message_end", message: textAssistant("Hello world") });
+    await h.subscription.waitForPendingEvents();
     expect(h.onBlockReply).toHaveBeenCalledTimes(1);
+    expect(h.texts()).toEqual(["Hello world"]);
     expect(h.subscription.assistantTexts).toEqual(["Hello world"]);
   });
 
@@ -337,6 +362,12 @@ describe("text_end replay and tool handoff", () => {
       h.emit({ type: "message_start", message: { role: "assistant" } });
       emitAssistantTextEnd({ emit: h.emit, content: expected.slice(0, index + 1).join("") });
       await h.subscription.waitForPendingEvents();
+      expect(h.onBlockReply).toHaveBeenCalledTimes(index);
+      h.emit({
+        type: "message_end",
+        message: textAssistant(expected.slice(0, index + 1).join("")),
+      });
+      await h.subscription.waitForPendingEvents();
       expect(h.onBlockReply).toHaveBeenCalledTimes(index + 1);
     }
     expect(h.texts()).toEqual(expected);
@@ -347,6 +378,9 @@ describe("text_end replay and tool handoff", () => {
     const h = setup();
     h.emit({ type: "message_start", message: { role: "assistant" } });
     emitAssistantTextEnd({ emit: h.emit, content: "Checking:" });
+    await h.subscription.waitForPendingEvents();
+    expect(h.texts()).toEqual([]);
+    h.emit({ type: "message_end", message: textAssistant("Checking:") });
     await h.subscription.waitForPendingEvents();
     expect(h.onBlockReply).toHaveBeenCalledTimes(1);
     h.toolStart("message", "message-tool-1", {
@@ -371,14 +405,14 @@ describe("text_end replay and tool handoff", () => {
     expect(h.texts()).toEqual(["Checking:"]);
   });
 
-  it("preserves split reply directives after a delivered chunk through text_end", async () => {
+  it("preserves split reply directives after a prepared chunk through text_end", async () => {
     const h = setup({
       blockReplyChunking: { minChars: 13, maxChars: 13, breakPreference: "newline" },
     });
     h.start();
     for (const delta of ["Visible text.\n[[reply_to:", "target]]Bye"]) {
       emitAssistantTextDelta({ emit: h.emit, delta });
-      expect(h.texts()).toEqual(["Visible text."]);
+      expect(h.texts()).toEqual([]);
     }
     const text = "Visible text.\n[[reply_to:target]]Bye";
     const message = assistant([text]);
@@ -387,6 +421,9 @@ describe("text_end replay and tool handoff", () => {
       message,
       assistantMessageEvent: { type: "text_end", content: text, partial: message },
     });
+    await h.subscription.waitForPendingEvents();
+    expect(h.texts()).toEqual([]);
+    h.emit({ type: "message_end", message });
     await h.subscription.waitForPendingEvents();
     expect(h.texts()).toEqual(["Visible text.", "Bye"]);
     expect(h.onBlockReply.mock.calls.at(-1)?.[0]).toMatchObject({

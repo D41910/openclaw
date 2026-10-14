@@ -248,17 +248,23 @@ describe("guardSessionManager transcript updates", () => {
       expect(await h.snapshot()).toBe("Same answer.");
       h.stream(second);
       await h.subscription.waitForPendingEvents();
-      expect(await h.snapshot()).toBe("Same answer.\n\nSame answer.");
-      await h.commit(first);
       expect(await h.snapshot()).toBe("Same answer.");
+      await h.commit(first);
+      expect(await h.snapshot()).toBe("");
 
+      const completed = assistantText("Same answer. Continued.");
       h.emit({
         type: "message_update",
-        message: assistantText("Same answer. Continued."),
+        message: completed,
         assistantMessageEvent: { type: "text_delta", delta: " Continued." },
       });
       await h.subscription.waitForPendingEvents();
+      expect(await h.snapshot()).toBe("");
+      h.emit({ type: "message_end", message: completed });
+      await h.subscription.waitForPendingEvents();
       expect(await h.snapshot()).toBe("Same answer. Continued.");
+      await h.commit(completed);
+      expect(await h.snapshot()).toBe("");
     } finally {
       await h.close();
     }

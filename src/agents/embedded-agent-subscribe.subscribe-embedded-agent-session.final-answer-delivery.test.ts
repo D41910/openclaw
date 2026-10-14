@@ -94,7 +94,7 @@ describe("Responses final delivery", () => {
         });
       }
       await h.subscription.waitForPendingEvents();
-      expect(h.texts()).toEqual(items.slice(0, contentIndex + 1).map(({ text }) => text));
+      expect(h.onBlockReply).not.toHaveBeenCalled();
     }
     const message = {
       ...base,
@@ -344,6 +344,7 @@ describe("terminal visible replies", () => {
           assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta, partial },
         });
         await h.subscription.waitForPendingEvents();
+        expect(onAgentEvent).not.toHaveBeenCalled();
       }
     }
     h.emit({ type: "message_end", message });
@@ -361,7 +362,7 @@ describe("terminal visible replies", () => {
           .filter(([event]) => event.stream === "assistant")
           .map(([event]) => event.data.text),
       )
-      .toEqual(["    const value = 1;", text]);
+      .toEqual([text]);
   });
 
   it("does not replay a source range assembled from multiple streamed chunks", async () => {
@@ -383,7 +384,20 @@ describe("terminal visible replies", () => {
     await Promise.resolve();
     expect(h.onBlockReply).not.toHaveBeenCalled();
     responsePair(h, "Hello world", "item_final", "final_answer", " world");
-    await Promise.resolve();
+    await h.subscription.waitForPendingEvents();
+    expect(h.onBlockReply).not.toHaveBeenCalled();
+    h.emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        api: "openai-responses",
+        content: [
+          block("Hello", "item_commentary", "commentary"),
+          block("Hello world", "item_final", "final_answer"),
+        ],
+      },
+    });
+    await h.subscription.waitForPendingEvents();
     expectSingle(h, "Hello world");
   });
 
@@ -591,7 +605,7 @@ describe("unphased provider text delivery", () => {
       args: { id: "ORDER-1234" },
     },
   ] as const)(
-    "streams $api pre-tool narration once without retroactive phase changes",
+    "delivers $api pre-tool narration once at message completion without retroactive phase changes",
     async ({ api, narration, toolName, args }) => {
       const { emit, subscription, onBlockReply } = blockHarness({
         blockReplyChunking: { minChars: 4, maxChars: 200 },
@@ -606,7 +620,7 @@ describe("unphased provider text delivery", () => {
         content: narration,
       });
       await subscription.waitForPendingEvents();
-      expect(extractTextPayloads(onBlockReply.mock.calls)).toEqual([narration.trimEnd()]);
+      expect(onBlockReply).not.toHaveBeenCalled();
       emit({
         type: "message_end",
         message: {
@@ -616,6 +630,8 @@ describe("unphased provider text delivery", () => {
           content: [{ type: "text", text: narration }, toolBlock("tool-1", toolName)],
         },
       });
+      await subscription.waitForPendingEvents();
+      expect(extractTextPayloads(onBlockReply.mock.calls)).toEqual([narration.trimEnd()]);
       emit({ type: "tool_execution_start", toolName, toolCallId: "tool-1", args });
       await subscription.waitForPendingEvents();
       expect(extractTextPayloads(onBlockReply.mock.calls)).toEqual([narration.trimEnd()]);
@@ -638,15 +654,13 @@ describe("unphased provider text delivery", () => {
         }
         yield makeCompletionsChunk({ content: "Initial text." });
         await subscription.waitForPendingEvents();
-        expect(onPartialReply).toHaveBeenCalledWith(
-          expect.objectContaining({ text: "Initial text." }),
-        );
+        expect(onPartialReply).not.toHaveBeenCalled();
         expect(onBlockReply).not.toHaveBeenCalled();
         yield makeCompletionsChunk({ reasoning_content: "Second thought." });
         if (interleaved) {
           yield makeCompletionsChunk({ content: "Final text." });
           await subscription.waitForPendingEvents();
-          expect(onPartialReply.mock.calls.at(-1)?.[0].text).toContain("Final text.");
+          expect(onPartialReply).not.toHaveBeenCalled();
           expect(onBlockReply).not.toHaveBeenCalled();
         }
         yield makeCompletionsChunk({}, "stop");
@@ -659,9 +673,9 @@ describe("unphased provider text delivery", () => {
       });
       emit({ type: "message_end", message: output });
       await subscription.waitForPendingEvents();
-      expect(onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([
-        interleaved ? "Initial text.\nFinal text." : "Initial text.",
-      ]);
+      const text = interleaved ? "Initial text.\nFinal text." : "Initial text.";
+      expect(onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([text]);
+      expect(onPartialReply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text }));
     },
   );
 });

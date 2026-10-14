@@ -73,13 +73,16 @@ export function findFinalTagMatches(text: string): FinalTagMatch[] {
 }
 
 /** Removes final-answer markers outside Markdown code while preserving their enclosed answer. */
-export function stripFinalTags(text: string): string {
+export function stripFinalTags(
+  text: string,
+  isInsideCodeSpan?: (index: number) => boolean,
+): string {
   const matches = findFinalTagMatches(text);
   if (matches.length === 0) {
     return text;
   }
   // Literal examples must survive the final delivery sanitizer, just as they do reasoning cleanup.
-  const codeRegions = findCodeRegions(text);
+  const codeRegions = isInsideCodeSpan ? [] : findCodeRegions(text);
   let codeIndex = 0;
   let output = "";
   let lastIndex = 0;
@@ -90,7 +93,7 @@ export function stripFinalTags(text: string): string {
       codeIndex += 1;
       codeRegion = codeRegions[codeIndex];
     }
-    if (codeRegion && codeRegion.start <= match.index) {
+    if (isInsideCodeSpan?.(match.index) || (codeRegion && codeRegion.start <= match.index)) {
       continue;
     }
     output += text.slice(lastIndex, match.index);
