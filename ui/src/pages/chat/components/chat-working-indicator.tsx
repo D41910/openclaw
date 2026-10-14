@@ -243,8 +243,7 @@ export function TurnRecapRow(props: {
         </span>
       </Show>
       <Show when={tokens() !== null}>
-        <span>{tokens()}</span>
-        {" "}
+        <span>{tokens()}</span>{" "}
         <span class="chat-turn-recap__sep" aria-hidden="true">
           ·
         </span>{" "}
