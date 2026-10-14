@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createMissingReplyNotice } from "../../agents/reply-completion.js";
 import { withSystemEventOwner } from "../../infra/system-event-ownership.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { sessionDeliveryChannel } from "../../utils/delivery-context.read.js";
@@ -26,10 +27,7 @@ import {
 import { readPostCompactionContext } from "./post-compaction-context.js";
 import { warnPrivateMessageToolFinal } from "./private-message-tool-final.js";
 import { enqueueFollowupRun, refreshQueuedFollowupSession } from "./queue.js";
-import {
-  buildStrandedReplyDeliveryFailurePayload,
-  resolveStrandedReplyRecovery,
-} from "./stranded-reply-recovery.js";
+import { resolveStrandedReplyRecovery } from "./stranded-reply-recovery.js";
 
 export async function completeReplyAgentRun(input: {
   context: FinalizeReplyAgentRunInput;
@@ -144,7 +142,9 @@ export async function completeReplyAgentRun(input: {
     sessionKey &&
     storePath &&
     runResult.meta?.terminalReply?.disposition !== "silent" &&
-    (finalPayloads.length > 0 || isStrandedReplyRetryRun)
+    (finalPayloads.length > 0 ||
+      isStrandedReplyRetryRun ||
+      runResult.meta?.terminalReply !== undefined)
   ) {
     const sourceReplyPolicy = resolveSourceReplyPolicy({
       cfg,
@@ -154,9 +154,6 @@ export async function completeReplyAgentRun(input: {
       runtimePolicySessionKey,
       opts,
     });
-    // #85714: warn only for unusually substantive private final text. In
-    // message_tool_only, no tool call can be intentional silence, and
-    // final payloads also include verbose/status/usage metadata.
     const assistantFinalText = normalizeAssistantFinalDeliveryText(
       typeof runResult.meta?.finalAssistantVisibleText === "string"
         ? runResult.meta.finalAssistantVisibleText
@@ -175,7 +172,7 @@ export async function completeReplyAgentRun(input: {
       isHeartbeat,
       isRoomEvent: sessionCtx.InboundEventKind === "room_event",
     });
-    if (recovery.kind === "retry" || (recovery.kind === "diagnostic" && recovery.warn)) {
+    if (recovery.kind === "retry") {
       warnPrivateMessageToolFinal({
         sessionKey,
         channel:
@@ -199,7 +196,7 @@ export async function completeReplyAgentRun(input: {
         { position: "front" },
       );
       if (!retryEnqueued) {
-        finalPayloads = [...finalPayloads, buildStrandedReplyDeliveryFailurePayload()];
+        finalPayloads = [...finalPayloads, createMissingReplyNotice()];
       }
     }
     const recoverablePendingFinalText = buildRecoverablePendingFinalDeliveryText(

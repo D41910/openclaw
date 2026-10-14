@@ -1,35 +1,19 @@
 import type { AgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.types.js";
+import { createMissingReplyNotice } from "../../agents/reply-completion.js";
 import { isRuntimeToolAllowed } from "../../agents/tool-policy-match.js";
 import { formatSystemTurnPrompt } from "../../sessions/system-turn-prompt.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
-import {
-  getReplyPayloadMetadata,
-  isReplyPayloadTerminalContent,
-  markReplyPayloadForSourceSuppressionDelivery,
-} from "../reply-payload.js";
+import { getReplyPayloadMetadata, isReplyPayloadTerminalContent } from "../reply-payload.js";
 import type { ReplyPayload } from "../types.js";
-import {
-  classifyPrivateMessageToolFinal,
-  shouldClassifyPrivateMessageToolFinal,
-} from "./private-message-tool-final.js";
+import { isStrandedPrivateMessageToolFinal } from "./private-message-tool-final.js";
 import type { FollowupRun } from "./queue/types.js";
 
 const STRANDED_REPLY_RETRY_MARKER = "stranded-reply-retry";
-const STRANDED_REPLY_DELIVERY_FAILURE_TEXT =
-  "I generated a reply but could not deliver it to this chat. Please try again.";
-
-export function buildStrandedReplyDeliveryFailurePayload(): ReplyPayload {
-  return markReplyPayloadForSourceSuppressionDelivery({
-    text: STRANDED_REPLY_DELIVERY_FAILURE_TEXT,
-    isError: true,
-    isStatusNotice: true,
-  });
-}
 
 type StrandedReplyRecovery =
   | { kind: "none" }
   | { kind: "retry"; run: FollowupRun }
-  | { kind: "diagnostic"; payload: ReplyPayload; warn: boolean };
+  | { kind: "diagnostic"; payload: ReplyPayload };
 
 /** Resolve the one allowed recovery action for a final that missed source delivery. */
 export function resolveStrandedReplyRecovery(params: {
@@ -45,26 +29,20 @@ export function resolveStrandedReplyRecovery(params: {
 }): StrandedReplyRecovery {
   // Host-owned payloads can still be awaiting transport when completion bookkeeping runs.
   if (
-    params.terminalReply?.disposition === "silent" ||
-    !shouldClassifyPrivateMessageToolFinal(params) ||
+    !isStrandedPrivateMessageToolFinal(params) ||
     params.payloads.some(
       (payload) =>
-        isReplyPayloadTerminalContent(payload) &&
+        (isReplyPayloadTerminalContent(payload) || payload.isError === true) &&
         getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression === true,
     )
   ) {
     return { kind: "none" };
   }
-  const classification = classifyPrivateMessageToolFinal(params);
   if (params.base.strandedReplyRetry === true) {
     return {
       kind: "diagnostic",
-      payload: buildStrandedReplyDeliveryFailurePayload(),
-      warn: classification === "substantive",
+      payload: createMissingReplyNotice(),
     };
-  }
-  if (classification !== "substantive") {
-    return { kind: "none" };
   }
   return {
     kind: "retry",

@@ -53,10 +53,7 @@ import {
   isReplyOperationStalledBeforeOutput,
   STALLED_TURN_NOTICE_TEXT,
 } from "./stalled-turn-recovery.js";
-import {
-  buildStrandedReplyDeliveryFailurePayload,
-  resolveStrandedReplyRecovery,
-} from "./stranded-reply-recovery.js";
+import { resolveStrandedReplyRecovery } from "./stranded-reply-recovery.js";
 import { createTypingSignaler } from "./typing-mode.js";
 import { buildWaitingStatusPayload } from "./waiting-status.js";
 
@@ -633,7 +630,7 @@ export async function deliverFollowupDecision(params: {
     }
     payloads = resolveFollowupDeliveryPayloads({
       ...resolveFollowupPayloadContext(turn),
-      payloads: [buildStrandedReplyDeliveryFailurePayload()],
+      payloads: [createMissingReplyNotice()],
     });
   } else {
     payloads = decision.payloads;

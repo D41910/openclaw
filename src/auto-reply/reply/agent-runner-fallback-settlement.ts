@@ -17,7 +17,7 @@ import type {
   AgentFallbackCycleResult,
 } from "./agent-runner-fallback-cycle.types.js";
 import { drainPendingToolTasks } from "./pending-tool-task-drain.js";
-import { classifyPrivateMessageToolFinal } from "./private-message-tool-final.js";
+import { isStrandedPrivateMessageToolFinal } from "./private-message-tool-final.js";
 import { resolveReplyOperationAbortReason } from "./reply-operation-abort.js";
 
 /** Settles abort, lifecycle, and terminal failure state after fallback execution. */
@@ -132,21 +132,19 @@ export async function settleAgentFallbackCycle(params: {
         opts: turn.opts,
       })
     : undefined;
-  const finalText = runResult.meta?.finalAssistantVisibleText?.trim() ?? "";
   const successfulSourceReplyDelivery = hasCompletedSourceReplyDeliveryEvidence(runResult);
   const hasPendingContinuation =
     runResult.meta?.yielded === true || (runResult.meta?.pendingToolCalls?.length ?? 0) > 0;
   const privateFinalTerminalReply =
     !hasPendingContinuation &&
-    classifyPrivateMessageToolFinal({
+    isStrandedPrivateMessageToolFinal({
       sourceReplyDeliveryMode: sourceReplyPolicy?.sourceReplyDeliveryMode,
       sendPolicyDenied: sourceReplyPolicy?.sendPolicyDenied === true,
       successfulSourceReplyDelivery,
       isHeartbeat: turn.isHeartbeat,
       isRoomEvent: turn.sessionCtx.InboundEventKind === "room_event",
-      finalText,
       terminalReply: runResult.meta?.terminalReply,
-    }) === "short"
+    })
       ? ({ disposition: "empty", code: "message-tool-not-called" } as const)
       : undefined;
   const terminalRunFailed =
@@ -172,6 +170,9 @@ export async function settleAgentFallbackCycle(params: {
     turn.replyOperation?.retainFailureUntilComplete();
     turn.replyOperation?.fail("run_failed", terminalError);
   } else {
+    if (privateFinalTerminalReply) {
+      runResult.meta.terminalReply = privateFinalTerminalReply;
+    }
     settledLifecycleTerminal?.emit(
       "end",
       runResult,

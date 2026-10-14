@@ -92,6 +92,7 @@ export async function prepareReplyAgentPayloads(state: {
     replyToMode,
     returnWithQueuedFollowupDrain,
     runStartedAt,
+    runtimePolicySessionKey,
     sessionCtx,
     sessionKey,
     storePath,
@@ -156,6 +157,11 @@ export async function prepareReplyAgentPayloads(state: {
     !terminalFailurePayload;
   const authoredSilence =
     successfulTerminal && runResult.meta?.terminalReply?.disposition === "silent";
+  const strandedFinal =
+    successfulTerminal &&
+    runResult.meta?.terminalReply?.disposition === "empty" &&
+    runResult.meta.terminalReply.code === "message-tool-not-called" &&
+    followupRun.strandedReplyRetry !== true;
   const implicitContinuation = runResult.meta?.continuationPending === true;
   // Completion-message children own their continuation; detached media retains its own run owner.
   const continuationOwner =
@@ -270,7 +276,10 @@ export async function prepareReplyAgentPayloads(state: {
             runResult.didSendDeterministicApprovalPrompt === true,
         });
   const missingReplyPayload =
-    terminalFailurePayload || !missingReplyNoticeAllowed || completion.outcome !== "missing"
+    strandedFinal ||
+    terminalFailurePayload ||
+    !missingReplyNoticeAllowed ||
+    completion.outcome !== "missing"
       ? undefined
       : createMissingReplyNotice();
   const buildStrandedRetryMissingDeliveryDiagnostic = (): ReplyPayload | undefined => {
@@ -557,7 +566,8 @@ export async function prepareReplyAgentPayloads(state: {
   const sourcePayloads = quietFinal ? retainSilentFinalPayloads(payloadArray) : payloadArray;
   if (
     ((explicitSilence || heartbeatAcknowledgment) && sourcePayloads.length === 0) ||
-    (completion.outcome !== "delivered" &&
+    (!strandedFinal &&
+      completion.outcome !== "delivered" &&
       payloadArray.length === 0 &&
       fallbackNoticePayloads.length === 0 &&
       !shouldDeliverTerminalFailure &&
@@ -592,7 +602,7 @@ export async function prepareReplyAgentPayloads(state: {
   if (waitingStatusPayload && hasTerminalReply) {
     replyPayloads = replyPayloadsWithoutToolWarnings;
   }
-  if (!hasTerminalReply && !waitingStatusPayload) {
+  if (!hasTerminalReply && !waitingStatusPayload && !strandedFinal) {
     recordMissingReply();
   }
   if (shouldDeliverTerminalFailure && !hasTerminalReply && terminalFailurePayload) {
@@ -638,6 +648,7 @@ export async function prepareReplyAgentPayloads(state: {
   const canDeliverStandaloneFallbackNotice =
     Boolean(blockReplyPipeline?.didStream()) || successfulSideEffectDelivery;
   if (
+    !strandedFinal &&
     completion.outcome !== "delivered" &&
     (replyPayloads.length === 0 || (!hasVisibleReplyPayload && !canDeliverStandaloneFallbackNotice))
   ) {

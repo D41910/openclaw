@@ -456,9 +456,7 @@ describe("resolveFollowupDeliveryDecision", () => {
     async ({ payload, sent, deliver }) => {
       const turn = createTurn();
       turn.queued.run.sourceReplyDeliveryMode = "message_tool_only";
-      const execution = createSettledExecution(
-        "This is a substantive private answer that should have used the message tool. It has a second sentence so recovery is required.",
-      );
+      const execution = createSettledExecution("The answer is ready.");
       if (sent && payload?.mediaUrl) {
         execution.outcome.result.messagingToolSentMediaUrls = [payload.mediaUrl];
       }
@@ -520,7 +518,13 @@ describe("resolveFollowupDeliveryDecision", () => {
       }),
     ).toMatchObject({
       kind: "deliver",
-      payloads: [{ isError: true, isStatusNotice: true }],
+      payloads: [
+        {
+          text: "No answer was returned. Ask again if you still need one.",
+          isError: true,
+          isStatusNotice: true,
+        },
+      ],
     });
   });
 
@@ -529,11 +533,10 @@ describe("resolveFollowupDeliveryDecision", () => {
     { name: "required reply", expectation: "required", internal: false, final: "" },
     { name: "optional reply", expectation: "optional", internal: false, final: "" },
     {
-      name: "substantive private final",
+      name: "private final",
       expectation: undefined,
       internal: false,
-      final:
-        "This incomplete private text is substantive. It must not replace the sanitized failure.",
+      final: "This private text must not replace the sanitized failure.",
     },
   ] as const)(
     "preserves sanitized terminal failure policy for $name",
@@ -672,48 +675,21 @@ describe("resolveFollowupDeliveryDecision", () => {
     },
   );
 
-  it.each([
-    ["accidental", undefined, undefined],
-    ["intentional terminal tool", "tool-batch", undefined],
-    ["private terminal diagnostic", undefined, "Private terminal diagnostic."],
-  ] as const)(
-    "accounts for %s message-tool-only completion",
-    async (_label, intentionalTerminalCompletion, privateText) => {
-      const turn = createTurn();
-      turn.queued.originatingChatType = privateText ? "group" : turn.queued.originatingChatType;
-      turn.queued.run.sourceReplyDeliveryMode = "message_tool_only";
-      const execution = createSettledExecution();
-      if (intentionalTerminalCompletion) {
-        execution.outcome.result.meta.intentionalTerminalCompletion = intentionalTerminalCompletion;
-      }
+  it("does not let private payloads settle a producer-declared empty message-tool final", async () => {
+    const turn = createTurn();
+    turn.queued.run.sourceReplyDeliveryMode = "message_tool_only";
 
-      const decision = await resolveFollowupDeliveryDecision({
-        turn,
-        execution,
-        accounting: createAccounting(privateText ? [{ text: privateText }] : []),
-      });
-      if (privateText) {
-        expect(decision).toEqual({ kind: "suppress", reason: "message-tool-only" });
-        return;
-      }
+    const decision = await resolveFollowupDeliveryDecision({
+      turn,
+      execution: createSettledExecution(),
+      accounting: createAccounting([{ text: "Private terminal diagnostic." }]),
+    });
 
-      expect(decision).toMatchObject({
-        kind: "deliver",
-        payloads: [
-          {
-            text: "No answer was returned. Ask again if you still need one.",
-            isError: true,
-            isStatusNotice: true,
-          },
-        ],
-      });
-      if (decision.kind === "deliver") {
-        expect(
-          getReplyPayloadMetadata(decision.payloads[0] ?? {})?.deliverDespiteSourceReplySuppression,
-        ).toBe(true);
-      }
-    },
-  );
+    expect(decision).toMatchObject({
+      kind: "retry-source-delivery",
+      run: { strandedReplyRetry: true },
+    });
+  });
 });
 
 describe("deliverFollowupDecision", () => {
@@ -837,9 +813,7 @@ describe("deliverFollowupDecision", () => {
     const defaults = createDefaults(vi.fn(async () => {}));
     const decision = await resolveFollowupDeliveryDecision({
       turn,
-      execution: createSettledExecution(
-        "This substantive reply should have been sent with the message tool. ".repeat(6),
-      ),
+      execution: createSettledExecution("The answer is ready."),
       accounting: createAccounting(),
     });
     expect(decision.kind).toBe("retry-source-delivery");
@@ -894,7 +868,7 @@ describe("deliverFollowupDecision", () => {
           runId: "retry-run",
           payloads: [
             expect.objectContaining({
-              text: "I generated a reply but could not deliver it to this chat. Please try again.",
+              text: "No answer was returned. Ask again if you still need one.",
               isError: true,
             }),
           ],
