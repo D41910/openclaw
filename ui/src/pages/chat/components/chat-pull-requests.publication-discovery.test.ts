@@ -7,12 +7,12 @@ import {
   publication,
   sessionBranch,
 } from "./chat-pull-requests.test-support.ts";
-import type { renderChatPullRequests } from "./chat-pull-requests.ts";
+import type { ChatPullRequestsProps } from "./chat-pull-requests.tsx";
 
 describe("failed publication account discovery", () => {
   let container: HTMLDivElement;
 
-  function paint(props: Partial<Parameters<typeof renderChatPullRequests>[0]>) {
+  function paint(props: Partial<ChatPullRequestsProps>) {
     paintChatPullRequests(
       {
         pullRequests: [],

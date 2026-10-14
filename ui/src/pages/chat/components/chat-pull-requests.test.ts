@@ -20,8 +20,8 @@ import {
   chatPullRequestId,
   dismissChatPullRequest,
   listDismissedChatPullRequests,
-  type renderChatPullRequests,
 } from "./chat-pull-requests.ts";
+import type { ChatPullRequestsProps } from "./chat-pull-requests.tsx";
 
 function pullRequest(
   overrides: Partial<ControlUiSessionPullRequest> = {},
@@ -42,10 +42,10 @@ function pullRequest(
   };
 }
 
-describe("renderChatPullRequests", () => {
+describe("ChatPullRequests", () => {
   let container: HTMLDivElement;
 
-  function paint(props: Partial<Parameters<typeof renderChatPullRequests>[0]>) {
+  function paint(props: Partial<ChatPullRequestsProps>) {
     paintChatPullRequests(
       {
         pullRequests: [],
@@ -360,7 +360,7 @@ describe("renderChatPullRequests", () => {
 
   it("shows Gateway publication request and terminal URL states", () => {
     const onPublish = vi.fn();
-    const props: Parameters<typeof renderChatPullRequests>[0] = {
+    const props: ChatPullRequestsProps = {
       pullRequests: [],
       branch: sessionBranch(),
       status: "ready",

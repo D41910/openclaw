@@ -10,7 +10,11 @@ import {
 import { projectSubagentStatus } from "../chat-subagent-wait.ts";
 import { renderChatAuthorAvatar } from "./chat-author-avatar.ts";
 import type { ChatDetailsProps } from "./chat-details-types.ts";
-import { renderChatPullRequests } from "./chat-pull-requests.ts";
+import {
+  ChatPullRequests,
+  hasChatPullRequests,
+  type ChatPullRequestsProps,
+} from "./chat-pull-requests.tsx";
 import "./chat-subagent-activity-live.ts";
 import { ChatSummaryAutomations } from "./chat-summary-automations.tsx";
 
@@ -40,13 +44,13 @@ export const ChatDetailsSession = defineSolidBridge<Props>(
           const subagents = createMemo(() =>
             props.props ? projectSubagentStatus(props.props, false).activity : [],
           );
-          const pullRequests = createMemo(() => {
+          const pullRequests = createMemo<ChatPullRequestsProps | null>(() => {
             const snapshot = props.props;
             if (!snapshot) {
               return null;
             }
             const current = () => host.isConnected && props.presented && props.props === snapshot;
-            return renderChatPullRequests({
+            return {
               pullRequests: snapshot.pullRequests ?? [],
               gateway: snapshot.pullRequestsGateway,
               sessionId: snapshot.pullRequestsSessionId,
@@ -79,7 +83,7 @@ export const ChatDetailsSession = defineSolidBridge<Props>(
                 : undefined,
               publication: snapshot.githubPublication,
               compact: true,
-            });
+            };
           });
           return (
             <Show when={props.props}>
@@ -181,24 +185,28 @@ export const ChatDetailsSession = defineSolidBridge<Props>(
                     )}
                   </section>
                 )}
-                <Show when={pullRequests() !== null}>
-                  <details
-                    class="chat-details__group"
-                    data-details-group="pull-requests"
-                    open
-                    onToggle={(event) => {
-                      if (event.currentTarget.isConnected) {
-                        setPullRequestsOpen(event.currentTarget.open);
-                      }
-                    }}
-                  >
-                    <summary class="chat-details__caption">
-                      {t("chat.sessionDetails.pullRequests")}
-                      <span>{props.props?.pullRequests?.length || null}</span>
-                      <Icon name="chevronDown" />
-                    </summary>
-                    <LitContent render={() => pullRequests()} />
-                  </details>
+                <Show when={pullRequests()}>
+                  {(requests) => (
+                    <Show when={hasChatPullRequests(requests())}>
+                      <details
+                        class="chat-details__group"
+                        data-details-group="pull-requests"
+                        open
+                        onToggle={(event) => {
+                          if (event.currentTarget.isConnected) {
+                            setPullRequestsOpen(event.currentTarget.open);
+                          }
+                        }}
+                      >
+                        <summary class="chat-details__caption">
+                          {t("chat.sessionDetails.pullRequests")}
+                          <span>{props.props?.pullRequests?.length || null}</span>
+                          <Icon name="chevronDown" />
+                        </summary>
+                        <ChatPullRequests {...requests()} />
+                      </details>
+                    </Show>
+                  )}
                 </Show>
                 <ChatSummaryAutomations
                   gateway={props.props?.pullRequestsGateway}

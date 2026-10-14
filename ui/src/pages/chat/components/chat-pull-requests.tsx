@@ -52,6 +52,30 @@ const CHECK_LABEL_KEYS = {
   pending: "chat.pullRequests.checksPending",
 } as const;
 
+function retainedPublication(publication: GitHubPublicationView | undefined) {
+  return (
+    publication?.result ||
+    publication?.locked ||
+    (publication?.error && !publication.optionsUnavailable)
+  );
+}
+
+function showWorkRow(props: ChatPullRequestsProps): boolean {
+  return Boolean(
+    (!props.branchDismissed && props.branch) ||
+    (!props.pullRequests.length &&
+      (retainedPublication(props.publication) ||
+        (!props.branchDismissed &&
+          props.publication?.canPublishShared &&
+          !props.publication.canPublishPersonal &&
+          props.publication.options?.shared))),
+  );
+}
+
+export function hasChatPullRequests(props: ChatPullRequestsProps): boolean {
+  return props.pullRequests.length > 0 || showWorkRow(props);
+}
+
 function ChecksRow(props: { label: string; count: number; modifier: string }) {
   return (
     <Show when={props.count !== 0}>
@@ -292,19 +316,9 @@ function WorkRow(props: {
 export function ChatPullRequests(props: ChatPullRequestsProps) {
   const published = () =>
     props.publication?.result?.status === "published" ? props.publication.result : undefined;
-  const retained = () =>
-    props.publication?.result ||
-    props.publication?.locked ||
-    (props.publication?.error && !props.publication.optionsUnavailable);
+  const retained = () => retainedPublication(props.publication);
   const branch = () => (props.branchDismissed ? undefined : props.branch);
-  const workRow = () =>
-    branch() ||
-    (!props.pullRequests.length &&
-      (retained() ||
-        (!props.branchDismissed &&
-          props.publication?.canPublishShared &&
-          !props.publication.canPublishPersonal &&
-          props.publication.options?.shared)));
+  const workRow = () => showWorkRow(props);
   const visible = createMemo(() => [
     ...props.pullRequests.filter((item) => item.state === "open" || item.state === "draft"),
     ...props.pullRequests.filter((item) => item.state !== "open" && item.state !== "draft"),
@@ -312,7 +326,7 @@ export function ChatPullRequests(props: ChatPullRequestsProps) {
   const recovery = () =>
     retained() && (!published() || props.publication?.error) ? props.publication : undefined;
   return (
-    <Show when={workRow() || props.pullRequests.length > 0}>
+    <Show when={hasChatPullRequests(props)}>
       <div class="chat-prs" aria-live="polite">
         <Show
           when={workRow()}

@@ -30,9 +30,9 @@ export function ChatQuestionSummary(props: { prompt: QuestionPrompt }) {
         <For each={props.prompt.questions}>
           {(question) => (
             <div class="chat-question-summary__item">
-              <div class="chat-question-summary__prompt">{question.question}</div>
+              <div class="chat-question-summary__prompt">{question.question}</div>{" "}
               <div class="chat-question-summary__line">
-                <strong>{question.header}:</strong>
+                <strong>{question.header}:</strong>{" "}
                 <span>{terminalAnswer(props.prompt, question)}</span>
               </div>
             </div>

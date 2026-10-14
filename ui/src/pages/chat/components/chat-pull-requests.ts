@@ -3,9 +3,7 @@ import type {
   ControlUiSessionBranch,
   ControlUiSessionPullRequest,
 } from "../../../../../src/gateway/control-ui-contract.js";
-import { solidContent } from "../../../lit/solid-content.tsx";
 import { getSafeLocalStorage } from "../../../local-storage.ts";
-import { ChatPullRequests, type ChatPullRequestsProps } from "./chat-pull-requests.tsx";
 
 const DISMISSED_STORAGE_KEY = "openclaw.chat.dismissedPullRequests";
 // Bounds localStorage growth: dismissals for the oldest sessions fall off
@@ -69,8 +67,4 @@ export function dismissChatPullRequest(sessionKey: string, id: string): Readonly
     // Quota or privacy-mode failures only cost re-showing dismissed chips.
   }
   return ids;
-}
-
-export function renderChatPullRequests(props: ChatPullRequestsProps) {
-  return solidContent(ChatPullRequests, props);
 }

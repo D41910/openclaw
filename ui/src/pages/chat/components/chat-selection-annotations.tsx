@@ -3,7 +3,20 @@ import { Icon } from "../../../components/solid/icon.tsx";
 import { t } from "../../../lib/reactive/i18n.ts";
 import type { ChatAttachmentControlsProps } from "./chat-attachment-controls.types.ts";
 import { CommentPreviewChip, CommentPreviewRow } from "./chat-comment-preview.tsx";
-import { dispatchChatCommentAction } from "./chat-selection-annotations.ts";
+
+export function dispatchChatCommentAction(
+  event: Event,
+  id: string | undefined,
+  action: "edit" | "delete" | "delete-all",
+) {
+  event.currentTarget?.dispatchEvent(
+    new CustomEvent("openclaw-comment-action", {
+      bubbles: true,
+      composed: true,
+      detail: { id, action },
+    }),
+  );
+}
 
 export function ChatSelectionAnnotations(props: ChatAttachmentControlsProps) {
   const comments = () =>

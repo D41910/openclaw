@@ -4,6 +4,7 @@ import { render } from "lit";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ChatQueueItem } from "../../lib/chat/chat-types.ts";
 import { captureChatOutboxAdmission } from "../../lib/chat/outbox-store.ts";
+import { flush } from "../../test-helpers/solid-settle.ts";
 import { createStorageMock } from "../../test-helpers/storage.ts";
 import { createComposerContainer } from "./chat-composer.test-support.ts";
 import { makeChatHost } from "./chat-host.test-support.ts";
@@ -160,7 +161,10 @@ it("refreshes a mounted question summary when a canonical answer appears or is r
     messages: [question],
     onAsyncQuestionSubmit: vi.fn(async () => true),
   });
-  const draw = () => render(renderChat(props), container);
+  const draw = () => {
+    render(renderChat(props), container);
+    flush();
+  };
   const summary = () => container.querySelector(".chat-question-summary")?.textContent;
   draw();
   expect(summary()).toContain("Answer above");

@@ -11,6 +11,7 @@ import { t } from "../../i18n/index.ts";
 import type { SessionCapability } from "../../lib/sessions/index.ts";
 import { createApplicationContextProvider } from "../../test-helpers/application-context.ts";
 import { gatewayHelloForMethods } from "../../test-helpers/gateway-methods.ts";
+import { flush } from "../../test-helpers/solid-settle.ts";
 import { setChatHistoryLoad } from "./chat-history-state.ts";
 import { consumePaneSessionHandoff } from "./chat-pane-shared.ts";
 import {
@@ -556,6 +557,7 @@ describe("global chat pane feature ownership", () => {
       const draw = async () => {
         await pane.updateComplete;
         render(renderChat(pane.chatProps!), container);
+        flush();
         if (container.querySelector("openclaw-chat-question-card")) {
           await questionPanelIn(container);
         }
