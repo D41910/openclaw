@@ -246,6 +246,10 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
             ? "pending"
             : "missing",
       );
+      if (delivery === "visible-during-recovery") {
+        expect(observations).toBe(2);
+        expect(result.prepared.sourceReplyDeliveryState).toBe("missing");
+      }
     } else {
       expect(backendMocks.runSettledFinalization).not.toHaveBeenCalled();
       expect(result.finalizationOutcome).toBe("not-attempted");
