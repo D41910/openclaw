@@ -332,6 +332,7 @@ suite.define(() => {
         expect(await trigger.getAttribute("aria-expanded")).toBe("false");
         await page.setViewportSize({ width: 430, height: 900 });
         expect(await details.isVisible()).toBe(false);
+        await page.getByRole("button", { name: "Panels", exact: true }).waitFor();
         await selectChatLayoutAction(page, "Details");
         await expect.poll(() => details.getAttribute("role")).toBe("dialog");
         await geometry(false);
