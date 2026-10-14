@@ -8,6 +8,7 @@ import type {
   ControlUiViewContext,
 } from "../../../../src/plugin-sdk/control-ui.js";
 import type { ApplicationContext } from "../../app/context.ts";
+import { createApplicationContextProvider } from "../../test-helpers/application-context.ts";
 import { mountSolid } from "../../test-helpers/mount-solid.ts";
 import {
   createSolidApplicationContextProvider,
@@ -83,6 +84,8 @@ describe("native chat view session identity", () => {
       onRefresh: vi.fn(),
       agentsList: null,
     };
+    // ChatView still contains registered bridges that request their application through the DOM.
+    const container = document.body.appendChild(createApplicationContextProvider(context));
     const view = mountSolid(
       () => (
         <>
@@ -104,7 +107,7 @@ describe("native chat view session identity", () => {
           />
         </>
       ),
-      { wrapper: provider.wrapper },
+      { container, wrapper: provider.wrapper },
     );
 
     await vi.waitFor(() => {
