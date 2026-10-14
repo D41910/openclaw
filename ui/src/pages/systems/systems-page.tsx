@@ -146,10 +146,12 @@ function SystemMeasurements(props: { row: SystemsInventoryRow; controller: Syste
 
 export function SystemsPage(props: { controller: SystemsController; presented: boolean }) {
   let host!: HTMLElement;
-  const projection = createMemo(() => projectOwner(props.controller, (value) => value));
+  const source = createMemo(() => props.controller);
+  const presented = createMemo(() => props.presented);
+  const projection = createMemo(() => projectOwner(source(), (value) => value));
   const controller = () => projection().read();
   createEffect(
-    () => ({ controller: props.controller, presented: props.presented }),
+    () => ({ controller: source(), presented: presented() }),
     ({ controller: active, presented }) => {
       active.setPresented(presented);
       return () => active.setPresented(false);
@@ -211,7 +213,7 @@ export function SystemsPage(props: { controller: SystemsController; presented: b
     };
   });
   return (
-    <openclaw-systems-page ref={host}>
+    <openclaw-systems-page ref={(element) => (host = element)}>
       <Show
         when={controller().current}
         fallback={

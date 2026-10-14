@@ -415,6 +415,48 @@ describe("Systems workspace", () => {
     expect(controller.needsInventoryRefresh).toBe(false);
   });
 
+  it("keeps desktop setup active through route refreshes and renders rejected writes", async () => {
+    const pending = createDeferred<boolean>();
+    const { controller, context } = harness(async () => [
+      { ...host, desktopSetup: { state: "ready" } },
+    ]);
+    vi.spyOn(context.runtimeConfig, "ensureLoaded").mockResolvedValue();
+    const patch = vi.spyOn(context.runtimeConfig, "patch").mockReturnValue(pending.promise);
+    const [route, setRoute] = createSignal({
+      data: { controller },
+      loaderPending: false,
+      presented: true,
+    });
+    const mounted = mountSolid(() =>
+      createComponent(renderSolid, {
+        get data() {
+          return route().data;
+        },
+        get loaderPending() {
+          return route().loaderPending;
+        },
+        get presented() {
+          return route().presented;
+        },
+      }),
+    );
+    await waitForSolid(() => expect(controller.inventory).not.toBeNull());
+    const enable = mounted.container.querySelector<HTMLButtonElement>(".systems-state button")!;
+    enable.click();
+    await waitForSolid(() => expect(patch).toHaveBeenCalledOnce());
+    setRoute({ data: { controller }, loaderPending: true, presented: true });
+    flush();
+    expect(mounted.container.querySelector(".systems-state button")).toBe(enable);
+    expect(enable.disabled).toBe(true);
+    pending.reject(new Error("Desktop configuration could not be saved"));
+    await waitForSolid(() =>
+      expect(mounted.container.querySelector('[role="alert"]')?.textContent).toContain(
+        "Desktop configuration could not be saved",
+      ),
+    );
+    expect(enable.disabled).toBe(false);
+  });
+
   it.each(["selection", "authority"])(
     "cancels pending desktop enablement when %s changes",
     async (change) => {
@@ -533,7 +575,7 @@ describe("Systems workspace", () => {
     expect(request.mock.calls.filter(([method]) => method === "environments.list")).toHaveLength(1);
 
     unmount();
-    ({ page, sidebar, unmount } = await mount(controller));
+    ({ page, sidebar } = await mount(controller));
     await waitForSolid(() => expect(controller.loading).toBe(false));
     await sidebar.updateComplete;
     expect(names()).toEqual(["Alpha laptop"]);
@@ -748,7 +790,7 @@ describe("Systems workspace", () => {
     expect(page.textContent).toContain("This machine is no longer listed");
     expect(page.querySelector<HTMLSelectElement>(".systems-mobile-picker")?.value).toBe("");
     expect(page.querySelector("openclaw-desktop-panel")).toBeNull();
-    expect(handle.disconnect).toHaveBeenCalled();
+    await waitForSolid(() => expect(handle.disconnect).toHaveBeenCalled());
     window.dispatchEvent(
       new CustomEvent(DESKTOP_PANEL_TOGGLE_EVENT, {
         detail: { open: true, environmentId: "worker-no-longer-known" },
