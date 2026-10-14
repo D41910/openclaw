@@ -30,12 +30,36 @@ function succeed(res: ServerResponse, result: unknown = true) {
   writeJson(res, 200, { ok: true, result });
 }
 
-test("visibly settles a message-tool-only Telegram turn after a provider failure", async () => {
+test("visibly settles a message-tool-only Telegram turn after a provider failure", async ({
+  signal,
+  onTestFailed,
+  onTestFinished,
+}) => {
   const pendingPolls = new Set<ServerResponse>();
   const telegramSends: JsonObject[] = [];
   const providerBodies: JsonObject[] = [];
   let providerRequests = 0;
   let updateDelivered = false;
+  const started = performance.now();
+  let phase = "gateway-start";
+  let reported = false;
+  const report = () => {
+    if (reported) return;
+    reported = true;
+    console.log(
+      "[qa-phase]",
+      JSON.stringify({
+        phase,
+        elapsedMs: Math.round(performance.now() - started),
+        providerRequests,
+        updateDelivered,
+        sends: telegramSends.length,
+      }),
+    );
+  };
+  signal.addEventListener("abort", report, { once: true });
+  onTestFailed(report);
+  onTestFinished(() => signal.removeEventListener("abort", report));
 
   const update = {
     update_id: 1,
@@ -168,6 +192,7 @@ test("visibly settles a message-tool-only Telegram turn after a provider failure
             },
           });
 
+          phase = "turn";
           await expect
             .poll(
               () => ({
@@ -184,6 +209,7 @@ test("visibly settles a message-tool-only Telegram turn after a provider failure
               providerRequests: expect.any(Number),
               sends: [{ chatId: String(CHAT_ID), silent: true, text: FAILURE_TEXT }],
             });
+          phase = "delivery-observed";
           expect(providerRequests).toBeGreaterThan(0);
           expect(providerBodies[1]?.model).toBe(providerBodies[0]?.model);
           expect(JSON.stringify(providerBodies[1]?.input)).toContain(REQUEST_TEXT);
@@ -193,6 +219,7 @@ test("visibly settles a message-tool-only Telegram turn after a provider failure
           expect(publicReplies).not.toContain(RAW_ERROR_DETAIL);
           expect(publicReplies).not.toContain(RAW_ERROR_CANARY);
         } finally {
+          phase = "cleanup";
           await stopQaGatewayFixture(gatewayOwner);
           for (const poll of pendingPolls) {
             poll.destroy();

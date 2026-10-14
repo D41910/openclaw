@@ -111,11 +111,37 @@ async function settleCleanup(...cleanups: Array<() => Promise<void>>) {
   }
 }
 
-test("introduces itself once when Telegram reports joining an allowed supergroup", async () => {
+test("introduces itself once when Telegram reports joining an allowed supergroup", async ({
+  signal,
+  onTestFailed,
+  onTestFinished,
+}) => {
   const telegramCalls: TelegramCall[] = [];
   const pendingUpdates: unknown[] = [];
   const pendingPolls = new Set<ServerResponse>();
   let groundedModelResponses = 0;
+  let providerRequests = 0;
+  const started = performance.now();
+  let phase = "gateway-start";
+  let reported = false;
+  const report = () => {
+    if (reported) return;
+    reported = true;
+    console.log(
+      "[qa-phase]",
+      JSON.stringify({
+        phase,
+        elapsedMs: Math.round(performance.now() - started),
+        providerRequests,
+        pendingUpdates: pendingUpdates.length,
+        groundedModelResponses,
+        sends: telegramCalls.filter((call) => call.method === "sendMessage").length,
+      }),
+    );
+  };
+  signal.addEventListener("abort", report, { once: true });
+  onTestFailed(report);
+  onTestFinished(() => signal.removeEventListener("abort", report));
   let mock: Awaited<ReturnType<typeof startQaMockOpenAiServer>> | undefined;
 
   const queueUpdate = (update: unknown) => {
@@ -137,6 +163,7 @@ test("introduces itself once when Telegram reports joining an allowed supergroup
       writeJson(res, 503, { error: "mock provider is not ready" });
       return;
     }
+    providerRequests += 1;
     const raw = await readRequest(req);
     const upstream = await fetch(`${mock.baseUrl}${pathname}`, {
       method: req.method,
@@ -287,6 +314,7 @@ test("introduces itself once when Telegram reports joining an allowed supergroup
             },
           });
 
+          phase = "turn";
           queueUpdate(joinUpdate());
           await expect
             .poll(
@@ -325,6 +353,7 @@ test("introduces itself once when Telegram reports joining an allowed supergroup
               );
             });
 
+          phase = "delivery-observed";
           const deliveries = telegramCalls.filter((call) => call.method === "sendMessage");
           expect(deliveries).toHaveLength(1);
           expect(String(deliveries[0]?.body.chat_id)).toBe(String(CHAT_ID));
@@ -347,6 +376,7 @@ test("introduces itself once when Telegram reports joining an allowed supergroup
             expect.stringContaining(UNAVAILABLE_HISTORY_FACT),
           );
         } finally {
+          phase = "cleanup";
           await settleCleanup(
             async () => await stopQaGatewayFixture(gatewayOwner),
             async () => await mock?.stop(),
