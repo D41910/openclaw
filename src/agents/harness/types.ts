@@ -416,7 +416,7 @@ export type AgentHarnessSessionDeletionParams = {
 
 /**
  * Direct, unbound commit/rollback callbacks are deprecated and will be removed
- * in the next Plugin SDK major. Use createNativeSessionBindingLifecycleV2 for
+ * after an announced stable deprecation period. Use createNativeSessionBindingLifecycleV2 for
  * reversible stored bindings or createNativeSessionCommitFinalizer for
  * commit-only cleanup from openclaw/plugin-sdk/agent-harness-session-runtime.
  * Factory-produced participants remain supported by this contract.
@@ -523,7 +523,7 @@ type AgentHarnessContract<
   supports(ctx: AgentHarnessSupportContext): AgentHarnessSupport;
   /**
    * Synchronous private ownership read; no discovery, auth loading, or native connection setup.
-   * @deprecated Implement resolveSessionRuntimeOwnershipAsync; removed in the next Plugin SDK major.
+   * @deprecated Implement resolveSessionRuntimeOwnershipAsync; removal follows a stable deprecation period.
    */
   resolveSessionRuntimeOwnership?(params: {
     config?: OpenClawConfig;
