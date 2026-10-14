@@ -8,6 +8,7 @@ import { parseReplyDirectivesFromMedia } from "../auto-reply/reply/reply-directi
 import { isMeaningfulMediaFact, readPersistedMediaFacts } from "../media/media-facts.js";
 import { isRelativeAssistantMediaReference, splitMediaOutput } from "../media/parse-output.js";
 import { normalizeInputProvenance } from "../sessions/input-provenance.js";
+import { parseAssistantTextSignature } from "../shared/chat-message-content.js";
 import { isSuppressedControlReplyText } from "./control-reply-text.js";
 
 export type RoleContentMessage = {
@@ -118,14 +119,17 @@ export function truncateChatHistoryText(
   };
 }
 
-export function extractAssistantReplyDirectives(message: unknown) {
+export function extractAssistantReplyDirectives(
+  message: unknown,
+  onMediaDirective?: (url: string, sourceOffset: number) => void,
+) {
   const entry = readObjectRecord(message);
   if (entry?.role !== "assistant") {
     return undefined;
   }
   const content = typeof entry.text === "string" ? entry.text : entry.content;
   if (typeof content === "string") {
-    return parseReplyDirectivesFromMedia(splitMediaOutput(content));
+    return parseReplyDirectivesFromMedia(splitMediaOutput(content, { onMediaDirective }));
   }
   if (!Array.isArray(content) || content.length === 0) {
     return undefined;
@@ -146,7 +150,7 @@ export function extractAssistantReplyDirectives(message: unknown) {
     texts.push(typed.text);
   }
   return texts.length > 0
-    ? parseReplyDirectivesFromMedia(splitMediaOutput(texts.join("\n")))
+    ? parseReplyDirectivesFromMedia(splitMediaOutput(texts.join("\n"), { onMediaDirective }))
     : undefined;
 }
 
@@ -156,37 +160,69 @@ export function suppressSilentAssistantMessageText(message: unknown): unknown {
   if (!entry || isProjectedForwardedMessage(entry)) {
     return message;
   }
-  const parsed = extractAssistantReplyDirectives(message);
+  const media: Array<{ url: string; offset: number }> = [];
+  const parsed = extractAssistantReplyDirectives(message, (url, offset) =>
+    media.push({ url, offset }),
+  );
   if (!parsed?.hasSilentIntent) {
     return message;
   }
   const projected = { ...entry };
-  const mediaText = stripAssistantMediaDirectivesForDisplay(
-    (parsed.mediaUrls ?? []).map((url) => `MEDIA:${url}`).join("\n"),
-    takeAssistantManagedMediaUrlsForDisplay(projected, "assistant").urls,
+  const managed = new Set(
+    takeAssistantManagedMediaUrlsForDisplay(projected, "assistant").urls.map((url) => url.trim()),
   );
+  const mediaText = (start = 0, end = Infinity) =>
+    media
+      .filter(
+        ({ url, offset }) =>
+          offset >= start &&
+          offset < end &&
+          !(isRelativeAssistantMediaReference(url) && managed.has(url.trim())),
+      )
+      .map(({ url }) => {
+        const quote = url.includes('"') ? "'" : '"';
+        return `MEDIA:${quote}${url}${quote}`;
+      })
+      .join("\n");
   if (typeof projected.text === "string") {
-    projected.text = mediaText;
+    projected.text = mediaText();
   }
   if (typeof projected.content === "string") {
-    projected.content = mediaText;
+    projected.content = mediaText();
   } else if (Array.isArray(projected.content)) {
+    let offset = 0;
     const content = projected.content.flatMap((block) => {
       const part = readObjectRecord(block);
       if (isAssistantInternalReasoningContentType(part?.type)) {
         return [];
       }
+      if (!part || !isAssistantTextContentType(part.type) || typeof part.text !== "string") {
+        return [block];
+      }
+      const text =
+        typeof entry.text === "string" ? "" : mediaText(offset, offset + part.text.length);
+      offset += part.text.length + 1;
       return [
-        part && isAssistantTextContentType(part.type) && typeof part.text === "string"
-          ? { ...part, text: "" }
-          : block,
+        {
+          ...part,
+          text,
+          ...(text
+            ? {
+                // Attachments keep their position and survive the final-answer phase filter.
+                textSignature: JSON.stringify({
+                  v: 1,
+                  ...parseAssistantTextSignature(part),
+                  phase: "final_answer",
+                }),
+              }
+            : {}),
+        },
       ];
     });
-    if (mediaText) {
-      // Retained attachments must survive the final-answer phase filter.
+    if (typeof projected.text === "string" && projected.text) {
       content.push({
         type: "text",
-        text: mediaText,
+        text: projected.text,
         textSignature: JSON.stringify({ v: 1, phase: "final_answer" }),
       });
     }

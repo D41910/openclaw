@@ -245,4 +245,35 @@ describe("control reply display projection", () => {
       expect(message).toEqual(original);
     },
   );
+
+  it("keeps silent-message attachment order, quoting, and cross-block fences", () => {
+    const first = "https://example.com/first image.png?signature=abc)";
+    const last = 'https://example.com/last.png?signature=abc"';
+    const message = assistant([
+      textBlock("```text"),
+      textBlock(`MEDIA:${first}\n\x60\x60\x60`),
+      textBlock(""),
+      {
+        ...textBlock(`The attachment is enough.\nMEDIA:"${first}"`),
+        textSignature: JSON.stringify({ v: 1, id: "progress", phase: "commentary" }),
+      },
+      {
+        type: "attachment",
+        attachment: { url: "/media/middle.png", kind: "image", label: "middle.png" },
+      },
+      {
+        ...textBlock(`MEDIA:'${last}'\nNO_REPLY`),
+        textSignature: JSON.stringify({ v: 1, id: "final", phase: "final_answer" }),
+      },
+    ]);
+    const original = structuredClone(message);
+    const projected = projectChatDisplayMessages([message]);
+    expect(projected).toHaveLength(1);
+    const content = normalizeMessage(projected[0]).content;
+    expect(content.map((part) => part.type)).toEqual(["attachment", "attachment", "attachment"]);
+    expect(
+      content.flatMap((part) => (part.type === "attachment" ? [part.attachment.url] : [])),
+    ).toEqual([first, "/media/middle.png", last]);
+    expect(message).toEqual(original);
+  });
 });

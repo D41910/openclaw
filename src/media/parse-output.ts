@@ -42,6 +42,7 @@ type SplitMediaOutputOptions = {
   extractMediaDirectives?: boolean;
   preserveTrailingWhitespace?: boolean;
   onAudioDirective?: () => void;
+  onMediaDirective?: (url: string, sourceOffset: number) => void;
 };
 
 type MarkdownImageExtraction = {
@@ -666,6 +667,7 @@ export function splitMediaOutput(
       foundMediaToken = true;
       for (const url of media.slice(mediaStartIndex)) {
         segments.push({ type: "media", url });
+        options.onMediaDirective?.(url, lineOffset + match.index);
       }
       cleanedLine = cleanLineText(invalidParts.join(" "));
     } else if (looksLikeLocalPath || rejectedMediaCount > rejectedBefore) {
