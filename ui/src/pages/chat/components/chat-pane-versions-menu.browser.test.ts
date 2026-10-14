@@ -50,6 +50,7 @@ it("opens help on its own retained header and retires native overlays when prese
   await userEvent.keyboard("{Escape}");
   expect((await hidden).target).toBe(help);
   expect(help.matches(":popover-open")).toBe(false);
+  await expect.element(page.elementLocator(menuSurface)).toBeVisible();
   await expect.poll(() => document.activeElement).toBe(info);
   await userEvent.keyboard(" ");
   await expect.element(page.elementLocator(help)).toBeVisible();

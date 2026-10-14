@@ -1,7 +1,8 @@
 import { html } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installTitleTooltips } from "../../../components/tooltip-title.ts";
-import { i18n } from "../../../i18n/index.ts";
+import "../../../components/web-awesome.ts";
+import { i18n, t } from "../../../i18n/index.ts";
 import { KEYBOARD_SHORTCUT_COMBOS } from "../../../lib/keyboard-shortcut-contract.ts";
 import {
   openChatLayoutMenu,
@@ -95,6 +96,35 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
       expect(onBrowser).toHaveBeenCalledOnce();
     });
 
+    it("keeps mobile panel choices first and opens Details from the native trigger", async () => {
+      const onOpenDetails = vi.fn();
+      const { container } = mountChatPaneHeader(containers, {
+        mergedChrome: true,
+        narrow: true,
+        onOpenDetails,
+        panelMenuActions: [
+          { id: "terminal", label: "Terminal", icon: html``, onActivate: vi.fn() },
+        ],
+        onOpenSplitView: vi.fn(),
+      });
+      const scope = {
+        container,
+        click: (element: HTMLElement) => page.elementLocator(element).click(),
+      };
+      const menu = await openChatLayoutMenu(scope);
+      const trigger = menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!;
+      expect(trigger.getAttribute("aria-label")).toBe(t("chat.sessionHeader.panels"));
+      expect(trigger.textContent?.trim()).toBe("");
+      expect(
+        [...menu.querySelectorAll("[role^=menuitem]")].map((item) =>
+          item.getAttribute("data-value"),
+        ),
+      ).toEqual(["details", "terminal", "open-split-view"]);
+      await selectChatLayoutAction(scope, t("chat.sessionDetails.title"));
+      expect(onOpenDetails).toHaveBeenCalledExactlyOnceWith(trigger);
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    });
+
     it("closes Layout before changing its contents and restores focus on selection and Escape", async () => {
       const { userEvent } = await import("vitest/browser");
       const observations: Array<{ open: boolean; focused: boolean }> = [];
@@ -164,9 +194,20 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
     it.each([320, 693])(
       "keeps a running batch and all controls inside a %ipx header",
       async (width) => {
+        await page.viewport(width, 800);
+        const onTerminal = vi.fn();
         const { container } = mountChatPaneHeader(containers, {
           narrow: true,
           runningSubagentCount: 12,
+          panelMenuActions: [
+            {
+              id: "terminal",
+              label: "Toggle terminal",
+              icon: html``,
+              shortcut: KEYBOARD_SHORTCUT_COMBOS.terminalPanel,
+              onActivate: onTerminal,
+            },
+          ],
           detailsControl: html`<openclaw-chat-details .presented=${true}></openclaw-chat-details>`,
           sidebarLayout: { columns: [] },
           onLayoutChange: vi.fn(),
@@ -203,6 +244,17 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         expect(container.querySelector(".chat-pane__subagents-running")?.textContent).toContain(
           "Subagents · 12 running",
         );
+        const scope = {
+          container,
+          click: (element: HTMLElement) => page.elementLocator(element).click(),
+        };
+        const menu = await openChatLayoutMenu(scope);
+        const shortcut = menu.querySelector<HTMLElement>("kbd")!;
+        expect(shortcut.checkVisibility()).toBe(false);
+        const surface = menu.querySelector<HTMLElement>("[role=menu]")!;
+        expect(surface.getBoundingClientRect().width).toBeLessThanOrEqual(264);
+        await selectChatLayoutAction(scope, "Toggle terminal");
+        expect(onTerminal).toHaveBeenCalledOnce();
       },
     );
 

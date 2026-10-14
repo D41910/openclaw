@@ -28,6 +28,35 @@ afterEach(async () => {
   await page.viewport(originalViewport.width, originalViewport.height);
 });
 
+it("keeps submenu icons and details in the visible trigger", async () => {
+  let icon!: HTMLSpanElement;
+  let details!: HTMLSpanElement;
+  render(() => (
+    <Menu
+      id="people"
+      label="People"
+      items={[
+        {
+          id: "view",
+          label: "View",
+          icon: <span ref={(node) => (icon = node)}>Eye</span>,
+          details: <span ref={(node) => (details = node)}>V</span>,
+          children: [{ id: "reasoning", label: "Reasoning" }],
+        },
+      ]}
+    />
+  ));
+  flush();
+  await openMenu();
+  const view = item("View");
+  expect(view.contains(icon)).toBe(true);
+  expect(view.contains(details)).toBe(true);
+  await userEvent.click(view);
+  await phase(surface("people-view"), "open");
+  expect(view.contains(icon)).toBe(true);
+  expect(view.contains(details)).toBe(true);
+});
+
 it("routes arrow navigation from an embedded button through the menu", async () => {
   const activate = vi.fn();
   mountMenu({

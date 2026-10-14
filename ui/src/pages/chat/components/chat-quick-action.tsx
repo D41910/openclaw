@@ -70,7 +70,7 @@ export function chatQuickActionEntry(
   id: string,
   layout = false,
   slot?: string,
-): MenuEntry {
+): Exclude<MenuEntry, { kind: "group" }> {
   const label = (
     <span class="session-menu__text">
       {action.label}

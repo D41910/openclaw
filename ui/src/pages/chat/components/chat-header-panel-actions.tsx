@@ -22,11 +22,15 @@ import type { HeaderMenuQuickAction } from "./chat-header-session-menu.ts";
 import { chatQuickActionEntry, type ChatQuickAction } from "./chat-quick-action.tsx";
 import type { SidebarPanelDefinition } from "./chat-sidebar-region-types.ts";
 
+export type HeaderPanelAction = HeaderMenuQuickAction & { shortcut?: KeyboardShortcutCombo };
+
 export type ChatPaneLayoutMenuProps = {
   paneId: string;
   narrow: boolean;
+  mobile?: boolean;
+  onOpenDetails?: (source: HTMLElement) => void;
   actionsDisabled?: boolean;
-  panelMenuActions?: (HeaderMenuQuickAction & { shortcut?: KeyboardShortcutCombo })[];
+  panelMenuActions?: HeaderPanelAction[];
   layoutMenuActions?: HeaderMenuQuickAction[];
   sidebarLayout?: SidebarLayout;
   panelDefinitions?: SidebarPanelDefinition[];
@@ -39,7 +43,7 @@ export type ChatPaneLayoutMenuProps = {
   onClosePane?: (paneId: string) => void;
 };
 
-function layoutModel(props: ChatPaneLayoutMenuProps) {
+function layoutModel(props: ChatPaneLayoutMenuProps, openDetails: () => void) {
   const layout = props.sidebarLayout;
   const definitions = props.panelDefinitions ?? [];
   const side = layout ? sidebarActivePanel(layout) : undefined;
@@ -143,7 +147,19 @@ function layoutModel(props: ChatPaneLayoutMenuProps) {
       });
     }
   }
-  const panelActions = props.panelMenuActions ?? [];
+  const panelActions: ChatQuickAction[] = [
+    ...(props.mobile && props.onOpenDetails
+      ? [
+          {
+            id: "details",
+            label: t("chat.sessionDetails.title"),
+            icon: icons.listChecks,
+            onActivate: openDetails,
+          },
+        ]
+      : []),
+    ...(props.panelMenuActions ?? []),
+  ];
   const allActions = [...actions, ...panelActions];
   return {
     actions,
@@ -158,46 +174,58 @@ let nextLayoutId = 0;
 export function ChatPaneLayoutMenu(props: ChatPaneLayoutMenuProps) {
   const id = `chat-pane-layout-${++nextLayoutId}`;
   const [opened, setOpened] = createSignal(false);
-  const model = createMemo(() => layoutModel(props));
   let menu: MenuHandle | undefined;
+  const model = createMemo(() =>
+    layoutModel(props, () => {
+      const trigger = menu?.overlay.trigger;
+      if (trigger) {
+        props.onOpenDetails?.(trigger);
+      }
+    }),
+  );
   const headerActions = (
     <Show when={opened() || model().allActions.length === 0}>
       <LitContent value={model().mainHeaderAction} />
       <LitContent value={model().sideHeaderAction} />
     </Show>
   );
-  const items = createMemo((): MenuEntry[] => [
-    ...model().actions.map((action) => chatQuickActionEntry(action, action.id, true)),
-    ...(model().panelActions.length
-      ? [
-          {
-            kind: "content" as const,
-            id: "panel-actions",
-            content: <div class="session-menu__separator" role="separator" />,
-          },
-        ]
-      : []),
-    ...model().panelActions.map((action) => chatQuickActionEntry(action, action.id, true)),
-    {
-      kind: "content",
-      id: "header-actions",
-      content: headerActions,
-    },
-  ]);
+  const items = createMemo((): MenuEntry[] => {
+    const { actions, panelActions } = model();
+    const primary = props.mobile ? panelActions : actions;
+    const secondary = props.mobile ? actions : panelActions;
+    return [
+      ...primary.map((action) => chatQuickActionEntry(action, action.id, true)),
+      ...(primary.length && secondary.length
+        ? [
+            {
+              kind: "content" as const,
+              id: "panel-actions",
+              content: <div class="session-menu__separator" role="separator" />,
+            },
+          ]
+        : []),
+      ...secondary.map((action) => chatQuickActionEntry(action, action.id, true)),
+      {
+        kind: "content",
+        id: "header-actions",
+        content: headerActions,
+      },
+    ];
+  });
   return (
     <Show when={model().allActions.length > 0 || model().mainHeaderAction}>
       <Menu
         id={id}
-        class="chat-pane__layout-menu chat-panel-layout-menu"
+        class={`chat-pane__layout-menu chat-panel-layout-menu${props.mobile ? " chat-panel-layout-menu--mobile" : ""}`}
         placement="bottom-end"
-        label={t("chat.sessionHeader.layout")}
+        label={t(props.mobile ? "chat.sessionHeader.panels" : "chat.sessionHeader.layout")}
         triggerClass="btn btn--ghost chat-pane__layout-trigger"
         trigger={
           <>
             <span aria-hidden="true">
-              <Icon name="columns2" />
+              <Icon name={props.mobile ? "panelRightOpen" : "columns2"} />
             </span>
-            {t("chat.sessionHeader.layout")}
+            <Show when={!props.mobile}>{t("chat.sessionHeader.layout")}</Show>
           </>
         }
         items={items()}
