@@ -1,7 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import { createMemo, For, Show } from "solid-js";
-import { t } from "../i18n/index.ts";
 import { shouldHandleNavigationClick } from "../lib/navigation-click.ts";
+import { t } from "../lib/reactive/i18n.ts";
 import type { SidebarSessionHovercardRow } from "./app-sidebar-session-types.ts";
 import { sessionMachineParts } from "./session-machine.ts";
 import type { progressCardHeadsUp } from "./session-progress-card.ts";
