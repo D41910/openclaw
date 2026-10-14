@@ -1,4 +1,3 @@
-import type { ChildProcess } from "node:child_process";
 import process from "node:process";
 import { expectDefined } from "@openclaw/normalization-core";
 import { toErrorObject } from "@openclaw/normalization-core/error-coercion";
@@ -93,8 +92,6 @@ export type CommandOptions = {
   killSignal?: NodeJS.Signals | number;
   /** Grace between graceful termination and the force-kill fallback. */
   killGraceMs?: number;
-  /** Local child only: fd3 is a pipe and Node IPC is enabled for a private protocol. */
-  onPrivateControlChild?: (child: ChildProcess) => void;
 };
 
 export async function runCommandWithTimeout(
@@ -247,21 +244,12 @@ async function runCommandWithOutputEncoding(
     killSignal,
     ...(hasInput && !options.beforeInput ? { input } : {}),
     reject: false,
-    stdio: options.onPrivateControlChild
-      ? [
-          // SAFETY: Execa forwards arbitrary numeric descriptors to Node; its stdin type narrows them to fd 0.
-          (options.stdinFileDescriptor as 0 | undefined) ?? (hasInput ? "pipe" : "inherit"),
-          "pipe",
-          "pipe",
-          "pipe",
-        ]
-      : [
-          // SAFETY: Execa forwards arbitrary numeric descriptors to Node; its stdin type narrows them to fd 0.
-          (options.stdinFileDescriptor as 0 | undefined) ?? (hasInput ? "pipe" : "inherit"),
-          "pipe",
-          "pipe",
-        ],
-    ...(options.onPrivateControlChild ? { ipc: true } : {}),
+    stdio: [
+      // SAFETY: Execa forwards arbitrary numeric descriptors to Node; its stdin type narrows them to fd 0.
+      (options.stdinFileDescriptor as 0 | undefined) ?? (hasInput ? "pipe" : "inherit"),
+      "pipe",
+      "pipe",
+    ],
     stripFinalNewline: false,
     windowsVerbatimArguments: options.windowsVerbatimArguments,
   });
@@ -398,13 +386,6 @@ async function runCommandWithOutputEncoding(
   const onAbort = () => cancel("signal");
   signal?.addEventListener("abort", onAbort, { once: true });
   armNoOutputTimer();
-  let privateControlError: Error | undefined;
-  try {
-    options.onPrivateControlChild?.(nodeChild);
-  } catch (error) {
-    privateControlError = toErrorObject(error, "Private child control failed");
-    cancel("signal");
-  }
   const clearTimers = () => {
     timeoutTimer?.clear();
     noOutputTimer?.clear();
@@ -618,9 +599,6 @@ async function runCommandWithOutputEncoding(
   }
   if (inputAdmissionError) {
     throw failedProcess(inputAdmissionError, cleanup);
-  }
-  if (privateControlError) {
-    throw failedProcess(privateControlError, cleanup);
   }
   if (terminatingOutputError) {
     throw failedProcess(terminatingOutputError, cleanup);

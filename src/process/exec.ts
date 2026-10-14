@@ -1,4 +1,3 @@
-import type { ChildProcess } from "node:child_process";
 import {
   asPositiveFiniteNumber,
   resolveOptionalIntegerOption,
@@ -264,7 +263,6 @@ export type BufferedCommandOptions = {
   terminateOnOutputError?: boolean | { stdout?: boolean; stderr?: boolean };
   killProcessTree?: boolean;
   killGraceMs?: number;
-  onPrivateControlChild?: (child: ChildProcess) => void;
 };
 
 export type BufferedCommandResult = {
@@ -337,7 +335,6 @@ export async function runCommandBuffered(
       killProcessTree: options.killProcessTree ?? true,
       killGraceMs: options.killGraceMs,
       onOutputChunk: appendChunk,
-      onPrivateControlChild: options.onPrivateControlChild,
       outputCapture: "discard",
       signal: options.signal,
       timeoutMs: options.timeoutMs,
