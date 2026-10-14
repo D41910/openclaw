@@ -285,6 +285,9 @@ describe("DebugOverlay", () => {
       // Healthy event loop: no tile carries the degraded tint.
       expect(overlay.querySelector(".gateway-vital[data-degraded]")).toBeNull();
 
+      // Accumulate history without refreshing the unrelated expanded sections.
+      overlay.querySelector<HTMLButtonElement>('[aria-label="Minimize system busyness"]')!.click();
+      await vitalUpdated();
       for (let interval = 0; interval < 90; interval += 1) {
         const nextSample = sampleCount + 1;
         vi.advanceTimersByTime(10_000);
@@ -294,6 +297,7 @@ describe("DebugOverlay", () => {
           ).toBe(1 + nextSample / 10);
         });
       }
+      overlay.querySelector<HTMLButtonElement>('[aria-label="Expand system busyness"]')!.click();
       await vitalUpdated();
 
       const points = overlay
