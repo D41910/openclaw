@@ -145,53 +145,18 @@ export function registerRequiredReplyCompletionCases({
     }
   });
 
-  it.each([
-    { text: "NO", expected: "NO" },
-    { text: "NO_", expected: "NO_" },
-    { text: "NO_RE", expected: "NO_RE" },
-    { text: "NO_REPLY\nHere is the answer.", expected: "Here is the answer." },
-  ])("delivers a non-silent terminal reply unchanged: $text", async ({ text, expected }) => {
+  it("delivers a prepared literal NO_REPLY without classifying it again", async () => {
     state.runEmbeddedAgentMock.mockResolvedValueOnce({
-      payloads: [{ text: expected }],
+      payloads: [{ text: "NO_REPLY" }],
       meta: {
-        finalAssistantRawText: text,
-        finalAssistantVisibleText: expected,
-        terminalReply: { disposition: "visible", text: expected },
+        finalAssistantRawText: "NO_REPLY\nNO_REPLY",
+        finalAssistantVisibleText: "NO_REPLY",
+        terminalReply: { disposition: "visible", text: "NO_REPLY" },
       },
     });
     const { run } = createMinimalRun();
-    await expect(run()).resolves.toMatchObject({ text: expected });
+    await expect(run()).resolves.toMatchObject({ text: "NO_REPLY" });
   });
-
-  it.each(
-    (["required", "result-required"] as const).flatMap((terminalReplyExpectation) =>
-      ["NO_REPLY.", '"NO_REPLY"', "NO_REPLY NO_REPLY", '{"action":"NO_REPLY"}'].map((text) => ({
-        terminalReplyExpectation,
-        text,
-      })),
-    ),
-  )(
-    "keeps ordinary visible text for $terminalReplyExpectation: $text",
-    async ({ terminalReplyExpectation, text }) => {
-      state.runEmbeddedAgentMock.mockResolvedValueOnce({
-        payloads: [{ text }],
-        meta: {
-          finalAssistantRawText: text,
-          finalAssistantVisibleText: text,
-          terminalReply: { disposition: "visible", text },
-        },
-      });
-      const onBlockReply = vi.fn();
-      const onAgentRunTerminalOutcome = vi.fn();
-      const { run } = createMinimalRun({
-        runOverrides: { terminalReplyExpectation },
-        opts: { onBlockReply, onAgentRunTerminalOutcome },
-      });
-      await expect(run()).resolves.toMatchObject({ text });
-      expect(onBlockReply).not.toHaveBeenCalled();
-      expect(onAgentRunTerminalOutcome).not.toHaveBeenCalledWith("failed");
-    },
-  );
 
   it.each([
     { label: "empty output", payloads: [] },

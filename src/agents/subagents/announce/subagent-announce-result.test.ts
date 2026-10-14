@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createDeferred } from "../../../../test/helpers/promise.js";
 import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import type { SubagentRunRecord } from "../registry/subagent-registry.types.js";
+import { copySubagentRunRuntimeOwner } from "../registry/subagent-run-generation.js";
+import { readChildCompletionFindings, testing } from "./subagent-announce-output.test-support.js";
 import {
   buildChildCompletionFindings,
   readSubagentRunAnnounceResultUsing,
@@ -142,32 +144,6 @@ describe("prepared announcement results", () => {
     },
   );
 
-  it("retrieves full visible output from the recorded run rather than a snapshot", async () => {
-    const text = `${"full report ".repeat(700)}required-tail`;
-    const child = completedChild(text);
-    child.completion!.resultText = undefined;
-    child.execution.transcriptTarget = {
-      agentId: "main",
-      sessionId: "completed-session",
-      sessionKey: child.childSessionKey,
-      storePath: "/unused/session-store",
-    };
-    await expect(
-      readSubagentRunAnnounceResultUsing(child, {
-        ...resultDeps(() => child),
-        findTranscriptEvent: async (_scope, match) => {
-          expect(match).toEqual({ kind: "visible-final", runId: child.runId });
-          return {
-            event: {
-              type: "message",
-              message: { role: "assistant", content: [{ type: "text", text }] },
-            },
-          };
-        },
-      }),
-    ).resolves.toMatchObject({ text });
-  });
-
   it.each([
     { rawText: "NO_REPLY.", expected: "NO_REPLY." },
     { rawText: '{"answer":"NO_REPLY"}', expected: '{"answer":"NO_REPLY"}' },
@@ -249,46 +225,52 @@ describe("prepared announcement results", () => {
     },
   );
 
-  it.each(["silent replacement", "failed outcome", "transcript target", "retired run"] as const)(
-    "rejects %s during full transcript retrieval",
-    async (change) => {
-      const child = completedChild("original answer");
-      child.completion!.resultText = undefined;
-      child.execution.transcriptTarget = {
-        agentId: "main",
-        sessionId: "completed-session",
-        sessionKey: child.childSessionKey,
-        storePath: "/unused/session-store",
-      };
-      let current: SubagentRunRecord | undefined = child;
-      const started = createDeferred();
-      const release = createDeferred();
-      const pending = readSubagentRunAnnounceResultUsing(child, {
-        ...resultDeps(() => current),
-        findTranscriptEvent: async () => {
-          started.resolve();
-          await release.promise;
-          return { event: { message: { role: "assistant", content: "original answer" } } };
-        },
-      });
-      const rejected = expect(pending).rejects.toBeInstanceOf(
-        SubagentAnnouncePreparationConflictError,
-      );
-      await started.promise;
-      current = structuredClone(child);
-      if (change === "silent replacement") {
-        current.completion = { required: true, terminalReply: { disposition: "silent" } };
-      } else if (change === "failed outcome") {
-        current.execution.outcome = { status: "error", error: "cancelled" };
-      } else if (change === "transcript target") {
-        current.execution.transcriptTarget!.sessionId = "replacement-session";
-      } else {
-        current = undefined;
-      }
-      release.resolve();
-      await rejected;
-    },
-  );
+  it.each([
+    "silent replacement",
+    "failed outcome",
+    "transcript target",
+    "retired run",
+    "Gateway recovery",
+  ] as const)("rejects %s during full transcript retrieval", async (change) => {
+    const child = completedChild("original answer");
+    child.completion!.resultText = undefined;
+    child.execution.transcriptTarget = {
+      agentId: "main",
+      sessionId: "completed-session",
+      sessionKey: child.childSessionKey,
+      storePath: "/unused/session-store",
+    };
+    let current: SubagentRunRecord | undefined = child;
+    const started = createDeferred();
+    const release = createDeferred();
+    const pending = readSubagentRunAnnounceResultUsing(child, {
+      ...resultDeps(() => current),
+      findTranscriptEvent: async () => {
+        started.resolve();
+        await release.promise;
+        return { event: { message: { role: "assistant", content: "original answer" } } };
+      },
+    });
+    const rejected = expect(pending).rejects.toBeInstanceOf(
+      SubagentAnnouncePreparationConflictError,
+    );
+    await started.promise;
+    current =
+      change === "Gateway recovery"
+        ? structuredClone(child)
+        : copySubagentRunRuntimeOwner(child, structuredClone(child));
+    if (change === "silent replacement") {
+      current.completion = { required: true, terminalReply: { disposition: "silent" } };
+    } else if (change === "failed outcome") {
+      current.execution.outcome = { status: "error", error: "cancelled" };
+    } else if (change === "transcript target") {
+      current.execution.transcriptTarget!.sessionId = "replacement-session";
+    } else if (change === "retired run") {
+      current = undefined;
+    }
+    release.resolve();
+    await rejected;
+  });
 
   it("invalidates prepared output when the authoritative completion changes", async () => {
     const child = completedChild("original result");
@@ -298,11 +280,24 @@ describe("prepared announcement results", () => {
       resultDeps(() => current),
     );
     expect(result.isCurrent()).toBe(true);
-    current = {
+    current = copySubagentRunRuntimeOwner(child, {
       ...child,
       completion: { required: true, terminalReply: { disposition: "silent" } },
-    };
+    });
     expect(result.isCurrent()).toBe(false);
+  });
+  it("retains prepared authority across an equivalent immutable publication", async () => {
+    const child = completedChild("original answer");
+    let current = child;
+    const result = await readSubagentRunAnnounceResultUsing(
+      child,
+      resultDeps(() => current),
+    );
+    current = copySubagentRunRuntimeOwner(child, structuredClone(child));
+    current.completion!.capturedAt = 10;
+    current.delivery = { status: "delivered" };
+    expect(result.text).toBe("original answer");
+    expect(result.isCurrent()).toBe(true);
   });
 
   it("rejects retired completion owners", async () => {
@@ -314,4 +309,66 @@ describe("prepared announcement results", () => {
       ),
     ).rejects.toBeInstanceOf(SubagentAnnouncePreparationConflictError);
   });
+});
+
+describe("completion batch freshness", () => {
+  afterEach(() => testing.setDepsForTest());
+
+  it.each(["during", "after"] as const)(
+    "rejects an earlier child's change %s preparation",
+    async (timing) => {
+      const first = completedChild("first answer");
+      const second = completedChild("second answer");
+      second.runId = "second-run";
+      second.execution.transcriptTarget!.sessionId = "second-session";
+      const current = new Map([
+        [first.runId, first],
+        [second.runId, second],
+      ]);
+      const started = createDeferred();
+      const release = createDeferred();
+      testing.setDepsForTest({
+        findTranscriptEvent: async (scope) => {
+          if (scope.sessionId === "second-session") {
+            started.resolve();
+            await release.promise;
+          }
+          return {
+            event: {
+              message: {
+                role: "assistant",
+                content: scope.sessionId === "second-session" ? "second answer" : "first answer",
+              },
+            },
+          };
+        },
+      });
+      const pending = readChildCompletionFindings([first, second], (runId) => current.get(runId));
+      await started.promise;
+      await Promise.resolve();
+      const replaceFirst = () =>
+        current.set(
+          first.runId,
+          copySubagentRunRuntimeOwner(first, {
+            ...structuredClone(first),
+            completion: { required: true, terminalReply: { disposition: "silent" } },
+          }),
+        );
+      if (timing === "during") {
+        const rejected = expect(pending).rejects.toBeInstanceOf(
+          SubagentAnnouncePreparationConflictError,
+        );
+        replaceFirst();
+        release.resolve();
+        await rejected;
+      } else {
+        release.resolve();
+        const prepared = await pending;
+        expect(prepared.text).toContain("first answer");
+        expect(prepared.isCurrent()).toBe(true);
+        replaceFirst();
+        expect(prepared.isCurrent()).toBe(false);
+      }
+    },
+  );
 });

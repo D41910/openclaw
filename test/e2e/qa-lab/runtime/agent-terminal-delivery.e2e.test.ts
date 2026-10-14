@@ -460,10 +460,9 @@ describe("provider terminal reply delivery", () => {
                 outcome: { status: "ok" },
                 transcriptTarget: childTarget,
               },
-              // Released versions retained a capped snapshot alongside the recorded visible fact.
+              // Legacy records have capped result text but no terminal reply fact.
               completion: {
                 required: true,
-                terminalReply: { disposition: "visible", text: cases[3]!.raw.slice(0, 4_096) },
                 resultText: cases[3]!.raw.slice(0, 4_096),
               },
               delivery: { status: "pending" },

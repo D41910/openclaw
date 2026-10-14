@@ -330,39 +330,26 @@ describe("agent reply visibility", () => {
     ).toBe(text);
   });
 
-  it.each(['{"action":"NO_REPLY"}', '"NO_REPLY"', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
-    "preserves ordinary assistant text: %s",
-    (text) => {
-      const result = { payloads: [{ text }] };
-      expect(hasVisibleAgentPayload(result)).toBe(true);
-      expect(extractAgentRunText(result)).toBe(text);
-      expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
-      expect(
-        isTerminalSilentAssistantMessage({
-          role: "assistant",
-          stopReason: "stop",
-          content: [{ type: "text", text }],
-        }),
-      ).toBe(false);
-    },
-  );
-
-  it.each(["The requested answer.", "NO_REPLY The answer."])(
-    "keeps substantive text visible: %s",
-    (text) => {
-      const result = { payloads: [{ text }] };
-      expect(hasVisibleAgentPayload(result)).toBe(true);
-      expect(extractAgentRunText(result)).toBe(text);
-      expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
-      expect(
-        isTerminalSilentAssistantMessage({
-          role: "assistant",
-          stopReason: "stop",
-          content: [{ type: "text", text }],
-        }),
-      ).toBe(false);
-    },
-  );
+  it.each([
+    '{"action":"NO_REPLY"}',
+    '"NO_REPLY"',
+    "NO_REPLY.",
+    "NO_REPLY NO_REPLY",
+    "The requested answer.",
+    "NO_REPLY The answer.",
+  ])("preserves ordinary assistant text: %s", (text) => {
+    const result = { payloads: [{ text }] };
+    expect(hasVisibleAgentPayload(result)).toBe(true);
+    expect(extractAgentRunText(result)).toBe(text);
+    expect(extractAgentRunText({ meta: { finalAssistantVisibleText: text } })).toBe(text);
+    expect(
+      isTerminalSilentAssistantMessage({
+        role: "assistant",
+        stopReason: "stop",
+        content: [{ type: "text", text }],
+      }),
+    ).toBe(false);
+  });
 
   it("classifies terminal silent transcript messages and meaningful tails", () => {
     expect(

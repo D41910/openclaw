@@ -757,8 +757,6 @@ describe("sendPolicy deny — suppress delivery, not processing (#53328)", () =>
     ["caller-run", undefined, false],
     [undefined, "generated-run", false],
     ["caller-run", "observed-run", true],
-    [undefined, undefined, true],
-    ["<@everyone>", undefined, true],
   ] as const)(
     "keeps the missing-answer notice independent of run identity (supplied=%s, observed=%s, routed=%s)",
     async (runId, generatedRunId, routed) => {

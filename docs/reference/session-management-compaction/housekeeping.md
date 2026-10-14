@@ -13,7 +13,7 @@ OpenClaw supports "silent" turns for background tasks where the user should not 
 - The assistant returns an entire final that trims to uppercase `NO_REPLY` to request no user-visible text. Lowercase, punctuation, quotes, JSON, and trailing tokens remain visible.
 - The terminal producer records the decision and prepares output once; delivery and clients consume that fact instead of parsing text. One literal leading `NO_REPLY\n` removes only that control line and preserves the remainder as visible text.
 - Streaming control buffering belongs to producer preparation, so a possible control line does not leak into drafts or typing activity.
-- This is for true background/no-delivery turns only - it is not a shortcut for ordinary actionable user requests.
+- Use this for intentional silence, not missing output. External turns honor it even when a reply was required; internal result-required turns still need an answer.
 
 ## Pre-compaction memory flush
 

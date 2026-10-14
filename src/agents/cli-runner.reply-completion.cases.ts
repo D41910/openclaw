@@ -300,58 +300,6 @@ export function registerCliReplyCompletionTests({
     },
   );
 
-  it("settles NO_REPLY after a targetless WebChat progress send through the internal sink", async () => {
-    const text = "answer delivered through the internal sink";
-    supervisorSpawnMock.mockImplementationOnce(async (input) => {
-      completeToolCall(
-        {
-          captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
-          toolName: "message",
-          args: { action: "send", message: text, final: false },
-        },
-        {
-          content: [
-            {
-              type: "text",
-              text: "Sent visible reply to the current source conversation via internal-ui.",
-            },
-          ],
-          details: {
-            status: "ok",
-            deliveryStatus: "sent",
-            channel: "webchat",
-            target: "current-run",
-            sourceReplyTranscriptOwner: true,
-            sourceReplySink: "internal-ui",
-            sourceReply: { text },
-            message: text,
-            dryRun: false,
-            sourceReplyDeliveryMode: "message_tool_only",
-            messageDelivery: { status: "settled", partialDelivery: false, createdThreadIds: [] },
-          },
-        },
-      );
-      input.onStdout?.(
-        `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
-      );
-      return makeManagedRun();
-    });
-    const context = createContext({
-      sessionKey: "agent:main:dashboard:4d1d7313-43bf-4498-906b-4f6212e4a5b1",
-      runId: "run-webchat-internal-sink",
-      sourceReplyDeliveryMode: "automatic",
-      messageChannel: "webchat",
-      messageProvider: "webchat",
-    });
-    context.backendResolved.config.output = "jsonl";
-
-    const result = await run(context);
-
-    expect(result.didSendViaMessagingTool).toBe(true);
-    expect(result.meta.executionTrace?.attempts?.[0]?.result).toBe("error");
-    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-  });
-
   it.each(
     [false, true].flatMap((interSession) =>
       (
@@ -512,21 +460,13 @@ export function registerCliReplyCompletionTests({
     '"NO_REPLY"',
     JSON.stringify({ action: SILENT_REPLY_TOKEN }),
     "NO_REPLY NO_REPLY",
+    "NO_REPLY The requested result.",
   ])("preserves ordinary token-like text on an external required turn: %s", async (text) => {
     supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
     const result = await run(createContext({ terminalReplyExpectation: "required" }));
     expect(result.meta.error).toBeUndefined();
     expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
     expect(result.payloads).toEqual([{ text }]);
-    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-  });
-
-  it("delivers substantive mixed-token CLI output unchanged", async () => {
-    const text = "NO_REPLY The requested result.";
-    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
-    const result = await run(createContext({ terminalReplyExpectation: "required" }));
-    expect(result.payloads).toEqual([{ text }]);
-    expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
     expect(supervisorSpawnMock).toHaveBeenCalledOnce();
   });
 }

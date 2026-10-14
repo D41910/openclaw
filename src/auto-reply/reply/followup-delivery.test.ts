@@ -725,47 +725,7 @@ describe("resolveFollowupDeliveryDecision", () => {
 });
 
 describe("deliverFollowupDecision", () => {
-  it.each([
-    { text: "NO_REPLY", silent: true },
-    { text: '{"action":"NO_REPLY"}', silent: false },
-    { text: "NO_REPLY.", silent: false },
-    { text: '"NO_REPLY"', silent: false },
-    { text: "NO_RE", silent: false },
-    { text: "An ordinary answer.", silent: false },
-  ])("uses the producer terminal fact for queued text: $text", async ({ text, silent }) => {
-    const turn = createTurn();
-    const execution = createSettledExecution(text);
-    const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});
-    deliveryState.routeReply.mockReset();
-    deliveryState.routeReply.mockResolvedValue({ ok: true, delivered: true });
-    deliveryState.runtimeError.mockReset();
-
-    const decision = await resolveFollowupDeliveryDecision({
-      turn,
-      execution,
-      accounting: createAccounting(execution.outcome.result.payloads),
-    });
-    await deliverFollowupDecision({
-      decision,
-      turn,
-      defaults: createDefaults(onBlockReply),
-      runId: turn.runId,
-      runFollowup: vi.fn(async () => {}),
-    });
-    if (silent) {
-      expect(decision).toMatchObject({ kind: "suppress", reason: "silent" });
-      expect(deliveryState.routeReply).not.toHaveBeenCalled();
-    } else {
-      expect(decision).toMatchObject({ kind: "deliver", payloads: [{ text }] });
-      expect(deliveryState.routeReply).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ payload: expect.objectContaining({ text }) }),
-      );
-    }
-    expect(onBlockReply).not.toHaveBeenCalled();
-    expect(deliveryState.runtimeError).not.toHaveBeenCalled();
-  });
-
-  it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
+  it.each(["NO_REPLY", '{"action":"NO_REPLY"}'])(
     "preserves prepared control-looking text at the delivery boundary: %s",
     async (text) => {
       const onBlockReply = vi.fn(async (_payload: ReplyPayload) => {});

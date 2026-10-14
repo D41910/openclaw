@@ -149,7 +149,7 @@ OpenClaw renders smaller system prompts for sub-agents. The runtime sets a `prom
 
 Under `promptMode=minimal`, extra injected prompts are labeled **Subagent Context** instead of **Group Chat Context**.
 
-The **Silent Replies** section applies to sessions connected to external message channels, including direct chats and message-tool-only replies. A token-only `NO_REPLY` can end an external turn silently even when an answer was required. The guidance explains that `NO_REPLY` discards anything written this turn that was not sent, so confirmations must be sent before ending silently. Subagents, private completions, the Control UI, and other internal sessions do not receive silent-token guidance: they must return a result or continue unfinished work. See [Silent replies](/concepts/messages#silent-replies).
+The **Silent Replies** section applies to external message channels, including message-tool-only replies; direct-message prompts omit it. A token-only `NO_REPLY` still ends an external turn silently even when an answer was required. The guidance explains that `NO_REPLY` discards unsent text, so send confirmations first. Subagents, private completions, the Control UI, and other internal sessions receive no silent-token guidance: they must return a result or continue unfinished work. See [Silent replies](/concepts/messages#silent-replies).
 
 ## Prompt snapshots
 

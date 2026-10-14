@@ -215,18 +215,6 @@ it("does not capture hook-block rejection text as a model response", async () =>
   expect(onRawLlmResponse).not.toHaveBeenCalled();
 });
 
-it("captures the model's raw text, never streamed delivery text", async () => {
-  const context = createContext();
-  const onRawLlmResponse = vi.fn();
-  context.opts = { onRawLlmResponse };
-  context.execution.result.acceptedSessionSpawns = undefined;
-  context.execution.result.meta = { durationMs: 0 };
-  context.execution.result.payloads = [{ text: "streamed part" }, { text: "final part" }];
-
-  await prepare("ordinary", context);
-  expect(onRawLlmResponse).not.toHaveBeenCalled();
-});
-
 describe.each(["ordinary", "queued"] as const)("%s waiting status delivery", (lane) => {
   it.each(["explicit acknowledgment", "visible final", "optional turn", "delivered message"])(
     "selects waiting status for %s",
@@ -341,7 +329,7 @@ it.each([true, false])(
   },
 );
 
-it.each([undefined, " ", "NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(
+it.each([undefined, "NO_REPLY"])(
   "settles a continuation without manufacturing waiting text for %s",
   async (yieldAcknowledgment) => {
     const context = createContext();

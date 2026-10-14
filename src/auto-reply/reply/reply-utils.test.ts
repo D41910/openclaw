@@ -167,8 +167,6 @@ describe("typing controller", () => {
       const signaler = createTypingSignaler({ typing, mode: "message", isHeartbeat: false });
       try {
         await signaler.signalTextDelta(text);
-        await signaler.signalMessageStart();
-        await typing.startTypingOnText(text);
         expect(onReplyStart).toHaveBeenCalled();
       } finally {
         typing.cleanup();

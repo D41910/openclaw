@@ -890,6 +890,7 @@ describe("subagent registry lifecycle error grace", () => {
     expect(run.completion?.terminalReply).toEqual({
       disposition: "visible",
       text: expect.stringMatching(/^x+…$/),
+      truncated: true,
     });
     if (run.completion?.terminalReply?.disposition === "visible") {
       expect(run.completion.terminalReply.text.length).toBeLessThanOrEqual(4_096);

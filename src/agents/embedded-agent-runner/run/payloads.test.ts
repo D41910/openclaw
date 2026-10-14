@@ -727,23 +727,16 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expect(payloads[0]?.text).toBeUndefined();
   });
 
-  it.each(['{"action":"NO_REPLY"}', '"NO_REPLY"', "NO_REPLY.", "NO_REPLY NO_REPLY"])(
-    "preserves ordinary assistant text: %s",
-    (text) => {
-      expect(buildPayloads({ assistantTexts: [text] })).toEqual([
-        expect.objectContaining({ text }),
-      ]);
-    },
-  );
-
-  it.each(["The requested answer.", "NO_REPLY The requested result."])(
-    "preserves substantive assistant text: %s",
-    (text) => {
-      expect(buildPayloads({ assistantTexts: [text] })).toEqual([
-        expect.objectContaining({ text }),
-      ]);
-    },
-  );
+  it.each([
+    '{"action":"NO_REPLY"}',
+    '"NO_REPLY"',
+    "NO_REPLY.",
+    "NO_REPLY NO_REPLY",
+    "The requested answer.",
+    "NO_REPLY The requested result.",
+  ])("preserves ordinary assistant text: %s", (text) => {
+    expect(buildPayloads({ assistantTexts: [text] })).toEqual([expect.objectContaining({ text })]);
+  });
 
   it("strips an exact leading NO_REPLY line and preserves the answer", () => {
     const text = "The requested answer.\nSecond line.";
