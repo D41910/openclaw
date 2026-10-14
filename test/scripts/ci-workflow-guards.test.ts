@@ -6212,7 +6212,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 it("pins generated publisher and maturity owners before credentials and selected checkout", () => {
   const pinned = {
     name: "Prepare Git owner",
-    uses: "openclaw/openclaw/.github/actions/git-owner@dd4528b6393e7d00063067a080ca7241b48ce475",
+    uses: "openclaw/openclaw/.github/actions/git-owner@88095dc00eef288c3829909d4dc64a9e249fa7ef",
   };
   const action = parse(readFileSync(PUBLISH_GENERATED_PR_ACTION, "utf8"));
   expect(action.runs.steps.map(({ name }: WorkflowStep) => name)).toEqual([
@@ -6513,7 +6513,7 @@ it("reports stale Linux release requests before selected code runs", () => {
 it("isolates release credentials and verifies trusted AppImage and signing tools", () => {
   const pinned = {
     name: "Prepare Git owner",
-    uses: "openclaw/openclaw/.github/actions/git-owner@dd4528b6393e7d00063067a080ca7241b48ce475",
+    uses: "openclaw/openclaw/.github/actions/git-owner@88095dc00eef288c3829909d4dc64a9e249fa7ef",
   };
   const workflows = [
     {
@@ -7596,7 +7596,7 @@ it("pins trusted Performance Git owners before checkout", () => {
     }
     expect(steps[index]).toEqual({
       name: "Prepare Git owner",
-      uses: "openclaw/openclaw/.github/actions/git-owner@a379bbd73e30b84a89aca4d54744ab9ca19082e7",
+      uses: "openclaw/openclaw/.github/actions/git-owner@88095dc00eef288c3829909d4dc64a9e249fa7ef",
       ...(decision ? { if: "steps.lane.outputs.run == 'true'" } : {}),
     });
   }
