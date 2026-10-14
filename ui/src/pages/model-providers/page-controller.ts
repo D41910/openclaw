@@ -1,4 +1,4 @@
-import { I18nController } from "../../i18n/lib/lit-controller.ts";
+import { i18n } from "../../i18n/lib/translate.ts";
 
 export interface PageLifecycle {
   hostConnected?(): void;
@@ -17,7 +17,7 @@ export interface ControllerHost {
 /** Keeps synchronous page owners and their subscriptions independent of the renderer. */
 export class ModelPageController implements ControllerHost {
   private readonly controllers = new Set<PageLifecycle>();
-  protected readonly i18nController = new I18nController(this);
+  private stopLocale: (() => void) | undefined;
   private connected = false;
   private settle: ((settled: boolean) => void) | undefined;
   updateComplete = Promise.resolve(true);
@@ -59,6 +59,8 @@ export class ModelPageController implements ControllerHost {
 
   connect(): void {
     this.connected = true;
+    this.stopLocale?.();
+    this.stopLocale = i18n.subscribe(() => this.requestUpdate());
     for (const controller of this.controllers) {
       controller.hostConnected?.();
     }
@@ -82,6 +84,8 @@ export class ModelPageController implements ControllerHost {
 
   disconnect(): void {
     this.connected = false;
+    this.stopLocale?.();
+    this.stopLocale = undefined;
     for (const controller of this.controllers) {
       controller.hostDisconnected?.();
     }
