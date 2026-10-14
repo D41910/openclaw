@@ -1,4 +1,3 @@
-import { html } from "lit";
 import { solidContent } from "../lit/solid-content.tsx";
 import { resolveCloudProfileIconData, type CloudProfileIdentity } from "./provider-icon-data.ts";
 import {
@@ -20,15 +19,15 @@ export function resolveCloudProfileIcon(profile?: CloudProfileIdentity) {
   const data = resolveCloudProfileIconData(profile);
   return {
     label: data.label,
-    icon: html`${solidContent(CloudProfileIcon, { profile })}`,
+    icon: solidContent(CloudProfileIcon, { profile }),
   };
 }
 
 /** Lettered badge for surfaces that must not infer a provider identity. */
 export function renderProviderFallbackIcon(label: string, options?: { className?: string }) {
-  return html`${solidContent(ProviderFallbackIcon, { label, class: options?.className })}`;
+  return solidContent(ProviderFallbackIcon, { label, class: options?.className });
 }
 
 export function renderProviderBrandIcon(provider: string, options?: { className?: string }) {
-  return html`${solidContent(ProviderBrandIcon, { provider, class: options?.className })}`;
+  return solidContent(ProviderBrandIcon, { provider, class: options?.className });
 }

@@ -1,12 +1,12 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import type { Accessor } from "@solidjs/signals";
 import type { JSX } from "@solidjs/web";
-import type { nothing, TemplateResult } from "lit";
 import { isSensitiveConfigPath } from "../../../src/config/sensitive-paths.js";
 import type { ConfigUiHints } from "../api/types.ts";
 import { t } from "../i18n/index.ts";
 import { isEnvPlaceholder, REDACTED_SENTINEL } from "../lib/config-form-utils.ts";
 import { formatUnknownText } from "../lib/format.ts";
+import type { emptyLegacyContent, LegacyTemplateResult } from "../lit/solid-content.tsx";
 import { formatConfigFormNumber } from "./config-form.numeric.ts";
 import { resolveConfigFieldMeta, type ConfigSearchCriteria } from "./config-form.search.ts";
 import {
@@ -59,7 +59,7 @@ export type ConfigNodeRenderParams = {
 export type ConfigNodeRenderer = (params: Accessor<ConfigNodeRenderParams>) => JSX.Element;
 export type LegacyNodeRenderer = (
   params: ConfigNodeRenderParams,
-) => TemplateResult | typeof nothing;
+) => LegacyTemplateResult | typeof emptyLegacyContent;
 
 export function configChildRenderOptions(params: ConfigNodeRenderParams) {
   return {
