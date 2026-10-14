@@ -474,6 +474,7 @@ export async function performClawHubSkillInstall(
                 ...(result.replacementBlocked !== undefined
                   ? { replacementBlocked: result.replacementBlocked }
                   : {}),
+                ...(result.recoveryIncomplete ? { recoveryIncomplete: true } : {}),
               } satisfies InstallClawHubSkillResult);
         },
       });

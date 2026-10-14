@@ -112,6 +112,30 @@ describe("skills-clawhub", () => {
     expect(result).toMatchObject({ ok: false, recoveryIncomplete: true });
   });
 
+  it("preserves incomplete recovery through the public ClawHub skill install", async () => {
+    await writeTrackedSkill(testWorkspaceDir, "agentreceipt", {
+      installedVersion: "1.0.0",
+      skillMd: "old skill",
+    });
+    installPackageDirMock.mockResolvedValueOnce({
+      ok: false,
+      error: "Could not restore the displaced skill directory",
+      recoveryIncomplete: true,
+    });
+
+    const result = await installTestSkill(testWorkspaceDir, "agentreceipt", {
+      version: "2.0.0",
+      force: true,
+      clawManaged: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: "Could not restore the displaced skill directory",
+      recoveryIncomplete: true,
+    });
+  });
+
   function mockSecurity(overrides: Partial<Parameters<typeof mockSkillSecurityVerdict>[0]>) {
     mockSkillSecurityVerdict({
       ok: true,
