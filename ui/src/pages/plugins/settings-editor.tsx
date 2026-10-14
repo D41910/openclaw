@@ -24,7 +24,6 @@ import { SettingsLoadingSkeleton } from "../../components/solid/settings-ui.tsx"
 import { registerPluginManagementEnglish } from "../../i18n/locales/en-plugin-management.ts";
 import { t } from "../../lib/reactive/i18n.ts";
 import { resolveScrollBehavior } from "../../lib/scroll-behavior.ts";
-import { defineSolidBridge } from "../../lit/solid-bridge.ts";
 import type { JSX as SolidJSX } from "../../types/solid-elements.d.ts";
 import { PluginCredentialEditor, type PluginCredentialEditorProps } from "./credential-editor.tsx";
 import "./custom-elements.ts";
@@ -368,7 +367,7 @@ function PluginSettingsGroups(props: GroupsProps) {
   );
 }
 
-function PluginSettingsEditorContent(props: PluginSettingsEditorProps) {
+export function PluginSettingsEditor(props: PluginSettingsEditorProps) {
   const pluginId = createMemo(() => props.model?.pluginId);
   const [query, setQuery] = createSignal(() => {
     pluginId();
@@ -408,7 +407,7 @@ function PluginSettingsEditorContent(props: PluginSettingsEditorProps) {
     return loading || fields.length ? { fields, loading } : undefined;
   });
   return (
-    <>
+    <openclaw-plugin-settings-editor>
       {props.model ? (
         <section class="plugin-editor">
           <header class="plugin-editor__header">
@@ -469,7 +468,7 @@ function PluginSettingsEditorContent(props: PluginSettingsEditorProps) {
           ) : null}
         </section>
       ) : null}
-    </>
+    </openclaw-plugin-settings-editor>
   );
 }
 
@@ -498,19 +497,6 @@ function PluginSettingsDraft(props: GroupsProps) {
     </Show>
   );
 }
-
-export const PluginSettingsEditor = defineSolidBridge<PluginSettingsEditorProps>(
-  "openclaw-plugin-settings-editor",
-  PluginSettingsEditorContent,
-  {
-    properties: {
-      model: { default: undefined, attribute: false },
-      permissions: { default: undefined, attribute: false },
-      onAskSetting: { default: undefined, attribute: false },
-      resolveCredential: { default: undefined, attribute: false },
-    },
-  },
-);
 
 declare module "@solidjs/web" {
   namespace JSX {

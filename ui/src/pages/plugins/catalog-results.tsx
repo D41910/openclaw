@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import { For, onSettled } from "solid-js";
+import { For, createMemo, onSettled } from "solid-js";
 import { comparePluginCatalogEntries } from "../../../../packages/plugin-package-contract/src/catalog-order.js";
 import { Icon } from "../../components/solid/icon.tsx";
 import { PanelEmptyState } from "../../components/solid/panel-empty-state.tsx";
@@ -198,14 +198,15 @@ function CatalogIcon(props: {
   plugin: PluginDiscoveryEntry;
   state: PluginCatalogResultsProps;
 }): JSX.Element {
-  const iconUrl = () =>
+  const iconUrl = createMemo(() =>
     resolvePluginCatalogIconUrl(
       {
         pluginId: props.plugin.local.pluginId,
         imageUrl: props.plugin.catalog.imageUrl,
       },
       props.state,
-    );
+    ),
+  );
   return (
     <PluginArtTile
       slug={props.plugin.local.pluginId ?? props.plugin.id}
@@ -446,8 +447,8 @@ function renderCatalogEmptyState(): JSX.Element {
 
 function RawResults(props: PluginCatalogResultsProps): JSX.Element {
   const items = () => props.result?.items ?? [];
-  const official = () => items().filter((plugin) => plugin.catalog.official);
-  const community = () => items().filter((plugin) => !plugin.catalog.official);
+  const official = createMemo(() => items().filter((plugin) => plugin.catalog.official));
+  const community = createMemo(() => items().filter((plugin) => !plugin.catalog.official));
   return (
     <>
       {props.loading ? (
@@ -503,10 +504,11 @@ function RawResults(props: PluginCatalogResultsProps): JSX.Element {
 
 function GroupedCatalog(props: PluginCatalogResultsProps): JSX.Element {
   const items = () => props.result?.items ?? [];
-  const categories = () =>
+  const categories = createMemo(() =>
     props.categories
       .filter((category) => category.slug !== "other")
-      .toSorted((left, right) => left.order - right.order);
+      .toSorted((left, right) => left.order - right.order),
+  );
   const hasAnySection = () =>
     props.featured.length > 0 ||
     props.trending.length > 0 ||
