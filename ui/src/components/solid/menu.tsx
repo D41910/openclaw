@@ -451,7 +451,7 @@ export function Menu(props: BranchProps): JSX.Element {
                     href={item().disabled ? undefined : item().href}
                     class={["oc-menu-item", item().class]}
                     data-value={item().id}
-                    value={item().id}
+                    value={item().attributes?.value ?? item().id}
                     data-variant={item().variant}
                     role={itemRole(item().type)}
                     aria-label={item().label}

@@ -67,7 +67,7 @@ export type MenuNavigationOptions = {
 };
 
 export const MENU_FORM_CONTROL_SELECTOR =
-  ':is(input, textarea, select, [data-form-control], button, a[href]):not([role^="menuitem"])';
+  ':is(input, textarea, select, [data-form-control], button, a[href]):not([role^="menuitem"]):not([aria-haspopup="menu"])';
 
 export function useMenuMachine(
   overlay: Overlay,
@@ -318,7 +318,8 @@ export function useMenuMachine(
     const fromButton =
       options.surface !== "listbox" &&
       event.target instanceof HTMLButtonElement &&
-      event.target.matches(MENU_FORM_CONTROL_SELECTOR);
+      event.target.matches(MENU_FORM_CONTROL_SELECTOR) &&
+      !event.target.closest('[role^="menuitem"]');
     const type =
       event.key === "ArrowDown"
         ? fromButton

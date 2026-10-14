@@ -25,13 +25,19 @@ function waitForMenuShow(menu: Element): Promise<void> {
   });
 }
 
+function isChatLayoutMenuClosed(element: Element): boolean {
+  const surface = element.querySelector<HTMLElement>(".oc-menu");
+  return !element.isConnected || !surface || surface.dataset.phase === "hidden";
+}
+
 async function waitForMenuClose(menu: ElementHandle<Element> | HTMLElement): Promise<void> {
   await expect
     .poll(
-      () => ("evaluate" in menu ? menu.evaluate(isChatLayoutMenuOpen) : isChatLayoutMenuOpen(menu)),
+      () =>
+        "evaluate" in menu ? menu.evaluate(isChatLayoutMenuClosed) : isChatLayoutMenuClosed(menu),
       { timeout: 10_000, message: "Layout menu did not finish closing" },
     )
-    .toBe(false);
+    .toBe(true);
 }
 
 export function openChatLayoutMenu(scope: DomChatLayoutScope): Promise<HTMLElement>;

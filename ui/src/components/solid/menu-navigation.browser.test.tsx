@@ -88,7 +88,8 @@ describe("Solid menu navigation", () => {
     await userEvent.click(surface().querySelector<HTMLButtonElement>("[data-form-control]")!);
     expect(pins).toBe(1);
     expect(selected).toEqual([]);
-    item("Beta").focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(item("Beta"));
     await userEvent.keyboard("{Enter}");
     await phase(surface(), "hidden");
     expect(selected).toEqual(["beta"]);
