@@ -1,6 +1,8 @@
 import type { BoardGetParams } from "@openclaw/gateway-protocol";
+import { insert, type JSX } from "@solidjs/web";
 import {
   createEffect,
+  createRoot,
   createSignal,
   getOwner,
   onCleanup,
@@ -31,6 +33,7 @@ type PluginViewProps = {
   props: unknown;
   defaultView: unknown;
   mountDefaultView: ((target: HTMLElement) => () => void) | undefined;
+  mountReplacementCompanion: ((target: HTMLElement) => () => void) | undefined;
   replacementCompanion: unknown;
   defaultHost: object | undefined;
   presented: boolean;
@@ -403,7 +406,11 @@ function PluginViewContent(props: PluginViewProps, host: PluginViewElement) {
         }
       >
         <Show when={!state().delegated}>
-          <MountedContent value={props.replacementCompanion} host={props.defaultHost ?? host} />
+          <MountedContent
+            value={props.replacementCompanion}
+            host={props.defaultHost ?? host}
+            mount={props.mountReplacementCompanion}
+          />
         </Show>
         <Show when={state().mountGeneration + 1} keyed>
           {(_generation) => <ViewRoot />}
@@ -424,12 +431,56 @@ export const PluginView = defineSolidBridge<
     props: { default: {}, attribute: false },
     defaultView: { default: undefined, attribute: false },
     mountDefaultView: { default: undefined, attribute: false },
+    mountReplacementCompanion: { default: undefined, attribute: false },
     replacementCompanion: { default: undefined, attribute: false },
     defaultHost: { default: undefined, attribute: false },
     presented: { default: true, type: Boolean },
   },
   methods: { focus: (host, options) => views.get(host)?.focus(options) },
 });
+
+/** Native callers keep built-in views in their Solid owner, including plugin delegation. */
+export function PluginSurface<S extends ControlUiSurface>(props: {
+  surface: S;
+  props: ControlUiSurfaceProps[S];
+  renderDefault: () => JSX.Element;
+  renderCompanion?: () => JSX.Element;
+  presented?: boolean;
+}) {
+  const owner = getOwner();
+  const context = useOptionalApplication();
+  const runtime = projectSource(context?.plugins, {
+    read: (source) => source,
+    subscribe: (source, publish) => source?.subscribe(publish) ?? (() => {}),
+    equality: "revision",
+  });
+  const mount = (target: HTMLElement, view: () => JSX.Element) =>
+    runWithOwner(owner, () =>
+      createRoot((dispose) => {
+        insert(target, view());
+        return () => {
+          dispose();
+          target.replaceChildren();
+        };
+      }),
+    );
+  const mountDefault = (target: HTMLElement) => mount(target, props.renderDefault);
+  const mountCompanion = (target: HTMLElement) => mount(target, () => props.renderCompanion?.());
+  return (
+    <Show
+      when={runtime.read()?.selectedReplacement(props.surface)}
+      fallback={props.renderDefault()}
+    >
+      <PluginView
+        surface={props.surface}
+        props={props.props}
+        presented={props.presented ?? true}
+        mountDefaultView={mountDefault}
+        mountReplacementCompanion={mountCompanion}
+      />
+    </Show>
+  );
+}
 
 export function PluginContribution(props: {
   kind: Exclude<ViewKind, "replacements">;
