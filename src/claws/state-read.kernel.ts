@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { EngineConnection } from "../infra/sql-connection.js";
 import type {
   OpenClawStateReadCommand,
   OpenClawStateReadResult,
@@ -9,7 +9,7 @@ type ClawStateReadCommand = Extract<OpenClawStateReadCommand, { type: "claws.inv
 type ClawStateReadResult = Extract<OpenClawStateReadResult, { type: "claws.inventory" }>;
 
 export function readClawStateCommandInDatabase(
-  db: DatabaseSync,
+  db: EngineConnection,
   command: ClawStateReadCommand,
 ): ClawStateReadResult {
   return { type: command.type, inventory: readClawInventoryInDatabase(db) };

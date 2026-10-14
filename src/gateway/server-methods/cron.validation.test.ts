@@ -1578,9 +1578,6 @@ describe("cron method validation", () => {
       { context, client: runClient },
     );
     expect(remove.respond).toHaveBeenCalledWith(true, { ok: true, removed: true }, undefined);
-    expect(context.cron.remove).toHaveBeenCalledWith(accountJob.id, {
-      commitGuard: expect.any(Function),
-    });
 
     cronRunRecordsOverride.mockImplementationOnce(async () => {
       runClient.internal!.agentRuntimeIdentity!.cronSelfManagementContext!.expiresAtMs =

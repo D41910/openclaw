@@ -3757,6 +3757,11 @@ export const en: TranslationMap & {
         "Use arrow keys or Home and End to choose a marker, Enter or Space to jump, and Escape to return to the conversation. Tab leaves the rail.",
     },
     pendingInputs: {
+      agentUpdate: {
+        queued: "Agent update received · waiting for delivery.",
+        cancelled: "This agent update was cancelled before delivery.",
+        interrupted: "Delivery interrupted. This saved agent update is not scheduled to retry.",
+      },
       waitingForWorkspaceSync: "Received · waiting for workspace sync",
       waitingForWorkerSetup: "Received · waiting for worker setup",
       resuming:
@@ -3864,7 +3869,6 @@ export const en: TranslationMap & {
         clear: "Clear session overrides",
       },
       contextUsage: {
-        label: "Context",
         title: "Context usage details",
         open: "Open context usage details",
         summary: "Session context usage: {used} of {limit} ({pct}%)",
@@ -3957,6 +3961,7 @@ export const en: TranslationMap & {
       allowImage: "Allow image",
       attachedFile: "Attached file",
       audio: "Audio",
+      download: "Download",
       expand: "Open {filename} in the side panel",
       open: "Open",
       previewUnavailable: "Preview unavailable",

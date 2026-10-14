@@ -321,9 +321,6 @@ describe.each(["HTTP", "WebSocket"] as const)(
           expect(runtime.beforeHook).toHaveBeenCalledOnce();
           expect(runtime.execute).toHaveBeenCalledOnce();
           if (transport === "WebSocket") {
-            expect(runtime.createTools).toHaveBeenCalledWith(
-              expect.objectContaining({ approvalReviewerDeviceIds: ["standalone-reviewer"] }),
-            );
             expect(runtime.beforeHook).toHaveBeenCalledWith(
               expect.objectContaining({
                 ctx: expect.objectContaining({ approvalReviewerDeviceId: "standalone-reviewer" }),

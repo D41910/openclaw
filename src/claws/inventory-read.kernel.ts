@@ -1,13 +1,16 @@
-import type { DatabaseSync } from "node:sqlite";
-import { readAllClawCronRefsInDatabase } from "./cron.js";
-import { readAllClawMcpServerRefsInDatabase } from "./mcp.js";
-import { readClawInstallRecordsInDatabase, readClawPackageRefsInDatabase } from "./provenance.js";
-import { readAllClawWorkspaceFilesInDatabase } from "./workspace.js";
+import type { EngineConnection } from "../infra/sql-connection.js";
+import { readAllClawCronRefsInDatabase } from "./cron-records.js";
+import { readAllClawMcpServerRefsInDatabase } from "./mcp-records.js";
+import {
+  readClawInstallRecordsInDatabase,
+  readClawPackageRefsInDatabase,
+} from "./provenance-read.kernel.js";
+import { readAllClawWorkspaceFilesInDatabase } from "./workspace-state.js";
 
 /** Return persisted Claw ownership facts before any asynchronous resource inspection. */
-export function readClawInventoryInDatabase(db: DatabaseSync) {
+export function readClawInventoryInDatabase(db: EngineConnection) {
   const installs = readClawInstallRecordsInDatabase(db);
-  const packages = readClawPackageRefsInDatabase(db, { readOnly: true });
+  const packages = readClawPackageRefsInDatabase(db);
   const workspaceFiles = readAllClawWorkspaceFilesInDatabase(db);
   return {
     installs,

@@ -7,7 +7,7 @@ export function clawAgentCopyNumber(baseId: string, agentId: string): number {
   }
   const suffix = agentId.slice(prefix.length);
   const index = Number(suffix);
-  return /^[2-9]\d*$/.test(suffix) && Number.isSafeInteger(index) ? index : 1;
+  return /^[1-9]\d*$/.test(suffix) && Number.isSafeInteger(index) && index >= 2 ? index : 1;
 }
 
 export function selectNextClawAgentId(baseId: string, existingAgentIds: Iterable<string>): string {

@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { EngineConnection } from "../infra/sql-connection.js";
 import type { Selectable } from "kysely";
 import { getNodeSqliteKysely } from "../infra/kysely-sync.js";
 import { coerceRequiredSqliteNumber as sqliteNumber } from "../infra/sqlite-number.js";
@@ -23,7 +23,7 @@ export type PersistedClawWorkspaceFile = {
 export type WorkspaceDatabase = Pick<DB, "claw_workspace_files">;
 export type WorkspaceFileRow = Selectable<DB["claw_workspace_files"]>;
 
-function selectWorkspaceFiles(db: DatabaseSync) {
+function selectWorkspaceFiles(db: EngineConnection) {
   return getNodeSqliteKysely<WorkspaceDatabase>(db)
     .selectFrom("claw_workspace_files")
     .select([
@@ -72,7 +72,7 @@ export function workspaceFileToRow(record: PersistedClawWorkspaceFile): Workspac
 }
 
 export function readAllClawWorkspaceFilesInDatabase(
-  db: DatabaseSync,
+  db: EngineConnection,
 ): PersistedClawWorkspaceFile[] {
   if (!tableExists(db, "claw_workspace_files")) {
     return [];

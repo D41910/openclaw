@@ -89,6 +89,7 @@ describe("claws inspect extensions", () => {
       adapterIdentity: "openclaw/test",
       declaredCapabilities: emptyPluginCapabilityEvidence.declared,
       capabilityGrants: emptyPluginCapabilityEvidence.grants,
+      capabilityGrantsByPluginId: emptyPluginCapabilityEvidence.grantsByPluginId,
     });
     await runClawsInspectCommand(root, { json: true }, runtime);
 
@@ -127,6 +128,7 @@ describe("claws inspect extensions", () => {
       adapterIdentity: "openclaw/test",
       declaredCapabilities: emptyPluginCapabilityEvidence.declared,
       capabilityGrants: emptyPluginCapabilityEvidence.grants,
+      capabilityGrantsByPluginId: emptyPluginCapabilityEvidence.grantsByPluginId,
     });
     await runClawsInspectCommand(root, { json: true }, runtime);
 

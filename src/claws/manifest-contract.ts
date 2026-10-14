@@ -29,6 +29,15 @@ export type ClawSourceIdentity = {
   byteLength: number;
 };
 
+export type ClawCronJob = {
+  id: string;
+  name?: string;
+  schedule: { cron: string; timezone: string };
+  session: "main" | "isolated";
+  message: string;
+  delivery?: { mode: "none" | "announce"; channel?: "last" };
+};
+
 export const CLAW_BOOTSTRAP_FILE_NAMES = [
   "AGENTS.md",
   "SOUL.md",

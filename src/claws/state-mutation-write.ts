@@ -1,13 +1,10 @@
 import { createSqliteWorkerOperationAdmission } from "../infra/sqlite-worker-operation-admission.js";
-import type { OpenClawStateDatabaseOptions } from "../state/openclaw-state-db-contract.js";
 import { captureOpenClawStateWorkerContext } from "../state/openclaw-state-worker-context.js";
 import type { OpenClawStateWorkerOperations } from "../state/openclaw-state-worker-contract.js";
 import { runOpenClawStateWorkerOperation } from "../state/openclaw-state-worker-store.js";
+import type { ClawMutationStateOptions } from "./state-mutation-options.js";
 
-export type ClawMutationStateOptions = OpenClawStateDatabaseOptions & {
-  stateMode?: "worker";
-  assertCurrent?: () => void;
-};
+export type { ClawMutationStateOptions } from "./state-mutation-options.js";
 
 export async function executeClawMutationStateCommand<
   Key extends keyof OpenClawStateWorkerOperations,
