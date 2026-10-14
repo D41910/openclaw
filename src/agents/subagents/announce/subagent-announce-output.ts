@@ -144,7 +144,10 @@ export async function readSubagentOutput(
   if (!agentId) {
     return undefined;
   }
-  if (options?.runId && options.sessionTarget) {
+  if (options?.runId) {
+    if (!options.sessionTarget) {
+      return undefined;
+    }
     const result = await findTranscriptEvent(options.sessionTarget, {
       kind: "visible-final",
       runId: options.runId,

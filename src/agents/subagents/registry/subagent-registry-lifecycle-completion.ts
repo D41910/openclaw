@@ -120,7 +120,6 @@ function resolveTerminalRequest(
     requestedEndedAt,
     endedAt,
     completionOutcome,
-    // Fresh capture follows this request before retained Stop intent changes the published outcome.
     captureOutcome: withSubagentOutcomeTiming(completionOutcome, {
       startedAt: observedStartedAt ?? entry.execution.startedAt,
       endedAt,
@@ -128,7 +127,9 @@ function resolveTerminalRequest(
     completionReason,
     observedStartedAt,
     terminalReply,
-    missingRequiredReply: entry.expectsCompletionMessage === true && !terminalReply,
+    missingRequiredReply:
+      entry.expectsCompletionMessage === true &&
+      (!terminalReply || (terminalReply.disposition === "visible" && !terminalReply.text.trim())),
   };
 }
 
@@ -657,7 +658,7 @@ function planTerminalCompletion(
   ) {
     throw new SubagentRegistryMutationRejectedError(FRESH_CAPTURE_REQUIRED);
   }
-  if (terminalReply?.disposition !== "visible") {
+  if (missingRequiredReply || terminalReply?.disposition !== "visible") {
     completion.resultText = null;
     completion.capturedAt = endedAt;
   }
@@ -686,10 +687,7 @@ function planTerminalCompletion(
   if (closesAsIntentionalNonDelivery) {
     // Producer-owned empty success is a terminal fact, not a failed send.
     // Close it before terminal persistence so no requester delivery can start.
-    entry.delivery = {
-      status: "not_required",
-      disposition: "intentional_non_delivery",
-    };
+    entry.delivery = { status: "not_required", disposition: "intentional_non_delivery" };
     entry.suppressCompletionDelivery = true;
   }
 

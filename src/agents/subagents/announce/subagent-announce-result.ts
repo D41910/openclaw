@@ -117,16 +117,7 @@ export async function readSubagentRunAnnounceResultUsing(
       );
     }
     const text = isRecord(event) ? extractStoredAssistantText(event.message) : capturedResult;
-    return {
-      text:
-        !event &&
-        capturedResult &&
-        child.completion?.terminalReply?.disposition === "visible" &&
-        child.execution.outcome?.status === "ok"
-          ? `[truncated-by-retention: complete child answer unavailable]\n${capturedResult}`
-          : text,
-      isCurrent,
-    };
+    return { text, isCurrent };
   });
 }
 

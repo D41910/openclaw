@@ -1,3 +1,5 @@
+export const AGENT_RUN_TERMINAL_REPLY_MAX_CHARS = 4_096;
+
 export type AgentRunTerminalReplySnapshot =
   | { disposition: "visible"; text: string; modelRouteChange?: string }
   | { disposition: "silent" }

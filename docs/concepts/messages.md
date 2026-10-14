@@ -229,6 +229,8 @@ An empty final is not intentional silence. OpenClaw keeps its bounded recovery p
 
 Pending media work without an authored acknowledgment retains its existing waiting status so supported channels can keep the live progress card until the media arrives. An explicit `NO_REPLY` still ends silently without canceling that work. Failed delegated tasks use the same short missing-answer copy; their existing delivery and requester-history mirroring are unchanged.
 
+A completed child result is read from its full run-keyed transcript first, without waiting for another final. If that row is unavailable, OpenClaw uses the recorded visible snapshot. A snapshot below the 4,096-character limit is delivered as the complete answer; one at the limit carries the existing incomplete-result warning. A missing or empty visible result is a failure, not an indefinitely pending completion.
+
 Pending WebChat and Control UI work retains progress cards, authored yield acknowledgments, and the existing media waiting status while a result is still owed.
 
 ## Related

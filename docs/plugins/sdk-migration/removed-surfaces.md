@@ -96,8 +96,10 @@ import { SILENT_REPLY_TOKEN } from "openclaw/plugin-sdk/reply-runtime";
 
 Harness producers use `prepareAgentRunTerminalReply` from
 `openclaw/plugin-sdk/agent-harness-runtime` once on the raw final text, then
-render the returned text and publish the matching terminal fact. Do not deliver the
-bounded `terminalReply.text` snapshot as the answer. An exact uppercase
+render the returned text and publish the matching terminal fact. Deliver the full
+returned text rather than the bounded `terminalReply.text` snapshot. Host child-result
+recovery uses the snapshot only when the full transcript is unavailable, with an
+incomplete-result warning when it reaches the cap. An exact uppercase
 `NO_REPLY`, ignoring surrounding whitespace, requests silence; punctuation,
 quotes, JSON, and prose do not. A literal leading `NO_REPLY\n` removes one line
 without reclassifying the suffix. See [Silent replies](/concepts/messages#silent-replies).

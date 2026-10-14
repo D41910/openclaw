@@ -247,7 +247,7 @@ export const captureSubagentRunResult = async (
         getGatewayContextResolver(entry),
         () =>
           params.captureSubagentCompletionReply(entry.childSessionKey, {
-            waitForReply: entry.expectsCompletionMessage === true,
+            waitForReply: false,
             runId: entry.runId,
             outcome,
             ...(sessionTarget ? { sessionTarget } : {}),
@@ -270,7 +270,7 @@ export const captureSubagentRunResult = async (
             },
           )
         : await capture(transcriptTarget?.sessionId);
-    resultText = captured?.trim() ? captured : null;
+    resultText = captured?.trim() ? captured : terminalReply.text || null;
   } catch (error) {
     if (hasSqliteWorkerOutcomeUnknown(error)) {
       throw error;

@@ -70,7 +70,7 @@ describe("resolveSubagentCompletionResultText", () => {
   );
 
   it.each([undefined, null])(
-    "does not substitute a snapshot or fallback for a missing retained body (%j)",
+    "uses the producer snapshot when the retained body is missing (%j)",
     (resultText) => {
       expect(
         resolveSubagentCompletionResultText({
@@ -81,7 +81,7 @@ describe("resolveSubagentCompletionResultText", () => {
           },
           execution: { outcome: { status: "ok" } },
         }),
-      ).toBeUndefined();
+      ).toBe("bounded snapshot");
     },
   );
 

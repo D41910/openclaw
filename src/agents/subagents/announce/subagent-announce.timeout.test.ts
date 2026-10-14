@@ -527,6 +527,16 @@ describe("captureSubagentCompletionReply", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("does not substitute unscoped history for a completed run without a session target", async () => {
+    const readHistory = vi.mocked(announceRuntime.callSubagentLifecycleGateway).mockClear();
+    await expect(
+      captureSubagentCompletionReply(sessionKey, { runId: "completed-run", waitForReply: false }),
+    ).resolves.toBeUndefined();
+    expect(readMessages).not.toHaveBeenCalled();
+    expect(readHistory).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("does not read output with an exhausted retry budget", async () => {
     const readHistory = vi.mocked(announceRuntime.callSubagentLifecycleGateway).mockClear();
     await expect(

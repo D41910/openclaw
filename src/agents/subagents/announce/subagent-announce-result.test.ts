@@ -109,7 +109,7 @@ describe("prepared announcement results", () => {
     },
   );
 
-  it("does not substitute a snapshot when full prepared output is missing", async () => {
+  it("uses an uncapped snapshot when the full prepared output is missing", async () => {
     const child = completedChild("bounded evidence");
     child.completion!.resultText = undefined;
     await expect(
@@ -118,7 +118,7 @@ describe("prepared announcement results", () => {
         findTranscriptEvent: async () => undefined,
         findSessionTranscriptArchiveEventReadOnly: async () => undefined,
       }),
-    ).resolves.toMatchObject({ text: undefined });
+    ).resolves.toMatchObject({ text: "bounded evidence" });
   });
 
   it("retrieves full visible output from the recorded run rather than a snapshot", async () => {
@@ -205,8 +205,7 @@ describe("prepared announcement results", () => {
   it.each([
     {
       recordedFact: true,
-      expected:
-        "[truncated-by-retention: complete child answer unavailable]\nretained prepared result",
+      expected: "retained prepared result",
     },
     { recordedFact: false, expected: undefined },
   ])(

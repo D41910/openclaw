@@ -645,24 +645,27 @@ describe("subagent registry lifecycle hardening", () => {
     },
   );
 
-  it("fails a required successful completion without producer reply evidence", async () => {
-    const entry = createRunEntry({
-      expectsCompletionMessage: true,
-      completion: { required: true, resultText: "unproven stored reply" },
-    });
-    const captureSubagentCompletionReply = vi.fn(async () => "stale transcript reply");
-    const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
+  it.each([undefined, { disposition: "visible", text: "" } as const])(
+    "fails a required successful completion without usable producer reply evidence (%j)",
+    async (terminalReply) => {
+      const entry = createRunEntry({
+        expectsCompletionMessage: true,
+        completion: { required: true, resultText: "unproven stored reply" },
+      });
+      const captureSubagentCompletionReply = vi.fn(async () => "stale transcript reply");
+      const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
 
-    await completeRun(controller, entry, { terminalReply: undefined });
+      await completeRun(controller, entry, { terminalReply });
 
-    expect(readLifecycleRun(entry).endedReason).toBe(SUBAGENT_ENDED_REASON_ERROR);
-    expect(readLifecycleRun(entry).execution.outcome).toMatchObject({
-      status: "error",
-      error: "subagent run ended before producing a final reply",
-    });
-    expect(readLifecycleRun(entry).completion?.resultText).toBeNull();
-    expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
-  });
+      expect(readLifecycleRun(entry).endedReason).toBe(SUBAGENT_ENDED_REASON_ERROR);
+      expect(readLifecycleRun(entry).execution.outcome).toMatchObject({
+        status: "error",
+        error: "subagent run ended before producing a final reply",
+      });
+      expect(readLifecycleRun(entry).completion?.resultText).toBeNull();
+      expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not infer optional completion output without a terminal fact", async () => {
     const entry = createRunEntry({
