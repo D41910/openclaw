@@ -1,6 +1,5 @@
 /* @vitest-environment jsdom */
 
-import { html, nothing, render } from "lit";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AgentActivityItem } from "../../../../../packages/gateway-protocol/src/schema/logs-chat.js";
 import { flush } from "../../../test-helpers/solid-settle.ts";
@@ -9,7 +8,7 @@ import * as chatThreadBuild from "../chat-thread-build.ts";
 import { setExpansionState } from "../chat-thread.ts";
 import { createTestTranscript, stubAnimationFrames } from "../chat-view.test-helpers.ts";
 import { getTranscriptState } from "./chat-thread-interactions.ts";
-import { renderChatThread } from "./chat-thread.test-support.ts";
+import { render, renderChatThread } from "./chat-transcript-native.test-support.tsx";
 import { projectChatTranscript } from "./chat-transcript-projection.ts";
 import {
   installTranscriptDomMocks,
@@ -78,7 +77,7 @@ it.each(["answer", "reasoning"] as const)(
     const project = () =>
       transcript.renderSession(props.sessionKey, (session) => {
         projectChatTranscript(props, session);
-        return html``;
+        return null;
       });
     try {
       project();
@@ -89,7 +88,7 @@ it.each(["answer", "reasoning"] as const)(
           messageRecoveryKey(undefined, "message-1"),
           { status: "loaded", markdown: "Full answer", revision: 1 },
         );
-        return html``;
+        return null;
       });
       project();
       build.mockClear();
@@ -140,7 +139,7 @@ function drawThread(props: ReturnType<typeof threadProps>) {
       flush();
     },
     dispose: () => {
-      render(nothing, container);
+      render(null, container);
       transcript.hostDisconnected();
     },
   };
@@ -285,7 +284,7 @@ it("keeps search and gallery caches warm while refreshing streamed and replaced 
   const project = () => {
     transcript.renderSession(props.sessionKey, (session) => {
       projectChatTranscript(props, session);
-      return html``;
+      return null;
     });
     return state.transcriptRenderContext.turnVideoMessages
       ?.values()

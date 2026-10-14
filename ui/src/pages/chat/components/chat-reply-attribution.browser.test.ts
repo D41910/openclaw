@@ -1,9 +1,11 @@
-import { html, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { resolveTypefaces, syncTypefaceStylesheets } from "../../../app/typography.ts";
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import {
+  renderFixture as render,
+  groupFixture as renderMessageGroup,
+} from "./chat-reply-attribution.test-support.tsx";
 import { createReplyPreviewResolver } from "./chat-reply-preview.ts";
 import "../../../styles/base.css";
 import "../../../styles/chat/startup-layout.css";
@@ -410,14 +412,17 @@ it.each([1440, 390])(
         };
         const drawLookup = (lookup: Lookup) =>
           render(
-            html`${renderMessageGroup(group, {
+            renderMessageGroup(
+              group,
+              {
                 showReasoning: false,
                 showToolCalls: false,
                 avatarPlacement: "gutter",
                 onOpenReply: vi.fn(),
                 resolveReplyPreview: () => lookup,
-              })}
-              <div class="after">Next</div>`,
+              },
+              true,
+            ),
             host,
           );
         const measure = () => {

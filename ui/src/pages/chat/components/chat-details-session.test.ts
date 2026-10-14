@@ -6,7 +6,9 @@ import { mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { flush } from "../../../test-helpers/solid-settle.ts";
 import { ChatDetailsSession } from "./chat-details-session.tsx";
 import type { ChatDetailsProps } from "./chat-details-types.ts";
-import type { ChatSubagentActivityLive } from "./chat-subagent-activity-live.ts";
+import type { ChatSubagentActivity } from "./chat-subagent-activity-live.ts";
+
+type ChatSubagentActivityLive = InstanceType<typeof ChatSubagentActivity.Element>;
 
 async function mount(overrides: Partial<ChatDetailsProps> = {}) {
   const value: ChatDetailsProps = {

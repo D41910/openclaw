@@ -1,10 +1,11 @@
 /* @vitest-environment jsdom */
-import { render } from "lit";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
-import { solidContent } from "../../../lit/solid-content.tsx";
-import { AgentRunFrame } from "./chat-agent-run-frame.tsx";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import {
+  renderFixture as render,
+  groupFixture as renderMessageGroup,
+  frameFixture,
+} from "./chat-reply-attribution.test-support.tsx";
 import { createReplyPreviewResolver } from "./chat-reply-preview.ts";
 
 const alice = { id: "alice", name: "Alice" };
@@ -97,7 +98,7 @@ function draw(
   };
   render(
     presentation === "frame"
-      ? solidContent(AgentRunFrame, {
+      ? frameFixture({
           frame: {
             kind: "agent-run-frame",
             key: "frame",

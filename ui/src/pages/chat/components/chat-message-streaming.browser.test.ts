@@ -12,12 +12,8 @@ import type { MarkdownRenderOptions } from "../../../components/markdown-render-
 import { releaseMarkdownTables } from "../../../components/markdown-tables.ts";
 import { toSanitizedMarkdownHtml } from "../../../components/markdown.ts";
 import { renderSolidRef } from "../../../test-helpers/render-solid-ref.ts";
-import {
-  prepareMarkdownMedia,
-  renderMarkdownMedia,
-  type MarkdownMedia,
-} from "./chat-message-media-markdown.ts";
-import { renderMessageMarkdown } from "./chat-message-text.ts";
+import { prepareMarkdownMedia, type MarkdownMedia } from "./chat-message-media-markdown.ts";
+import { renderMarkdownMedia, renderMessageMarkdown } from "./chat-message-text.test-support.ts";
 
 let container: HTMLDivElement;
 let blocks: ReturnType<typeof renderSolidRef>;

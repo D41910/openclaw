@@ -9,7 +9,7 @@ import { LitContent } from "../../lit/solid-bridge.ts";
 import { attachHistoryActivity } from "../chat/chat-history-request.ts";
 import { mergeChatTranscriptPages } from "../chat/chat-transcript-pages.ts";
 import { renderChatHistoryBoundary } from "../chat/components/chat-history-boundary.ts";
-import { renderChatTranscriptFeed } from "../chat/components/chat-transcript-feed.ts";
+import { ChatTranscriptFeed } from "../chat/components/chat-transcript-feed.ts";
 
 type Scope = { client: GatewayBrowserClient; isCurrent: () => boolean };
 
@@ -132,18 +132,15 @@ export function CronRunTranscriptView(props: {
     props.revision();
     return props.controller;
   };
-  const transcript = createMemo(() => {
+  const historyBoundary = createMemo(() => {
     const current = state();
-    return [
-      current.nextCursor
-        ? renderChatHistoryBoundary({
-            hasMore: true,
-            loading: current.loading,
-            onShowEarlier: () => void props.controller.load(props.controller.nextCursor),
-          })
-        : undefined,
-      renderChatTranscriptFeed(current.messages),
-    ];
+    return current.nextCursor
+      ? renderChatHistoryBoundary({
+          hasMore: true,
+          loading: current.loading,
+          onShowEarlier: () => void props.controller.load(props.controller.nextCursor),
+        })
+      : undefined;
   });
   return (
     <>
@@ -177,7 +174,8 @@ export function CronRunTranscriptView(props: {
           {!state().loading && !state().error && state().messages.length === 0 ? (
             <p>{t("cron.runEntry.transcriptEmpty")}</p>
           ) : null}
-          <LitContent render={() => transcript()} />
+          <LitContent render={() => historyBoundary()} />
+          <ChatTranscriptFeed messages={state().messages} />
         </section>
       ) : null}
     </>
