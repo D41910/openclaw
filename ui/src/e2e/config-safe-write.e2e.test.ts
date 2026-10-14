@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Locator, Page } from "playwright";
 import { beforeEach, expect, it } from "vitest";
 import { createControlUiE2eArtifactDir } from "../test-helpers/control-ui-e2e-artifacts.ts";
+import { evaluateControlUiContext } from "../test-helpers/control-ui-e2e-context.ts";
 import { takeControlUiViewportScreenshot } from "../test-helpers/control-ui-e2e-screenshot.ts";
 import { installMockGateway, type MockGatewayRequest } from "../test-helpers/control-ui-e2e.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
@@ -561,14 +562,56 @@ suite.define(() => {
   tools: {},
 }
 `;
-        await rawEditor.fill(rawDraft);
+        const rawObservation = await rawEditor.evaluateHandle((element) => {
+          if (!(element instanceof HTMLTextAreaElement)) {
+            throw new Error("Expected the raw config textarea");
+          }
+          const inputs: string[] = [];
+          const onInput = () => inputs.push(element.value);
+          element.addEventListener("input", onInput);
+          return { element, inputs, onInput };
+        });
         const rawSave = page.getByRole("button", { name: "Save", exact: true });
-        await expect
-          .poll(async () => ({
-            raw: await rawEditor.inputValue(),
-            saveEnabled: await rawSave.isEnabled(),
-          }))
-          .toEqual({ raw: rawDraft, saveEnabled: true });
+        try {
+          await rawEditor.fill(rawDraft);
+          await expect
+            .poll(async () => ({
+              raw: await rawEditor.inputValue(),
+              saveEnabled: await rawSave.isEnabled(),
+            }))
+            .toEqual({ raw: rawDraft, saveEnabled: true });
+        } catch (error) {
+          console.error(
+            "Raw config input diagnostic",
+            await Promise.all([
+              rawObservation.evaluate(({ element, inputs }) => ({
+                inputs,
+                connected: element.isConnected,
+                retained: element === document.querySelector(".config-raw-field textarea"),
+                observedRaw: element.value,
+                currentRaw: document.querySelector<HTMLTextAreaElement>(
+                  ".config-raw-field textarea",
+                )?.value,
+              })),
+              evaluateControlUiContext(page, (context) => {
+                const state = context.runtimeConfig.state;
+                return {
+                  raw: state.configRaw,
+                  dirty: state.configFormDirty,
+                  mode: state.configFormMode,
+                  loading: state.configLoading,
+                  saving: state.configSaving,
+                };
+              }),
+            ]).catch((diagnosticError: unknown) => ({ diagnosticError: String(diagnosticError) })),
+          );
+          throw error;
+        } finally {
+          await rawObservation
+            .evaluate(({ element, onInput }) => element.removeEventListener("input", onInput))
+            .catch(() => undefined);
+          await rawObservation.dispose().catch(() => undefined);
+        }
         await capture(page, "02-raw-draft.png", rawEditor);
 
         const setRequestsBeforeRawSave = (await gateway.getRequests("config.set")).length;
