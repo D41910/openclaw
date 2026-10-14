@@ -3,6 +3,7 @@ import { subtitleForRoute, titleForRoute } from "../../app-navigation.ts";
 import { pathForRoute, type RouteId } from "../../app-route-paths.ts";
 import type { ApplicationContext, ApplicationNavigationOptions } from "../../app/context-types.ts";
 import { renderAgentIdentityAvatar } from "../../components/identity-avatar-view.ts";
+import { Icon } from "../../components/solid/icon.tsx";
 import { SettingsPageHeader } from "../../components/solid/settings-ui.tsx";
 import { i18n } from "../../i18n/index.ts";
 import { registerAgentsHomeEnglish } from "../../i18n/locales/en-agents-home.ts";
@@ -13,6 +14,8 @@ import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
 import { projectI18n, registerEnglishCatalog, t } from "../../lib/reactive/i18n.ts";
 import { projectSource } from "../../lib/reactive/projection.ts";
 import { LitContent } from "../../lit/solid-bridge.ts";
+import type { ClawCatalogEntry } from "./claws-catalog-client.ts";
+import { ClawsExplore } from "./claws-explore.tsx";
 import "../../styles/agents-home.css";
 
 registerEnglishCatalog(registerAgentsHomeEnglish);
@@ -28,6 +31,9 @@ type AgentsHomeProps = {
   loading: boolean;
   error: string | null;
   canCreate: boolean;
+  showExplore: boolean;
+  onOpenCatalog: () => void;
+  onSelectClaw: (entry: ClawCatalogEntry) => void;
   onRetry: () => void;
 };
 
@@ -69,6 +75,20 @@ export function AgentsHomeView(props: AgentsHomeProps) {
           subtitle={subtitle()}
           actions={
             <>
+              {props.showExplore ? (
+                <button
+                  type="button"
+                  class="btn btn--icon"
+                  data-claws-open-catalog
+                  aria-label={t("clawsCatalog.search")}
+                  title={t("clawsCatalog.search")}
+                  aria-haspopup="dialog"
+                  disabled={!props.connected}
+                  onClick={props.onOpenCatalog}
+                >
+                  <Icon name="search" />
+                </button>
+              ) : undefined}
               {manage()}
               <a
                 class="btn primary"
@@ -170,6 +190,7 @@ export function AgentsHomeView(props: AgentsHomeProps) {
             )}
           </For>
         </div>
+        {props.showExplore ? <ClawsExplore onSelect={props.onSelectClaw} /> : undefined}
       </section>
     </>
   );

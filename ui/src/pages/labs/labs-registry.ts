@@ -100,6 +100,12 @@ export const LAB_FEATURES = (
     },
     {
       ...BOOLEAN_GATE,
+      id: "claws",
+      docsUrl: "https://docs.openclaw.ai/cli/claws",
+      configPath: ["gateway", "controlUi", "experimental", "claws"],
+    },
+    {
+      ...BOOLEAN_GATE,
       id: "hostDesktop",
       docsUrl: "https://docs.openclaw.ai/gateway/configuration-reference#desktop",
       configPath: ["desktop", "host", "enabled"],

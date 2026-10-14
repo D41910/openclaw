@@ -40,6 +40,20 @@ declare module "@solidjs/web" {
       messageActions: MessageActionDetails | null | undefined;
     }
     interface IntrinsicElements {
+      "openclaw-claws-explore": HTMLAttributes<HTMLElement> & {
+        "prop:onSelect"?: (
+          entry: import("../pages/agents-home/claws-catalog-client.ts").ClawCatalogEntry,
+        ) => void;
+      };
+      "openclaw-claws-catalog-dialog": HTMLAttributes<HTMLElement> & {
+        "prop:initialPackageName"?: string;
+        "prop:pageMode"?: boolean;
+        "prop:onClose"?: () => void;
+        "prop:onAdded"?: () => void;
+        "prop:onSelectEntry"?: (
+          entry: import("../pages/agents-home/claws-catalog-client.ts").ClawCatalogEntry,
+        ) => void;
+      };
       "openclaw-github-identity": HTMLAttributes<HTMLElement>;
       "openclaw-plugins-page": HTMLAttributes<HTMLElement>;
       "openclaw-dashboards-page": HTMLAttributes<HTMLElement>;

@@ -47,6 +47,7 @@ type SettingsPageHeaderProps = {
   title: unknown;
   subtitle?: unknown;
   actions?: TemplateResult | typeof nothing;
+  stacked?: boolean;
 };
 
 export function renderSettingsPage(
@@ -65,7 +66,7 @@ export function renderSettingsPage(
 export function renderSettingsPageHeader(props: SettingsPageHeaderProps): TemplateResult {
   return html`
     <section
-      class="content-header content-header--settings"
+      class="content-header content-header--settings ${props.stacked ? "content-header--stacked" : ""}"
       ${shellLayoutTraits({ toolbarHeader: true })}
     >
       <div>
