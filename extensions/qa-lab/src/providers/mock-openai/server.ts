@@ -915,11 +915,7 @@ async function buildResponsesPayload(
   }
   if (terminalCompletionCase && terminalTurn?.kind === "completion") {
     const visibleRepresentation =
-      terminalCompletionCase === "silent"
-        ? QA_SUBAGENT_TERMINAL_MARKERS.silent
-        : terminalCompletionCase === "empty"
-          ? QA_SUBAGENT_TERMINAL_MARKERS.empty
-          : undefined;
+      terminalCompletionCase === "silent" ? QA_SUBAGENT_TERMINAL_MARKERS.silent : undefined;
     if (visibleRepresentation) {
       if (completedToolName === "message") {
         return buildAssistantEvents("");
@@ -956,11 +952,6 @@ async function buildResponsesPayload(
     return buildAssistantEvents("NO_REPLY");
   }
   if (terminalWorkerCase === "empty") {
-    if (hasEmptyResponseRetryInstruction && completedToolName === "write") {
-      return buildAssistantEvents(
-        "The file qa-terminal-empty-side-effect.txt was written successfully. I did not repeat the write.",
-      );
-    }
     if (!hasCompletedToolOutput && canCallScenarioTool(toolDeclarationBody, "write")) {
       return buildToolCallEventsWithArgs("write", {
         path: "qa-terminal-empty-side-effect.txt",

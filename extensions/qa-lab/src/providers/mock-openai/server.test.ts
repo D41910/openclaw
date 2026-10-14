@@ -841,7 +841,7 @@ describe("qa mock openai server", () => {
           "[Internal task completion event]\nTask: qa-terminal-empty\nChild task: Subagent terminal reply QA worker: empty.\nResult: (no output)",
         ),
       ],
-      "QA-SUBAGENT-TERMINAL-EMPTY-REPRESENTED",
+      "",
     ],
     [
       "lets child subagent prompts finish with an exact token",
