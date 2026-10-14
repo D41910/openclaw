@@ -799,12 +799,13 @@ it("refreshes the Ask label when the branding owner publishes", () => {
 
 it("follows shared agent selection and identity publications without remounting", async () => {
   const agents = sidebarAgentProps();
-  const selectionListeners = new Set<() => void>();
+  type SelectionListener = Parameters<SidebarProps["settingsAgentSelection"]["subscribe"]>[0];
+  const selectionListeners = new Set<SelectionListener>();
   const identityListeners = new Set<() => void>();
   let identities: AgentIdentityResult[] = [];
   const settingsAgentSelection = {
     ...agents.settingsAgentSelection,
-    subscribe(listener: () => void) {
+    subscribe(listener: SelectionListener) {
       selectionListeners.add(listener);
       return () => {
         selectionListeners.delete(listener);
@@ -848,7 +849,7 @@ it("follows shared agent selection and identity publications without remounting"
   settingsAgentSelection.state.selectedId = "research";
   settingsAgentSelection.state.scopeId = "research";
   for (const notify of selectionListeners) {
-    notify();
+    notify(settingsAgentSelection.state);
   }
   await waitForSolid(() =>
     expect(selector.querySelector(".agent-select__trigger")?.getAttribute("aria-label")).toContain(
