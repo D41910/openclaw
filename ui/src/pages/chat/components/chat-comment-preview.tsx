@@ -2,7 +2,7 @@ import type { JSX } from "@solidjs/web";
 import { Show, onCleanup } from "solid-js";
 import { observeScrollState } from "../../../components/scroll-state-observer.ts";
 import { Icon } from "../../../components/solid/icon.tsx";
-import { Tooltip } from "../../../components/solid/tooltip.tsx";
+import "../../../components/tooltip.ts";
 import { registerChatMessageMetadataEnglish } from "../../../i18n/locales/en-chat-message-metadata.ts";
 import { registerEnglishCatalog, t } from "../../../lib/reactive/i18n.ts";
 import { LitContent, solidContent } from "../../../lit/solid-content.tsx";
@@ -60,17 +60,17 @@ type ChipProps = {
 
 export function CommentPreviewChip(props: ChipProps) {
   return (
-    <Tooltip
+    <openclaw-tooltip
       class={
         props.removal
           ? "chat-comment-preview chat-comment-preview--editable"
           : "chat-comment-preview"
       }
-      placement="top-start"
-      autoSize
-      describe={false}
-      openOnClick
-      hoverDismissDelay={props.removal ? 200 : undefined}
+      prop:placement="top-start"
+      prop:autoSize={true}
+      prop:describe={false}
+      prop:openOnClick={true}
+      prop:hoverDismissDelay={props.removal ? 200 : undefined}
     >
       <AttachmentPreviewChip
         label={t(
@@ -97,7 +97,7 @@ export function CommentPreviewChip(props: ChipProps) {
       >
         {props.children}
       </div>
-    </Tooltip>
+    </openclaw-tooltip>
   );
 }
 
