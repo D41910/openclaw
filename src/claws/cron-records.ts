@@ -32,6 +32,7 @@ export function rowToClawCronRef(row: CronRefRow): PersistedClawCronRef {
     ...(row.scheduler_job_id ? { schedulerJobId: row.scheduler_job_id } : {}),
     // SAFETY: Lifecycle writers own the existing persisted status enum.
     status: row.status as PersistedClawCronRef["status"],
+    // SAFETY: Claw cron writers persist validated manifest jobs as JSON.
     job: JSON.parse(row.job_json) as ClawCronJob,
     ...(row.error ? { error: row.error } : {}),
     createdAtMs: sqliteNumber(row.created_at_ms),
