@@ -19,6 +19,7 @@ it("refreshes retained hovercard labels and age without replacing its focused li
     workContext: { kind: "project", name: "Example", path: "/workspace/example" },
     placementProviderId: "local",
     placementProfileId: "default",
+    placementMachine: { cpu: 4, memoryGb: 16 },
     attention: {
       kind: "error",
       reason: "Synthetic failure",
@@ -46,6 +47,7 @@ it("refreshes retained hovercard labels and age without replacing its focused li
     expect(card?.querySelector('[aria-label="Runs on local · default"]')).not.toBeNull();
     expect(card?.querySelector(".session-hovercard__created-age")?.textContent).toBe("2h");
     expect(card?.textContent).toContain("Run failed: Synthetic failure");
+    expect(card?.querySelector(".session-hovercard__machine")?.textContent).toContain("16 GB");
   });
 
   await i18n.setLocale("de");
@@ -58,6 +60,14 @@ it("refreshes retained hovercard labels and age without replacing its focused li
     expect(age?.getAttribute("title")).toBe("vor 2 Std.");
     expect(card?.textContent).toContain("Ausführung fehlgeschlagen: Synthetic failure");
     expect(view.container.querySelector(".session-hovercard")).toBe(card);
+    expect(document.activeElement).toBe(link);
+  });
+
+  const machine = card?.querySelector(".session-hovercard__machine");
+  await i18n.setLocale("fr");
+  await waitForSolid(() => {
+    expect(machine?.textContent).toContain("16 Go");
+    expect(card?.querySelector(".session-hovercard__machine")).toBe(machine);
     expect(document.activeElement).toBe(link);
   });
 });
