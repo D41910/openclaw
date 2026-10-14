@@ -20,10 +20,10 @@ import { useOptionalApplication } from "../lib/reactive/context.ts";
 import { t } from "../lib/reactive/i18n.ts";
 import { projectSource } from "../lib/reactive/projection.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../lit/solid-bridge.ts";
-import { renderLegacyTemplate } from "../lit/solid-content.tsx";
+import { LitContent, renderLegacyTemplate, solidContent } from "../lit/solid-content.tsx";
 import type { ControlUiRegistration } from "./control-ui-capability.ts";
 import { scopeControlUiHost } from "./control-ui-scope.ts";
-import type { ViewKind } from "./control-ui-view.ts";
+import { renderPluginSurface, type ViewKind } from "./control-ui-view.ts";
 
 type ViewRegistration = ControlUiRegistration<{ mount: ControlUiView<unknown> }>;
 type PluginViewProps = {
@@ -449,6 +449,23 @@ export function PluginSurface<S extends ControlUiSurface>(props: {
 }) {
   const owner = getOwner();
   const context = useOptionalApplication();
+  // Unported Lit callers can mount Solid islands without an application owner.
+  // Their directive still owns live DOM-context lookup until that boundary is removed.
+  if (!context) {
+    const DefaultView = () => props.renderDefault();
+    const CompanionView = () => props.renderCompanion?.();
+    return (
+      <LitContent
+        value={renderPluginSurface(
+          props.surface,
+          props.props,
+          solidContent(DefaultView, {}),
+          props.presented ?? true,
+          props.renderCompanion ? solidContent(CompanionView, {}) : undefined,
+        )}
+      />
+    );
+  }
   const runtime = projectSource(context?.plugins, {
     read: (source) => source,
     subscribe: (source, publish) => source?.subscribe(publish) ?? (() => {}),
