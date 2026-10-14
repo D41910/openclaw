@@ -439,7 +439,7 @@ suite.define(() => {
                 .filter((className) => typeof className === "string" && className.length > 0),
             ),
         ).toEqual(["sr-only", "sidebar-issues-button"]);
-        await page.locator("openclaw-sidebar-attention").screenshot({
+        await page.locator(".sidebar-issues-button").screenshot({
           animations: "disabled",
           path: path.join(PROOF_DIR, "00-inbox-badge.png"),
         });
