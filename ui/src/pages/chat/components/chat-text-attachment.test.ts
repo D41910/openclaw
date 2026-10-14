@@ -13,6 +13,7 @@ async function mountAttachment(
     sandboxUrl: "/mcp-app-sandbox?frames=none",
     sandboxPort: 8444,
   }),
+  onPreviewContext?: () => void,
 ) {
   const panel = document.createElement("openclaw-chat-detail-panel") as HTMLElement & {
     content: SidebarContent;
@@ -32,6 +33,7 @@ async function mountAttachment(
     ) {
       event.stopPropagation();
       event.callback(previewContext);
+      onPreviewContext?.();
     }
   });
   panel.content = {
@@ -404,10 +406,40 @@ it.each([
       sandboxUrl: "/mcp-app-sandbox?frames=none",
       sandboxPort: 8444,
     });
-    const panel = await mountAttachment({ title, mimeType }, request);
+    let contextReceipts = 0;
+    const panel = await mountAttachment({ title, mimeType }, request, () => contextReceipts++);
     await customElements.whenDefined("openclaw-chat-html-preview");
-    await expect.poll(() => panel.querySelector("openclaw-chat-html-preview")).not.toBeNull();
-    await expect.poll(() => panel.querySelector("iframe")).not.toBeNull();
+    let previewUpdateComplete = false;
+    let previewUpdateError: string | undefined;
+    try {
+      await expect.poll(() => panel.querySelector("openclaw-chat-html-preview")).not.toBeNull();
+      void panel.querySelector("openclaw-chat-html-preview")?.updateComplete.then(
+        () => {
+          previewUpdateComplete = true;
+        },
+        (error) => {
+          previewUpdateError = String(error);
+        },
+      );
+      await expect.poll(() => panel.querySelector("iframe")).not.toBeNull();
+    } catch (error) {
+      const preview = panel.querySelector("openclaw-chat-html-preview");
+      console.error("HTML attachment initial readiness failed", {
+        title,
+        mimeType,
+        contextReceipts,
+        previewPresent: preview !== null,
+        previewConnected: preview?.isConnected,
+        previewUpdateComplete,
+        previewUpdateError,
+        iframePresent: panel.querySelector("iframe") !== null,
+        html: preview?.html,
+        sourceIdentity: preview?.sourceIdentity,
+        text: panel.textContent,
+        requests: request.mock.calls,
+      });
+      throw error;
+    }
     const frame = panel.querySelector("iframe");
     expect(panel.querySelector("h1, script, style")).toBeNull();
     expect(panel.querySelector("pre")?.hidden).toBe(true);
