@@ -13,7 +13,6 @@ async function mountAttachment(
     sandboxUrl: "/mcp-app-sandbox?frames=none",
     sandboxPort: 8444,
   }),
-  onPreviewContext?: () => void,
 ) {
   const panel = document.createElement("openclaw-chat-detail-panel") as HTMLElement & {
     content: SidebarContent;
@@ -33,7 +32,6 @@ async function mountAttachment(
     ) {
       event.stopPropagation();
       event.callback(previewContext);
-      onPreviewContext?.();
     }
   });
   panel.content = {
@@ -406,40 +404,12 @@ it.each([
       sandboxUrl: "/mcp-app-sandbox?frames=none",
       sandboxPort: 8444,
     });
-    let contextReceipts = 0;
-    const panel = await mountAttachment({ title, mimeType }, request, () => contextReceipts++);
+    const panel = await mountAttachment({ title, mimeType }, request);
     await customElements.whenDefined("openclaw-chat-html-preview");
-    let previewUpdateComplete = false;
-    let previewUpdateError: string | undefined;
-    try {
-      await expect.poll(() => panel.querySelector("openclaw-chat-html-preview")).not.toBeNull();
-      void panel.querySelector("openclaw-chat-html-preview")?.updateComplete.then(
-        () => {
-          previewUpdateComplete = true;
-        },
-        (error: unknown) => {
-          previewUpdateError = String(error);
-        },
-      );
-      await expect.poll(() => panel.querySelector("iframe")).not.toBeNull();
-    } catch (error) {
-      const preview = panel.querySelector("openclaw-chat-html-preview");
-      console.error("HTML attachment initial readiness failed", {
-        title,
-        mimeType,
-        contextReceipts,
-        previewPresent: preview !== null,
-        previewConnected: preview?.isConnected,
-        previewUpdateComplete,
-        previewUpdateError,
-        iframePresent: panel.querySelector("iframe") !== null,
-        html: preview?.html,
-        sourceIdentity: preview?.sourceIdentity,
-        text: panel.textContent,
-        requests: request.mock.calls,
-      });
-      throw error;
-    }
+    await waitForSolid(() =>
+      expect(panel.querySelector("openclaw-chat-html-preview")).not.toBeNull(),
+    );
+    await waitForSolid(() => expect(panel.querySelector("iframe")).not.toBeNull());
     const frame = panel.querySelector("iframe");
     expect(panel.querySelector("h1, script, style")).toBeNull();
     expect(panel.querySelector("pre")?.hidden).toBe(true);
@@ -461,12 +431,11 @@ it.each([
       "/__openclaw__/assistant-media?mediaTicket=text-preview",
     );
     Reflect.set(panel, "embedSandboxMode", "strict");
-    await expect
-      .poll(() => {
-        const current = panel.querySelector("iframe");
-        return current !== null && current !== frame;
-      })
-      .toBe(true);
+    await waitForSolid(() => {
+      const current = panel.querySelector("iframe");
+      expect(current).not.toBeNull();
+      expect(current).not.toBe(frame);
+    });
     const strictFrame = panel.querySelector("iframe")!;
     expect(strictFrame.hasAttribute("srcdoc")).toBe(false);
     expect(strictFrame.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin allow-forms");
@@ -481,7 +450,7 @@ it.each([
         },
       }),
     );
-    await expect.poll(() => post.mock.calls.length).toBe(1);
+    await waitForSolid(() => expect(post).toHaveBeenCalledOnce());
     expect(post.mock.calls[0]![0].params).toEqual({
       html: text,
       renderId: expect.any(String),
