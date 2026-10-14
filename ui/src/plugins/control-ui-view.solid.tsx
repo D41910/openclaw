@@ -464,13 +464,14 @@ export function PluginSurface<S extends ControlUiSurface>(props: {
         };
       }),
     );
-  const mountDefault = (target: HTMLElement) => mount(target, props.renderDefault);
+  function DefaultView() {
+    // Preserve the transparent legacy host: direct-child CSS selectors depend on it.
+    return <span style={{ display: "contents" }}>{props.renderDefault()}</span>;
+  }
+  const mountDefault = (target: HTMLElement) => mount(target, DefaultView);
   const mountCompanion = (target: HTMLElement) => mount(target, () => props.renderCompanion?.());
   return (
-    <Show
-      when={runtime.read()?.selectedReplacement(props.surface)}
-      fallback={props.renderDefault()}
-    >
+    <Show when={runtime.read()?.selectedReplacement(props.surface)} fallback={<DefaultView />}>
       <PluginView
         surface={props.surface}
         props={props.props}
