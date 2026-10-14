@@ -7,8 +7,10 @@ type DomChatLayoutScope = {
 };
 
 function isChatLayoutMenuOpen(element: Element): boolean {
+  const surface = element.querySelector<HTMLElement>(".oc-menu");
   return (
-    element.isConnected && Boolean(element.querySelector(".oc-menu")?.matches(":popover-open"))
+    element.isConnected &&
+    (surface?.dataset.phase === "opening" || surface?.dataset.phase === "open")
   );
 }
 

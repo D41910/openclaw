@@ -195,7 +195,7 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         ".chat-pane__layout-trigger",
       )!;
       const menu = fixture.container.querySelector(".chat-pane__layout-menu")!;
-      const surface = menu.querySelector('[role="menu"]')!;
+      const surface = menu.querySelector<HTMLElement>('[role="menu"]')!;
       const shown = vi.fn();
       surface.addEventListener("overlay-after-show", shown, { once: true });
       await openChatLayoutMenu({
@@ -203,9 +203,17 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         click: (element: HTMLElement) => page.elementLocator(element).click(),
       });
       expect(shown).toHaveBeenCalledOnce();
+      surface.style.setProperty("--oc-overlay-hide-duration", "1s");
       await userEvent.keyboard("{Escape}");
-      await expect.poll(() => surface.matches(":popover-open")).toBe(false);
+      expect(surface.dataset.phase).toBe("closing");
+      expect(surface.matches(":popover-open")).toBe(true);
       expect(document.activeElement).toBe(trigger);
+      await openChatLayoutMenu({
+        container: fixture.container,
+        click: (element: HTMLElement) => page.elementLocator(element).click(),
+      });
+      expect(surface.dataset.phase).toBe("open");
+      surface.style.removeProperty("--oc-overlay-hide-duration");
       for (const label of ["Minimize side panel", "Side panel"]) {
         await selectChatLayoutAction(
           {
