@@ -10,9 +10,9 @@ import { t } from "../lib/reactive/i18n.ts";
 import { LitContent } from "../lit/solid-bridge.ts";
 import { PluginArtTile } from "../pages/plugins/consent-dialog.tsx";
 import type { CommandPaletteItem } from "./command-palette-catalog-search.ts";
-import { renderSessionOwnerAvatar } from "./session-owner-chip.ts";
 import { Icon } from "./solid/icon.tsx";
 import { AgentIdentityAvatar } from "./solid/identity-avatar.tsx";
+import { renderSessionOwnerAvatar } from "./solid/session-presentation.tsx";
 import { renderThemeBrandIcon } from "./theme-brand-icon.ts";
 
 // Preserve source offsets when case folding expands Unicode characters.
@@ -151,9 +151,7 @@ export function CommandPaletteResult(props: {
               />
               <Show when={owner()?.id}>
                 <span class="cmd-palette__owner">
-                  <LitContent
-                    render={() => renderSessionOwnerAvatar({ ...owner()!, id: owner()!.id! })}
-                  />
+                  {renderSessionOwnerAvatar({ ...owner()!, id: owner()!.id! })}
                 </span>
               </Show>
             </span>
