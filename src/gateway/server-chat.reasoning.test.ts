@@ -169,12 +169,17 @@ it("hands paced native reasoning to stable durable identity despite rewritten po
     update("Checking", "Checking", true);
     const first = update("Checking facts", " facts");
     await unlisten.drain();
-    expect(thoughts()).toHaveLength(0);
     const source = readAgentAssistantSource(first);
     expect(source?.itemId).toEqual(expect.any(String));
     if (!source) {
       throw new Error("Native thinking must retain its assistant occurrence");
     }
+    expect(thoughts().map((event) => ({ runId: event.runId, data: event.data }))).toEqual([
+      {
+        runId: clientRunId,
+        data: { text: "Checking", delta: "Checking", itemId: source.itemId },
+      },
+    ]);
     first.content.push({ type: "text", text: "The first answer is ready." });
     emit({ type: "message_end", message: first });
     await subscription.waitForPendingEvents();
@@ -192,7 +197,11 @@ it("hands paced native reasoning to stable durable identity despite rewritten po
     expect(thoughts().map((event) => ({ runId: event.runId, data: event.data }))).toEqual([
       {
         runId: clientRunId,
-        data: { text: "Checking facts", delta: "Checking facts", itemId: source.itemId },
+        data: { text: "Checking", delta: "Checking", itemId: source.itemId },
+      },
+      {
+        runId: clientRunId,
+        data: { text: "Checking facts", delta: " facts", itemId: source.itemId },
       },
       {
         runId: clientRunId,
@@ -218,18 +227,26 @@ it("hands paced native reasoning to stable durable identity despite rewritten po
       message: { __openclaw: { id: messageId, runId, seq: 7 } },
     });
     vi.advanceTimersByTime(100);
-    expect(thoughts()).toHaveLength(2);
+    expect(thoughts()).toHaveLength(3);
 
     const second = update("Checking facts", "Checking facts", true);
     await unlisten.drain();
+    // The Gateway's pacing timer owns the next live send even when already due.
+    vi.advanceTimersByTime(75);
     const nextSource = readAgentAssistantSource(second);
     expect(nextSource?.itemId).toEqual(expect.any(String));
     expect(nextSource?.itemId).not.toBe(source.itemId);
-    expect(thoughts()).toHaveLength(2);
+    expect(thoughts()).toHaveLength(4);
+    expect(thoughts().at(-1)?.data).toEqual({
+      text: "Checking facts",
+      delta: "Checking facts",
+      itemId: nextSource?.itemId,
+    });
     emit({ type: "message_end", message: second });
     await subscription.waitForPendingEvents();
     await unlisten.drain();
     gateway.chatRunState.flushPendingText(clientRunId);
+    expect(thoughts()).toHaveLength(4);
     expect(thoughts().at(-1)?.data).toEqual({
       text: "Checking facts",
       delta: "Checking facts",

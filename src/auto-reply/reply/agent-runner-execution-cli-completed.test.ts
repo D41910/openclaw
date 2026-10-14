@@ -1,5 +1,6 @@
 import { assert, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
+import { transformCliResultText } from "../../agents/cli-output-results.js";
 import { createCliJsonlStreamingParser } from "../../agents/cli-output-stream.js";
 import {
   claudeStreamEvent,
@@ -279,5 +280,120 @@ it.each([
         ?.filter((payload) => !payload.isReasoning)
         .map((payload) => payload.text),
     ).toEqual(acceptFirst ? ["A", "NO_REPLY"] : [accepted]);
+  },
+);
+
+it.each([
+  { text: "NO_REPLY\nMEDIA:https://example.com/result.png", transformed: false },
+  {
+    text: "Preparing the attachment.\nNO_REPLY\nMEDIA:https://example.com/result.png",
+    transformed: false,
+  },
+  { text: "PRIVATE_MEDIA\nNO_REPLY", transformed: true },
+])(
+  "delivers an accepted silent attachment before the CLI process ends: $text",
+  async ({ text, transformed }) => {
+    const { setBlockReplyDelivery } = await import("./block-reply-delivery.js");
+    const { onAgentEventForRun } = await import("../../infra/agent-events.js");
+    const delivered = createDeferred();
+    const continueProcess = createDeferred();
+    let processContinued = false;
+    const onBlockReply = vi.fn<NonNullable<GetReplyOptions["onBlockReply"]>>(async () => {
+      setBlockReplyDelivery(Promise.resolve({ outcome: "delivered" }));
+      delivered.resolve();
+    });
+    state.runCliAgentMock.mockImplementationOnce(
+      async (params: Parameters<typeof import("../../agents/cli-runner.js").runCliAgent>[0]) => {
+        const context = buildContext(params.runId);
+        context.params = { ...context.params, ...params };
+        if (transformed) {
+          context.backendResolved.textTransforms = {
+            output: [
+              { from: /PRIVATE_MEDIA/g, to: "MEDIA:https://example.com/result.png" },
+              { from: /NO_REPLY/g, to: "" },
+            ],
+          };
+        }
+        const handlers = createCliEventHandlers({
+          context,
+          toolTracking: buildToolTracking(),
+          getRunState: () => ({ failed: false, error: undefined }),
+        });
+        const parser = createCliJsonlStreamingParser({
+          backend: { ...context.backendResolved.config, jsonlDialect: "claude-stream-json" },
+          providerId: "claude-cli",
+          onAssistantDelta: handlers.emitCliAssistantDelta,
+          onCompletedReply: handlers.emitCliCompletedReply,
+        });
+        let previewText: string | undefined;
+        const completed: string[] = [];
+        const stop = onAgentEventForRun(params.runId, (event) => {
+          if (event.stream !== "assistant") {
+            return;
+          }
+          if (typeof event.data.text === "string") {
+            previewText = event.data.text;
+          }
+          if (typeof event.data.completedText === "string") {
+            completed.push(event.data.completedText);
+          }
+        });
+        try {
+          parser.push(
+            joinJsonlFrames(
+              claudeStreamEvent({ type: "message_start", message: { id: "attachment" } }),
+              claudeTextDelta(text),
+              claudeStreamEvent({ type: "message_stop" }),
+              { type: "result", subtype: "success", result: text, openclaw_interim_result: true },
+              "",
+            ),
+          );
+          expect(previewText).toBe("");
+          expect(completed).toHaveLength(1);
+          await continueProcess.promise;
+          processContinued = true;
+          parser.push(joinJsonlFrames({ type: "result", subtype: "success", result: text }, ""));
+          parser.finish();
+          const rawOutput = parser.getOutput();
+          assert(rawOutput);
+          const output = transformCliResultText(
+            rawOutput,
+            context.backendResolved.textTransforms?.output,
+          );
+          return buildCliRunResult({
+            context,
+            output,
+            assistantText: prepareCliAssistantReply(output).text,
+            usedHistoryPrompt: false,
+            userTurnHandled: true,
+            sessionBindingDisabled: true,
+            preparedContextAgentMeta: {},
+          });
+        } finally {
+          stop();
+        }
+      },
+    );
+    const executeAgentTurn = await getExecuteAgentTurnForTest();
+    const run = executeAgentTurn(createCliTurn({ onBlockReply }));
+    try {
+      await Promise.race([
+        delivered.promise,
+        run.then(() => {
+          throw new Error("CLI settled before delivering its accepted attachment");
+        }),
+      ]);
+      expect(processContinued).toBe(false);
+      expect(
+        onBlockReply.mock.calls.map(([payload]) => ({
+          text: payload.text,
+          mediaUrls: payload.mediaUrls,
+        })),
+      ).toEqual([{ text: undefined, mediaUrls: ["https://example.com/result.png"] }]);
+    } finally {
+      continueProcess.resolve();
+      await run;
+    }
+    expect(onBlockReply).toHaveBeenCalledOnce();
   },
 );

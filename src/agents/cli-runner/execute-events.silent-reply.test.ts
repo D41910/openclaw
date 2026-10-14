@@ -8,7 +8,6 @@ describe("CLI completed reply publication", () => {
     "The discussion is already complete.\nNO_REPLY",
     "Nobody asked me for an answer.\n(NO_REPLY)\n\n",
     "Die Frage ist schon beantwortet.\nNO_REPLY.",
-    "The attachment is ready.\nNO_REPLY\nMEDIA:https://example.com/result.png",
   ])("streams previews then clears a silent accepted reply: %j", (text) => {
     const context = buildContext("silent-cli-segment");
     const handlers = createCliEventHandlers({

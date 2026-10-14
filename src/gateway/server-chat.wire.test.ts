@@ -707,6 +707,7 @@ it.each(["immediate", "paced", "slow"])(
       cli.emitCliCompletedReply("foo");
       await dispose.drain();
       chatRunState.flushPendingText(runId);
+      expect(chatDeltaText(frames)).toBe("foo");
       if (mode === "slow") {
         hold = true;
         broadcaster.broadcast("tick", {});
@@ -726,15 +727,16 @@ it.each(["immediate", "paced", "slow"])(
         callbacks.shift()?.();
       }
       const itemId = `cli-assistant:${runId}`;
-      expect(
-        payloads(frames, "agent")
-          .map((payload) => payload.data)
-          .filter((data) => data?.text || data?.delta),
-      ).toEqual([
-        { itemId, text: "foo", delta: "foo" },
-        { itemId, delta: "baz" },
-        { itemId, delta: "baz" },
-      ]);
+      const updates = payloads(frames, "agent")
+        .map((payload) => payload.data)
+        .filter((data) => data?.text || data?.delta);
+      expect(updates[0]).toEqual({ itemId, text: "foo", delta: "foo" });
+      const recipient = createAssistantTextStream(false);
+      for (const data of updates) {
+        expect(data).toMatchObject({ itemId });
+        recipient.update(data);
+      }
+      expect(recipient.streamedText).toBe(`${replacement}baz`);
       expect(chatDeltaText(frames)).toBe(`${replacement}baz`);
     } finally {
       try {

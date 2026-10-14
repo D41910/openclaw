@@ -2059,7 +2059,7 @@ describe("OpenAI-compatible HTTP API (e2e)", () => {
     },
   );
 
-  it("keeps late-classified commentary separate from the final answer", async () => {
+  it("keeps embedded late commentary append-only while the final answer streams", async () => {
     agentCommandMock.mockImplementationOnce(emitEmbeddedLateCommentary);
     const stream = await createOpenAiHttpTestClient(enabledPort).chat.completions.create({
       model: "openclaw",
@@ -2074,7 +2074,7 @@ describe("OpenAI-compatible HTTP API (e2e)", () => {
         finishReasons.push(choice.finish_reason);
       }
     }
-    expect(content.join("")).toBe("The check is complete.");
+    expect(content.join("")).toBe("I will inspect the workspace.\n\nThe check is complete.");
     expect(finishReasons.at(-1)).toBe("stop");
   });
 

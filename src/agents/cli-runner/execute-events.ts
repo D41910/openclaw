@@ -17,6 +17,7 @@ import type {
   CliToolUseStartDelta,
 } from "../cli-output-contracts.js";
 import { isClaudeForegroundAgentToolName } from "../cli-output-records.js";
+import { transformCliResultText } from "../cli-output-results.js";
 import type { ToolSummaryTrace } from "../embedded-agent-runner/types.js";
 import { extractToolErrorMessage, prepareToolResult } from "../embedded-agent-tool-results.js";
 import { runAgentHarnessAfterToolCallHook } from "../harness/hook-helpers.js";
@@ -408,14 +409,12 @@ export function createCliEventHandlers(params: {
     if (text) {
       observedCliActivity = true;
     }
-    const completedText = applyPluginTextReplacements(
-      text,
+    const completedText = transformCliResultText(
+      { text },
       context.backendResolved.textTransforms?.output,
-    );
-    if (
-      parseReplyDirectives(text).hasSilentIntent ||
-      parseReplyDirectives(completedText).hasSilentIntent
-    ) {
+    ).text;
+    const parsed = parseReplyDirectives(completedText);
+    if (parsed.hasSilentIntent) {
       emitLiveEvent("assistant", () => ({
         itemId: cliAssistantItemId(runParams.runId),
         text: acceptedReplyText,
@@ -428,8 +427,9 @@ export function createCliEventHandlers(params: {
         delta: "",
         isReasoningSnapshot: true,
       }));
-    } else if (assistantMessageIndex !== undefined) {
-      acceptedReplyText = [acceptedReplyText, completedText].filter(Boolean).join("\n");
+    }
+    if (assistantMessageIndex !== undefined && (parsed.text || parsed.mediaUrls?.length)) {
+      acceptedReplyText = [acceptedReplyText, parsed.text].filter(Boolean).join("\n");
       emitLiveEvent("assistant", () => ({ assistantMessageIndex, completedText }));
     }
   };

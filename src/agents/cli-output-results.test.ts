@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { prepareCliReplyPayload } from "../auto-reply/reply/cli-reply-payload.js";
 import { transformCliResultText } from "./cli-output-results.js";
 
 const replacements = [
@@ -7,10 +8,16 @@ const replacements = [
 ];
 
 it.each(["", "\nMEDIA:https://example.com/result.png"])(
-  "preserves a raw silent completion before applying output replacements: %j",
+  "applies output replacements while preserving raw silent intent: %j",
   (media) => {
     const text = `PRIVATE_MARKER: the conversation is complete.\nNO_REPLY${media}`;
-    expect(transformCliResultText({ text }, replacements)).toEqual({ text, rawText: text });
+    const output = transformCliResultText({ text }, replacements);
+    expect(output.rawText).toBe(text);
+    expect(output.text).toContain("public: the conversation is complete.");
+    expect(prepareCliReplyPayload(output.text)).toMatchObject({
+      text: "",
+      mediaUrls: media ? ["https://example.com/result.png"] : undefined,
+    });
   },
 );
 
@@ -40,3 +47,19 @@ it("allows a non-silent source replacement to produce silent intent", () => {
     transformCliResultText({ text: "SILENT_MARKER" }, [{ from: /SILENT_MARKER/g, to: "NO_REPLY" }]),
   ).toEqual({ text: "NO_REPLY", rawText: "SILENT_MARKER" });
 });
+
+it.each([false, true])(
+  "preserves silent intent while transformed media reaches reply preparation (strip token=%s)",
+  (stripToken) => {
+    const text = "PRIVATE_MEDIA\nNO_REPLY";
+    const output = transformCliResultText({ text }, [
+      { from: /PRIVATE_MEDIA/g, to: "MEDIA:https://example.com/result.png" },
+      ...(stripToken ? [{ from: /NO_REPLY/g, to: "" }] : []),
+    ]);
+    expect(output.rawText).toBe(text);
+    expect(prepareCliReplyPayload(output.text)).toMatchObject({
+      text: "",
+      mediaUrls: ["https://example.com/result.png"],
+    });
+  },
+);

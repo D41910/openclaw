@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CliStreamingDelta } from "./cli-output-contracts.js";
 import { createClaudeParser, claudeTextDelta, joinJsonlFrames } from "./cli-output.test-helpers.js";
 
 function claudePartialSnapshot(id: string, content: unknown[]) {
@@ -51,12 +52,12 @@ describe("Claude CLI assistant snapshots", () => {
     expect(parser.getOutput()?.text).toBe("Hi there");
   });
 
-  it("keeps commentary, tools, and later assistant text in their lanes", () => {
+  it("reclassifies live snapshots as commentary before later assistant text", () => {
     const commentary: string[] = [];
     const tools: string[] = [];
-    const deltas: Array<{ text: string; delta: string }> = [];
+    const deltas: Array<Pick<CliStreamingDelta, "text" | "delta" | "replace">> = [];
     const parser = createClaudeParser({
-      onAssistantDelta: ({ text, delta }) => deltas.push({ text, delta }),
+      onAssistantDelta: ({ text, delta, replace }) => deltas.push({ text, delta, replace }),
       onCommentaryText: (text) => commentary.push(text),
       onToolUseStart: (tool) => tools.push(tool.name),
     });
@@ -76,7 +77,11 @@ describe("Claude CLI assistant snapshots", () => {
 
     expect(commentary).toEqual(["Inspecting now."]);
     expect(tools).toEqual(["Read"]);
-    expect(deltas).toEqual([{ text: "Done.", delta: "Done." }]);
+    expect(deltas).toEqual([
+      { text: "Inspecting now.", delta: "Inspecting now.", replace: undefined },
+      { text: "", delta: "", replace: true },
+      { text: "Done.", delta: "Done.", replace: undefined },
+    ]);
     expect(parser.getOutput()?.text).toBe("Done.");
   });
 

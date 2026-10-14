@@ -254,7 +254,7 @@ describe("handleMessageEnd", () => {
     await endMessage(ctx, {
       message: {
         role: "assistant",
-        content: "Hello world",
+        content: [{ type: "text", text: "Hello world" }],
         usage: { input: 10, output: 5, total: 15 },
       },
     });

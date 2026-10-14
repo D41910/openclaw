@@ -51,7 +51,7 @@ function renderedOrder(state: TestState) {
   return [...renderedText(state).matchAll(/Step (\d+):/gu)].map((match) => Number(match[1]));
 }
 
-it("restores only the unowned tail with bounded commentary replay and settles buffered continuation", async () => {
+it("restores only the unowned tail with bounded commentary replay and streams its continuation", async () => {
   vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
   vi.setSystemTime(new Date("2026-05-09T00:00:00.000Z"));
   vi.stubGlobal("window", globalThis);
@@ -208,6 +208,8 @@ it("restores only the unowned tail with bounded commentary replay and settles bu
     updateText(pending, pending);
     await subscription.waitForPendingEvents();
     await unsubscribe.drain();
+    // An accepted update reaches connected clients at the pacing deadline.
+    vi.advanceTimersByTime(75);
     history.inFlightRun = projectInFlightRunSnapshot({
       chatRunState: gateway.chatRunState,
       runId,
@@ -216,16 +218,20 @@ it("restores only the unowned tail with bounded commentary replay and settles bu
     const restored = createState(history);
     clients.push(restored);
     await loadChatHistory(restored);
-    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22]);
-    expect(renderedOrder(live)).toEqual(Array.from({ length: 22 }, (_, index) => index + 1));
+    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22, 23]);
+    expect(renderedOrder(live)).toEqual(Array.from({ length: 23 }, (_, index) => index + 1));
+    expect(restored.chatStream).toBe(pending);
 
     vi.advanceTimersByTime(250);
     const continued = `${pending} Continuing after switch-back.`;
     updateText(continued, " Continuing after switch-back.");
     await subscription.waitForPendingEvents();
     await unsubscribe.drain();
-    expect(renderedOrder(live)).toEqual(Array.from({ length: 22 }, (_, index) => index + 1));
-    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22]);
+    vi.advanceTimersByTime(75);
+    expect(renderedOrder(live)).toEqual(Array.from({ length: 23 }, (_, index) => index + 1));
+    expect(renderedOrder(restored)).toEqual([19, 20, 21, 22, 23]);
+    expect(live.chatStream).toBe(continued);
+    expect(restored.chatStream).toBe(continued);
 
     emit({ type: "message_end", message: textMessage(continued) });
     await subscription.waitForPendingEvents();

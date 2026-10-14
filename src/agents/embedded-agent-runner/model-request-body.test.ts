@@ -63,10 +63,10 @@ it("encodes the final large provider body off-thread and shares its exact bytes 
   const expectedPayload = { ...replacement, tools: allowedTools };
   const padding = 600 * 1_024 - Buffer.byteLength(JSON.stringify(expectedPayload));
   const finalContent = messages[99]!.content[0]!;
-  if (!("text" in finalContent)) {
+  if (typeof finalContent.text !== "string") {
     throw new Error("Expected the fixture's final text part");
   }
-  finalContent.text += "x".repeat(padding);
+  messages[99]!.content[0] = { type: "text", text: finalContent.text + "x".repeat(padding) };
   const expectedWire = JSON.stringify(expectedPayload);
   expect(Buffer.byteLength(expectedWire)).toBe(614_400);
   const sse = `data: ${JSON.stringify({

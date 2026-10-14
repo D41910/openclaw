@@ -1,6 +1,7 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/string-coerce";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { PluginTextReplacement } from "../plugins/cli-backend.types.js";
 import type { CliOutput } from "./cli-output-contracts.js";
 import { applyPluginTextReplacements } from "./plugin-text-transforms.js";
@@ -9,10 +10,13 @@ export function transformCliResultText(
   output: CliOutput,
   replacements?: PluginTextReplacement[],
 ): CliOutput {
-  const transform = (text: string) =>
-    parseReplyDirectives(text).hasSilentIntent
-      ? text
-      : applyPluginTextReplacements(text, replacements);
+  const transform = (text: string) => {
+    const transformed = applyPluginTextReplacements(text, replacements);
+    return parseReplyDirectives(text).hasSilentIntent &&
+      !parseReplyDirectives(transformed).hasSilentIntent
+      ? `${transformed.trimEnd()}\n${SILENT_REPLY_TOKEN}`
+      : transformed;
+  };
   const textParts = output.textParts?.map(transform);
   return {
     ...output,

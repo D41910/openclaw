@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
   CliCompactionDelta,
+  CliStreamingDelta,
   CliToolInputDelta,
   CliToolResultDelta,
   CliToolUseStartDelta,
@@ -825,7 +826,7 @@ describe("createCliJsonlStreamingParser events", () => {
 
   it.each([
     {
-      name: "fires onCommentaryText with accumulated text before a tool_use block",
+      name: "reclassifies live Claude text as commentary before a tool_use block",
       frames: [
         { type: "init", session_id: "session-commentary" },
         claudeTextDelta("Let me check "),
@@ -833,10 +834,14 @@ describe("createCliJsonlStreamingParser events", () => {
         claudeBlockStart({ type: "tool_use", id: "toolu_1", name: "Bash", input: {} }, 1),
       ],
       expectedCommentary: ["Let me check that for you."],
-      expectedDeltas: [],
+      expectedDeltas: [
+        { text: "Let me check ", delta: "Let me check ", replace: undefined },
+        { text: "Let me check that for you.", delta: "that for you.", replace: undefined },
+        { text: "", delta: "", replace: true },
+      ],
     },
     {
-      name: "flushes Claude text as an assistant delta when no tool follows",
+      name: "streams Claude text deltas when no tool follows",
       frames: [
         { type: "init", session_id: "session-answer" },
         claudeTextDelta("Final "),
@@ -844,11 +849,14 @@ describe("createCliJsonlStreamingParser events", () => {
         claudeMessageStop(),
       ],
       expectedCommentary: [],
-      expectedDeltas: [{ text: "Final answer.", delta: "Final answer." }],
+      expectedDeltas: [
+        { text: "Final ", delta: "Final ", replace: undefined },
+        { text: "Final answer.", delta: "answer.", replace: undefined },
+      ],
     },
   ])("$name", ({ frames, expectedCommentary, expectedDeltas }) => {
     const commentaryTexts: string[] = [];
-    const deltas: Array<{ text: string; delta: string }> = [];
+    const deltas: Array<Pick<CliStreamingDelta, "text" | "delta" | "replace">> = [];
     const parser = createCliJsonlStreamingParser({
       backend: {
         command: "claude",
@@ -857,7 +865,7 @@ describe("createCliJsonlStreamingParser events", () => {
         sessionIdFields: ["session_id"],
       },
       providerId: "claude-cli",
-      onAssistantDelta: (delta) => deltas.push({ text: delta.text, delta: delta.delta }),
+      onAssistantDelta: ({ text, delta, replace }) => deltas.push({ text, delta, replace }),
       onCommentaryText: (text) => commentaryTexts.push(text),
     });
 

@@ -15,7 +15,6 @@ import { recordAgentRunTerminalOutcome } from "../channels/turn/agent-run-termin
 import {
   emitAgentEvent,
   onAgentEvent,
-  onAgentEventForRun,
   getAgentEventLifecycleGeneration,
 } from "../infra/agent-events.js";
 
@@ -29,14 +28,6 @@ export async function emitEmbeddedLateCommentary(opts: unknown): Promise<void> {
   const { emit, subscription } = createSubscribedSessionHarness({ runId });
   const commentary = "I will inspect the workspace.";
   const finalText = "The check is complete.";
-  const output: Array<{ stream: "preamble" | "assistant"; text: unknown }> = [];
-  const unsubscribeEvents = onAgentEventForRun(runId, (event) => {
-    if (event.stream === "item" && event.data.kind === "preamble" && event.data.phase === "end") {
-      output.push({ stream: "preamble", text: event.data.progressText });
-    } else if (event.stream === "assistant" && typeof event.data.text === "string") {
-      output.push({ stream: "assistant", text: event.data.text });
-    }
-  });
   const message = (text: string) =>
     makeAgentAssistantMessage({
       api: "openai-completions",
@@ -89,12 +80,7 @@ export async function emitEmbeddedLateCommentary(opts: unknown): Promise<void> {
     emit({ type: "message_end", message: finalMessage });
     emit({ type: "agent_end", messages: [completedCommentary, finalMessage] });
     await subscription.waitForPendingEvents();
-    expect(output).toEqual([
-      { stream: "preamble", text: commentary },
-      { stream: "assistant", text: finalText },
-    ]);
   } finally {
-    unsubscribeEvents();
     subscription.unsubscribe();
   }
 }

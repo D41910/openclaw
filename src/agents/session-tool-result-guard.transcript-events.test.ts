@@ -213,7 +213,8 @@ describe("guardSessionManager transcript updates", () => {
           type: "message",
           message: { role: "assistant" },
         });
-        expect(h.sourceEvents).toEqual([]);
+        expect(h.sourceEvents.map((event) => event.data.text)).toEqual(["Repeated answer."]);
+        expect(await h.snapshot()).toBe("");
         if (prior === "retained by steer") {
           const steer = makeUserMessage("Continue with the same answer", 1);
           h.emit({ type: "message_start", message: steer });
@@ -225,9 +226,10 @@ describe("guardSessionManager transcript updates", () => {
         h.emit({ type: "agent_end", messages: [first, second] });
         await h.finishing.promise;
 
-        expect(h.sourceEvents.map((event) => event.data.text)).toEqual(
-          prior === "superseded" ? ["Repeated answer."] : ["Repeated answer.", "Repeated answer."],
-        );
+        expect(h.sourceEvents.map((event) => event.data.text)).toEqual([
+          "Repeated answer.",
+          "Repeated answer.",
+        ]);
         expect(await h.snapshot()).toBe("Repeated answer.");
         await h.commit(second);
         expect(await h.snapshot()).toBe("");
@@ -248,9 +250,9 @@ describe("guardSessionManager transcript updates", () => {
       expect(await h.snapshot()).toBe("Same answer.");
       h.stream(second);
       await h.subscription.waitForPendingEvents();
-      expect(await h.snapshot()).toBe("Same answer.");
+      expect(await h.snapshot()).toBe("Same answer.\n\nSame answer.");
       await h.commit(first);
-      expect(await h.snapshot()).toBe("");
+      expect(await h.snapshot()).toBe("Same answer.");
 
       const completed = assistantText("Same answer. Continued.");
       h.emit({
@@ -259,7 +261,7 @@ describe("guardSessionManager transcript updates", () => {
         assistantMessageEvent: { type: "text_delta", delta: " Continued." },
       });
       await h.subscription.waitForPendingEvents();
-      expect(await h.snapshot()).toBe("");
+      expect(await h.snapshot()).toBe("Same answer. Continued.");
       h.emit({ type: "message_end", message: completed });
       await h.subscription.waitForPendingEvents();
       expect(await h.snapshot()).toBe("Same answer. Continued.");
