@@ -1,37 +1,47 @@
-import { html, render, type LitElement } from "lit";
+import { createSignal, flush } from "solid-js";
 import { expect, it, vi } from "vitest";
+import { mountSolid } from "../test-helpers/mount-solid.ts";
+import { waitForSolid } from "../test-helpers/solid-settle.ts";
 import type { SettingsSaveIndicatorProps } from "./settings-save-indicator.tsx";
-import { renderSettingsSegmented } from "./settings-ui.ts";
+import { SettingsSegmented } from "./solid/settings-ui.tsx";
 import "./settings-save-indicator.tsx";
 import startupStyles from "../styles.css?inline";
 
-function drawRadioGroups(
-  container: HTMLElement,
-  { value = "first", busy = false, disabled = false, expanded = false } = {},
-  onChange = vi.fn(),
-) {
+function mountRadioGroups(onChange = vi.fn()) {
+  const [state, setState] = createSignal({
+    value: "first",
+    busy: false,
+    disabled: false,
+    expanded: false,
+  });
   const options = [
     { value: "first", label: "First" },
     { value: "second", label: "Second" },
     { value: "locked", label: "Locked", disabled: true },
   ];
-  render(
-    html`<fieldset ?disabled=${busy}>
-      ${renderSettingsSegmented({
-        value,
-        disabled,
-        ariaLabel: "Schedule",
-        options: expanded ? [...options, { value: "third", label: "Third" }] : options,
-        onChange,
-      })}${renderSettingsSegmented({
-        value: "second",
-        options,
-        ariaLabel: "Other schedule",
-        onChange,
-      })}
-    </fieldset>`,
-    container,
-  );
+  const view = mountSolid(() => (
+    <fieldset disabled={state().busy}>
+      <SettingsSegmented
+        value={state().value}
+        disabled={state().disabled}
+        ariaLabel="Schedule"
+        options={state().expanded ? [...options, { value: "third", label: "Third" }] : options}
+        onChange={onChange}
+      />
+      <SettingsSegmented
+        value="second"
+        options={options}
+        ariaLabel="Other schedule"
+        onChange={onChange}
+      />
+    </fieldset>
+  ));
+  const draw = (next: Partial<ReturnType<typeof state>>) => {
+    setState((previous) => ({ ...previous, ...next }));
+    flush();
+  };
+  flush();
+  return { ...view, draw };
 }
 
 it("animates Applying before lazy settings styles load", async () => {
@@ -39,30 +49,36 @@ it("animates Applying before lazy settings styles load", async () => {
   // Keep lazy route keyframes from masking a missing startup animation owner.
   const root = container.attachShadow({ mode: "open" });
   document.body.append(container);
+  let view: ReturnType<typeof mountSolid> | undefined;
   try {
-    render(
-      html`<style>
-          ${startupStyles}
-        </style>
-        <openclaw-settings-save-indicator
-          .props=${
-            {
-              status: "idle",
-              lastError: null,
-              needsApply: true,
-              applying: true,
-              applyDisabled: false,
-              onRetry: vi.fn(),
-              onSave: vi.fn(),
-              onReload: vi.fn(),
-              onApply: vi.fn(),
-            } satisfies SettingsSaveIndicatorProps
-          }
-        ></openclaw-settings-save-indicator>`,
-      root,
+    const target = root.appendChild(document.createElement("div"));
+    view = mountSolid(
+      () => (
+        <>
+          <style>{startupStyles}</style>
+          <openclaw-settings-save-indicator
+            prop:props={
+              {
+                status: "idle",
+                lastError: null,
+                needsApply: true,
+                applying: true,
+                applyDisabled: false,
+                onRetry: vi.fn(),
+                onSave: vi.fn(),
+                onReload: vi.fn(),
+                onApply: vi.fn(),
+              } satisfies SettingsSaveIndicatorProps
+            }
+          />
+        </>
+      ),
+      { container: target },
     );
-    const indicator = root.querySelector<LitElement>("openclaw-settings-save-indicator")!;
-    await indicator.updateComplete;
+    const indicator = root.querySelector("openclaw-settings-save-indicator")!;
+    await waitForSolid(() =>
+      expect(indicator.querySelector(".settings-save-indicator__spinner svg")).not.toBeNull(),
+    );
     const spinner = indicator.querySelector<SVGElement>(".settings-save-indicator__spinner svg")!;
     const animations = spinner.getAnimations();
     expect(animations.length).toBeGreaterThan(0);
@@ -75,17 +91,16 @@ it("animates Applying before lazy settings styles load", async () => {
     expect(transform.a).toBeCloseTo(0);
     expect(transform.b).toBeCloseTo(1);
   } finally {
-    render(null, root);
+    view?.unmount();
     container.remove();
   }
 });
 
 it("restores segmented controls after fieldset busy state while preserving disabled options", () => {
-  const container = document.createElement("div");
-  document.body.append(container);
   const onChange = vi.fn();
-  const draw = (busy: boolean, disabled = false) =>
-    drawRadioGroups(container, { busy, disabled }, onChange);
+  const view = mountRadioGroups(onChange);
+  const { container } = view;
+  const draw = (busy: boolean, disabled = false) => view.draw({ busy, disabled });
   const disabledStates = () =>
     [...container.querySelector('[role="radiogroup"]')!.querySelectorAll("input[type=radio]")].map(
       (radio) => radio.matches(":disabled"),
@@ -113,15 +128,14 @@ it("restores segmented controls after fieldset busy state while preserving disab
     draw(false);
     expect(disabledStates()).toEqual([false, false, true]);
   } finally {
-    render(null, container);
-    container.remove();
+    view.unmount();
   }
 });
 
 it("keeps externally updated radio selections checked and independent as options change", () => {
-  const container = document.createElement("div");
-  document.body.append(container);
-  const draw = (value: string, expanded = false) => drawRadioGroups(container, { value, expanded });
+  const view = mountRadioGroups();
+  const { container } = view;
+  const draw = (value: string, expanded = false) => view.draw({ value, expanded });
   const selected = () =>
     [...container.querySelectorAll('[role="radiogroup"]')].map((group) =>
       [...group.querySelectorAll<HTMLInputElement>("input:checked")].map((input) => input.value),
@@ -136,7 +150,6 @@ it("keeps externally updated radio selections checked and independent as options
     draw("second", true);
     expect(selected()).toEqual([["second"], ["second"]]);
   } finally {
-    render(null, container);
-    container.remove();
+    view.unmount();
   }
 });

@@ -1,5 +1,6 @@
 /* @vitest-environment jsdom */
 import { nothing, render } from "lit";
+import { flush } from "solid-js";
 import { expect, it, vi } from "vitest";
 import {
   renderContextWindowControl,
@@ -22,7 +23,10 @@ it("keeps multi-option context selection contained and ignores current or disabl
     disabled: false,
     onSelect,
   };
-  const paint = () => render(renderContextWindowControl(props, "agent:main:synthetic"), host);
+  const paint = () => {
+    render(renderContextWindowControl(props, "agent:main:synthetic"), host);
+    flush();
+  };
   const click = (label: string) => {
     const button = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
       (entry) => entry.textContent?.trim() === label,
@@ -46,7 +50,10 @@ it("keeps multi-option context selection contained and ignores current or disabl
     expect(
       [...host.querySelectorAll<HTMLButtonElement>("button")].every((button) => button.disabled),
     ).toBe(true);
-    expect(click("500K").defaultPrevented).toBe(true);
+    const disabledChoice = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "500K",
+    )!;
+    disabledChoice.click();
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(bubbled).not.toHaveBeenCalled();
   } finally {

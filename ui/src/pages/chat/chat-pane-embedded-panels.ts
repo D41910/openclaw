@@ -159,7 +159,7 @@ export function sidebarPanelDefinitions(
             : SIDEBAR_PANEL_SHORTCUTS[slot]?.available(panelContext)),
       ),
       content,
-      loading: renderPanelLoadingSkeleton(
+      loading: html`${renderPanelLoadingSkeleton(
         textKey === "conversation" || textKey === "companion"
           ? "chat"
           : textKey === "subagents" || textKey === "processes"
@@ -170,7 +170,7 @@ export function sidebarPanelDefinitions(
                 ? "board"
                 : textKey,
         t(textKey === "desktop" ? "desktop.connecting" : "common.loading"),
-      ),
+      )}`,
       empty: { description: t(`chat.sidePanel.${textKey}Empty`) },
       headerAction,
       shortcut: SIDEBAR_PANEL_SHORTCUTS[slot]?.combo,
@@ -323,7 +323,7 @@ export function sidebarPanelDefinitions(
       "detail",
       icons.diff,
       detailContent?.kind === "loading"
-        ? renderPanelLoadingSkeleton("review", t("common.loading"))
+        ? html`${renderPanelLoadingSkeleton("review", t("common.loading"))}`
         : detailContent?.kind === "unavailable"
           ? html`<div class="callout danger review-unavailable" role="alert">
               <strong>${t("chat.detailPanel.unavailable")}</strong>
@@ -357,7 +357,7 @@ export function sidebarPanelDefinitions(
             .onClose=${params?.onCloseLinkReader}
           ></openclaw-link-reader-panel>`
         : null,
-      loading: renderPanelLoadingSkeleton("files", t("linkReader.loadingPreview")),
+      loading: html`${renderPanelLoadingSkeleton("files", t("linkReader.loadingPreview"))}`,
       empty: { description: t("linkReader.urlPlaceholder") },
     },
     definePanel("portal", icons.globe, portal),
@@ -406,7 +406,7 @@ export function sidebarPanelDefinitions(
             params?.isPluginPanelPresented(slot),
           )
         : null,
-      loading: renderPanelLoadingSkeleton("files", t("common.loading")),
+      loading: html`${renderPanelLoadingSkeleton("files", t("common.loading"))}`,
       empty: { description: entry?.value.label ?? t("pluginTabs.unavailableSubtitle") },
     })),
   ];

@@ -1,9 +1,10 @@
 import { html, nothing } from "lit";
 import type { GatewayContextWindowOption } from "../../../api/types.ts";
 import { icons } from "../../../components/icons.ts";
-import { renderSettingsSegmented } from "../../../components/settings-ui.ts";
+import { SettingsSegmented } from "../../../components/solid/settings-ui.tsx";
 import { t } from "../../../i18n/index.ts";
 import { registerModelControlsEnglish } from "../../../i18n/locales/en-model-controls.ts";
+import { solidContent } from "../../../lit/solid-content.tsx";
 
 registerModelControlsEnglish();
 
@@ -60,7 +61,7 @@ export function renderContextWindowControl(
       </button>
     `;
   } else {
-    control = renderSettingsSegmented({
+    control = html`${solidContent(SettingsSegmented<string>, {
       mode: "buttons",
       variant: "compact",
       class: "chat-controls__context-window-options",
@@ -77,7 +78,7 @@ export function renderContextWindowControl(
       onChange: (value) => {
         void contextWindow.onSelect(value, sessionKey);
       },
-    });
+    })}`;
   }
   return html`
     <div class="chat-controls__fast-mode-row chat-controls__context-window-row">
