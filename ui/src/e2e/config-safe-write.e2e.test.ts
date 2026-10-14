@@ -3,8 +3,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Locator, Page } from "playwright";
 import { beforeEach, expect, it } from "vitest";
+import type { SessionProgressHovercardProvider } from "../components/session-progress-hovercard.runtime.tsx";
 import { createControlUiE2eArtifactDir } from "../test-helpers/control-ui-e2e-artifacts.ts";
-import { evaluateControlUiContext } from "../test-helpers/control-ui-e2e-context.ts";
 import { takeControlUiViewportScreenshot } from "../test-helpers/control-ui-e2e-screenshot.ts";
 import { installMockGateway, type MockGatewayRequest } from "../test-helpers/control-ui-e2e.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
@@ -562,14 +562,62 @@ suite.define(() => {
   tools: {},
 }
 `;
-        const rawObservation = await rawEditor.evaluateHandle((element) => {
-          if (!(element instanceof HTMLTextAreaElement)) {
-            throw new Error("Expected the raw config textarea");
-          }
-          const inputs: string[] = [];
-          const onInput = () => inputs.push(element.value);
-          element.addEventListener("input", onInput);
-          return { element, inputs, onInput };
+        const rawDiagnostics = await page.evaluateHandle(() => {
+          const editor = document.querySelector<HTMLTextAreaElement>(".config-raw-field textarea");
+          const runtime = document.querySelector<SessionProgressHovercardProvider>(
+            "openclaw-session-progress-hovercard-provider",
+          )?.context?.runtimeConfig;
+          const snapshot = (phase: string, input?: HTMLTextAreaElement) => {
+            const current = document.querySelector<HTMLTextAreaElement>(
+              ".config-raw-field textarea",
+            );
+            const state = runtime?.state;
+            return {
+              phase,
+              at: performance.now(),
+              sameEditor: current === editor,
+              editorConnected: editor?.isConnected,
+              focused: current === document.activeElement,
+              value: current?.value,
+              selection: [current?.selectionStart, current?.selectionEnd],
+              inputValue: input?.value,
+              inputIsOriginalEditor: input ? input === editor : undefined,
+              owner: state
+                ? {
+                    raw: state.configRaw,
+                    dirty: state.configFormDirty,
+                    mode: state.configFormMode,
+                    saving: state.configSaving,
+                    loading: state.configLoading,
+                  }
+                : null,
+            };
+          };
+          const events = [snapshot("before-fill")];
+          const record = (phase: string, input?: HTMLTextAreaElement) => {
+            if (events.length < 100) {
+              events.push(snapshot(phase, input));
+            }
+          };
+          const onInput = (event: Event) => {
+            const input = event.target;
+            if (
+              input instanceof HTMLTextAreaElement &&
+              input.matches(".config-raw-field textarea")
+            ) {
+              record("input-capture", input);
+              queueMicrotask(() => record("input-microtask", input));
+            }
+          };
+          document.addEventListener("input", onInput, true);
+          const stop = runtime?.subscribe(() => record("owner-publish"));
+          return {
+            read: () => ({ events, final: snapshot("failure") }),
+            stop: () => {
+              document.removeEventListener("input", onInput, true);
+              stop?.();
+            },
+          };
         });
         const rawSave = page.getByRole("button", { name: "Save", exact: true });
         try {
@@ -581,36 +629,14 @@ suite.define(() => {
             }))
             .toEqual({ raw: rawDraft, saveEnabled: true });
         } catch (error) {
-          console.error(
-            "Raw config input diagnostic",
-            await Promise.all([
-              rawObservation.evaluate(({ element, inputs }) => ({
-                inputs,
-                connected: element.isConnected,
-                retained: element === document.querySelector(".config-raw-field textarea"),
-                observedRaw: element.value,
-                currentRaw: document.querySelector<HTMLTextAreaElement>(
-                  ".config-raw-field textarea",
-                )?.value,
-              })),
-              evaluateControlUiContext(page, (context) => {
-                const state = context.runtimeConfig.state;
-                return {
-                  raw: state.configRaw,
-                  dirty: state.configFormDirty,
-                  mode: state.configFormMode,
-                  loading: state.configLoading,
-                  saving: state.configSaving,
-                };
-              }),
-            ]).catch((diagnosticError: unknown) => ({ diagnosticError: String(diagnosticError) })),
-          );
+          const diagnostics = await rawDiagnostics
+            .evaluate((data) => data.read())
+            .catch((unavailable: unknown) => ({ unavailable: String(unavailable) }));
+          console.error("Raw config draft diagnostics", JSON.stringify(diagnostics));
           throw error;
         } finally {
-          await rawObservation
-            .evaluate(({ element, onInput }) => element.removeEventListener("input", onInput))
-            .catch(() => undefined);
-          await rawObservation.dispose().catch(() => undefined);
+          await rawDiagnostics.evaluate((data) => data.stop()).catch(() => undefined);
+          await rawDiagnostics.dispose();
         }
         await capture(page, "02-raw-draft.png", rawEditor);
 
