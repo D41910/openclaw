@@ -326,7 +326,7 @@ describe("subagent announce timeout config", () => {
 
       await runAnnounceFlowForTest("run-timeout-visible-terminal", {
         outcome: { status: "timeout" },
-        roundOneReply: text,
+        roundOneReply: undefined,
         terminalReply: { disposition: "visible", text },
       });
 
@@ -405,6 +405,7 @@ describe("subagent announce timeout config", () => {
     await runAnnounceFlowForTest("run-terminal-error-no-stale-output", {
       outcome: { status: "error", error: "All models failed (2): timeout" },
       roundOneReply: "stale frozen output",
+      fallbackReply: "older fallback output",
     });
 
     const directAgentCall = findFinalDirectAgentCall();
@@ -524,16 +525,6 @@ describe("captureSubagentCompletionReply", () => {
       captureSubagentCompletionReply(sessionKey, { sessionTarget, waitForReply: false }),
     ).resolves.toBeUndefined();
     expect(readMessages).toHaveBeenCalledOnce();
-    expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("does not substitute unscoped history for a completed run without a session target", async () => {
-    const readHistory = vi.mocked(announceRuntime.callSubagentLifecycleGateway).mockClear();
-    await expect(
-      captureSubagentCompletionReply(sessionKey, { runId: "completed-run", waitForReply: false }),
-    ).resolves.toBeUndefined();
-    expect(readMessages).not.toHaveBeenCalled();
-    expect(readHistory).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
 

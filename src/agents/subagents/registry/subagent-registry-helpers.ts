@@ -21,6 +21,7 @@ import {
   recordGatewaySessionRunFailure,
   resolveSessionRunError,
 } from "../../../sessions/session-run-error.js";
+import { truncateUtf8Prefix } from "../../../utils/utf8-truncate.js";
 import { cleanupMaterializedSubagentAttachments } from "../subagent-attachment-cleanup.js";
 import { resolveSubagentChildSessionOwner } from "./subagent-child-session-owner.js";
 import { getDeliveryLastError } from "./subagent-delivery-state.js";
@@ -46,6 +47,23 @@ const ANNOUNCE_RETRY_BACKOFF = {
   factor: 2,
   jitter: ANNOUNCE_RETRY_JITTER,
 };
+
+const FROZEN_RESULT_TEXT_MAX_BYTES = 100 * 1024;
+
+export function capFrozenResultText(resultText: string): string {
+  const trimmed = resultText.trim();
+  const totalBytes = Buffer.byteLength(trimmed, "utf8");
+  if (totalBytes <= FROZEN_RESULT_TEXT_MAX_BYTES) {
+    return trimmed;
+  }
+  const notice = `\n\n[truncated: frozen completion output exceeded ${Math.round(FROZEN_RESULT_TEXT_MAX_BYTES / 1024)}KB (${Math.round(totalBytes / 1024)}KB)]`;
+  const maxPayloadBytes = Math.max(
+    0,
+    FROZEN_RESULT_TEXT_MAX_BYTES - Buffer.byteLength(notice, "utf8"),
+  );
+  const payload = truncateUtf8Prefix(trimmed, maxPayloadBytes);
+  return `${payload}${notice}`;
+}
 
 export function resolveAnnounceRetryDelayMs(retryCount: number) {
   return computeBackoff(ANNOUNCE_RETRY_BACKOFF, Math.max(1, retryCount));

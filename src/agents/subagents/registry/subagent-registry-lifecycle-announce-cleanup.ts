@@ -396,6 +396,7 @@ export const startSubagentAnnounceCleanupFlow = (
     timeoutMs: params.subagentAnnounceTimeoutMs,
     cleanup: suppressSessionEffects ? "keep" : cleanup,
     roundOneReply: entry.completion?.resultText ?? undefined,
+    fallbackReply: entry.completion?.fallbackResultText ?? undefined,
     completionRequesterLifecycleRevision: entry.completionRequesterLifecycleRevision,
     wakeOnDescendantSettle: pendingPayload.wakeOnDescendantSettle === true,
     suppressChildSessionEffects: suppressSessionEffects,

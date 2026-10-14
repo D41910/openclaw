@@ -1,3 +1,4 @@
+import { isSilentReplyText } from "../../../auto-reply/tokens.js";
 import { hasSqliteWorkerOutcomeUnknown } from "../../../infra/sqlite-worker-contract.js";
 import { withPluginRuntimeGatewayContextResolver } from "../../../plugins/runtime/gateway-request-scope.js";
 import { parseAgentSessionKey } from "../../../routing/session-key.js";
@@ -68,6 +69,8 @@ import {
   buildCompactAnnounceStatsLine,
   dedupeLatestChildCompletionRows,
   filterCurrentDirectChildCompletionRows,
+  readLatestSubagentOutputWithRetry,
+  readSubagentOutput,
   readSubagentTimeoutProgress,
 } from "./subagent-announce-output.js";
 import type { PreparedAnnounceResult } from "./subagent-announce-result.js";
@@ -123,6 +126,8 @@ type SubagentAnnounceFlowParams = {
   cleanup: "delete" | "keep";
   roundOneReply?: string;
   terminalReply?: AgentRunTerminalReplySnapshot;
+  /** Cached pre-wake result for legacy runs without terminal facts. */
+  fallbackReply?: string;
   startedAt?: number;
   endedAt?: number;
   label?: string;
@@ -209,7 +214,13 @@ async function runSubagentAnnounceFlowBound(
         ? childSessionEntry.sessionId.trim()
         : undefined;
     const settleTimeoutMs = Math.min(Math.max(params.timeoutMs, 1), 120_000);
-    let reply = params.terminalReply?.disposition === "visible" ? params.roundOneReply : undefined;
+    const legacySilent = !params.terminalReply && isSilentReplyText(params.roundOneReply);
+    let reply =
+      params.terminalReply?.disposition === "visible"
+        ? params.terminalReply.text
+        : params.terminalReply || legacySilent
+          ? undefined
+          : params.roundOneReply;
     const outcome: SubagentRunOutcome = params.outcome ?? { status: "unknown" };
     if (
       childSessionId &&
@@ -225,6 +236,12 @@ async function runSubagentAnnounceFlowBound(
           return "retryable";
         }
       }
+    }
+    const failedTerminalOutcome = outcome.status === "error";
+    const allowFailedOutputCapture =
+      !failedTerminalOutcome || (!params.roundOneReply && !params.fallbackReply);
+    if (failedTerminalOutcome && !params.terminalReply) {
+      reply = undefined;
     }
 
     let requesterDepth = await getSubagentDepthFromSessionStoreInWorker(targetRequesterSessionKey, {
@@ -337,6 +354,11 @@ async function runSubagentAnnounceFlowBound(
       }
     }
 
+    const fallbackReply =
+      params.terminalReply || failedTerminalOutcome ? undefined : params.fallbackReply?.trim();
+    const visibleFallback =
+      fallbackReply && !isSilentReplyText(fallbackReply) ? fallbackReply : undefined;
+
     const childRun = subagentRuns.get(params.childRunId);
     if (childRun?.childSessionKey === params.childSessionKey && completionDeliveryAllowed()) {
       ownResult = await readSubagentRunAnnounceResult(childRun);
@@ -367,10 +389,50 @@ async function runSubagentAnnounceFlowBound(
         reply = timeoutProgress;
       }
     }
+    if (!params.terminalReply && (!ownResult || !childRun?.completion?.terminalReply)) {
+      if (
+        !legacySilent &&
+        !reply &&
+        allowFailedOutputCapture &&
+        (await prepareChildSessionEffects()) &&
+        childSessionEffectsAllowed()
+      ) {
+        reply = await readSubagentOutput(params.childSessionKey, outcome, {
+          childAgentId: params.childAgentId,
+        });
+      }
+      if (
+        !legacySilent &&
+        !reply?.trim() &&
+        allowFailedOutputCapture &&
+        (await prepareChildSessionEffects()) &&
+        childSessionEffectsAllowed()
+      ) {
+        reply = await readLatestSubagentOutputWithRetry({
+          sessionKey: params.childSessionKey,
+          childAgentId: params.childAgentId,
+          maxWaitMs: params.timeoutMs,
+          outcome,
+        });
+      }
+      if (!reply?.trim() && visibleFallback) {
+        reply = visibleFallback;
+      }
+      if (legacySilent && !reply?.trim() && !expectsCompletionMessage) {
+        return "delivered";
+      }
+    }
 
     const childSessionCurrent = await prepareChildSessionEffects();
     if (!ownResult && (!childSessionCurrent || !childSessionEffectsAllowed())) {
-      reply = params.terminalReply?.disposition === "visible" ? params.roundOneReply : undefined;
+      reply =
+        params.terminalReply?.disposition === "visible"
+          ? (params.roundOneReply ?? params.terminalReply.text)
+          : params.terminalReply
+            ? undefined
+            : legacySilent
+              ? visibleFallback
+              : (params.roundOneReply ?? visibleFallback);
     }
 
     const statusLabel =

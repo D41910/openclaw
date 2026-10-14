@@ -8,6 +8,7 @@ import { defaultRuntime } from "../../../runtime.js";
 import { resolveSubagentSessionAttachmentRootDir } from "../subagent-attachment-paths.js";
 import { updateSwarmCollectorCompletion } from "../swarm/swarm-collector.js";
 import {
+  capFrozenResultText,
   logAnnounceGiveUp,
   resolveAnnounceRetryDelayMs,
   safeRemoveAttachmentsDir,
@@ -40,6 +41,16 @@ describe("resolveAnnounceRetryDelayMs", () => {
       15_000, 30_000, 60_000, 120_000, 240_000, 300_000, 300_000, 300_000, 300_000, 300_000,
     ]);
     randomSpy.mockRestore();
+  });
+});
+
+describe("capFrozenResultText", () => {
+  it("preserves a valid UTF-8 prefix within the frozen-result byte budget", () => {
+    const result = capFrozenResultText("😀".repeat(25_601));
+
+    expect(Buffer.byteLength(result, "utf8")).toBeLessThanOrEqual(100 * 1024);
+    expect(result).not.toContain("�");
+    expect(result).toContain("[truncated: frozen completion output exceeded 100KB");
   });
 });
 

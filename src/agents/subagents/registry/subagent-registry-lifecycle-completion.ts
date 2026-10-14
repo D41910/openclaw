@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { captureSessionWatcherStorePaths } from "../../../config/sessions/session-store-path.js";
 import {
   getAgentEventLifecycleGeneration,
@@ -45,7 +46,6 @@ import {
 } from "./subagent-run-timeout.js";
 
 const MISSING_REQUIRED_FINAL_REPLY_ERROR = "subagent run ended before producing a final reply";
-const FRESH_CAPTURE_REQUIRED = "Subagent completion requires fresh result capture";
 
 const browserCleanupLoader = createLazyImportLoader(
   () => import("../../../browser-lifecycle-cleanup.js"),
@@ -108,28 +108,23 @@ function resolveTerminalRequest(
     completionOutcome = { status: "timeout" };
     completionReason = SUBAGENT_ENDED_REASON_COMPLETE;
   }
-  // A later silent receipt cannot retract this run's recorded visible answer.
-  const prior = entry.completion?.terminalReply;
-  const next = completeParams.terminalReply;
-  const terminalReply =
-    (prior?.disposition === "visible" && next?.disposition === "silent") ||
-    (prior && existingEndedAt !== undefined && (completeParams.endedAt ?? now) <= existingEndedAt)
-      ? prior
-      : mergeAgentRunTerminalReplySnapshot(prior, next);
+  // Reply evidence follows producer order; duplicate receipts may still drain cleanup.
+  const terminalReply = mergeAgentRunTerminalReplySnapshot(
+    entry.completion?.terminalReply,
+    entry.completion?.terminalReply &&
+      typeof existingEndedAt === "number" &&
+      (completeParams.endedAt ?? now) <= existingEndedAt
+      ? undefined
+      : completeParams.terminalReply,
+  );
   return {
     requestedEndedAt,
     endedAt,
     completionOutcome,
-    captureOutcome: withSubagentOutcomeTiming(completionOutcome, {
-      startedAt: observedStartedAt ?? entry.execution.startedAt,
-      endedAt,
-    }),
     completionReason,
     observedStartedAt,
     terminalReply,
-    missingRequiredReply:
-      entry.expectsCompletionMessage === true &&
-      (!terminalReply || (terminalReply.disposition === "visible" && !terminalReply.text.trim())),
+    missingRequiredReply: entry.expectsCompletionMessage === true && !terminalReply,
   };
 }
 
@@ -205,6 +200,10 @@ export async function completeSubagentRunAttempt(
         (selected.swarmRunId ? peekSwarmStructuredOutput(selected.swarmRunId) : undefined))
       : undefined;
     const terminal = resolveTerminalRequest(selected, completeParams, now, structuredOutput);
+    const captureOutcome = withSubagentOutcomeTiming(terminal.completionOutcome, {
+      startedAt: terminal.observedStartedAt ?? selected.execution.startedAt,
+      endedAt: terminal.endedAt,
+    });
     const prepared = {
       now,
       childAgentId: resolveSubagentChildSessionOwner(selected, params.getRuntimeConfig()).agentId,
@@ -214,16 +213,11 @@ export async function completeSubagentRunAttempt(
       capture:
         completeParams.recoverInterrupted ||
         context.newerGenerationOwnsSession(selected) ||
+        terminal.terminalReply ||
         (terminal.missingRequiredReply && terminal.completionOutcome.status === "ok") ||
         completeParams.completionSnapshot
           ? undefined
-          : await captureSubagentRunResult(
-              context,
-              selected,
-              terminal.captureOutcome,
-              assertCurrent,
-              terminal.terminalReply,
-            ),
+          : await captureSubagentRunResult(context, selected, captureOutcome, assertCurrent),
       collectorSession,
     };
     assertCurrent();
@@ -359,6 +353,7 @@ function planTerminalCompletion(
     collectorSession?: SubagentKillSession;
   },
 ) {
+  const params = context.options;
   if (
     currentEntry.pauseReason === "sessions_yield" &&
     completeParams.reason !== SUBAGENT_ENDED_REASON_KILLED
@@ -650,18 +645,6 @@ function planTerminalCompletion(
     completion.resultText = completeParams.completionSnapshot.resultText;
     completion.capturedAt = completeParams.completionSnapshot.capturedAt;
   }
-  const capture = prepared.capture;
-  if (
-    capture &&
-    (!isDeepStrictEqual(entry.execution.transcriptTarget, capture.transcriptTarget) ||
-      !isDeepStrictEqual(terminal.captureOutcome, capture.outcome))
-  ) {
-    throw new SubagentRegistryMutationRejectedError(FRESH_CAPTURE_REQUIRED);
-  }
-  if (missingRequiredReply || terminalReply?.disposition !== "visible") {
-    completion.resultText = null;
-    completion.capturedAt = endedAt;
-  }
 
   if (
     terminalReply &&
@@ -671,8 +654,10 @@ function planTerminalCompletion(
     completion.terminalReply = terminalReply;
     completion.resultText =
       terminalReply.disposition === "visible"
-        ? (prepared.capture?.resultText ?? completion.resultText ?? null)
-        : null;
+        ? terminalReply.text
+        : terminalReply.disposition === "silent"
+          ? SILENT_REPLY_TOKEN
+          : null;
     completion.capturedAt = endedAt;
   }
 
@@ -687,7 +672,10 @@ function planTerminalCompletion(
   if (closesAsIntentionalNonDelivery) {
     // Producer-owned empty success is a terminal fact, not a failed send.
     // Close it before terminal persistence so no requester delivery can start.
-    entry.delivery = { status: "not_required", disposition: "intentional_non_delivery" };
+    entry.delivery = {
+      status: "not_required",
+      disposition: "intentional_non_delivery",
+    };
     entry.suppressCompletionDelivery = true;
   }
 
@@ -696,19 +684,26 @@ function planTerminalCompletion(
       completion.resultText = null;
       completion.capturedAt = prepared.now;
     } else {
-      if (!capture) {
-        throw new SubagentRegistryMutationRejectedError(FRESH_CAPTURE_REQUIRED);
+      const capture = prepared.capture;
+      if (
+        !capture ||
+        !isDeepStrictEqual(entry.execution.transcriptTarget, capture.transcriptTarget) ||
+        !isDeepStrictEqual(executionOutcome, capture.outcome)
+      ) {
+        throw new SubagentRegistryMutationRejectedError(
+          "Subagent completion requires fresh result capture",
+        );
       }
       completion.resultText = capture.resultText;
       completion.capturedAt = capture.capturedAt;
     }
   }
   if (entry.collect) {
-    updateSwarmCollectorCompletion(entry, context.options.getRuntimeConfig(), {
+    updateSwarmCollectorCompletion(entry, params.getRuntimeConfig(), {
       entry: prepared.collectorSession?.entry,
     });
   } else {
-    updateSubagentArchiveAtMs(entry, context.options.getRuntimeConfig());
+    updateSubagentArchiveAtMs(entry, params.getRuntimeConfig());
   }
   const delivery = entry.delivery;
   if (

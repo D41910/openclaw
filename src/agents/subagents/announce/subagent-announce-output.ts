@@ -132,7 +132,6 @@ export async function readSubagentOutput(
   options?: {
     childAgentId?: string;
     sessionTarget?: SessionTranscriptRuntimeTarget;
-    runId?: string;
   },
 ): Promise<string | undefined> {
   const agentId =
@@ -143,16 +142,6 @@ export async function readSubagentOutput(
     });
   if (!agentId) {
     return undefined;
-  }
-  if (options?.runId) {
-    if (!options.sessionTarget) {
-      return undefined;
-    }
-    const result = await findTranscriptEvent(options.sessionTarget, {
-      kind: "visible-final",
-      runId: options.runId,
-    });
-    return isRecord(result?.event) ? extractStoredAssistantText(result.event.message) : undefined;
   }
   let messages: unknown[] | undefined;
   if (options?.sessionTarget) {
@@ -241,7 +230,6 @@ export async function captureSubagentCompletionReply(
     waitForReply?: boolean;
     outcome?: SubagentRunOutcome;
     sessionTarget?: SessionTranscriptRuntimeTarget;
-    runId?: string;
   },
 ): Promise<string | undefined> {
   const waitForReply = options?.waitForReply;
@@ -250,7 +238,6 @@ export async function captureSubagentCompletionReply(
   const readOutput = () =>
     readSubagentOutput(sessionKey, options?.outcome, {
       sessionTarget: options?.sessionTarget,
-      runId: options?.runId,
     });
   const immediate = await readOutput();
   if (immediate?.trim()) {

@@ -38,7 +38,6 @@ import {
   tryBeginGatewayRootWorkAdmission,
   tryBeginGatewaySuspendAdmission,
 } from "../../../process/gateway-work-admission.js";
-import { createVisibleAssistantResultEventMatcher } from "../../../sessions/transcript-visible-record.js";
 import {
   AsyncWorkScope,
   getAsyncWorkSignal,
@@ -47,7 +46,6 @@ import {
 import { createDeferredCore } from "../../../shared/deferred.js";
 import { getOpenClawStateWorkerOwner } from "../../../state/openclaw-state-worker-owner.js";
 import { createTestAdmittedRunContext } from "../../admitted-run-context.test-support.js";
-import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   buildAnnounceIdFromChildRun,
   buildAnnounceIdempotencyKey,
@@ -243,12 +241,12 @@ vi.mock("./subagent-registry-cleanup.js", async (importOriginal) => ({
   resolveDeferredCleanupDecision: () => ({ kind: "give-up", reason: "expiry" }),
 }));
 
-// mock-isolation: Keep real session writes and attachment cleanup outside lifecycle fixtures.
 vi.mock("./subagent-registry-helpers.js", () => ({
   ANNOUNCE_COMPLETION_HARD_EXPIRY_MS: 30 * 60_000,
   ANNOUNCE_EXPIRY_MS: 5 * 60_000,
   MIN_ANNOUNCE_RETRY_DELAY_MS: 1_000,
   PROVISIONAL_KILL_RECONCILIATION_MS: 5 * 60_000,
+  capFrozenResultText: (text: string) => text.trim(),
   logAnnounceGiveUp: helperMocks.logAnnounceGiveUp,
   persistSubagentSessionTiming: helperMocks.persistSubagentSessionTiming,
   resolveAnnounceRetryDelayMs: (retryCount: number) =>
@@ -530,61 +528,6 @@ describe("subagent registry lifecycle hardening", () => {
     },
   );
 
-  it("retains and retrieves the full visible answer after a later silent receipt for the same run", async () => {
-    const text = `${"complete report ".repeat(700)}\nrequired-tail: preserved`;
-    const visible = prepareAgentRunTerminalReply({ rawText: text });
-    const silent = prepareAgentRunTerminalReply({ rawText: "NO_REPLY" });
-    const entry = createRunEntry({ expectsCompletionMessage: true });
-    const controller = createLifecycleController({
-      entry,
-      captureSubagentCompletionReply: vi.fn(async () => text),
-    });
-    await completeRun(controller, entry, {
-      terminalReply: visible.terminalReply,
-      endedAt: 4_000,
-    });
-    await mutateLifecycleRun(entry, (draft) => {
-      draft.completion!.resultText = text.slice(0, 4_096);
-      draft.execution.transcriptTarget = {
-        agentId: "main",
-        sessionId: "completed-session",
-        sessionKey: entry.childSessionKey,
-        storePath: "/unused",
-      };
-    });
-    await completeRun(controller, entry, {
-      terminalReply: silent.terminalReply,
-      endedAt: 4_001,
-    });
-
-    const stored = readLifecycleRun(entry);
-    expect(stored.completion?.terminalReply).toEqual(visible.terminalReply);
-    const events = [text, "NO_REPLY"].map((content, index) => ({
-      type: "message",
-      message: {
-        role: "assistant",
-        content,
-        stopReason: "stop",
-        ...(index === 0 ? { display: true } : {}),
-        __openclaw: { runId: entry.runId },
-      },
-    }));
-    const prepared = await readSubagentRunAnnounceResultUsing(stored, {
-      getRuntimeConfig: () => ({}),
-      readSubagentRun: (id) => controller.options.runs.get(id),
-      resolveSessionStorePathCore: () => "/unused",
-      readSubagentSessionEntry: async () => undefined,
-      findTranscriptEvent: async (_scope, match) => {
-        expect(match).toEqual({ kind: "visible-final", runId: entry.runId });
-        const event = events.findLast(createVisibleAssistantResultEventMatcher(entry.runId));
-        return event ? { event } : undefined;
-      },
-      findSessionTranscriptArchiveEventReadOnly: async () => undefined,
-    });
-    expect(prepared.text).toBe(text);
-    expect(prepared.text).toContain("required-tail: preserved");
-  });
-
   describe.each([
     {
       name: "visible answer",
@@ -594,7 +537,7 @@ describe("subagent registry lifecycle hardening", () => {
     {
       name: "intentional silence",
       first: { disposition: "silent" as const },
-      resultText: null,
+      resultText: "NO_REPLY",
     },
     {
       name: "empty reply",
@@ -608,13 +551,7 @@ describe("subagent registry lifecycle hardening", () => {
       { order: "newer", endedAt: 4_001, accepted: true },
     ])("accepts only a newer correction ($order receipt)", async ({ endedAt, accepted }) => {
       const entry = createRunEntry({ expectsCompletionMessage: true });
-      const controller = createLifecycleController({
-        entry,
-        captureSubagentCompletionReply: vi
-          .fn()
-          .mockResolvedValueOnce(first.disposition === "visible" ? first.text : "corrected final")
-          .mockResolvedValue("corrected final"),
-      });
+      const controller = createLifecycleController({ entry });
       const correction = { disposition: "visible", text: "corrected final" } as const;
       await completeRun(controller, entry, { terminalReply: first, endedAt: 4_000 });
       await completeRun(controller, entry, { terminalReply: correction, endedAt });
@@ -641,38 +578,29 @@ describe("subagent registry lifecycle hardening", () => {
 
       expect(readLifecycleRun(entry).completion).toMatchObject({
         terminalReply,
-        resultText: null,
+        resultText: "first producer reply",
       });
     },
   );
 
-  it.each([undefined, { disposition: "visible", text: "" } as const])(
-    "fails a required successful completion without usable producer reply evidence (%j)",
-    async (terminalReply) => {
-      const entry = createRunEntry({
-        expectsCompletionMessage: true,
-        completion: { required: true, resultText: "unproven stored reply" },
-      });
-      const captureSubagentCompletionReply = vi.fn(async () => "stale transcript reply");
-      const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
+  it("fails a required successful completion without producer reply evidence", async () => {
+    const entry = createRunEntry({ expectsCompletionMessage: true });
+    const captureSubagentCompletionReply = vi.fn(async () => "stale transcript reply");
+    const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
 
-      await completeRun(controller, entry, { terminalReply });
+    await completeRun(controller, entry, { terminalReply: undefined });
 
-      expect(readLifecycleRun(entry).endedReason).toBe(SUBAGENT_ENDED_REASON_ERROR);
-      expect(readLifecycleRun(entry).execution.outcome).toMatchObject({
-        status: "error",
-        error: "subagent run ended before producing a final reply",
-      });
-      expect(readLifecycleRun(entry).completion?.resultText).toBeNull();
-      expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
-    },
-  );
-
-  it("does not infer optional completion output without a terminal fact", async () => {
-    const entry = createRunEntry({
-      expectsCompletionMessage: false,
-      completion: { required: false, resultText: "unproven stored reply" },
+    expect(readLifecycleRun(entry).endedReason).toBe(SUBAGENT_ENDED_REASON_ERROR);
+    expect(readLifecycleRun(entry).execution.outcome).toMatchObject({
+      status: "error",
+      error: "subagent run ended before producing a final reply",
     });
+    expect(readLifecycleRun(entry).completion?.resultText).toBeNull();
+    expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
+  });
+
+  it("keeps reply-optional successful completion compatible without evidence", async () => {
+    const entry = createRunEntry({ expectsCompletionMessage: false });
     const captureSubagentCompletionReply = vi.fn(async () => "legacy transcript reply");
     const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
 
@@ -680,9 +608,42 @@ describe("subagent registry lifecycle hardening", () => {
 
     expect(readLifecycleRun(entry).endedReason).toBe(SUBAGENT_ENDED_REASON_COMPLETE);
     expect(readLifecycleRun(entry).execution.outcome).toMatchObject({ status: "ok" });
-    expect(readLifecycleRun(entry).completion?.resultText).toBeNull();
-    expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
+    expect(readLifecycleRun(entry).completion?.resultText).toBe("legacy transcript reply");
   });
+
+  it.each([
+    {
+      terminalReply: { disposition: "visible", text: "authoritative final" } as const,
+      resultText: "authoritative final",
+    },
+    {
+      terminalReply: { disposition: "silent" } as const,
+      resultText: "NO_REPLY",
+    },
+  ])(
+    "persists $terminalReply.disposition producer evidence without transcript inference",
+    async ({ terminalReply, resultText }) => {
+      const entry = createRunEntry({ expectsCompletionMessage: true });
+      const captureSubagentCompletionReply = vi.fn(async () => "stale transcript reply");
+      const runSubagentAnnounceFlow = vi.fn(async () => "delivered" as const);
+      const controller = createLifecycleController({
+        entry,
+        captureSubagentCompletionReply,
+        runSubagentAnnounceFlow,
+      });
+
+      await completeAndJoinCleanup(controller, entry, {
+        triggerCleanup: true,
+        terminalReply,
+      });
+
+      expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
+      expect(readLifecycleRun(entry).completion).toMatchObject({ terminalReply, resultText });
+      expect(runSubagentAnnounceFlow).toHaveBeenCalledWith(
+        expect.objectContaining({ terminalReply }),
+      );
+    },
+  );
 
   it("records explicit empty success as intentional non-delivery at the lifecycle owner", async () => {
     const entry = createRunEntry({ expectsCompletionMessage: true });
@@ -831,7 +792,7 @@ describe("subagent registry lifecycle hardening", () => {
 
   it("merges late visible reply evidence into an already-terminal completion", async () => {
     const entry = createRunEntry({ expectsCompletionMessage: true });
-    const captureSubagentCompletionReply = vi.fn(async () => "late authoritative reply");
+    const captureSubagentCompletionReply = vi.fn(async () => "legacy fallback");
     const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
 
     await completeRun(controller, entry, {
@@ -846,7 +807,7 @@ describe("subagent registry lifecycle hardening", () => {
       resultText: "late authoritative reply",
       terminalReply: { disposition: "visible", text: "late authoritative reply" },
     });
-    expect(captureSubagentCompletionReply).toHaveBeenCalledOnce();
+    expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
   });
 
   registerDetachedCleanupAuthorityTest({ createRunEntry, createLifecycleController });
@@ -1822,9 +1783,7 @@ describe("subagent registry lifecycle hardening", () => {
       });
       const captureSubagentCompletionReply = vi.fn(async () => text);
       const controller = createLifecycleController({ entry, captureSubagentCompletionReply });
-      await controller.completeSubagentRun(
-        makeKilledSubagentCompletion(entry, { terminalReply: undefined }),
-      );
+      await controller.completeSubagentRun(makeKilledSubagentCompletion(entry));
       expect(readLifecycleRun(entry).completion).toMatchObject({ resultText: null });
 
       await completeRun(controller, entry, {
@@ -1833,8 +1792,8 @@ describe("subagent registry lifecycle hardening", () => {
         terminalReply: status === "ok" ? { disposition: "visible", text } : undefined,
       });
 
-      expect(captureSubagentCompletionReply).toHaveBeenCalledTimes(status === "ok" ? 1 : 0);
-      expect(readLifecycleRun(entry).completion?.resultText).toBe(status === "ok" ? text : null);
+      expect(captureSubagentCompletionReply).toHaveBeenCalledTimes(status === "ok" ? 0 : 1);
+      expect(readLifecycleRun(entry).completion?.resultText).toBe(text);
     },
   );
 
@@ -1855,10 +1814,7 @@ describe("subagent registry lifecycle hardening", () => {
       captureSubagentCompletionReply,
     });
 
-    await completeRun(controller, entry, {
-      endedAt: 4_001,
-      terminalReply: entry.completion?.terminalReply,
-    });
+    await completeRun(controller, entry, { endedAt: 4_001 });
 
     expect(captureSubagentCompletionReply).not.toHaveBeenCalled();
     expect(readLifecycleRun(entry).completion).toMatchObject({
@@ -1912,8 +1868,7 @@ describe("subagent registry lifecycle hardening", () => {
       outcome: { status: "ok" },
       completion: {
         required: true,
-        resultText: null,
-        terminalReply: { disposition: "visible", text: "latest session reply" },
+        resultText: "newer generation placeholder",
         capturedAt: 5_000,
       },
     });
@@ -1949,10 +1904,6 @@ describe("subagent registry lifecycle hardening", () => {
       expectsCompletionMessage: true,
       endedAt: 4_000,
       outcome: { status: "ok" },
-      completion: {
-        required: true,
-        terminalReply: { disposition: "visible", text: "result" },
-      },
     });
     const runs = new Map([[entry.runId, entry]]);
     const captured = createDeferredCore<string>();
@@ -3256,7 +3207,6 @@ describe("subagent registry lifecycle hardening", () => {
 
     expect(captureSubagentCompletionReply).toHaveBeenCalledWith(entry.childSessionKey, {
       waitForReply: false,
-      runId: entry.runId,
       sessionTarget: entry.execution?.transcriptTarget,
       outcome: {
         status: "ok",

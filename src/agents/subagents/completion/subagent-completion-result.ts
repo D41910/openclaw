@@ -1,3 +1,4 @@
+import { HEARTBEAT_TOKEN, isSilentReplyText } from "../../../auto-reply/tokens.js";
 import type { AgentRunTerminalReplySnapshot } from "../../agent-run-terminal-reply.types.js";
 
 export function resolveSubagentCompletionResultText(entry: {
@@ -11,20 +12,21 @@ export function resolveSubagentCompletionResultText(entry: {
   };
 }): string | undefined {
   const terminalReply = entry.completion?.terminalReply;
-  if (!terminalReply) {
-    const legacyResult = entry.completion?.resultText;
-    return entry.execution.outcome?.status === "ok" && legacyResult?.trim()
-      ? `[truncated-by-retention: complete child answer unavailable]\n${legacyResult}`
-      : undefined;
+  if (terminalReply) {
+    return terminalReply.disposition === "visible" ? terminalReply.text : undefined;
   }
-  if (terminalReply.disposition !== "visible") {
+  const primary = entry.completion?.resultText?.trim();
+  const fallback = entry.completion?.fallbackResultText?.trim();
+  if (entry.execution.outcome?.status !== "ok") {
+    return primary || fallback || undefined;
+  }
+  if (primary === HEARTBEAT_TOKEN) {
     return undefined;
   }
-  const resultText = entry.completion?.resultText;
-  if (resultText !== undefined && resultText !== null) {
-    return resultText;
+  if (primary && !isSilentReplyText(primary)) {
+    return primary;
   }
-  return terminalReply.truncated
-    ? `[truncated-by-retention: complete child answer unavailable]\n${terminalReply.text}`
-    : terminalReply.text;
+  return fallback && fallback !== HEARTBEAT_TOKEN && !isSilentReplyText(fallback)
+    ? fallback
+    : undefined;
 }

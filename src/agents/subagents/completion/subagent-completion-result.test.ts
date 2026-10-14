@@ -7,10 +7,10 @@ describe("resolveSubagentCompletionResultText", () => {
       name: "visible",
       terminalReply: {
         disposition: "visible",
-        text: "retained first sentence.",
+        text: "NO_REPLY",
         modelRouteChange: "Model route changed: requested/model → actual/model.",
       } as const,
-      expected: "retained first sentence.\nremaining findings",
+      expected: "NO_REPLY",
     },
     {
       name: "silent",
@@ -23,12 +23,12 @@ describe("resolveSubagentCompletionResultText", () => {
       expected: undefined,
     },
   ])(
-    "uses $name terminal eligibility with the full retained result",
+    "uses $name terminal evidence before retained fallback text",
     ({ terminalReply, expected }) => {
       expect(
         resolveSubagentCompletionResultText({
           completion: {
-            resultText: "retained first sentence.\nremaining findings",
+            resultText: "NO_REPLY",
             fallbackResultText: "older visible fallback",
             terminalReply,
           },
@@ -38,35 +38,29 @@ describe("resolveSubagentCompletionResultText", () => {
     },
   );
 
-  it("keeps the released-writer warning when only its retained prefix survives", () => {
+  it("keeps legacy result selection when producer terminal evidence is absent", () => {
     expect(
       resolveSubagentCompletionResultText({
-        completion: { resultText: "released capped prefix" },
+        completion: {
+          resultText: "NO_REPLY",
+          fallbackResultText: "legacy fallback",
+        },
         execution: { outcome: { status: "ok" } },
       }),
-    ).toBe("[truncated-by-retention: complete child answer unavailable]\nreleased capped prefix");
+    ).toBe("legacy fallback");
   });
 
   it.each(["error", "timeout", "unknown"] as const)(
-    "preserves a %s outcome independently of terminal reply eligibility",
+    "preserves a %s outcome even when its captured reply is NO_REPLY",
     (status) => {
-      for (const terminalReply of [
-        { disposition: "visible", text: "bounded snapshot" },
-        { disposition: "silent" },
-        { disposition: "empty" },
-      ] as const) {
-        const entry = {
+      expect(
+        resolveSubagentCompletionResultText({
           completion: {
-            resultText: "NO_REPLY",
-            terminalReply,
+            terminalReply: { disposition: "visible", text: "NO_REPLY" },
           },
           execution: { outcome: { status } },
-        };
-        expect(resolveSubagentCompletionResultText(entry)).toBe(
-          terminalReply.disposition === "visible" ? "NO_REPLY" : undefined,
-        );
-        expect(entry.execution.outcome).toEqual({ status });
-      }
+        }),
+      ).toBe("NO_REPLY");
     },
   );
 
@@ -75,18 +69,17 @@ describe("resolveSubagentCompletionResultText", () => {
     { status: "timeout", resultText: "" },
     { status: "unknown", resultText: " \n\t " },
   ] as const)(
-    "preserves blank prepared bytes when a $status completion is visible ($#)",
+    "preserves captured findings when a $status completion has blank primary text ($#)",
     ({ status, resultText }) => {
       expect(
         resolveSubagentCompletionResultText({
           completion: {
             resultText,
             fallbackResultText: "  actionable captured findings  ",
-            terminalReply: { disposition: "visible", text: "bounded snapshot" },
           },
           execution: { outcome: { status } },
         }),
-      ).toBe(resultText);
+      ).toBe("actionable captured findings");
     },
   );
 });

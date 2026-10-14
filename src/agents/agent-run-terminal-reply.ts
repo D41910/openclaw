@@ -3,10 +3,9 @@ import { truncateWithMarker } from "@openclaw/normalization-core/utf16-slice";
 import { stripInternalMetadataForDisplay } from "../auto-reply/reply/display-text-sanitize.js";
 import { isSilentReplyText } from "../auto-reply/tokens.js";
 import { normalizeAgentRunRouteChange } from "./agent-run-terminal-receipt.js";
-import {
-  AGENT_RUN_TERMINAL_REPLY_MAX_CHARS,
-  type AgentRunTerminalReplySnapshot,
-} from "./agent-run-terminal-reply.types.js";
+import type { AgentRunTerminalReplySnapshot } from "./agent-run-terminal-reply.types.js";
+
+const AGENT_RUN_TERMINAL_REPLY_MAX_CHARS = 4_096;
 
 function isMessageToolNotCalledTerminalReply(
   reply: AgentRunTerminalReplySnapshot | undefined,
@@ -14,7 +13,7 @@ function isMessageToolNotCalledTerminalReply(
   return reply?.disposition === "empty" && reply.code === "message-tool-not-called";
 }
 
-/** Sanitizes known-visible text and records whether the snapshot cap cuts it. */
+/** Sanitizes and caps known-visible text without classifying silence. */
 export function sanitizeAgentRunTerminalReply(rawText: string): AgentRunTerminalReplySnapshot {
   const visibleText = stripInternalMetadataForDisplay(rawText).trim();
   const text = truncateWithMarker(visibleText, AGENT_RUN_TERMINAL_REPLY_MAX_CHARS, {
@@ -25,11 +24,7 @@ export function sanitizeAgentRunTerminalReply(rawText: string): AgentRunTerminal
   if (!text) {
     return { disposition: "empty" };
   }
-  const snapshot: AgentRunTerminalReplySnapshot = { disposition: "visible", text };
-  if (visibleText.length > AGENT_RUN_TERMINAL_REPLY_MAX_CHARS) {
-    snapshot.truncated = true;
-  }
-  return snapshot;
+  return { disposition: "visible", text };
 }
 
 export type PreparedAgentRunTerminalReply = {
@@ -78,9 +73,6 @@ export function normalizeAgentRunTerminalReplySnapshot(
   }
   const snapshot = sanitizeAgentRunTerminalReply(rawText);
   if (snapshot.disposition === "visible") {
-    if (value.truncated === true) {
-      snapshot.truncated = true;
-    }
     const modelRouteChange = normalizeAgentRunRouteChange(value.modelRouteChange);
     if (modelRouteChange) {
       snapshot.modelRouteChange = modelRouteChange;

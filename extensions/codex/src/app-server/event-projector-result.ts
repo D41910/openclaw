@@ -255,12 +255,6 @@ export abstract class CodexTurnProjection {
       )
       .join("\n\n");
     const aggregateTruncated = terminalSnapshotText.length > TERMINAL_REPLY_SNAPSHOT_MAX_CHARS;
-    const truncated =
-      aggregateTruncated ||
-      preparedReplies.some(
-        ({ terminalReply }) =>
-          terminalReply.disposition === "visible" && terminalReply.truncated === true,
-      );
     const preparedTerminalReply = visibleReplies.length
       ? {
           text: terminalText,
@@ -272,7 +266,6 @@ export abstract class CodexTurnProjection {
                   TERMINAL_REPLY_SNAPSHOT_MAX_CHARS - 1,
                 ).trimEnd()}…`
               : terminalSnapshotText,
-            ...(truncated ? { truncated: true as const } : {}),
           },
         }
       : (preparedReplies.at(-1) ?? prepareAgentRunTerminalReply({}));

@@ -11,7 +11,6 @@ import {
   runUntilCompleted,
 } from "../code-mode.test-support.js";
 import { createSubagentRunRecord } from "../subagent-test-fixtures.test-helpers.js";
-import { readSubagentRunAnnounceResult } from "../subagents/announce/subagent-announce-output.js";
 import type { PreparedSubagentRunsRead } from "../subagents/registry/subagent-registry-read-snapshot.js";
 import {
   saveSubagentRegistryChangesToSqlite,
@@ -31,13 +30,6 @@ vi.mock("../subagents/registry/subagent-registry.js", () => ({
   prepareSubagentRunsByRunIds: registryEvents.read,
 }));
 
-// mock-isolation: Supply run-keyed canonical finals without opening transcript storage.
-vi.mock("../subagents/announce/subagent-announce-output.js", () => ({
-  readSubagentRunAnnounceResult: vi.fn<typeof readCollectorResult>((...args) =>
-    readCollectorResult(...args),
-  ),
-}));
-
 vi.mock("../subagents/registry/subagent-registry-publication.js", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../subagents/registry/subagent-registry-publication.js")>();
@@ -55,11 +47,9 @@ vi.mock("../subagents/registry/subagent-registry-publication.js", async (importO
 import { isToolResultError } from "../tool-result-error.js";
 import { createAgentsWaitTool, waitForCollectorCompletion } from "./agents-wait-tool.js";
 import {
-  collectorFinals,
   collectorRun,
   createMainSessionWaitTool,
   preparedRuns,
-  readCollectorResult,
   selectRuns,
   waitAtBoundary,
 } from "./agents-wait-tool.test-support.js";
@@ -80,8 +70,6 @@ function persistCollectorReadFixture(
 describe("agents_wait", () => {
   beforeEach(() => {
     records.clear();
-    collectorFinals.clear();
-    vi.mocked(readSubagentRunAnnounceResult).mockReset().mockImplementation(readCollectorResult);
     registryEvents.listeners.clear();
     registryEvents.subscribe.mockReset().mockImplementation((listener) => {
       registryEvents.listeners.add(listener);
@@ -90,49 +78,6 @@ describe("agents_wait", () => {
     registryEvents.read
       .mockReset()
       .mockImplementation(async (runIds) => preparedRuns(() => selectRuns(records, runIds)));
-  });
-
-  it("returns the full run-keyed final instead of either bounded snapshot", async () => {
-    const entry = collectorRun("full-final", "agent:main:main", { status: "done" });
-    const fullText = "complete canonical final\n".repeat(1_000);
-    entry.completion = {
-      required: false,
-      resultText: "bounded result",
-      terminalReply: { disposition: "visible", text: "bounded terminal fact" },
-    };
-    collectorFinals.set(entry.runId, fullText);
-    records.set(entry.runId, entry);
-    const result = await createMainSessionWaitTool().execute("wait", {
-      ids: [entry.runId],
-      timeoutSeconds: 0,
-    });
-    expect(result.details).toMatchObject({
-      completed: [{ runId: entry.runId, result: fullText }],
-      pending: [],
-    });
-  });
-
-  it("does not release a prepared final after the collector owner changes", async () => {
-    const entry = collectorRun("changed-during-result", "agent:main:main", { status: "done" });
-    records.set(entry.runId, entry);
-    vi.mocked(readSubagentRunAnnounceResult).mockImplementationOnce(async (observed, readRun) => {
-      const result = await readCollectorResult(observed, readRun!);
-      records.set(entry.runId, {
-        ...entry,
-        swarmRequesterSessionKey: "agent:other:main",
-      });
-      return result;
-    });
-    const result = await createMainSessionWaitTool().execute("wait", {
-      ids: [entry.runId],
-      timeoutSeconds: 0,
-    });
-    expect(result.details).toEqual({
-      completed: [],
-      pending: [],
-      errors: [{ runId: entry.runId, error: "not_owner" }],
-      success: false,
-    });
   });
 
   it("composes real collector outputs through discovery, describe, and generated declarations", async () => {

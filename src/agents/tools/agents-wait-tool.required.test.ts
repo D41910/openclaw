@@ -6,11 +6,7 @@ import { createCodeModeHarness, resetCodeModeTestState } from "../code-mode.test
 import type { PreparedSubagentRunsRead } from "../subagents/registry/subagent-registry-read-snapshot.js";
 import type { SubagentRunRecord } from "../subagents/registry/subagent-registry.types.js";
 import { createAgentsWaitTool } from "./agents-wait-tool.js";
-import {
-  collectorFinals,
-  collectorRun,
-  readCollectorResult,
-} from "./agents-wait-tool.test-support.js";
+import { collectorRun } from "./agents-wait-tool.test-support.js";
 
 const records = new Map<string, SubagentRunRecord>();
 const registryEvents = vi.hoisted(() => ({
@@ -19,12 +15,6 @@ const registryEvents = vi.hoisted(() => ({
 }));
 vi.mock("../subagents/registry/subagent-registry.js", () => ({
   prepareSubagentRunsByRunIds: registryEvents.read,
-}));
-// mock-isolation: Supply run-keyed canonical finals without opening transcript storage.
-vi.mock("../subagents/announce/subagent-announce-output.js", () => ({
-  readSubagentRunAnnounceResult: vi.fn<typeof readCollectorResult>((...args) =>
-    readCollectorResult(...args),
-  ),
 }));
 vi.mock("../subagents/registry/subagent-registry-publication.js", async (importOriginal) => {
   const actual =
@@ -65,7 +55,6 @@ function createMainSessionWaitTool() {
 describe("required collector completion", () => {
   beforeEach(() => {
     records.clear();
-    collectorFinals.clear();
     registryEvents.listeners.clear();
     registryEvents.read
       .mockReset()
@@ -103,12 +92,7 @@ describe("required collector completion", () => {
         await vi.advanceTimersByTimeAsync(60_000);
         expect(settled).toBe(false);
         expect(registryEvents.read).toHaveBeenCalledOnce();
-        second.completion = {
-          required: false,
-          resultText: "child failure evidence",
-          terminalReply: { disposition: "visible", text: "child failure evidence" },
-        };
-        collectorFinals.set(second.runId, "child failure evidence");
+        second.completion = { required: false, resultText: "child failure evidence" };
         second.collectorCompletion = { status: "failed" };
         for (const listener of registryEvents.listeners) {
           listener();

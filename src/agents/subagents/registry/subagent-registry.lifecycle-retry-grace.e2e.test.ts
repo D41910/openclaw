@@ -13,7 +13,6 @@ import {
   type OpenClawTestState,
 } from "../../../test-utils/openclaw-test-state.js";
 import "../spawn/subagent-spawn-model.mocks.shared.js";
-import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import { loadAgentRuntimePluginRegistryHandle } from "../../runtime-plugins.js";
 import { maybeSpawnVisibleSession } from "../../tools/sessions-spawn-visible.js";
 import { createSessionsYieldTool } from "../../tools/sessions-yield-tool.js";
@@ -236,8 +235,13 @@ describe("subagent registry lifecycle error grace", () => {
     }
   });
 
-  const { flushAsync, waitForRun, waitForDeliveredCleanup, waitForFrozenResultText } =
-    createLifecycleWaits(MAIN_REQUESTER_SESSION_KEY);
+  const {
+    flushAsync,
+    waitForRun,
+    waitForDeliveredCleanup,
+    waitForFrozenResult,
+    waitForFrozenResultText,
+  } = createLifecycleWaits(MAIN_REQUESTER_SESSION_KEY);
 
   const waitForAgentCallCount = (count: number) => agentCallWaits.waitForAgentCallCount(count);
   const waitForCleanupHandledFalse = (runId: string) =>
@@ -864,55 +868,27 @@ describe("subagent registry lifecycle error grace", () => {
     ).toEqual(["All work complete, final summary", "All work complete, final summary"]);
   });
 
-  it("retains full completion output and bounded terminal evidence after keep-mode cleanup without replay", async () => {
+  it("regression, captures frozen completion output with 100KB cap and retains it for keep-mode cleanup", async () => {
     await registerCompletionRun("run-capped", "capped", "capped result test", undefined, false);
-    const resultText = "x".repeat(120 * 1024);
-    const { terminalReply } = prepareAgentRunTerminalReply({ rawText: resultText });
-    setAssistantOutput("agent:main:subagent:capped", resultText, "run-capped");
+    setAssistantOutput("agent:main:subagent:capped", "x".repeat(120 * 1024), "run-capped");
 
-    const endedAt = Date.now();
-    emitLifecycleEvent("run-capped", {
-      phase: "end",
-      endedAt,
-      terminalReply,
-    });
+    emitLifecycleEvent("run-capped", { phase: "end", endedAt: Date.now() });
     await flushAsync();
     await agentCallWaits.settle();
 
-    const run = await waitForRun(
-      "run-capped",
-      (candidate) => typeof candidate.cleanupCompletedAt === "number",
+    const run = await waitForFrozenResult("run-capped", (resultText) =>
+      resultText.includes("[truncated: frozen completion output exceeded 100KB"),
     );
+    expect(getAgentCalls()).toHaveLength(0);
     expect(run.runId).toBe("run-capped");
-    expect(run.cleanup).toBe("keep");
-    expect(run.completion?.resultText).toBe(resultText);
-    expect(run.completion?.capturedAt).toBeTypeOf("number");
-    expect(run.completion?.terminalReply).toEqual({
-      disposition: "visible",
-      text: expect.stringMatching(/^x+…$/),
-      truncated: true,
-    });
-    if (run.completion?.terminalReply?.disposition === "visible") {
-      expect(run.completion.terminalReply.text.length).toBeLessThanOrEqual(4_096);
-    }
-    expect(getAgentCalls()).toHaveLength(0);
-
-    const retainedCompletion = structuredClone(run.completion);
-    setAssistantOutput(
-      "agent:main:subagent:capped",
-      "Unrelated later turn",
-      "run-capped-followup-turn",
+    expect(typeof run.completion?.resultText).toBe("string");
+    expect(run.completion?.resultText).toContain(
+      "[truncated: frozen completion output exceeded 100KB",
     );
-    emitLifecycleEvent("run-capped", { phase: "end", endedAt, terminalReply });
-    await flushAsync();
-    await agentCallWaits.settle();
-
-    const retainedRun = mod
-      .listSubagentRunsForRequester(MAIN_REQUESTER_SESSION_KEY)
-      .find((candidate) => candidate.runId === "run-capped");
-    expect(retainedRun?.completion).toEqual(retainedCompletion);
-    expect(retainedRun?.cleanupCompletedAt).toBe(run.cleanupCompletedAt);
-    expect(getAgentCalls()).toHaveLength(0);
+    expect(Buffer.byteLength(run.completion?.resultText ?? "", "utf8")).toBeLessThanOrEqual(
+      100 * 1024,
+    );
+    expect(run.completion?.capturedAt).toBeTypeOf("number");
   });
 
   it("announces a provider hard timeout from its canonical lifecycle metadata", async () => {
