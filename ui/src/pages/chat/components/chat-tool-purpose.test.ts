@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { describe, expect, it, vi } from "vitest";
-import { renderToolCard, renderToolFixture as render } from "./chat-tool-render.test-support.ts";
+import { renderToolFixture as render, renderToolCard } from "./chat-tool-render.test-support.ts";
 
 describe("execution purpose cards", () => {
   it.each([

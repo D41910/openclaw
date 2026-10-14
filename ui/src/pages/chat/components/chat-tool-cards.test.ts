@@ -31,9 +31,7 @@ import { renderToolPreview } from "./widget-card.ts";
 
 const canvas = { kind: "canvas", surface: "assistant_message", render: "url" } as const;
 
-function textOf(container: ParentNode, selector: string) {
-  return container.querySelector(selector)?.textContent;
-}
+const textOf = (root: ParentNode, selector: string) => root.querySelector(selector)?.textContent;
 
 async function mountCard(
   card: ToolCard,
