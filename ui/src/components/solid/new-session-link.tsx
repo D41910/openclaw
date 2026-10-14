@@ -31,7 +31,7 @@ export function renderNewSessionLink(params: {
   basePath: string;
   agentId: string;
   target?: NewSessionTarget;
-  className: string;
+  class: string;
   label: string;
   disabledReason?: string;
   showShortcut?: boolean;
@@ -50,7 +50,7 @@ export function renderNewSessionLink(params: {
         </span>
       </Show>
       <a
-        class={params.className}
+        class={params.class}
         role="link"
         href={disabled() ? undefined : href()}
         aria-label={params.label}
@@ -81,7 +81,7 @@ const NewSessionLink = renderNewSessionLink;
 
 export function ContextNewSessionAction(props: {
   context: ApplicationContext;
-  className: string;
+  class: string;
   agentId?: string;
 }) {
   const agentId = () =>
@@ -113,7 +113,7 @@ export function ContextNewSessionAction(props: {
         <NewSessionLink
           basePath={props.context.basePath}
           agentId={agentId()}
-          className={props.className}
+          class={props.class}
           label={t("agentChip.newConversation")}
           showShortcut
           disabledReason={disabledReason()}
@@ -124,7 +124,7 @@ export function ContextNewSessionAction(props: {
       <NewSessionMenu
         basePath={props.context.basePath}
         access={access()}
-        triggerClass={props.className}
+        triggerClass={props.class}
         active
         snapshotCards={null}
         onOpen={onOpen}

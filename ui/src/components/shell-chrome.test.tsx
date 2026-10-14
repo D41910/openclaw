@@ -29,7 +29,7 @@ describe("Solid shell chrome", () => {
             <NewSessionLink
               basePath="/control"
               agentId="writer"
-              className="header-new-session"
+              class="header-new-session"
               label="New conversation"
               onOpen={openSession}
             />

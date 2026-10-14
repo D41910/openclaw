@@ -153,7 +153,7 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
               >
                 <ContextNewSessionAction
                   context={view().context}
-                  className="header-new-session"
+                  class="header-new-session"
                   agentId={view().selectedAgentId}
                 />
               </Show>
@@ -188,7 +188,7 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
               <NewSessionLink
                 basePath={view().context.basePath}
                 agentId={view().selectedAgentId}
-                className="shell-chrome-controls__button shell-chrome-controls__new-thread"
+                class="shell-chrome-controls__button shell-chrome-controls__new-thread"
                 label={t("chat.runControls.newSession")}
                 showShortcut
                 disabledReason={view().newSessionDisabledReason}

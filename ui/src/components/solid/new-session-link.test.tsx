@@ -13,7 +13,7 @@ it("keeps a resident new-session link current as permission and agent change", (
       get agentId() {
         return agentId();
       },
-      className: "sidebar-new-session",
+      class: "sidebar-new-session",
       label: "New conversation",
       showShortcut: true,
       get disabledReason() {

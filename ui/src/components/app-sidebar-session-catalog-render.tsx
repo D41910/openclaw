@@ -416,7 +416,7 @@ function renderCatalogGroup(
                         catalogId: readCatalog().id,
                       };
                     },
-                    get className() {
+                    get class() {
                       return "sidebar-session-group-actions sidebar-session-new sidebar-session-catalog-new";
                     },
                     get label() {
