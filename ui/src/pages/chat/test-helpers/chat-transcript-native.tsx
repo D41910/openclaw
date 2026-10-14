@@ -6,11 +6,14 @@ import type { SolidController, SolidControllerHost } from "../../../lit/solid-co
 import { mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { flush } from "../../../test-helpers/solid-settle.ts";
 import { createTestTranscript } from "../chat-view.test-helpers.ts";
-import type { ChatThreadProps } from "./chat-thread-interactions.ts";
-import { ChatThread } from "./chat-thread-view.tsx";
-import type { ChatTranscriptController } from "./chat-transcript-controller.ts";
-import type { ChatTranscriptSession } from "./chat-transcript-session.ts";
-import { flushDeferredRowPrune, type TestContentRow } from "./chat-transcript.test-support.ts";
+import type { ChatThreadProps } from "../components/chat-thread-interactions.ts";
+import { ChatThread } from "../components/chat-thread-view.tsx";
+import type { ChatTranscriptController } from "../components/chat-transcript-controller.ts";
+import type { ChatTranscriptSession } from "../components/chat-transcript-session.ts";
+import {
+  flushDeferredRowPrune,
+  type TestContentRow,
+} from "../components/chat-transcript.test-support.ts";
 
 class ThreadFixture {
   constructor(

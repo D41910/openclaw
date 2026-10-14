@@ -2,9 +2,12 @@ import { Show, createMemo } from "solid-js";
 import { Icon } from "../../../components/solid/icon.tsx";
 import "../../../components/tooltip.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
-import { closeTranscriptSearch, type ChatThreadState } from "./chat-thread-interactions.ts";
 
-export function TranscriptSearch(props: { state: ChatThreadState; requestUpdate: () => void }) {
+export function TranscriptSearch(props: {
+  state: { searchOpen: boolean; searchQuery: string; searchFocusPending: boolean };
+  requestUpdate: () => void;
+  onClose: () => void;
+}) {
   const query = createMemo(() => props.state.searchQuery);
   return (
     <Show when={props.state.searchOpen}>
@@ -21,7 +24,7 @@ export function TranscriptSearch(props: { state: ChatThreadState; requestUpdate:
           }
           event.preventDefault();
           event.stopPropagation();
-          closeTranscriptSearch(props.state, props.requestUpdate);
+          props.onClose();
         }}
       >
         <Icon name="search" />
@@ -50,7 +53,7 @@ export function TranscriptSearch(props: { state: ChatThreadState; requestUpdate:
           <button
             class="btn btn--ghost"
             aria-label={t("chat.thread.closeSearch")}
-            onClick={() => closeTranscriptSearch(props.state, props.requestUpdate)}
+            onClick={() => props.onClose()}
           >
             <Icon name="x" />
           </button>

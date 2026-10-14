@@ -21,11 +21,8 @@ import {
 } from "./chat-message-markdown-view.tsx";
 import { ChatTimestamp } from "./chat-message-timestamp-view.tsx";
 import { renderChatQuestionSummary } from "./chat-question-card.ts";
-import {
-  ReplyLineView,
-  ReplyLineConnector,
-  resolveGroupReplyLine,
-} from "./chat-reply-attribution.ts";
+import { resolveGroupReplyLine } from "./chat-reply-attribution.ts";
+import { ReplyLineView, ReplyLineConnector } from "./chat-reply-attribution.tsx";
 import type { ReplyPreviewLookup } from "./chat-reply-preview.types.ts";
 import type { SidebarContent } from "./chat-sidebar-content-types.ts";
 import { syncToolDisclosureOverflow } from "./chat-tool-cards.solid.tsx";

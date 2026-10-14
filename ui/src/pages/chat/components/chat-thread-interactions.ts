@@ -319,7 +319,12 @@ export function resetThreadPresentation(paneId?: string, owner?: ParentNode) {
 }
 
 export function renderTranscriptSearch(paneId: string, requestUpdate: () => void) {
-  return solidContent(TranscriptSearch, { state: getTranscriptState(paneId), requestUpdate });
+  const state = getTranscriptState(paneId);
+  return solidContent(TranscriptSearch, {
+    state,
+    requestUpdate,
+    onClose: () => closeTranscriptSearch(state, requestUpdate),
+  });
 }
 
 export function closeTranscriptSearch(state: ChatThreadState, requestUpdate: () => void): void {

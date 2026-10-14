@@ -188,5 +188,3 @@ export function resolveGroupReplyLine(
     ? resolveSource(group.replyToMessage?.message, group.replyToSender, lookup)
     : NO_REPLY_LINE;
 }
-
-export { ReplyLineView, ReplyLineConnector } from "./chat-reply-attribution.tsx";

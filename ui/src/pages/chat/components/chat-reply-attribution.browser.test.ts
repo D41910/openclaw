@@ -5,7 +5,7 @@ import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
 import {
   renderFixture as render,
   groupFixture as renderMessageGroup,
-} from "./chat-reply-attribution.test-support.tsx";
+} from "../test-helpers/chat-reply-attribution.tsx";
 import { createReplyPreviewResolver } from "./chat-reply-preview.ts";
 import "../../../styles/base.css";
 import "../../../styles/chat/startup-layout.css";

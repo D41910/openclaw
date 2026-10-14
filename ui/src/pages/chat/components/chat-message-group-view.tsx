@@ -37,11 +37,10 @@ import type { AssistantMessageDisclosure } from "./chat-message-text-view.tsx";
 import { MessageMeta } from "./chat-message-timestamp-view.tsx";
 import {
   NO_REPLY_LINE,
-  ReplyLineView,
-  ReplyLineConnector,
   resolveGroupReplyLine,
   resolveMessageReplyLine,
 } from "./chat-reply-attribution.ts";
+import { ReplyLineView, ReplyLineConnector } from "./chat-reply-attribution.tsx";
 import { ChatSessionActivity } from "./chat-session-activity.solid.tsx";
 import { renderBrowserTabPreviews } from "./chat-tool-cards.ts";
 import { renderTurnRecapRow } from "./chat-working-indicator.ts";

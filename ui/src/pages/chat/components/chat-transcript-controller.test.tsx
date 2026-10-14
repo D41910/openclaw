@@ -12,7 +12,6 @@ import {
   scheduleCommittedChatScroll,
 } from "../scroll.ts";
 import { SIDEBAR_GEOMETRY_COMMIT_EVENT } from "../sidebar-layout.ts";
-import { ChatTranscriptController } from "./chat-transcript-controller.ts";
 import {
   render,
   renderChatThread,
@@ -22,7 +21,8 @@ import {
   stubMcpAppLifecycle,
   contact,
   TranscriptTestHost,
-} from "./chat-transcript-native.test-support.tsx";
+} from "../test-helpers/chat-transcript-native.tsx";
+import { ChatTranscriptController } from "./chat-transcript-controller.ts";
 import {
   flushDeferredRowPrune,
   installTranscriptDomMocks,

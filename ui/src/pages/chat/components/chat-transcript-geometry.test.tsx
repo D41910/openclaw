@@ -7,14 +7,14 @@ import { flush } from "../../../test-helpers/solid-settle.ts";
 import { createTestTranscript, stubAnimationFrames } from "../chat-view.test-helpers.ts";
 import { saveChatSessionScrollPosition } from "../scroll.ts";
 import { SIDEBAR_GEOMETRY_COMMIT_EVENT } from "../sidebar-layout.ts";
-import { ChatTranscriptController } from "./chat-transcript-controller.ts";
-import { readConnectedTranscriptRows } from "./chat-transcript-geometry.ts";
-import type { TranscriptRow } from "./chat-transcript-layout.ts";
 import {
   render,
   renderChatThread,
   mountTestTranscript,
-} from "./chat-transcript-native.test-support.tsx";
+} from "../test-helpers/chat-transcript-native.tsx";
+import { ChatTranscriptController } from "./chat-transcript-controller.ts";
+import { readConnectedTranscriptRows } from "./chat-transcript-geometry.ts";
+import type { TranscriptRow } from "./chat-transcript-layout.ts";
 import {
   flushDeferredRowPrune,
   installTranscriptDomMocks,

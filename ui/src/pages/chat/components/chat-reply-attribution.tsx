@@ -48,7 +48,7 @@ export function ReplyLineView(props: ReplyLineProps) {
             </span>
           </Show>
           {t("chat.messages.replyingToLabel")}
-        </span>
+        </span>{" "}
         <Show when={props.line.state !== "reserved"}>
           <Show
             when={named() && props.line.openId && props.actions.onOpenReply}
@@ -72,7 +72,7 @@ export function ReplyLineView(props: ReplyLineProps) {
             >
               {person()}
             </button>
-          </Show>
+          </Show>{" "}
           <Show when={!named()}>
             <span class="chat-reply-attribution__unavailable">
               {t("chat.messages.replyOriginalUnavailable")}

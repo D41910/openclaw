@@ -5,7 +5,7 @@ import {
   renderFixture as render,
   groupFixture as renderMessageGroup,
   frameFixture,
-} from "./chat-reply-attribution.test-support.tsx";
+} from "../test-helpers/chat-reply-attribution.tsx";
 import { createReplyPreviewResolver } from "./chat-reply-preview.ts";
 
 const alice = { id: "alice", name: "Alice" };

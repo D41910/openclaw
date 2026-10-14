@@ -47,6 +47,8 @@ describe("file path tooltip", () => {
     expect(document.querySelectorAll("openclaw-tooltip[open]")).toHaveLength(1);
     await userEvent.keyboard("{Escape}");
     await page.elementLocator(anchor()).hover();
+    // The closing popup can stay visible after its owner clears [open].
+    await expect.poll(card).not.toBeNull();
     await expect.element(copyButton()).toBeVisible();
     expect(card()?.textContent).not.toContain("Copied!");
     await page.elementLocator(anchor()).click();

@@ -1,8 +1,8 @@
 import { createSignal, Show, type ComponentProps } from "solid-js";
 import { mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { flush } from "../../../test-helpers/solid-settle.ts";
-import { AgentRunFrame } from "./chat-agent-run-frame.tsx";
-import { MessageGroup } from "./chat-message-group-view.tsx";
+import { AgentRunFrame } from "../components/chat-agent-run-frame.tsx";
+import { MessageGroup } from "../components/chat-message-group-view.tsx";
 
 type GroupProps = ComponentProps<typeof MessageGroup>;
 type Fixture =
