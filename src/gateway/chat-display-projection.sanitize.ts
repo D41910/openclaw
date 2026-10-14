@@ -645,7 +645,11 @@ export function shouldDropAssistantHistoryMessage(message: unknown): boolean {
   if (!parsed || (!parsed.hasSilentIntent && !isSuppressedControlReplyText(parsed.text))) {
     return false;
   }
-  return !hasAssistantDisplayableNonTextContent(message) && !hasTranscriptMediaFacts(entry);
+  return (
+    !parsed.mediaUrls?.length &&
+    !hasAssistantDisplayableNonTextContent(message) &&
+    !hasTranscriptMediaFacts(entry)
+  );
 }
 
 export function sanitizeChatHistoryMessages(

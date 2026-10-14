@@ -82,7 +82,7 @@ export function normalizeReplyPayloadOutcome(
   const trimmed = normalizeOptionalString(payload.text) ?? "";
   const hasSpeechContent = hasReplyPayloadSpeechContent(payload);
   if (!hasContent(trimmed) && !hasSpeechContent) {
-    return suppress("empty");
+    return suppress(getReplyPayloadMetadata(payload)?.silentReply ? "silent" : "empty");
   }
 
   let text = payload.text ?? undefined;

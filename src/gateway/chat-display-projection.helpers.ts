@@ -161,13 +161,17 @@ export function suppressSilentAssistantMessageText(message: unknown): unknown {
     return message;
   }
   const projected = { ...entry };
+  const mediaText = stripAssistantMediaDirectivesForDisplay(
+    (parsed.mediaUrls ?? []).map((url) => `MEDIA:${url}`).join("\n"),
+    takeAssistantManagedMediaUrlsForDisplay(projected, "assistant").urls,
+  );
   if (typeof projected.text === "string") {
-    projected.text = "";
+    projected.text = mediaText;
   }
   if (typeof projected.content === "string") {
-    projected.content = "";
+    projected.content = mediaText;
   } else if (Array.isArray(projected.content)) {
-    projected.content = projected.content.flatMap((block) => {
+    const content = projected.content.flatMap((block) => {
       const part = readObjectRecord(block);
       if (isAssistantInternalReasoningContentType(part?.type)) {
         return [];
@@ -178,6 +182,15 @@ export function suppressSilentAssistantMessageText(message: unknown): unknown {
           : block,
       ];
     });
+    if (mediaText) {
+      // Retained attachments must survive the final-answer phase filter.
+      content.push({
+        type: "text",
+        text: mediaText,
+        textSignature: JSON.stringify({ v: 1, phase: "final_answer" }),
+      });
+    }
+    projected.content = content;
   }
   return projected;
 }

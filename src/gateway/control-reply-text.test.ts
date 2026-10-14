@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { normalizeMessage } from "../../ui/src/lib/chat/message-normalizer.ts";
 import { projectChatDisplayMessages } from "./chat-display-projection.js";
 import { sanitizeChatHistoryMessage } from "./chat-display-projection.sanitize.js";
 import { stripSuppressedControlReplyToken } from "./control-reply-text.js";
@@ -209,4 +210,39 @@ describe("control reply display projection", () => {
       { ...assistant(""), __openclaw: metadata },
     ]);
   });
+
+  it.each(["string", "blocks", "text"] as const)(
+    "keeps directive-only attachments from a silent %s message through UI normalization",
+    (shape) => {
+      const text = "No explanation needed.\nNO_REPLY\nMEDIA:https://example.com/result.png";
+      const message =
+        shape === "text"
+          ? { role: "assistant", text }
+          : assistant(
+              shape === "string"
+                ? text
+                : [
+                    {
+                      ...textBlock(text),
+                      textSignature: JSON.stringify({ v: 1, id: "final", phase: "final_answer" }),
+                    },
+                  ],
+            );
+      const original = structuredClone(message);
+      const projected = projectChatDisplayMessages([message]);
+      expect(projected).toHaveLength(1);
+      expect(normalizeMessage(projected[0]).content).toEqual([
+        {
+          type: "attachment",
+          attachment: {
+            url: "https://example.com/result.png",
+            kind: "image",
+            label: "result.png",
+            mimeType: "image/png",
+          },
+        },
+      ]);
+      expect(message).toEqual(original);
+    },
+  );
 });

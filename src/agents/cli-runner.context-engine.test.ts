@@ -2,6 +2,7 @@
 import type { AgentMessage } from "openclaw/plugin-sdk/agent-core";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { awaitGateBeforeSettlement, createDeferred } from "../../test/helpers/promise.js";
+import { prepareCliReplyPayload } from "../auto-reply/reply/cli-reply-payload.js";
 import { composeSessionSourceAssertion } from "../config/sessions/session-source-authority.js";
 import { resolveSessionTranscriptReadFence } from "../config/sessions/session-transcript-read-fence.js";
 import type { ContextEngine } from "../context-engine/types.js";
@@ -11,6 +12,7 @@ import {
   prepareSystemAgentRunAdmission,
   type AdmittedRunContext,
 } from "./admitted-run-context.js";
+import { buildAgentRunTerminalReplySnapshot } from "./agent-run-terminal-reply.js";
 import type { PreparedCliRunContext } from "./cli-runner/types.js";
 import { waitForDeferredTurnMaintenanceForSession } from "./embedded-agent-runner/context-engine-maintenance.js";
 
@@ -301,6 +303,72 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
         { role: "user", content: "transcript visible ask" },
         ...(visible ? [{ role: "assistant", content: [{ type: "text", text: visible }] }] : []),
       ]);
+    },
+  );
+
+  it.each([
+    {
+      name: "silent prose",
+      parts: ["Nobody needs another response.\nNO_REPLY"],
+      visible: "",
+      disposition: "silent",
+      mediaUrls: [],
+    },
+    {
+      name: "separately completed silent replies",
+      parts: ["The discussion is complete.\nNO_REPLY", "Keine Antwort nötig.\n(NO_REPLY)"],
+      visible: "",
+      disposition: "silent",
+      mediaUrls: [],
+    },
+    {
+      name: "an earlier accepted answer",
+      parts: ["A real answer.", "No more text is needed.\nNO_REPLY"],
+      visible: "A real answer.",
+      disposition: "visible",
+      mediaUrls: [],
+    },
+    {
+      name: "genuinely empty output",
+      parts: [""],
+      visible: "",
+      disposition: "empty",
+      mediaUrls: [],
+    },
+    {
+      name: "a silent attachment",
+      parts: ["No explanation needed.\nNO_REPLY\nMEDIA:https://example.com/result.png"],
+      visible: "",
+      disposition: "empty",
+      mediaUrls: ["https://example.com/result.png"],
+    },
+  ])(
+    "projects intentional CLI silence into terminal reply metadata: $name",
+    async ({ parts, visible, disposition, mediaUrls }) => {
+      const context = buildPreparedContext(createContextEngine());
+      context.params.terminalReplyExpectation = "optional";
+      const rawText = parts.join("\n");
+      executeMock.mockResolvedValueOnce({ text: rawText, rawText, textParts: parts });
+
+      const result = await runPreparedCliAgent(context);
+
+      expect(result.meta.finalAssistantVisibleText).toBe(visible);
+      expect(result.meta.finalAssistantRawText).toBe(rawText || undefined);
+      expect(result.meta.terminalReplyKind).toBe(
+        disposition === "silent" ? "silent-empty" : undefined,
+      );
+      expect(
+        buildAgentRunTerminalReplySnapshot({
+          visibleText: result.meta.finalAssistantVisibleText,
+          rawText: result.meta.finalAssistantRawText,
+          terminalReplyKind: result.meta.terminalReplyKind,
+        }),
+      ).toEqual(visible ? { disposition, text: visible } : { disposition });
+      expect(
+        result.payloads?.flatMap(
+          (payload) => prepareCliReplyPayload(payload.text ?? "").mediaUrls ?? [],
+        ),
+      ).toEqual(mediaUrls);
     },
   );
 

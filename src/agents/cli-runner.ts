@@ -454,6 +454,7 @@ async function runPreparedCliAgentOwned(
     return {
       output,
       assistantText,
+      terminalReplyKind: assistantReply.terminalReplyKind,
       lastAssistant,
       sourceReplyWasDelivered: sourceReplyMirror.delivered,
       usedHistoryPrompt:
@@ -483,12 +484,13 @@ async function runPreparedCliAgentOwned(
           `CLI backend ${context.backendResolved.id} cannot ${params.controlOperation} without a reusable native session.`,
         );
       }
-      const { output, assistantText, usedHistoryPrompt } =
+      const { output, assistantText, terminalReplyKind, usedHistoryPrompt } =
         await executeCliAttempt(reusableCliSessionId);
       return buildCliRunResult({
         ...resultContext,
         output,
         assistantText,
+        terminalReplyKind,
         ...(!isolatedCompletion ? { effectiveCliSessionId: reusableCliSessionId } : {}),
         bindingFlushOk: true,
         assistantTranscriptOwned: false,
@@ -524,8 +526,14 @@ async function runPreparedCliAgentOwned(
       result: Awaited<ReturnType<typeof executeCliAttempt>>,
       fallbackCliSessionId?: string,
     ) => {
-      const { output, assistantText, lastAssistant, sourceReplyWasDelivered, usedHistoryPrompt } =
-        result;
+      const {
+        output,
+        assistantText,
+        terminalReplyKind,
+        lastAssistant,
+        sourceReplyWasDelivered,
+        usedHistoryPrompt,
+      } = result;
       let completed: EmbeddedAgentRunResult | undefined;
       try {
         const terminalInterruption = output.terminalInterruption;
@@ -556,6 +564,7 @@ async function runPreparedCliAgentOwned(
           ...resultContext,
           output,
           assistantText,
+          terminalReplyKind,
           effectiveCliSessionId,
           bindingFlushOk,
           assistantTranscriptOwned: assistantTranscript.owned,

@@ -1,6 +1,6 @@
 import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
 import { prepareCliReplyPayload } from "../../auto-reply/reply/cli-reply-payload.js";
-import { normalizeReplyPayload } from "../../auto-reply/reply/normalize-reply.js";
+import { normalizeReplyPayloadOutcome } from "../../auto-reply/reply/normalize-reply.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
@@ -61,18 +61,13 @@ async function settleCliAuthProfile(params: {
         modelId?: string;
       };
 }): Promise<void> {
+  const { terminal, provider, ...binding } = params;
   try {
-    if (params.terminal.outcome === "success") {
-      await markAuthProfileSuccess({
-        store: params.store,
-        profileId: params.profileId,
-        provider: params.provider,
-        modelId: params.terminal.modelId,
-        agentDir: params.agentDir,
-      });
+    if (terminal.outcome === "success") {
+      await markAuthProfileSuccess({ ...binding, provider, modelId: terminal.modelId });
       return;
     }
-    const error = params.terminal.error;
+    const error = terminal.error;
     const reason = resolveAuthProfileFailureReason({
       failoverReason: isFailoverError(error) ? error.reason : null,
       providerStarted:
@@ -82,18 +77,16 @@ async function settleCliAuthProfile(params: {
     });
     if (reason) {
       await markAuthProfileFailure({
-        store: params.store,
-        profileId: params.profileId,
+        ...binding,
         reason,
-        cfg: params.terminal.config,
-        agentDir: params.agentDir,
-        runId: params.terminal.runId,
-        modelId: params.terminal.modelId,
+        cfg: terminal.config,
+        runId: terminal.runId,
+        modelId: terminal.modelId,
       });
     }
   } catch (error) {
     log.warn(
-      `CLI auth-profile ${params.terminal.outcome} settlement failed: ${formatErrorMessage(error)}`,
+      `CLI auth-profile ${terminal.outcome} settlement failed: ${formatErrorMessage(error)}`,
     );
   }
 }
@@ -467,16 +460,26 @@ export function buildCliDeliveredFailure(params: {
 export function prepareCliAssistantReply(output: Pick<CliOutput, "text" | "textParts">): {
   text: string;
   hasContent: boolean;
+  terminalReplyKind?: EmbeddedAgentRunResult["meta"]["terminalReplyKind"];
 } {
-  const payloads = (output.textParts ?? [output.text]).map((text) =>
-    normalizeReplyPayload(prepareCliReplyPayload(text)),
+  const outcomes = (output.textParts ?? [output.text]).map((text) =>
+    normalizeReplyPayloadOutcome(prepareCliReplyPayload(text)),
   );
+  const payloads = outcomes.flatMap((outcome) =>
+    outcome.kind === "deliver" ? [outcome.payload] : [],
+  );
+  const hasContent = payloads.length > 0;
   return {
     text: payloads
-      .map((payload) => payload?.text?.trim())
+      .map((payload) => payload.text?.trim())
       .filter(Boolean)
       .join("\n"),
-    hasContent: payloads.some((payload) => payload !== null),
+    hasContent,
+    terminalReplyKind:
+      !hasContent &&
+      outcomes.some((outcome) => outcome.kind === "suppress" && outcome.reason === "silent")
+        ? "silent-empty"
+        : undefined,
   };
 }
 
@@ -484,6 +487,7 @@ export function buildCliRunResult(params: {
   context: PreparedCliRunContext;
   output: CliOutput;
   assistantText: string;
+  terminalReplyKind?: EmbeddedAgentRunResult["meta"]["terminalReplyKind"];
   effectiveCliSessionId?: string;
   bindingFlushOk?: boolean;
   assistantTranscriptOwned?: boolean;
@@ -501,6 +505,7 @@ export function buildCliRunResult(params: {
     effectiveCliSessionId,
     output,
     assistantText,
+    terminalReplyKind,
     preparedContextAgentMeta,
     sessionBindingDisabled,
     usedHistoryPrompt,
@@ -630,6 +635,13 @@ export function buildCliRunResult(params: {
       ...(output.finalPromptText ? { finalPromptText: output.finalPromptText } : {}),
       finalAssistantVisibleText: assistantText,
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
+      ...(terminalReplyKind &&
+      !terminalInterruption &&
+      !yielded &&
+      !sourceReplyMirror.delivered &&
+      !output.toolMediaUrls?.length
+        ? { terminalReplyKind }
+        : {}),
       // An empty final message is recorded as "" so capture never falls back to
       // the cumulative raw text.
       ...(rawFinalText !== undefined && rawFinalText !== rawText
