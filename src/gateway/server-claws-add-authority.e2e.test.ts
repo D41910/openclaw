@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HelloOk } from "../../packages/gateway-protocol/src/index.js";
 import type { ClawLifecyclePlanResult } from "../../packages/gateway-protocol/src/schema/claws.js";
-import { awaitGateBeforeSettlement, withTestTimeout } from "../../test/helpers/promise.js";
+import { awaitGateBeforeSettlement, withinTest } from "../../test/helpers/promise.js";
 import { runQaGatewayFixture } from "../../test/helpers/qa-gateway-cleanup.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import {
@@ -213,7 +213,9 @@ function setClawHubFixtures(fixtures: Fixture[]) {
 }
 
 describe("Claw Add dependency consent authority (real Gateway RPC)", () => {
-  it("publishes for admin, rejects read-only, and fences a revoked admin before effect", async () => {
+  it("publishes for admin, rejects read-only, and fences a revoked admin before effect", async ({
+    signal,
+  }) => {
     const state = await createOpenClawTestState({
       label: "claw-add-authority",
       env: {
@@ -284,11 +286,7 @@ describe("Claw Add dependency consent authority (real Gateway RPC)", () => {
         });
         clients.push(client);
         client.start();
-        const hello = await withTestTimeout(
-          ready.promise,
-          10_000,
-          "Claw Add client did not connect",
-        );
+        const hello = await withinTest(ready.promise, signal);
         expect(hello.auth.scopes).toEqual(expect.arrayContaining(options.scopes));
         return { client, closed: closed.promise };
       };
@@ -405,11 +403,9 @@ describe("Claw Add dependency consent authority (real Gateway RPC)", () => {
         deviceId: identity.deviceId,
         role: "operator",
       });
-      await withTestTimeout(device.closed, 10_000, "Revoked Claw Add client remained connected");
+      await withinTest(device.closed, signal);
       release.resolve();
-      expect(
-        await withTestTimeout(settled.promise, 10_000, "Revoked install did not settle"),
-      ).toBeDefined();
+      expect(await withinTest(settled.promise, signal)).toBeDefined();
       await reply;
       expect(await installed(revokedFixture)).toEqual({
         agent: undefined,
