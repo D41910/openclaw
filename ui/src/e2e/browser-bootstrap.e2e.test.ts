@@ -54,7 +54,7 @@ suite.define(() => {
               `${requested.pathname}${requested.search}`,
               suite.server.baseUrl,
             );
-            const response = await route.fetch({ url: upstream.href });
+            const response = await route.fetch({ url: upstream.href, maxRetries: 1 });
             await route.fulfill({ response });
           }),
         );
