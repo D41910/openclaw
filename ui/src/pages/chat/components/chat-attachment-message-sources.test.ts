@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { html, nothing, render } from "lit";
+import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as markdown from "../../../components/markdown.ts";
 import * as chatAvatar from "../chat-avatar-view.tsx";

@@ -193,7 +193,7 @@ describe("shared identity avatar view", () => {
     const view = mountImage({
       id: "profile-ada",
       name: "Ada",
-      profileAvatarUrl: "/api/users/profile-ada/avatar?v=1",
+      profileAvatarUrl: "https://gateway.example.test/api/users/profile-ada/avatar?v=1",
     });
     await vi.waitFor(() => expect(view.image()?.getAttribute("src")).toBe("blob:old-gateway"));
     view.present(false);

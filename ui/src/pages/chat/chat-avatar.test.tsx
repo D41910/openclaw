@@ -97,6 +97,36 @@ it("refreshes a mounted channel portrait when Gateway credentials change", async
   );
 });
 
+it("resolves a mounted agent-author portrait against the replacement Gateway", async () => {
+  setAvatarGatewayOrigin("https://gateway.example.test", ["old-avatar-token"]);
+  const fetchAvatar = mockAvatarFetch();
+  vi.spyOn(URL, "createObjectURL")
+    .mockReturnValueOnce("blob:old-agent-author")
+    .mockReturnValueOnce("blob:new-agent-author");
+  const view = mountSolid(() => (
+    <ChatAuthorAvatar
+      sender={{
+        name: "Ada",
+        identity: { type: "agent", id: "ada" },
+        profileAvatarUrl: "/avatar/ada",
+      }}
+    />
+  ));
+  await vi.waitFor(() =>
+    expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:old-agent-author"),
+  );
+  const image = view.container.querySelector("img");
+  setAvatarGatewayOrigin("https://replacement.example.test", ["new-avatar-token"]);
+  await vi.waitFor(() =>
+    expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:new-agent-author"),
+  );
+  expect(view.container.querySelector("img")).toBe(image);
+  expect(fetchAvatar).toHaveBeenLastCalledWith(
+    "https://replacement.example.test/avatar/ada",
+    expect.objectContaining({ headers: { Authorization: "Bearer new-avatar-token" } }),
+  );
+});
+
 it.each(["assistant", "local", "profile"] as const)(
   "refreshes a mounted %s chat image when Gateway credentials change",
   async (kind) => {
