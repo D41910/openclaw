@@ -330,7 +330,11 @@ it("mounts only selected tool replacements and keeps their context, projection, 
     expect(mountedSignal?.aborted).toBe(false);
     expect(dispose).not.toHaveBeenCalled();
     setActive(true);
-    await waitForSolid(() => expect(latest?.signal).toBe(mountedSignal));
+    setOptions((previous) => ({ ...previous, presented: true }));
+    await waitForSolid(() => {
+      expect(latest?.signal).toBe(mountedSignal);
+      expect(latest?.presented).toBe(true);
+    });
     expect(view.getByLabelText("Plugin local draft")).toBe(localDraft);
     expect(localDraft.value).toBe("Retained plugin draft");
     selected = undefined;
