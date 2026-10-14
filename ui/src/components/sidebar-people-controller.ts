@@ -1,8 +1,8 @@
-import type { ReactiveController } from "lit";
 import { t } from "../i18n/index.ts";
+import { createPresenceActivityLifecycle } from "../lib/presence-activity-lifecycle.ts";
 import { projectPresencePayload } from "../lib/presence-users.ts";
 import { showToast } from "../lib/toast.ts";
-import { createPresenceActivityController } from "../lit/presence-activity-controller.ts";
+import type { SolidController } from "../lit/solid-controller-host.ts";
 import type { AppSidebarSessionNavigationElement } from "./app-sidebar-session-navigation.ts";
 import { PersonActivityDataController } from "./person-activity-data.ts";
 import type { SidebarPeopleRuntime } from "./sidebar-people.runtime.ts";
@@ -13,7 +13,7 @@ export type SidebarPeopleSortMode = "presence" | "running" | "open" | "name";
 const EVENTS = ["pointerover", "pointerout", "focusin", "focusout", "click", "keydown"] as const;
 
 /** One lazy interaction owner per sidebar; the data stays in SessionDataController. */
-export class SidebarPeopleController implements ReactiveController {
+export class SidebarPeopleController implements SolidController {
   statusFilter: SidebarPeopleStatusFilter = "all";
   sortMode: SidebarPeopleSortMode = "presence";
 
@@ -34,16 +34,17 @@ export class SidebarPeopleController implements ReactiveController {
   }
 
   private runtime: SidebarPeopleRuntime | null = null;
-  private readonly activityExpiry: ReturnType<typeof createPresenceActivityController>;
+  private readonly activityExpiry: ReturnType<typeof createPresenceActivityLifecycle>;
   private loading: Promise<typeof import("./sidebar-people.runtime.ts")> | null = null;
   private generation = 0;
   private pendingTarget: HTMLElement | null = null;
 
   constructor(private readonly host: AppSidebarSessionNavigationElement) {
-    host.addController(this);
-    this.activityExpiry = createPresenceActivityController(host, () =>
-      host.connected ? projectPresencePayload(host.sessionData.presencePayload).users : [],
+    this.activityExpiry = createPresenceActivityLifecycle(
+      () => (host.connected ? projectPresencePayload(host.sessionData.presencePayload).users : []),
+      () => host.requestUpdate(),
     );
+    host.addController(this);
     host.addController(
       new PersonActivityDataController(host, () => host.sessionDataContext, host.sessionData),
     );
@@ -53,6 +54,7 @@ export class SidebarPeopleController implements ReactiveController {
     for (const event of EVENTS) {
       this.host.addEventListener(event, this.handleEvent);
     }
+    this.activityExpiry.connect();
   }
 
   hostUpdate(): void {
@@ -77,6 +79,7 @@ export class SidebarPeopleController implements ReactiveController {
     this.clearPending();
     this.runtime?.dispose();
     this.runtime = null;
+    this.activityExpiry.disconnect();
   }
 
   private clearPending(): void {
