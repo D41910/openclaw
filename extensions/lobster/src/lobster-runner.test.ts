@@ -50,6 +50,22 @@ async function createWorkflow(name = "workflow.lobster") {
   return { cwd, filePath };
 }
 
+async function createApprovedShellWorkflow() {
+  const workflow = await createWorkflow();
+  await fs.writeFile(
+    workflow.filePath,
+    [
+      "steps:",
+      "  - id: gate",
+      "    approval: Proceed?",
+      "  - id: write",
+      "    run: node -e \"require('fs').writeFileSync('committed.txt','yes')\"",
+    ].join("\n"),
+    "utf8",
+  );
+  return workflow;
+}
+
 const toolContext = (cwd = process.cwd()) =>
   expect.objectContaining({ cwd, mode: "tool", signal: expect.any(AbortSignal) });
 
@@ -175,7 +191,37 @@ describe("createEmbeddedLobsterRunner", () => {
     expect(runtime.resumeToolRequest).not.toHaveBeenCalled();
   });
 
-  it("does not commit an approved effect when the published runtime loses host authority", async () => {
+  it("executes an approved continuation with the pinned embedded runtime", async () => {
+    const cwd = tempDirs.make("openclaw-lobster-authority-");
+    vi.stubEnv("LOBSTER_STATE_DIR", cwd);
+    const runner = createEmbeddedLobsterRunner();
+    const checkpoint = await runner.run(
+      runParams({ pipeline: "approve --prompt Write? | state.set committed", cwd }),
+    );
+    if (!checkpoint.ok || checkpoint.status !== "needs_approval") {
+      throw new Error("Lobster did not create an approval checkpoint");
+    }
+    const token = checkpoint.requiresApproval?.resumeToken;
+    if (!token) {
+      throw new Error("Lobster approval checkpoint is missing a resume token");
+    }
+
+    const resumed = await runner.run(
+      runParams({
+        action: "resume",
+        pipeline: undefined,
+        token,
+        approve: true,
+        cwd,
+        assertInvocationCurrent: () => {},
+      }),
+    );
+
+    expect(resumed).toMatchObject({ ok: true, status: "ok" });
+    await expect(fs.stat(path.join(cwd, "committed.json"))).resolves.toBeDefined();
+  });
+
+  it("does not commit an approved effect when the host invocation retires during resume", async () => {
     const cwd = tempDirs.make("openclaw-lobster-authority-");
     vi.stubEnv("LOBSTER_STATE_DIR", cwd);
     const runner = createEmbeddedLobsterRunner();
@@ -211,10 +257,82 @@ describe("createEmbeddedLobsterRunner", () => {
           },
         }),
       ),
-    ).rejects.toThrow(/host invocation retired|does not preserve host invocation authority/);
+    ).rejects.toThrow("host invocation retired");
 
     expect(checks).toBeGreaterThanOrEqual(1);
     await expect(fs.stat(path.join(cwd, "committed.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("executes an approved workflow shell step with the pinned embedded runtime", async () => {
+    const { cwd, filePath } = await createApprovedShellWorkflow();
+    vi.stubEnv("LOBSTER_STATE_DIR", cwd);
+    const runner = createEmbeddedLobsterRunner();
+    const checkpoint = await runner.run(runParams({ pipeline: filePath, cwd }));
+    if (!checkpoint.ok || checkpoint.status !== "needs_approval") {
+      throw new Error("Lobster did not create an approval checkpoint");
+    }
+    const token = checkpoint.requiresApproval?.resumeToken;
+    if (!token) {
+      throw new Error("Lobster approval checkpoint is missing a resume token");
+    }
+
+    const resumed = await runner.run(
+      runParams({
+        action: "resume",
+        pipeline: undefined,
+        token,
+        approve: true,
+        cwd,
+        assertInvocationCurrent: () => {},
+      }),
+    );
+
+    expect(resumed).toMatchObject({ ok: true, status: "ok" });
+    await expect(fs.readFile(path.join(cwd, "committed.txt"), "utf8")).resolves.toBe("yes");
+  });
+
+  it("blocks a workflow shell step when the operator retires during resume-state claim", async () => {
+    const { cwd, filePath } = await createApprovedShellWorkflow();
+    vi.stubEnv("LOBSTER_STATE_DIR", cwd);
+    const runner = createEmbeddedLobsterRunner();
+    const checkpoint = await runner.run(runParams({ pipeline: filePath, cwd }));
+    if (!checkpoint.ok || checkpoint.status !== "needs_approval") {
+      throw new Error("Lobster did not create an approval checkpoint");
+    }
+    const token = checkpoint.requiresApproval?.resumeToken;
+    if (!token) {
+      throw new Error("Lobster approval checkpoint is missing a resume token");
+    }
+
+    let current = true;
+    let checks = 0;
+    await expect(
+      runner.run(
+        runParams({
+          action: "resume",
+          pipeline: undefined,
+          token,
+          approve: true,
+          cwd,
+          assertInvocationCurrent: () => {
+            checks++;
+            if (!current) {
+              throw new Error("operator retired");
+            }
+            if (checks === 2) {
+              queueMicrotask(() => {
+                current = false;
+              });
+            }
+          },
+        }),
+      ),
+    ).rejects.toThrow("operator retired");
+
+    expect(checks).toBeGreaterThanOrEqual(3);
+    await expect(fs.stat(path.join(cwd, "committed.txt"))).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
