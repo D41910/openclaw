@@ -105,7 +105,7 @@ function SentComments(props: {
   );
   const count = () => sources().filter((_, index) => comments()[index] !== null).length;
   return (
-    <openclaw-chat-sent-comments>
+    <openclaw-chat-sent-comments style={{ display: "contents" }}>
       <Show when={count()}>
         <CommentPreviewChip
           count={count()}
