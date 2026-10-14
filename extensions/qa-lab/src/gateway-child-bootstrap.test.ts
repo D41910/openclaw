@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import fsSync, { existsSync, readFileSync } from "node:fs";
+import fsSync, { existsSync, readFileSync, writeSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { clearTimeout as clearRealTimeout, setTimeout as realTimeout } from "node:timers";
@@ -13,6 +13,13 @@ import { createQaGatewayChild } from "./gateway-child.js";
 import { inspectLinuxProcessGroup, isQaPosixProcessGroupAlive } from "./posix-process-group.js";
 import { runQaCli } from "./qa-cli-process.js";
 import { createTempDirHarness } from "./temp-dir.test-helper.js";
+
+// Intercept the named ESM export consumed by the bootstrap owners; the default
+// fs object remains native so unrelated fixture writes still reach the filesystem.
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, writeSync: vi.fn(actual.writeSync) };
+});
 
 // RPC is outside these process-lifetime tests. HTTP readiness and all processes stay real.
 vi.mock("./gateway-rpc-client.js", () => ({
@@ -146,6 +153,7 @@ beforeEach(() => {
 afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.mocked(writeSync).mockReset();
   try {
     const results = await Promise.allSettled(cleanups.splice(0).map((cleanup) => cleanup()));
     for (const result of results) {
@@ -162,7 +170,7 @@ afterEach(async () => {
 function captureBootstrapBoundaries(failSink = false) {
   const messages: Array<{ command: string; event: string; [key: string]: unknown }> = [];
   const write = fsSync.writeSync;
-  vi.spyOn(fsSync, "writeSync").mockImplementation((...args) => {
+  vi.mocked(writeSync).mockImplementation((...args) => {
     const line = args[1];
     if (args[0] === 2 && typeof line === "string" && line.startsWith("[qa-bootstrap] ")) {
       messages.push(JSON.parse(line.slice("[qa-bootstrap] ".length)));

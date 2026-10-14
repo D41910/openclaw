@@ -232,7 +232,7 @@ describe("terminal persisted restore", () => {
     await i18n.setLocale("en");
   });
 
-  it.each([
+  it.for([
     { closeIndex: 0, closed: "session-a", remaining: "session-b" },
     { closeIndex: 1, closed: "session-b", remaining: "session-a" },
   ])(
@@ -299,7 +299,7 @@ describe("terminal persisted restore", () => {
     expect(savedIds()).toEqual(["replacement"]);
   });
 
-  it.each(["resolve", "reject"] as const)(
+  it.for(["resolve", "reject"] as const)(
     "keeps a queued attach visible after a cancelled restore and follower %s",
     async (outcome, { signal }) => {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(["session-a"]));
@@ -381,7 +381,7 @@ describe("terminal persisted restore", () => {
     expect(savedIds()).toEqual(["session-b"]);
   });
 
-  it.each([
+  it.for([
     { transition: "same-client reconnect", completion: "reject" },
     { transition: "replacement client", completion: "resolve" },
     { transition: "replacement host", completion: "resolve" },
