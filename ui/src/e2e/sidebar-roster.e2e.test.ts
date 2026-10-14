@@ -315,7 +315,15 @@ suite.define(() => {
           sidebar.evaluate(
             (element) =>
               new Promise<void>((resolve) => {
-                element.addEventListener("overlay-after-show", () => resolve(), { once: true });
+                const onShown = (event: Event) => {
+                  if (event.target !== element.querySelector(".sidebar-agent-menu")) {
+                    return;
+                  }
+                  element.removeEventListener("overlay-after-show", onShown, true);
+                  resolve();
+                };
+                // Completed overlay events do not bubble; observe this menu in capture.
+                element.addEventListener("overlay-after-show", onShown, true);
               }),
           ),
           workspace.hover(),

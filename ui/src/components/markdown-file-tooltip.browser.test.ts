@@ -119,7 +119,16 @@ describe("file path tooltip", () => {
         await userEvent.keyboard("{Escape}");
       }
       if (dismissal === "reopen") {
+        expect(card()).toBeNull();
         await page.elementLocator(anchor()).hover();
+        await expect
+          .poll(() =>
+            card()
+              ?.closest("openclaw-tooltip")
+              ?.shadowRoot?.querySelector(".tooltip-surface")
+              ?.getAttribute("data-phase"),
+          )
+          .toBe("open");
         await expect.element(copyButton()).toBeVisible();
       }
       reject(new Error("Denied"));

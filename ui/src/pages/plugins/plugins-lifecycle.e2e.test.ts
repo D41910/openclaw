@@ -213,6 +213,12 @@ describeControlUiE2e("Control UI plugin lifecycle", () => {
         "Removed all plugin entries owned by the calendar-plus package.",
       ] as const;
       const refreshError = "Configuration reload failed after removal.";
+      if (withWarnings) {
+        // Inspection can start a successor read; the entire refresh phase is unavailable.
+        await gateway.setMethodResponse("config.get", {
+          __mockError: { code: "UNAVAILABLE", message: refreshError },
+        });
+      }
       await gateway.deferNext("config.get");
       const removing = page.getByRole("button", { name: "Uninstall Calendar Plus", exact: true });
       await expect.poll(() => removing.getAttribute("aria-busy")).toBe("true");
@@ -276,6 +282,9 @@ describeControlUiE2e("Control UI plugin lifecycle", () => {
       await expect
         .poll(() => new URL(page.url()).pathname)
         .toBe(`/plugins/${calendarDiscoveryPlugin.id}`);
+      if (withWarnings) {
+        await gateway.setMethodResponse("config.get", configSnapshot(false));
+      }
       await gateway.deferNext("plugins.install");
       await page.getByRole("button", { name: "Install", exact: true }).click();
       expect((await gateway.waitForRequest("plugins.install", { after: 1 })).params).toEqual({
