@@ -11,17 +11,14 @@ import {
   renderPanelLoadingSkeleton,
   type PanelLoadingSkeletonVariant,
 } from "../components/panel-loading-skeleton.ts";
-import {
-  renderProviderBrandIcon,
-  renderProviderFallbackIcon,
-  resolveCloudProfileIcon,
-} from "../components/provider-icon.ts";
+import { renderProviderBrandIcon } from "../components/provider-icon.ts";
 import * as settings from "../components/settings-ui.ts";
 import { Icon } from "../components/solid/icon.tsx";
 import { KeyboardShortcut } from "../components/solid/kbd.tsx";
 import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
 import { PanelIconButton } from "../components/solid/panel-icon-button.tsx";
 import { PanelRefreshStatus } from "../components/solid/panel-refresh-status.tsx";
+import { CloudProfileIcon, ProviderFallbackIcon } from "../components/solid/provider-icon.tsx";
 import {
   SettingsLoadingSkeleton,
   SettingsRow,
@@ -307,8 +304,12 @@ function iconGallery() {
       ${names.map((name) => html`<div>${icons[name]}<span>${name}</span></div>`)}
       ${Object.entries(brandIcons).map(([name, svg]) => html`<div>${svg}<span>${name}</span></div>`)}
       ${["google", "acp-copilot", "anthropic", "unknown"].map((provider) => html`<div>${renderProviderBrandIcon(provider)}<span>${provider}</span></div>`)}
-      <div>${renderProviderFallbackIcon("👨‍👩‍👧‍👦")}<span>Emoji fallback</span></div>
-      <div>${resolveCloudProfileIcon({ providerId: "google" }).icon}<span>Cloud profile</span></div>
+      <div>${solidContent(ProviderFallbackIcon, { label: "👨‍👩‍👧‍👦" })}<span>Emoji fallback</span></div>
+      <div>
+        ${solidContent(CloudProfileIcon, { profile: { providerId: "google" } })}<span
+          >Cloud profile</span
+        >
+      </div>
     </div>`,
   );
 }
