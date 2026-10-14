@@ -596,8 +596,8 @@ describe("buildAgentSystemPrompt", () => {
       expect(prompt).not.toContain("MEDIA:<path-or-url>");
       expect(prompt).toContain("Group/channel:");
       expect(prompt).toContain("current source is default target");
-      expect(prompt).toContain("## Silent Replies");
-      expect(prompt).toContain(`Only that whole reply is silent.`);
+      expect(prompt).not.toContain("## Silent Replies");
+      expect(prompt).not.toContain("Only that whole reply is silent.");
       expect(prompt).not.toContain("`send`: `target` + `message`.");
     },
   );
