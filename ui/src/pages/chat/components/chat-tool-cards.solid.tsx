@@ -29,7 +29,7 @@ import { resolveSpawnedSubagent, type SpawnedSubagent } from "../chat-spawned-su
 import type { PluginToolIcons } from "../chat-tool-icon-controller.ts";
 import { HighlightedCommand } from "./chat-command-highlight.solid.tsx";
 import { DiffStatChips } from "./chat-diff-render.solid.tsx";
-import { renderChatPermissionCard } from "./chat-divider.ts";
+import { ChatPermissionCard } from "./chat-divider.tsx";
 import { ExpandedToolCardContent } from "./chat-tool-content.solid.tsx";
 import { ToolOutcomeSummary } from "./chat-tool-outcome-summary.solid.tsx";
 import {
@@ -555,7 +555,7 @@ function ToolCardView(props: ToolCardProps) {
       }
     >
       {(request) => (
-        <LitContent value={renderChatPermissionCard(request(), props.options.onPermissionRetry)} />
+        <ChatPermissionCard request={request()} onRetry={props.options.onPermissionRetry} />
       )}
     </Show>
   );

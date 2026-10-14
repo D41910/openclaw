@@ -1,28 +1,18 @@
-import { render } from "lit";
 import { describe, expect, it } from "vitest";
+import { renderWorkingIndicator } from "./chat-status.test-support.ts";
 import { selectWorkingClawSurprise } from "./chat-working-indicator-surprise.ts";
-import { renderChatWorkingIndicator } from "./chat-working-indicator.ts";
 
 describe("renderChatWorkingIndicator", () => {
   it("selects the working glyph independently of the mascot and keeps text when hidden", () => {
     const container = document.createElement("div");
     const part = { kind: "reading-indicator" as const, key: "brand-test", startedAt: 1 };
-    render(
-      renderChatWorkingIndicator(part, { mascot: "claw", workingIndicator: "dots" }),
-      container,
-    );
+    renderWorkingIndicator(part, { mascot: "claw", workingIndicator: "dots" }, container);
     expect(container.querySelectorAll(".chat-reading-indicator--neutral > span")).toHaveLength(3);
-    render(
-      renderChatWorkingIndicator(part, { mascot: "none", workingIndicator: "claw" }),
-      container,
-    );
+    renderWorkingIndicator(part, { mascot: "none", workingIndicator: "claw" }, container);
     expect(container.querySelector(".chat-reading-indicator svg")).not.toBeNull();
-    render(renderChatWorkingIndicator(part, { workingIndicator: "brand" }), container);
+    renderWorkingIndicator(part, { workingIndicator: "brand" }, container);
     expect(container.querySelector(".chat-reading-indicator--brand")).not.toBeNull();
-    render(
-      renderChatWorkingIndicator(part, { workingIndicator: "none", workingPhrases: [] }),
-      container,
-    );
+    renderWorkingIndicator(part, { workingIndicator: "none", workingPhrases: [] }, container);
     expect(container.querySelector(".chat-reading-indicator")).toBeNull();
     expect(
       container
@@ -35,11 +25,9 @@ describe("renderChatWorkingIndicator", () => {
   it("renders neutral dots without claw surprises and forwards authored phrases", () => {
     const container = document.createElement("div");
     const workingPhrases = ["Building"];
-    render(
-      renderChatWorkingIndicator(
-        { kind: "reading-indicator", key: findRenderKey(true), startedAt: 1 },
-        { mascot: "none", workingPhrases },
-      ),
+    renderWorkingIndicator(
+      { kind: "reading-indicator", key: findRenderKey(true), startedAt: 1 },
+      { mascot: "none", workingPhrases },
       container,
     );
     const bubble = container.querySelector(".chat-reading-indicator--neutral");
@@ -67,11 +55,9 @@ describe("renderChatWorkingIndicator", () => {
 
   function surpriseClassesFor(key: string, waitingApproval: boolean): string[] {
     const container = document.createElement("div");
-    render(
-      renderChatWorkingIndicator(
-        { kind: "reading-indicator", key, startedAt: 1 },
-        { waitingApproval },
-      ),
+    renderWorkingIndicator(
+      { kind: "reading-indicator", key, startedAt: 1 },
+      { waitingApproval },
       container,
     );
     const bubble = container.querySelector(".chat-reading-indicator");

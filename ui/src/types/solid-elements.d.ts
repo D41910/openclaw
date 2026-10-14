@@ -9,6 +9,7 @@ import type WaTabGroup from "@awesome.me/webawesome/dist/components/tab-group/ta
 import type WaTabPanel from "@awesome.me/webawesome/dist/components/tab-panel/tab-panel.js";
 import type WaTab from "@awesome.me/webawesome/dist/components/tab/tab.js";
 import type { JSX } from "@solidjs/web";
+import type { NodePermissionRequest } from "../../../packages/gateway-protocol/src/node-permissions.js";
 import type { UpdateRunRecord } from "../../../src/infra/update-run-record.ts";
 import type { ControlUiSurfaceProps } from "../../../src/plugin-sdk/control-ui.js";
 import type { ClawHubRecommendation } from "../../../src/shared/clawhub-recommendations.js";
@@ -40,7 +41,28 @@ declare module "@solidjs/web" {
       messageActions: MessageActionDetails | null | undefined;
     }
     interface IntrinsicElements {
+      "openclaw-working-phrase": HTMLAttributes<HTMLElement> & {
+        "prop:startMs"?: number | null;
+        "prop:seed"?: string;
+        "prop:phrases"?: readonly string[];
+      };
       "openclaw-github-identity": HTMLAttributes<HTMLElement>;
+      "openclaw-chat-permission-card": HTMLAttributes<HTMLElement> & {
+        "prop:request"?: NodePermissionRequest | null;
+        "prop:onRetry"?: (message: string) => void;
+      };
+      "openclaw-chat-run-failure-notice": LegacyAttributes<
+        HTMLElementTagNameMap["openclaw-chat-run-failure-notice"]
+      > &
+        ElementProperties<
+          Pick<
+            HTMLElementTagNameMap["openclaw-chat-run-failure-notice"],
+            "onRetry" | "onChangeModel"
+          >
+        >;
+      "openclaw-chat-retry-status": LegacyAttributes<
+        HTMLElementTagNameMap["openclaw-chat-retry-status"]
+      >;
       "openclaw-plugins-page": HTMLAttributes<HTMLElement>;
       "openclaw-dashboards-page": HTMLAttributes<HTMLElement>;
       "openclaw-lobster-pet": HTMLAttributes<HTMLElement> & ElementProperties<LobsterPetProps>;

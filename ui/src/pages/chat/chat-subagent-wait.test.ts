@@ -6,8 +6,9 @@ import { mountSolid } from "../../test-helpers/mount-solid.ts";
 import { flush } from "../../test-helpers/solid-settle.ts";
 import { projectSubagentStatus } from "./chat-subagent-wait.ts";
 import { UnplacedSubagentWait } from "./components/chat-message-stream-view.tsx";
+import { renderWorkingIndicator } from "./components/chat-status.test-support.ts";
 import { renderSubagentActivity } from "./components/chat-subagent-activity.ts";
-import { renderChatWorkingIndicator } from "./components/chat-working-indicator.ts";
+import type { ChatWorkingIndicatorOptions } from "./components/chat-working-indicator.tsx";
 
 function resolveChatSubagentWait(input: Parameters<typeof projectSubagentStatus>[0]) {
   return projectSubagentStatus(input, false).wait;
@@ -464,12 +465,10 @@ describe("chat waiting on subagents", () => {
 
   it("ends the working line with the running count", () => {
     const container = document.createElement("div");
-    const draw = (options: Parameters<typeof renderChatWorkingIndicator>[1]) =>
-      render(
-        renderChatWorkingIndicator(
-          { kind: "reading-indicator", key: "parent-working", startedAt: 1_000 },
-          options,
-        ),
+    const draw = (options: ChatWorkingIndicatorOptions) =>
+      renderWorkingIndicator(
+        { kind: "reading-indicator", key: "parent-working", startedAt: 1_000 },
+        options,
         container,
       );
     const suffix = () =>
@@ -504,14 +503,15 @@ describe("chat waiting on subagents", () => {
         workingPhrases: ["Building"],
       };
       const part = { kind: "reading-indicator" as const, key: "parent-wait", startedAt: 1_500 };
-      render(renderChatWorkingIndicator(part, options), container);
+      renderWorkingIndicator(part, options, container);
       expect(container.textContent).toContain("Working…");
       expect(container.querySelector(".chat-reading-indicator")).not.toBeNull();
-      render(
-        renderChatWorkingIndicator(part, {
+      renderWorkingIndicator(
+        part,
+        {
           ...options,
           subagentActivity: html`${renderSubagentActivity(projection.activity, onOpenSubagent)}`,
-        }),
+        },
         container,
       );
       expect(container.textContent).toContain("Backend implementation");
@@ -525,12 +525,10 @@ describe("chat waiting on subagents", () => {
   it("makes the running count the way to the list when navigation is available", () => {
     const container = document.createElement("div");
     const onOpenSubagents = vi.fn();
-    const draw = (options: Parameters<typeof renderChatWorkingIndicator>[1]) =>
-      render(
-        renderChatWorkingIndicator(
-          { kind: "reading-indicator", key: "parent-count", startedAt: 1_000 },
-          { onOpenSubagents, ...options },
-        ),
+    const draw = (options: ChatWorkingIndicatorOptions) =>
+      renderWorkingIndicator(
+        { kind: "reading-indicator", key: "parent-count", startedAt: 1_000 },
+        { onOpenSubagents, ...options },
         container,
       );
     const control = () => container.querySelector<HTMLButtonElement>("button");

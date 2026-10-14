@@ -84,7 +84,7 @@ type SidebarPanelDefinitionParams = {
     target: Extract<ControlUiFocusBuildTarget, { kind: "desktop" }>,
   ) => void;
   dashboard: TemplateResult | typeof nothing;
-  workspace: TemplateResult | typeof nothing;
+  workspace: SidebarPanelDefinition["content"];
   renderDetail: (content: SidebarContent) => TemplateResult;
   digest: SessionObserverDigest | null;
   activeRunId: string | null;
@@ -133,7 +133,7 @@ export function sidebarPanelDefinitions(
   const definePanel = (
     slot: Exclude<SidebarSlotId, `plugin:${string}` | "link-reader">,
     icon: TemplateResult,
-    content: TemplateResult | typeof nothing | null,
+    content: SidebarPanelDefinition["content"],
     headerAction?: TemplateResult,
   ): SidebarPanelDefinition => {
     const textKey = slot === "detail" ? "review" : slot === "workspace" ? "files" : slot;

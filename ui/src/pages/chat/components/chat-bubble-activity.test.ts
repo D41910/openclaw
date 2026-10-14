@@ -3,6 +3,7 @@ import { nothing, render } from "lit";
 import { afterEach, beforeEach, expect, it, onTestFinished } from "vitest";
 import { waitForSolid } from "../../../test-helpers/solid-settle.ts";
 import { createTestTranscript } from "../chat-view.test-helpers.ts";
+import { renderWorkingIndicator } from "./chat-status.test-support.ts";
 import type { ChatThreadProps } from "./chat-thread-interactions.ts";
 import { renderChatThread } from "./chat-thread.test-support.ts";
 import {
@@ -10,7 +11,6 @@ import {
   resetTranscriptTestDom,
   threadProps,
 } from "./chat-transcript.test-support.ts";
-import { renderChatWorkingIndicator } from "./chat-working-indicator.ts";
 
 beforeEach(installTranscriptDomMocks);
 afterEach(resetTranscriptTestDom);
@@ -163,11 +163,9 @@ it.each([
   { label: "Waiting for approval", options: { waitingApproval: true } },
 ])("keeps $label visible instead of replacing it with working dots", ({ label, options }) => {
   const container = document.createElement("div");
-  render(
-    renderChatWorkingIndicator(
-      { kind: "reading-indicator", key: "status", startedAt: 1 },
-      { bubbleMode: true, ...options },
-    ),
+  renderWorkingIndicator(
+    { kind: "reading-indicator", key: "status", startedAt: 1 },
+    { bubbleMode: true, ...options },
     container,
   );
   expect(container.querySelector("details")).toBeNull();
