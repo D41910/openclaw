@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
 import { buildChannelInboundEventContext } from "openclaw/plugin-sdk/channel-inbound";
 import { resolveStableChannelMessageIngress } from "openclaw/plugin-sdk/channel-ingress-runtime";
@@ -11,6 +12,7 @@ import { getXApi } from "../client.js";
 import { startXAccount } from "../monitor.js";
 import { setXRuntime } from "../runtime.js";
 import { createKeyedState, createQueue } from "./monitor.js";
+import { createXTestSpend } from "./spend.js";
 
 export const client = { getXApi: vi.mocked(getXApi) };
 
@@ -68,19 +70,32 @@ export function fixture(options: {
   onCursor?: () => void;
   cfg?: OpenClawConfig;
   replyText?: string;
+  visibleSessionUrl?: string | null;
 }) {
   const cfg = options.cfg ?? config;
   const replies: Array<{ text: string; parent: string }> = [];
   const api = {
+    spend: createXTestSpend(),
     getMentions: vi.fn(async (_params: Parameters<XApiClient["getMentions"]>[0]) =>
       page(options.posts),
     ),
     getPosts: vi.fn(async (ids: string[]) =>
       page(options.posts.filter((value) => ids.includes(value.id))),
     ),
+    getPublicPosts: vi.fn(async (ids: string[]): Promise<XPage> => ({
+      ...page(
+        [post("500", "10", "Original thread"), ...options.posts].filter((value) =>
+          ids.includes(value.id),
+        ),
+      ),
+      includes: { tweets: [], users: [{ id: "10", username: "author", protected: false }] },
+    })),
     searchConversation: vi.fn(async () => page([post("500", "10", "Original thread")])),
     getUserByUsername: vi.fn(async () => {
       throw new Error("Unexpected user lookup");
+    }),
+    getUsersByUsernames: vi.fn<XApiClient["getUsersByUsernames"]>(async () => {
+      throw new Error("Unexpected batch user lookup");
     }),
     reply: vi.fn(async (params: Parameters<XApiClient["reply"]>[0]) => {
       const assertCurrent = await params.assertActive?.();
@@ -96,13 +111,18 @@ export function fixture(options: {
   client.getXApi.mockResolvedValue(api);
   const resolveStable = vi.fn(resolveStableChannelMessageIngress);
   const dispatch = vi.fn(async (plan: Plan) => {
-    plan.replyOptions?.onVisibleWorkSessions?.([
-      {
-        sessionKey: "agent:maintainer:work:example",
-        url: "https://example.test/work/42",
-        label: "Work session",
-      },
-    ]);
+    await plan.replyOptions?.onVisibleWorkSessions?.(
+      options.visibleSessionUrl === null
+        ? []
+        : [
+            {
+              sessionKey: "agent:maintainer:work:example",
+              url: options.visibleSessionUrl ?? "https://example.test/work/42",
+              label: "Work session",
+            },
+          ],
+      { createdSessionKey: "agent:maintainer:work:example" },
+    );
     if (!plan.delivery.deliver) {
       throw new Error("Missing X text delivery adapter");
     }
@@ -124,10 +144,12 @@ export function fixture(options: {
   });
   const queue = options.queue ?? createQueue<Payload>();
   // The host doubles expose only the runtime facilities this channel consumes.
+  const stateDir = `synthetic-x-monitor:${randomUUID()}`;
   const runtime = {
+    version: "2026.9.8",
     state: {
       openKeyedStore,
-      resolveStateDir: () => "synthetic-x-monitor",
+      resolveStateDir: () => stateDir,
       openChannelIngressQueue: () => queue,
     },
     logging: { getChildLogger: () => logger },

@@ -1,5 +1,6 @@
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
+import "../lib/toast-host.ts";
 import { toSanitizedMarkdownHtml } from "./markdown.ts";
 import { installTitleTooltips } from "./tooltip-title.ts";
 import "../styles/base.css";
@@ -36,10 +37,12 @@ describe("file path tooltip", () => {
     await expect.element(copyButton()).toBeVisible();
     expect(card()?.textContent?.trim()).toBe(filePath);
     await copyButton().hover();
-    await copyButton().click();
+    await Promise.all([
+      expect.poll(() => card()?.querySelector('[role="status"]')?.textContent).toBe("Copied!"),
+      copyButton().click(),
+    ]);
     expect(write).toHaveBeenCalledWith(filePath);
     expect(open).not.toHaveBeenCalled();
-    await expect.element(page.getByRole("status")).toHaveTextContent("Copied!");
     expect(card()?.textContent).toContain(filePath);
     expect(document.querySelectorAll("openclaw-tooltip[open]")).toHaveLength(1);
     await userEvent.keyboard("{Escape}");

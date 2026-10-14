@@ -323,6 +323,7 @@ describe("watch-pr-ci", () => {
       timeout: 3600,
       interval: 120,
       completion: "rollup",
+      once: false,
     });
     expect(
       parseArgs([
@@ -340,6 +341,7 @@ describe("watch-pr-ci", () => {
         "5",
         "--completion",
         "ci-run",
+        "--once",
       ]),
     ).toMatchObject({
       repo: "fork/project",
@@ -348,6 +350,7 @@ describe("watch-pr-ci", () => {
       timeout: 90,
       interval: 5,
       completion: "ci-run",
+      once: true,
     });
     expect(parseArgs(["1", sha.toUpperCase()]).headSha).toBe(sha);
   });
@@ -510,6 +513,7 @@ console.log(JSON.stringify(value));
     slowPr?: boolean;
     slowQuota?: boolean;
     notifier?: boolean;
+    inheritedNotifier?: boolean;
     host?: string;
   }>([
     ...(["attach", "watch"] as const).flatMap((phase) => [
@@ -574,6 +578,14 @@ console.log(JSON.stringify(value));
       output: "GREEN",
     },
     {
+      label: "inherited notifier",
+      phase: "attach",
+      patch: {},
+      inheritedNotifier: true,
+      exitCode: 0,
+      output: "GREEN",
+    },
+    {
       label: "enterprise port",
       phase: "attach",
       patch: {},
@@ -591,6 +603,7 @@ console.log(JSON.stringify(value));
       slowPr = false,
       slowQuota = false,
       notifier = false,
+      inheritedNotifier = false,
       host = "github.com",
     }) => {
       await withTempDir("openclaw-watch-pr-ci-rest-", async (root) => {
@@ -609,6 +622,7 @@ console.log(JSON.stringify(value));
           `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
+if (${inheritedNotifier} && process.env.OPENCLAW_PR_LOCK_NOTIFY_FD !== undefined) throw new Error("unexpected inherited PR notifier");
 const calls = fs.readFileSync(${JSON.stringify(callsPath)}, "utf8").trim().split("\\n").filter(Boolean).map(JSON.parse);
 fs.appendFileSync(${JSON.stringify(callsPath)}, JSON.stringify(args) + "\\n");
 const pullPath = ${JSON.stringify(pullPath)};
@@ -649,8 +663,9 @@ console.log(JSON.stringify(value));
           sha,
           ["--repo", repo, "--completion", "ci-run"],
           slowQuota ? { readClock: readClockPath } : slowPr ? "wall" : "poll",
-          { OPENCLAW_PR_LOCK_NOTIFY_FD: notifier ? "3" : undefined },
+          notifier ? { OPENCLAW_PR_LOCK_NOTIFY_FD: "3" } : {},
           notifierPath,
+          inheritedNotifier ? { ...process.env, OPENCLAW_PR_LOCK_NOTIFY_FD: "3" } : undefined,
         );
         expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(exitCode);
         expect(result.stdout).toContain(output);
@@ -2336,6 +2351,27 @@ console.log(JSON.stringify(value));
       expect(polls).toBe(2);
     },
   );
+
+  it("returns an unresolved single pass without waiting", async () => {
+    const waits: number[] = [];
+    let polls = 0;
+    const result = await pollUntilDeadline({
+      deadline: 120_000,
+      interval: 1,
+      once: true,
+      now: () => 0,
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+      },
+      poll: () => {
+        polls += 1;
+        return undefined;
+      },
+    });
+    expect(result).toBeUndefined();
+    expect(polls).toBe(1);
+    expect(waits).toEqual([]);
+  });
 
   it("warns for an already-completed late attachment without changing attachment", () => {
     expect(classifyRunAttachment(102, { status: "completed", conclusion: "success" })).toEqual({

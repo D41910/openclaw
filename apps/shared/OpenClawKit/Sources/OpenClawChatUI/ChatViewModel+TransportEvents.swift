@@ -12,7 +12,7 @@ private final class PendingRunOwnerReference {
 }
 
 extension OpenClawChatViewModel {
-    /// Returns the task that settles the event's transcript or question reconciliation, when it starts one.
+    /// Returns the task that settles the reconciliation this event starts, when it starts one.
     @discardableResult
     func handleTransportEvent(_ evt: OpenClawChatTransportEvent) -> Task<Void, Never>? {
         guard !self.isTransportDetached else { return nil }
@@ -51,8 +51,9 @@ extension OpenClawChatViewModel {
             self.refreshSourceContext()
             self.refreshAgentsIfRequested()
             let session = self.currentSessionSnapshot()
-            Task { [weak self] in await self?.fetchModels(sessionSnapshot: session) }
-            return Task { [weak self] in await self?.refreshSwarmCapability(sessionSnapshot: session) }
+            let models = Task { [weak self] in await self?.fetchModels(sessionSnapshot: session) }
+            let swarm = Task { [weak self] in await self?.refreshSwarmCapability(sessionSnapshot: session) }
+            return Task { _ = await (models.value, swarm.value) }
         case let .sessionsChanged(change):
             return self.handleSessionsChangedEvent(change)
         case let .sessionObserver(digest):
@@ -153,10 +154,13 @@ extension OpenClawChatViewModel {
         if let phase,
            phase == "start" || phase == "end" || phase == "error"
         {
-            self.handleLifecycleSessionChange(change, phase: phase)
-            return nil
+            return self.handleLifecycleSessionChange(change, phase: phase)
         }
 
+        if change.reason == "subagent-status", self.sidebarData == nil {
+            let context = self.currentSessionSnapshot()
+            return Task { await self.fetchSessions(limit: 50, sessionSnapshot: context) }
+        }
         self.applySessionChangeProjection(change, ownedSwarmActivityNote: ownedSwarmActivityNote)
         // Group-catalog mutations from any client arrive as reason "groups"
         // (mirrors web ui/src/lib/sessions); bump the revision so views keyed
@@ -201,13 +205,12 @@ extension OpenClawChatViewModel {
         self.refreshSessions(limit: 50)
         guard matchesCurrentSession(eventSessionKey) else { return nil }
         let session = self.currentSessionSnapshot()
-        Task { [weak self] in await self?.fetchModels(sessionSnapshot: session) }
-        return nil
+        return Task { [weak self] in await self?.fetchModels(sessionSnapshot: session) }
     }
 
     private func handleLifecycleSessionChange(
         _ change: OpenClawChatSessionsChangedEvent,
-        phase: String)
+        phase: String) -> Task<Void, Never>?
     {
         let eventSessionKey = change.sessionKey ?? change.session?.key
         let changesCurrentSession = eventSessionKey.map {
@@ -255,9 +258,13 @@ extension OpenClawChatViewModel {
             mergedSnapshot = false
         }
 
-        if !mergedSnapshot {
-            self.refreshSessions(limit: 50)
+        // Without the shared sidebar owner, a merged child snapshot does not refresh
+        // its ancestors. Reload canonical rows to clear omitted helper flags too.
+        if !mergedSnapshot || self.sidebarData == nil {
+            let context = self.currentSessionSnapshot()
+            return Task { await self.fetchSessions(limit: 50, sessionSnapshot: context) }
         }
+        return nil
     }
 
     private func mergeLifecycleSessionSnapshot(
@@ -493,12 +500,25 @@ extension OpenClawChatViewModel {
                 current: self.sessionKey)
         } ?? true
         guard matchesCurrentSession || isOurRun else { return nil }
+        if chat.state == "status" {
+            if let runID = explicitRunID,
+               let state = ChatRunStartup.state(phase: chat.phase, retry: chat.retry),
+               // A retry without its sequence cannot be ordered against what is already shown.
+               chat.retry == nil || chat.seq != nil
+            {
+                self.reconcileRunStartup(ChatRunStartup(runID: runID, state: state, seq: chat.seq))
+            }
+            return nil
+        }
         if chat.state == "delta", let runID = explicitRunID {
             guard self.pendingRuns.isEmpty || self.pendingRuns.contains(runID) else { return nil }
             self.invalidateRunSnapshots()
             self.adoptRun(
                 runId: runID,
                 bufferedText: OpenClawChatEventText.assistantText(from: chat) ?? "")
+            if let text = OpenClawChatEventText.assistantText(from: chat), !text.isEmpty {
+                self.reconcileRunStartup(ChatRunStartup(runID: runID, state: .activity, seq: nil))
+            }
             return nil
         }
 
@@ -561,8 +581,7 @@ extension OpenClawChatViewModel {
     }
 
     private func appendFinalChatMessageIfPresent(_ chat: OpenClawChatEventPayload) {
-        guard chat.state == "final" else { return }
-        guard let text = OpenClawChatEventText.assistantText(from: chat) else { return }
+        guard chat.state == "final", let text = OpenClawChatEventText.assistantText(from: chat) else { return }
 
         let decoded = chat.message.flatMap {
             try? GatewayPayloadDecoding.decode($0, as: OpenClawChatMessage.self)
@@ -621,6 +640,71 @@ extension OpenClawChatViewModel {
         return timestamped
     }
 
+    func reconcileRunStartup(_ next: ChatRunStartup) {
+        guard next.runID == self.liveUsageRunID else { return }
+        let reconciled = ChatRunStartup.reconciled(current: self.runStartup, next: next)
+        if reconciled != self.runStartup { self.runStartup = reconciled }
+    }
+
+    /// Only output the native UI accepts ends its startup label. History uses the same projection.
+    func startupState(for event: OpenClawAgentEventPayload) -> ChatRunStartup? {
+        let data = event.data
+        switch event.stream {
+        case "run_status":
+            let phase = data["phase"]?.stringValue
+            let state: ChatRunStartup.State?
+            if phase == "retrying" {
+                guard event.seq != nil else { return nil }
+                if let attempt = data["attempt"]?.intValue, let maxAttempts = data["maxAttempts"]?.intValue {
+                    state = ChatRunStartup.state(phase: nil, retry: .init(attempt: attempt, maxAttempts: maxAttempts))
+                } else if let message = ChatPayloadDecoding.trimmedNonEmptyString(data["message"]?.stringValue) {
+                    state = .status(String(message.prefix(256)), retrying: true)
+                } else { return nil }
+            } else {
+                state = ChatRunStartup.state(phase: phase, retry: nil)
+            }
+            return state.map { ChatRunStartup(runID: event.runId, state: $0, seq: event.seq) }
+        case "assistant":
+            // History retains the assistant sequence but stores text separately.
+            guard self.isApplyingRunSnapshot || data["text"]?.stringValue?.isEmpty == false else { return nil }
+        case "tool":
+            guard let phase = data["phase"]?.stringValue,
+                  ["start", "input_delta", "result"].contains(phase),
+                  data["name"]?.stringValue != nil, let toolCallID = data["toolCallId"]?.stringValue
+            else { return nil }
+            if phase == "input_delta" {
+                guard self.turnToolCallsById[toolCallID] != nil,
+                      let diff = data["diff"]?.dictionaryValue,
+                      let added = diff["added"]?.intValue, let removed = diff["removed"]?.intValue,
+                      added >= 0, removed >= 0
+                else { return nil }
+            } else if phase == "result" {
+                // Snapshot results record historical output. A live result for an unknown call is a no-op.
+                guard self.isApplyingRunSnapshot || self.turnToolCallsById[toolCallID] != nil else { return nil }
+            }
+        case "item":
+            if data["kind"]?.stringValue == "preamble" {
+                let text = (data["progressText"]?.stringValue ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let silent = text.trimmingCharacters(in: .whitespacesAndNewlines.union(
+                    CharacterSet(charactersIn: "*_`~"))).caseInsensitiveCompare("NO_REPLY") == .orderedSame
+                guard !text.isEmpty, !silent,
+                      data["phase"]?.stringValue != "start", data["phase"]?.stringValue != "update"
+                else { return nil }
+            } else {
+                guard let item = try? GatewayPayloadDecoding.decode(
+                    AnyCodable(data), as: OpenClawAgentActivityItem.self), item.isVisible
+                else { return nil }
+            }
+        case "plan":
+            guard self.progressCardStoreAvailable == false, data["phase"]?.stringValue == "update",
+                  !Self.parseLegacyProgressCardSteps(data["steps"]).isEmpty
+            else { return nil }
+        default: return nil
+        }
+        return ChatRunStartup(runID: event.runId, state: .activity, seq: event.seq)
+    }
+
     private func handleAgentEvent(_ evt: OpenClawAgentEventPayload) -> Task<Void, Never>? {
         if evt.stream == "usage" {
             self.handleAgentUsageEvent(evt)
@@ -642,10 +726,14 @@ extension OpenClawChatViewModel {
 
         let isSelectedPendingRun = isPendingRun && self.liveUsageRunID == evt.runId
         if evt.stream == "item", evt.data["kind"]?.value as? String == "preamble" {
+            if self.ownsLiveTelemetryRun(evt.runId), let startup = self.startupState(for: evt) {
+                self.reconcileRunStartup(startup)
+            }
             self.handleAgentNarration(evt)
             return nil
         }
         guard isSelectedPendingRun || isLegacySessionStream else { return nil }
+        if let startup = self.startupState(for: evt) { self.reconcileRunStartup(startup) }
         self.invalidateRunSnapshots()
         self.logDiagnostic(
             "chat.ui event agent stream=\(evt.stream) "
@@ -732,7 +820,7 @@ extension OpenClawChatViewModel {
         else {
             return
         }
-        self.applyLiveRunUsage(
+        self.acceptLiveRunSequence(
             runID: evt.runId,
             sequence: sequence,
             outputTokens: outputTokens)
@@ -852,7 +940,7 @@ extension OpenClawChatViewModel {
     private func refreshIfPending(
         runId: String,
         sessionSnapshot: SessionSnapshot,
-        armID: UInt64? = nil,
+        armID: UInt64,
         after timestamp: Double?,
         terminalState: OpenClawChatRunTerminalState? = nil,
         allowNoOutputCompletion: Bool = false,
@@ -901,40 +989,29 @@ extension OpenClawChatViewModel {
                 self.clearStreamingActivity()
                 return true
             }
-            if let timestamp,
-               self.clearPendingRunIfAssistantMessagePresent(runId: runId, after: timestamp)
-            {
-                return false
-            }
-            if terminalState == .completed, allowNoOutputCompletion {
-                self.retirePendingRun(runId, hapticEvent: .runCompleted)
-                self.clearStreamingActivity()
-                return false
-            }
-            return true
+        }
+        guard !refresh.hasInFlightRun else { return true }
+        if let timestamp,
+           self.clearPendingRunIfAssistantMessagePresent(runId: runId, after: timestamp)
+        {
+            return false
         }
         if refresh.applied, terminalState == .completed, allowNoOutputCompletion {
-            if let timestamp,
-               self.clearPendingRunIfAssistantMessagePresent(runId: runId, after: timestamp)
-            {
-                return false
-            }
             self.retirePendingRun(runId, hapticEvent: .runCompleted)
             self.clearStreamingActivity()
             return false
         }
-        guard !refresh.hasInFlightRun, let timestamp else { return true }
-        return !self.clearPendingRunIfAssistantMessagePresent(runId: runId, after: timestamp)
+        return true
     }
 
     private func isCurrentPendingRunOwner(
         runId: String,
         sessionSnapshot: SessionSnapshot,
-        armID: UInt64?) -> Bool
+        armID: UInt64) -> Bool
     {
         self.isCurrentSession(sessionSnapshot) &&
             self.pendingRuns.contains(runId) &&
-            (armID == nil || self.pendingRunOwnerArmIDs[runId] == armID)
+            self.pendingRunOwnerArmIDs[runId] == armID
     }
 
     @discardableResult
@@ -1022,7 +1099,6 @@ extension OpenClawChatViewModel {
         in messages: [OpenClawChatMessage]) -> Bool
     {
         let nextIndex = messages.index(after: userIndex)
-        guard nextIndex < messages.endIndex else { return false }
         return messages[nextIndex...].contains { message in
             guard message.role.lowercased() == "assistant", message.streamSegmentID == nil else { return false }
             let text = message.content.compactMap(\.text).joined(separator: "\n")
@@ -1049,7 +1125,6 @@ extension OpenClawChatViewModel {
     func assistantHapticEventAfterLatestUser() -> OpenClawChatHaptics.Event? {
         guard let userIndex = messages.lastIndex(where: { $0.role.lowercased() == "user" }) else { return nil }
         let nextIndex = self.messages.index(after: userIndex)
-        guard nextIndex < self.messages.endIndex else { return nil }
         return self.messages[nextIndex...].reversed().lazy.compactMap(Self.assistantHapticEvent).first
     }
 

@@ -1,4 +1,58 @@
 import type { HeapSpaceInfo } from "node:v8";
+import type { WorkerRequestKind } from "./worker-request-kind.js";
+
+export type DiagnosticRuntimeMeasurementFields =
+  | {
+      type: "gateway.http.cancelled";
+      source: "client" | "shutdown";
+    }
+  | {
+      type: "gateway.event_loop.sample";
+      intervalMs: number;
+      delayMaxMs: number;
+    }
+  | {
+      type: "diagnostic.gc";
+      durationMs: number;
+    };
+
+export type DiagnosticWorkerRequestFields = {
+  type: "worker.request";
+  kind: WorkerRequestKind;
+  requestClass: string;
+  phase: "queued" | "started" | "completed";
+  queueDepth: number;
+  queueWaitMs?: number;
+  durationMs?: number;
+  /** Monotonic process timestamps spanning the complete request, including transport frames. */
+  timing?: Partial<
+    Record<
+      | "enqueued"
+      | "dispatched"
+      | "posted"
+      | "postFinished"
+      | "received"
+      | "inputReady"
+      | "executeStarted"
+      | "executeFinished"
+      | "serialized"
+      | "replied"
+      | "replyReceived",
+      number
+    >
+  >;
+};
+
+export type DiagnosticAsyncQueueDroppedFields = {
+  type: "diagnostic.async_queue.dropped";
+  droppedEvents: number;
+  droppedTrustedEvents?: number;
+  droppedUntrustedEvents?: number;
+  droppedPriorityEvents?: number;
+  queueLength: number;
+  maxQueueLength: number;
+  drainBatchSize: number;
+};
 
 export type DiagnosticMemoryUsage = {
   rssBytes: number;
@@ -66,7 +120,7 @@ export type DiagnosticMemoryPressureFields = DiagnosticMemoryPressureMetrics & {
 export type DiagnosticChildProcessSpawnFields = {
   type: "diagnostic.child_process.spawn";
   family: string;
-  /** Bounded Git owner/operation; unknown for unattributed Git and none for other families. */
+  /** Bounded Git owner or SQLite session/transport; unknown for unattributed Git. */
   operation?: string;
   count: number;
   intervalMs: number;

@@ -50,9 +50,10 @@ import {
   isCanonicalNodeTestConfig,
   isRuntimeTestFileIncluded,
   SOURCE_CHANNEL_TEST_POLICY,
-  type NodeTestShardGroup,
+  type NodeTestShard,
   type RuntimeTestSelection,
 } from "./ci-node-test-plan.mts";
+import { NODE_WORKER_E2E_TEST_FILES } from "./ci-node-worker-e2e-inventory.mts";
 import { resolvePolicyTestTargets } from "./ci-policy-test-watch.mts";
 import {
   isCiProofTestFile,
@@ -73,7 +74,6 @@ import {
 import {
   mergeVitestPretestBuildModes,
   resolveVitestPretestBuildMode,
-  type VitestPretestBuildMode,
 } from "./vitest-build-prerequisites.mts";
 import {
   createCompactSplitTimingGeneration,
@@ -82,21 +82,11 @@ import {
   VITEST_PRETEST_BUILD_SECONDS,
 } from "./vitest-shard-metadata.mts";
 
-type ChangedNodeTestShard = {
-  checkName: string;
-  configs: string[];
-  groups?: NodeTestShardGroup[];
-  env?: Record<string, string>;
-  includePatterns?: string[];
-  planConcurrency?: number;
-  predictedSeconds?: number;
-  predictedTestSeconds?: number;
-  pretestBuildMode?: VitestPretestBuildMode;
-  requiresDist: boolean;
-  runner: string;
-  shardName: string;
+// The manifest protocol also reads this policy from historical target planners.
+export { hasQaSmokeAffectingChange } from "./ci-qa-smoke-scope.mts";
+
+type ChangedNodeTestShard = NodeTestShard & {
   targets?: string[];
-  timeoutMinutes?: number;
 };
 type CwdOptions = { cwd?: string };
 type PlanDiagnostic = (reason: string) => void;
@@ -255,22 +245,6 @@ export function hasBuildArtifactAffectingChange(changedPaths: string[]) {
         !isTestOnlyPath(changedPath) &&
         !isDocumentationPath(changedPath)),
   );
-}
-
-// QA-owned surfaces that keep the smoke lane on PRs and main: the qa-lab
-// harness and scenario data, the two channels the smoke profile drives
-// (matrix, telegram), the packaged-CLI docker packaging scripts, and the QA
-// lane's own orchestration (this planner, the CI workflow, composite
-// actions) — changes to the gate must not be able to skip the gated lane.
-const QA_SMOKE_SURFACE_RE =
-  /^(?:extensions\/(?:matrix|qa-lab|telegram)|qa)\/|^scripts\/(?:build-all\.mts|package-openclaw-for-docker\.mts)$|^scripts\/lib\/ci-changed-node-test-plan\.mts$|^\.github\/(?:workflows\/ci\.yml$|actions\/)/u;
-
-/**
- * Broad runtime changes deliberately wait for manual/release validation;
- * automatic PR and main runs select the same QA-owned surfaces.
- */
-export function hasQaSmokeAffectingChange(changedPaths: string[]) {
-  return changedPaths.some((changedPath) => QA_SMOKE_SURFACE_RE.test(changedPath));
 }
 
 // UI artifacts and their own build/performance policy retain explicit ownership;
@@ -721,6 +695,18 @@ function createChangedTargetShards(
   });
 }
 
+/** One shared E2E build keeps hourly coverage inside the existing main matrix cap. */
+export function createNodeWorkerE2eTestShards() {
+  return createChangedTargetShards(
+    resolvePreciseChangedTargets(NODE_WORKER_E2E_TEST_FILES, process.cwd()),
+    {
+      checkName: "checks-node-worker-e2e",
+      shardName: "node-worker-e2e",
+    },
+    1,
+  ).map((shard) => Object.assign(shard, { planConcurrency: 1 }));
+}
+
 /** Narrow canonical envelopes without changing their workers, routing, or isolation. */
 function boundChangedNodeRows(
   shards: ChangedNodeTestShard[],
@@ -1009,13 +995,14 @@ export function createChangedNodeTestShards(
   const canonicalTargets = prTargetPlans
     .filter(({ target }) => !target.startsWith("extensions/"))
     .filter(
-      ({ plans }) =>
+      ({ target, plans }) =>
         plans.every((plan) => plan.includePatterns) &&
         plans.every(
           (plan) =>
             plan.config !== BOUNDARY_NODE_TEST_CONFIG && plan.config !== "ui/vitest.config.ts",
         ) &&
         (prTargetPlans.length > 96 ||
+          resolveVitestPretestBuildMode([{ includePatterns: [target] }]) === "private-qa" ||
           plans.some(({ config }) => nodeTestConfigRequiresCanonicalMetadata(config))) &&
         plans.every((plan) => isCanonicalNodeTestConfig(plan.config)),
     )

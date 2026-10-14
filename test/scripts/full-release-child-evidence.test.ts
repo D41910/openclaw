@@ -18,7 +18,7 @@ const PUBLISHER = "Seal full release child evidence / Seal child receipt";
 
 function fixture(role = "normalCi") {
   const spec = releaseChildSpec(role);
-  const workflowSha = role.endsWith("Candidate") ? TARGET : SHA;
+  const workflowSha = TARGET;
   const job = (id: number, name: string, conclusion: string | null = "success") => ({
     id,
     name,
@@ -48,9 +48,6 @@ function fixture(role = "normalCi") {
       actor: { login: "github-actions[bot]" },
       triggering_actor: { login: "github-actions[bot]" },
     },
-    lineage: role.endsWith("Candidate")
-      ? { status: "diverged", merge_base_commit: { sha: SHA } }
-      : { status: "ahead", merge_base_commit: { sha: workflowSha } },
     jobs,
     attempts: [jobs],
     role,
@@ -87,12 +84,11 @@ const fixture = JSON.parse(fs.readFileSync(process.env.FRV_FIXTURE, "utf8"));
 const endpoint = process.argv.find((arg) => arg.startsWith("repos/"));
 if (endpoint === "repos/openclaw/openclaw/actions/runs/101") {
   process.stdout.write(JSON.stringify(fixture.run));
-} else if (endpoint === "repos/openclaw/openclaw/compare/" + fixture.run.head_sha + "...main?per_page=1") {
-  process.stdout.write(JSON.stringify(fixture.lineage));
 } else if (endpoint.startsWith("repos/openclaw/openclaw/actions/runs/101/attempts/")) {
   const attempt = Number(endpoint.split("/").at(-2));
   const jobs = fixture.attempts[attempt - 1];
-  process.stdout.write(JSON.stringify([{total_count: jobs.length, jobs}]));
+  const page = Number(new URL("https://example.invalid/" + endpoint).searchParams.get("page") ?? 1);
+  process.stdout.write(JSON.stringify({total_count: jobs.length, jobs: jobs.slice((page - 1) * 100, page * 100)}));
 } else {
   throw new Error("Unexpected evidence read: " + endpoint);
 }
@@ -218,7 +214,7 @@ describe("full release child evidence producer", () => {
         effectiveRunAttempt: 1,
         role: "normalCi",
         targetSha: TARGET,
-        workflowSha: SHA,
+        workflowSha: TARGET,
         workloadConclusion: conclusion,
         inputs: { release_scope: "full", target_ref: TARGET },
         publisher: { jobId: "3", jobName: PUBLISHER },
@@ -235,15 +231,31 @@ describe("full release child evidence producer", () => {
     },
   );
 
-  it("seals candidate harness evidence at the exact target SHA", () => {
-    const { result, receipt } = seal(fixture("releaseChecksCandidate"));
+  it("seals a complete paginated attempt without a monolithic metadata response", () => {
+    const data = fixture();
+    for (let index = 0; index < 100; index++) {
+      data.jobs.push({ ...data.jobs[1]!, id: index + 10, name: `workload ${index}` });
+    }
+    const { result, receipt } = seal(data);
     expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(readFileSync(receipt, "utf8"))).toMatchObject({
-      role: "releaseChecksCandidate",
-      targetSha: TARGET,
-      workflowSha: TARGET,
-    });
+    const evidence = JSON.parse(readFileSync(receipt, "utf8"));
+    expect(evidence.workloadConclusion).toBe("success");
+    expect(evidence.jobs).toHaveLength(102);
+    expect(evidence.observedRunAttempts).toEqual([1]);
   });
+
+  it.each(["pluginPrereleaseIndependent", "releaseChecksCandidate"])(
+    "seals %s evidence at the exact target SHA",
+    (role) => {
+      const { result, receipt } = seal(fixture(role));
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(receipt, "utf8"))).toMatchObject({
+        role,
+        targetSha: TARGET,
+        workflowSha: TARGET,
+      });
+    },
+  );
 
   it.each([
     { runAttempt: 2, retryWorkload: true, observedRunAttempts: [1, 2], accepted: 2 },
@@ -297,11 +309,11 @@ describe("full release child evidence producer", () => {
 
   it.each([
     {
-      name: "workflow outside main ancestry",
+      name: "workflow SHA different from the target",
       mutate: (data: ReturnType<typeof fixture>) => {
-        data.lineage.status = "diverged";
+        data.run.head_sha = SHA;
       },
-      error: "not a main ancestor",
+      error: "does not match the target SHA",
     },
     {
       name: "stale run attempt",
