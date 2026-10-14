@@ -1,14 +1,9 @@
-import {
-  emptyLegacyContent,
-  solidContent,
-  type LegacyTemplateResult,
-} from "../lit/solid-content.tsx";
+import { emptyLegacyContent, solidContent } from "../lit/solid-content.tsx";
 import {
   AgentStartupState,
   LazyElementModal,
   LazyElementStateView,
   LazyViewError,
-  LegacyPanelErrorState,
   type LazyElementState,
 } from "./solid/lazy-view-error.tsx";
 
@@ -52,17 +47,4 @@ export function renderLazyViewError(params: {
 }) {
   const { render, inline, ...props } = params;
   return [render?.(), solidContent(LazyViewError, { ...props, inline: inline ?? Boolean(render) })];
-}
-
-export function renderPanelErrorState(params: {
-  actions?: LegacyTemplateResult;
-  class?: string;
-  detail?: string;
-  inline?: boolean;
-  role?: "alert" | "status";
-  stale?: boolean;
-  subtitle: string;
-  title: string;
-}) {
-  return solidContent(LegacyPanelErrorState, params);
 }
