@@ -452,14 +452,14 @@ export function PluginSurface<S extends ControlUiSurface>(props: {
   // Unported Lit callers can mount Solid islands without an application owner.
   // Their directive still owns live DOM-context lookup until that boundary is removed.
   if (!context) {
-    const DefaultView = () => props.renderDefault();
+    const LegacyDefaultView = () => props.renderDefault();
     const CompanionView = () => props.renderCompanion?.();
     return (
       <LitContent
         value={renderPluginSurface(
           props.surface,
           props.props,
-          solidContent(DefaultView, {}),
+          solidContent(LegacyDefaultView, {}),
           props.presented ?? true,
           props.renderCompanion ? solidContent(CompanionView, {}) : undefined,
         )}
