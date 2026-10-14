@@ -24,8 +24,8 @@ describe("external mutation config refresh", () => {
       { order: "successor read first", failure: false },
       { order: "mutation read first", failure: true },
       { order: "successor read first", failure: true },
-    ].flatMap((scenario) =>
-      [false, true].map((mutationFailure) => ({ ...scenario, mutationFailure })),
+    ].flatMap(({ order, failure }) =>
+      [false, true].map((mutationFailure) => ({ order, failure, mutationFailure })),
     ),
   )(
     "uses the actual successor result with $order (failure: $failure, mutation failure: $mutationFailure)",

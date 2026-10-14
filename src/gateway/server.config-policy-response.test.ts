@@ -136,7 +136,7 @@ describe("config writer policy-close ordering", () => {
           .filter((name) =>
             basenames.some((base) => name === base || name.startsWith(`${base}.bak`)),
           )
-          .sort();
+          .toSorted();
         return await Promise.all(
           names.map(async (name) => ({
             name,
