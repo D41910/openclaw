@@ -230,9 +230,9 @@ Generic internal runner failures stay quiet for optional turns that have not sho
 
 An empty final is not intentional silence. OpenClaw keeps its bounded recovery path without repeating completed actions. If recovery still returns no answer, the run fails. An admitted user request receives at most one short system notice: "No answer was returned. Ask again if you still need one." When model fallback is available, that notice appears only after the fallback chain is exhausted, not once per candidate. It is not saved or classified as an assistant answer. Heartbeat, cron, and other background or internal failures remain recorded without posting a missing-answer notice to chat. Existing classified failure guidance and alert paths still apply; a silent recovery cannot turn a provider failure into success. Confirmed delivery or still-owned delivery prevents duplicate recovery; see [Reply shaping](/concepts/agent-loop#reply-shaping).
 
-Pending media work without an authored acknowledgment retains its existing waiting status so supported channels can keep the live progress card until the media arrives. An explicit `NO_REPLY` still ends silently without canceling that work. Failed delegated tasks use the same short missing-answer copy; their existing delivery and requester-history mirroring are unchanged.
+Pending work without an authored acknowledgment retains its existing waiting status so supported channels can keep the live progress card until the result arrives. An explicit `NO_REPLY` still ends silently without canceling that work. Failed delegated tasks use the same short missing-answer copy; their existing delivery and requester-history mirroring are unchanged.
 
-Pending WebChat and Control UI work retains progress cards, authored yield acknowledgments, and the existing media waiting status while a result is still owed.
+Pending WebChat and Control UI work retains progress cards and waiting status while a result is still owed.
 
 ## Related
 

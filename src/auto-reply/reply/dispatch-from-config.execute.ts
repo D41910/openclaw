@@ -83,7 +83,7 @@ export async function executeDispatch(state: PrepareDispatchExecutionReadyState)
   const releasePendingContinuation = async () => {
     const settlement = pendingContinuationSettlement;
     pendingContinuationSettlement = undefined;
-    await settlement?.settle("cancelled");
+    await settlement?.settle(false);
   };
   let didDeliverVisiblePartialReply = false;
   let replyResolverError: string | undefined;

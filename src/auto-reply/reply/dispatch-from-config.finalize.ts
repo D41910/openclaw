@@ -32,7 +32,6 @@ import {
   clearPendingFinalDeliveryAfterSuccess,
   suppressPendingFinalDelivery,
 } from "./dispatch-from-config.pending-final.js";
-import type { PendingContinuationSettlement } from "./get-reply.types.js";
 
 type ExecuteDispatchReadyState = Extract<
   Awaited<ReturnType<typeof executeDispatch>>,
@@ -94,17 +93,15 @@ export async function finalizeDispatchAndAudit(state: ExecuteDispatchReadyState)
   let deferredTtsTextPending = explicitSilence ? "" : state.progressState.accumulatedBlockTtsText;
   let continuationSettlementAttempted = false;
   let continuationSettlementRegistered = false;
-  const settleContinuation = async (
-    outcome: Parameters<PendingContinuationSettlement["settle"]>[0],
-  ) => {
+  const settleContinuation = async (statusDelivered: boolean) => {
     if (!pendingContinuationSettlement || continuationSettlementAttempted) {
       return;
     }
     continuationSettlementAttempted = true;
     try {
-      await pendingContinuationSettlement.settle(outcome);
+      await pendingContinuationSettlement.settle(statusDelivered);
     } catch (error) {
-      if (outcome === "cancelled") {
+      if (!statusDelivered) {
         throw error;
       }
       // A delivered waiting status must not strand its child completion when
@@ -113,7 +110,7 @@ export async function finalizeDispatchAndAudit(state: ExecuteDispatchReadyState)
       logVerbose(
         `dispatch-from-config: continuation batch handoff failed: ${formatErrorMessage(error)}`,
       );
-      await pendingContinuationSettlement.settle("cancelled");
+      await pendingContinuationSettlement.settle(false);
     }
   };
   try {
@@ -237,23 +234,23 @@ export async function finalizeDispatchAndAudit(state: ExecuteDispatchReadyState)
             const outcome = await finalReply.dispatcherOutcome;
             // A post-send error can leave visibility unknown. Only an acknowledged
             // status may yield the requester and hold child completion delivery.
-            await settleContinuation(outcome === "delivered" ? "delivered" : "cancelled");
+            await settleContinuation(outcome === "delivered");
           });
           continuationSettlementRegistered = true;
         } else {
-          await settleContinuation(finalReply.routedFinalCount > 0 ? "delivered" : "cancelled");
+          await settleContinuation(finalReply.routedFinalCount > 0);
         }
       }
     }
-    if (!continuationSettlementRegistered) {
+    if (explicitSilence && !continuationSettlementRegistered) {
       throwIfDispatchOperationAborted();
-      await settleContinuation("silent");
+      await settleContinuation(true);
     }
   } finally {
     // The batch owns release even when an earlier payload fails or the status
     // is filtered out. An admitted status transfers ownership to queue settlement.
     if (!continuationSettlementRegistered) {
-      await settleContinuation("cancelled");
+      await settleContinuation(false);
     }
   }
   let channelTransformSuppressed =

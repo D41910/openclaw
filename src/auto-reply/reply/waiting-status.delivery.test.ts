@@ -1,12 +1,7 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
-import {
-  admitMediaHandle,
-  resetGeneratedMediaTaskActivityForTests,
-} from "../../agents/media-generation-activity.test-support.js";
 import { SubagentRegistryWriteError } from "../../agents/subagents/registry/subagent-registry-persistence.js";
 import type * as SubagentRegistry from "../../agents/subagents/registry/subagent-registry.js";
-import { createMediaGenerationTaskLifecycle } from "../../agents/tools/media-generate-background-shared.js";
 import { getReplyPayloadMetadata } from "../reply-payload.js";
 import { markAgentRunFailureReplyPayload } from "./agent-runner-failure-reply.js";
 import { accountAgentTurn } from "./agent-runner-result-accounting.js";
@@ -260,37 +255,8 @@ describe.each(["ordinary", "queued"] as const)("%s waiting status delivery", (la
   );
 });
 
-it("retains the queued media handoff when no acknowledgment was authored", async () => {
-  const context = createContext();
-  context.execution.result.acceptedSessionSpawns = undefined;
-  context.execution.result.meta = { durationMs: 0, continuationPending: true };
-  const handle = admitMediaHandle({
-    taskId: "queued-image",
-    runId: "tool:image_generate:queued",
-    requesterSessionKey: expectDefined(context.sessionKey, "media requester"),
-    requesterAgentId: context.followupRun.run.agentId,
-    taskLabel: "queued image",
-  });
-  onTestFinished(resetGeneratedMediaTaskActivityForTests);
-  const payloads = await prepare("queued", context);
-  expect(payloads).toHaveLength(1);
-  expect(payloads[0]?.text).toBe(
-    "I’m continuing this work and will send the result when it is ready.",
-  );
-  const draft = { push: vi.fn(), retire: vi.fn() };
-  expect(getReplyPayloadMetadata(payloads[0] ?? {})?.progressContinuation?.adopt(draft)).toBe(true);
-  createMediaGenerationTaskLifecycle("image").completeTaskRun({
-    handle,
-    provider: "fixture",
-    model: "fixture",
-    count: 1,
-  });
-  expect(draft.retire).toHaveBeenCalledOnce();
-  expect(settleRequester).not.toHaveBeenCalled();
-});
-
 it.each([true, false])(
-  "settles an authored continuation once after delivery=%s",
+  "settles a continuation once after status delivery=%s",
   async (delivered) => {
     const context = createContext();
     context.execution.result.meta = {
@@ -316,110 +282,119 @@ it.each([true, false])(
     expect(onPendingContinuation).toHaveBeenCalledOnce();
     const settlement = onPendingContinuation.mock.calls[0]?.[0];
     expect(settlement).toBeDefined();
-    await Promise.all([
-      settlement?.settle(delivered ? "delivered" : "cancelled"),
-      settlement?.settle(delivered ? "cancelled" : "delivered"),
-    ]);
+    await Promise.all([settlement?.settle(delivered), settlement?.settle(!delivered)]);
     expect(settleRequester).toHaveBeenCalledOnce();
     expect(settleRequester.mock.calls[0]?.[0]).toMatchObject({
       requesterYielded: delivered,
     });
-    await settlement?.settle(delivered ? "cancelled" : "delivered");
+    await settlement?.settle(!delivered);
     expect(settleRequester).toHaveBeenCalledOnce();
   },
 );
 
-it.each([undefined, "NO_REPLY"])(
-  "settles a continuation without manufacturing waiting text for %s",
-  async (yieldAcknowledgment) => {
+describe.each(["ordinary", "queued"] as const)("%s pending acknowledgments", (lane) => {
+  it.each([
+    { expectation: "required", acknowledgment: undefined },
+    { expectation: "result-required", acknowledgment: undefined },
+    { expectation: "required", acknowledgment: "NO_REPLY" },
+  ] as const)(
+    "preserves $expectation waiting status for $acknowledgment",
+    async ({ expectation, acknowledgment }) => {
+      const context = createContext();
+      context.followupRun.run.terminalReplyExpectation = expectation;
+      context.execution.result.meta = {
+        durationMs: 0,
+        continuationPending: true,
+        yieldAcknowledgment: acknowledgment,
+      };
+      const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
+      context.opts = { onPendingContinuation };
+
+      const payloads = await prepare(lane, context);
+      expect(payloads.map((payload) => payload.text)).toEqual([
+        acknowledgment ?? "I’m continuing this work and will send the result when it is ready.",
+      ]);
+      if (lane === "ordinary") {
+        const settlement = expectDefined(
+          onPendingContinuation.mock.calls[0]?.[0],
+          "continuation settlement",
+        );
+        await settlement.settle(true);
+        expect(settleRequester).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ requesterYielded: true }),
+        );
+      }
+    },
+  );
+});
+
+it.each(["delivered", "cancelled", "aborted"] as const)(
+  "settles an explicitly silent child continuation after %s",
+  async (outcome) => {
     const context = createContext();
     context.execution.result.meta = {
       durationMs: 0,
       continuationPending: true,
-      yieldAcknowledgment,
+      finalAssistantRawText: "NO_REPLY",
+      terminalReply: { disposition: "silent" },
     };
     const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
     context.opts = { onPendingContinuation };
 
-    const payloads = await prepare("ordinary", context);
-    expect(payloads.map((payload) => payload.text)).toEqual(
-      yieldAcknowledgment?.trim() ? [yieldAcknowledgment.trim()] : [],
-    );
+    expect(await prepare("ordinary", context)).toEqual([]);
     const settlement = expectDefined(
       onPendingContinuation.mock.calls[0]?.[0],
-      "continuation settlement",
+      "silent continuation settlement",
     );
-    await settlement.settle(yieldAcknowledgment?.trim() ? "delivered" : "silent");
-    expect(settleRequester).toHaveBeenCalledOnce();
-    expect(settleRequester.mock.calls[0]?.[0].requesterYielded).toBe(true);
-  },
-);
-
-it.each(["cancelled", "aborted"] as const)(
-  "releases a silent continuation when %s",
-  async (outcome) => {
-    const context = createContext();
-    context.execution.result.meta = { durationMs: 0, continuationPending: true };
-    const pending = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
-    context.opts = { onPendingContinuation: pending };
-    expect(await prepare("ordinary", context)).toEqual([]);
-    const settlement = expectDefined(pending.mock.calls[0]?.[0], "silent continuation");
     if (outcome === "aborted") {
       expect(context.replyOperation.abortByUser()).toBe(true);
     }
-    await settlement.settle(outcome === "aborted" ? "silent" : "cancelled");
+    await settlement.settle(outcome !== "cancelled");
     expect(settleRequester).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ requesterYielded: false }),
+      expect.objectContaining({ requesterYielded: outcome === "delivered" }),
     );
   },
 );
 
-it.each([
-  "refusal",
-  "persistence failure",
-  "silent refusal",
-  "silent persistence failure",
-] as const)("releases an implicit continuation after settlement %s", async (failure) => {
-  const context = createContext();
-  context.execution.result.meta = {
-    durationMs: 0,
-    continuationPending: true,
-    ...(!failure.startsWith("silent")
-      ? { yieldAcknowledgment: "The worker is still checking." }
-      : {}),
-  };
-  const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
-  context.opts = { onPendingContinuation };
-  await prepare("ordinary", context);
-  const settlement = expectDefined(
-    onPendingContinuation.mock.calls[0]?.[0],
-    "implicit continuation settlement",
-  );
-  settleRequester.mockImplementationOnce(async () => {
-    if (failure.endsWith("persistence failure")) {
-      throw new Error("native settlement persistence failed");
-    }
-    return false;
-  });
+it.each(["refusal", "persistence failure"] as const)(
+  "releases an implicit continuation after settlement %s",
+  async (failure) => {
+    const context = createContext();
+    context.execution.result.meta = {
+      durationMs: 0,
+      continuationPending: true,
+      yieldAcknowledgment: "The worker is still checking.",
+    };
+    const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
+    context.opts = { onPendingContinuation };
+    await prepare("ordinary", context);
+    const settlement = expectDefined(
+      onPendingContinuation.mock.calls[0]?.[0],
+      "implicit continuation settlement",
+    );
+    settleRequester.mockImplementationOnce(async () => {
+      if (failure === "persistence failure") {
+        throw new Error("native settlement persistence failed");
+      }
+      return false;
+    });
 
-  const outcome = failure.startsWith("silent") ? "silent" : "delivered";
-  await expect(
-    Promise.all([settlement.settle(outcome), settlement.settle(outcome)]),
-  ).rejects.toThrow(
-    failure.endsWith("persistence failure")
-      ? "native settlement persistence failed"
-      : "accepted continuation children could not transfer terminal delivery",
-  );
-  expect(settleRequester).toHaveBeenCalledOnce();
+    await expect(Promise.all([settlement.settle(true), settlement.settle(true)])).rejects.toThrow(
+      failure === "persistence failure"
+        ? "native settlement persistence failed"
+        : "accepted continuation children could not transfer terminal delivery",
+    );
+    expect(settleRequester).toHaveBeenCalledOnce();
 
-  await settlement.settle("cancelled");
-  expect(settleRequester.mock.calls.map(([params]) => params.requesterYielded)).toEqual([
-    true,
-    false,
-  ]);
-  await settlement.settle(outcome);
-  expect(settleRequester).toHaveBeenCalledTimes(2);
-});
+    await settlement.settle(false);
+    expect(settleRequester.mock.calls.map(([params]) => params.requesterYielded)).toEqual([
+      true,
+      false,
+    ]);
+    await settlement.settle(true);
+    expect(settleRequester).toHaveBeenCalledTimes(2);
+  },
+);
 
 it.each(["committed", "unknown"] as const)(
   "retains the %s settlement outcome when finalization requests non-yielded compensation",
@@ -440,9 +415,9 @@ it.each(["committed", "unknown"] as const)(
       outcome === "committed" ? "published" : undefined,
     );
     settleRequester.mockRejectedValueOnce(failure);
-    const first = settlement.settle("delivered");
+    const first = settlement.settle(true);
     await expect(first).rejects.toBe(failure);
-    const compensation = settlement.settle("cancelled");
+    const compensation = settlement.settle(false);
     expect(compensation).toBe(first);
     await expect(compensation).rejects.toBe(failure);
     expect(settleRequester).toHaveBeenCalledOnce();
@@ -479,11 +454,11 @@ it.each(["replacement", "rebound key", "rebound session", "retained abort"] as c
       expect(operation.abortByUser()).toBe(true);
     }
     if (change === "retained abort") {
-      await settlement.settle("silent");
+      await settlement.settle(false);
       expect(settleRequester).toHaveBeenCalledOnce();
       expect(settleRequester.mock.calls[0]?.[0].requesterYielded).toBe(false);
     } else {
-      await expect(settlement.settle("cancelled")).rejects.toThrow("original reply operation");
+      await expect(settlement.settle(false)).rejects.toThrow("original reply operation");
       expect(settleRequester).not.toHaveBeenCalled();
     }
   },

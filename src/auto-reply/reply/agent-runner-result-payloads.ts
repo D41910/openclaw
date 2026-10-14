@@ -7,7 +7,6 @@ import {
   resolveExplicitFinalSourceReplyDeliveryEvidence,
   resolveSourceReplyDelivery,
 } from "../../agents/embedded-agent-runner/delivery-evidence.js";
-import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
 import {
   createMissingReplyNotice,
   MISSING_REPLY_NOTICE_TEXT,
@@ -15,6 +14,10 @@ import {
   resolveReplyCompletion,
   shouldDeliverMissingReplyNotice,
 } from "../../agents/reply-completion.js";
+import {
+  assertSubagentRegistryWriteSourceCurrent,
+  SubagentRegistryWriteError,
+} from "../../agents/subagents/registry/subagent-registry-persistence.js";
 import {
   deriveContextPromptTokens,
   hasBillableUsage,
@@ -60,18 +63,23 @@ import {
 import type { AccountedAgentTurn } from "./agent-runner-result-accounting.js";
 import type { FinalizeReplyAgentRunInput } from "./agent-runner-result.types.js";
 import { resolveResponseUsageLine } from "./agent-runner-usage-line.js";
+import type { PendingContinuationSettlement } from "./get-reply.types.js";
 import { attachMcpAppChannelAction, attachMcpConnectChannelAction } from "./mcp-channel-actions.js";
 import { normalizeReplyPayload } from "./normalize-reply.js";
+import { resolveReplyOperationAbortReason } from "./reply-operation-abort.js";
 import {
   recordReplyOperationAgentTurn,
   resolveReplyOperationRunState,
 } from "./reply-operation-run-state.js";
-import { getReplyOperationSessionReader } from "./reply-run-registry.state.js";
+import { getReplyOperationSessionReader, replyRunState } from "./reply-run-registry.state.js";
 import { createReplyToModeFilterForChannel } from "./reply-threading.js";
 import { resolveReplyRunTrigger } from "./reply-turn-kind.js";
 import { resolveSourceReplyExpectation } from "./source-reply-delivery-mode.js";
 import { resolveStrandedReplyRecovery } from "./stranded-reply-recovery.js";
-import { prepareWaitingStatusContinuation, buildWaitingStatusPayload } from "./waiting-status.js";
+import {
+  attachWaitingStatusProgressContinuation,
+  buildWaitingStatusPayload,
+} from "./waiting-status.js";
 export async function prepareReplyAgentPayloads(state: {
   context: FinalizeReplyAgentRunInput;
   accounting: AccountedAgentTurn;
@@ -167,14 +175,6 @@ export async function prepareReplyAgentPayloads(state: {
           operationKey: replyOperation.key,
           operationSessionId: replyOperation.sessionId,
         }
-      : undefined;
-  const mediaSessionKey = runtimePolicySessionKey ?? sessionKey ?? followupRun.run.sessionKey;
-  const mediaRequester =
-    implicitContinuation &&
-    !continuationOwner &&
-    mediaSessionKey &&
-    hasPendingGeneratedMediaTaskForSessionKey(mediaSessionKey, followupRun.run.agentId)
-      ? { sessionKey: mediaSessionKey, agentId: followupRun.run.agentId }
       : undefined;
   const pendingContinuation =
     runResult.meta?.yielded === true ||
@@ -272,7 +272,6 @@ export async function prepareReplyAgentPayloads(state: {
           yielded: runResult.meta?.yielded === true,
           continuationPending: implicitContinuation,
           yieldAcknowledgment: runResult.meta?.yieldAcknowledgment,
-          mediaRequester,
           // Child spawns are side effects, not user-visible messages. They must not
           // suppress the explicit waiting reply for the parent turn.
           hasVisibleMessageDelivery:
@@ -403,23 +402,6 @@ export async function prepareReplyAgentPayloads(state: {
     await signalTypingIfNeeded([preparedPayload], typingSignals);
     return returnWithQueuedFollowupDrain(preparedPayload);
   };
-  if (waitingStatusPayload || implicitContinuation) {
-    const settlement = await prepareWaitingStatusContinuation({
-      payload: waitingStatusPayload,
-      acceptedSessionSpawns: runResult.acceptedSessionSpawns,
-      mediaRequester,
-      operation: replyOperation,
-      owner: continuationOwner,
-      requester: {
-        sessionKey: sessionKey ?? followupRun.run.sessionKey,
-        agentId: followupRun.run.agentId,
-        runId,
-      },
-    });
-    if (implicitContinuation) {
-      opts?.onPendingContinuation?.(settlement);
-    }
-  }
   const recordMissingReply = () => {
     if (completion.outcome === "missing" && !replyOperation.result) {
       replyOperation.retainFailureUntilComplete();
@@ -432,6 +414,80 @@ export async function prepareReplyAgentPayloads(state: {
       opts?.onAgentRunTerminalOutcome?.("failed");
     }
   };
+  const registerContinuationSettlement = (statusPayload?: ReplyPayload) => {
+    if (!continuationOwner) {
+      return;
+    }
+    const acceptedSessionSpawns = runResult.acceptedSessionSpawns;
+    const requesterSessionKey = sessionKey ?? followupRun.run.sessionKey;
+    if (
+      !requesterSessionKey ||
+      !acceptedSessionSpawns?.length ||
+      (!statusPayload && !explicitSilence)
+    ) {
+      throw new Error("accepted continuation status could not be prepared for delivery");
+    }
+    const { stateContext, operationKey, operationSessionId } = continuationOwner;
+    const assertRequesterCurrent = () => {
+      assertSubagentRegistryWriteSourceCurrent(stateContext);
+      // Abort can still owe non-yielded cleanup; replacement cannot inherit this cohort.
+      if (
+        replyRunState.activeRunsByKey.get(operationKey) !== replyOperation ||
+        replyOperation.key !== operationKey ||
+        replyOperation.sessionId !== operationSessionId
+      ) {
+        throw new Error("Requester continuation lost its original reply operation");
+      }
+    };
+    assertRequesterCurrent();
+    let settlementPromise: Promise<void> | undefined;
+    const settlement: PendingContinuationSettlement = {
+      settle: (statusDelivered) =>
+        (settlementPromise ??= (async () => {
+          try {
+            assertRequesterCurrent();
+            // Ordinary replies have no child-registry lifecycle; load only for this captured cohort.
+            const { settleRequesterAfterSessionSpawns } =
+              await import("../../agents/subagents/registry/subagent-registry.js");
+            assertRequesterCurrent();
+            const transferred = await settleRequesterAfterSessionSpawns({
+              requesterSessionKey,
+              requesterAgentId: followupRun.run.agentId,
+              requesterTurnRunId: runId,
+              acceptedSessionSpawns,
+              requesterYielded:
+                statusDelivered && resolveReplyOperationAbortReason(replyOperation) === undefined,
+              stateContext,
+              assertCurrent: assertRequesterCurrent,
+            });
+            if (!transferred) {
+              throw new Error(
+                "accepted continuation children could not transfer terminal delivery",
+              );
+            }
+            try {
+              assertRequesterCurrent();
+            } catch (error) {
+              throw new SubagentRegistryWriteError("committed", error, "published");
+            }
+          } finally {
+            if (statusPayload) {
+              getReplyPayloadMetadata(statusPayload)?.progressContinuation?.close();
+            }
+          }
+        })().catch((error: unknown) => {
+          if (!(error instanceof SubagentRegistryWriteError) || error.outcome === "not-committed") {
+            settlementPromise = undefined;
+          }
+          throw error;
+        })),
+    };
+    opts?.onPendingContinuation?.(settlement);
+  };
+  // Explicit silence still transfers admitted children before the empty-reply return.
+  if (explicitSilence) {
+    registerContinuationSettlement();
+  }
   const finishEmptyReply = async () => {
     recordMissingReply();
     if (completion.outcome === "silent" || completion.outcome === "blocked") {
@@ -687,6 +743,28 @@ export async function prepareReplyAgentPayloads(state: {
       ? appendUnscheduledReminderNote(replyPayloads)
       : replyPayloads;
 
+  const statusPayload = guardedReplyPayloads.find(
+    (payload) => getReplyPayloadMetadata(payload)?.continuationStatus === true,
+  );
+  // Media admission owns runs under the tools' runtime policy key, not a shared main key.
+  const mediaSessionKey =
+    implicitContinuation && !continuationOwner
+      ? (runtimePolicySessionKey ?? sessionKey ?? followupRun.run.sessionKey)
+      : undefined;
+  if (statusPayload) {
+    await attachWaitingStatusProgressContinuation({
+      payload: statusPayload,
+      acceptedSessionSpawns: runResult.acceptedSessionSpawns,
+      mediaRequester: mediaSessionKey
+        ? { sessionKey: mediaSessionKey, agentId: followupRun.run.agentId }
+        : undefined,
+      operation: replyOperation,
+    });
+  }
+
+  if (!explicitSilence) {
+    registerContinuationSettlement(statusPayload);
+  }
   await signalTypingIfNeeded(guardedReplyPayloads, typingSignals);
 
   const responseUsageSessionRaw =
