@@ -74,28 +74,24 @@ describe("subscribeEmbeddedAgentSession deferred progress", () => {
         await subscription.waitForPendingEvents();
 
         const finalizedPayloads = assistantPayloads();
-        expect(finalizedPayloads).toHaveLength(deferred ? 1 : 2);
+        expect(finalizedPayloads).toHaveLength(deferred ? 3 : 4);
         const firstMessage = deferred ? undefined : finalizedPayloads[0];
         if (!deferred) {
           expect(firstMessage).toMatchObject({ text: "Before tool.", itemId: expect.any(String) });
           expect(firstMessage?.itemId).not.toBe("");
         }
-        expect(
-          finalizedPayloads.some(
-            (payload) => typeof payload.text === "string" && payload.text.includes(firstBlock),
-          ),
-        ).toBe(false);
-        expect(
-          finalizedPayloads.some(
-            (payload) => typeof payload.text === "string" && payload.text.includes(lastBlock),
-          ),
-        ).toBe(false);
-        const secondItemId = expectDefined(finalizedPayloads.at(-1), "second message final").itemId;
+        const streamed = finalizedPayloads.slice(deferred ? 0 : 1, -1);
+        expect(streamed.map((payload) => payload.text)).toEqual([
+          firstBlock,
+          `${firstBlock}\n${lastBlock}`,
+        ]);
+        const secondItemId = expectDefined(streamed[0], "second message preview").itemId;
         expect(secondItemId).toEqual(expect.any(String));
         expect(secondItemId).not.toBe("");
         if (firstMessage) {
           expect(secondItemId).not.toBe(firstMessage.itemId);
         }
+        expect(streamed.every((payload) => payload.itemId === secondItemId)).toBe(true);
         expect(finalizedPayloads.at(-1)).toMatchObject({ text: finalText, itemId: secondItemId });
 
         emit({

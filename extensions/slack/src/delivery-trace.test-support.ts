@@ -83,6 +83,28 @@ export function collectSlackWireTexts(events: readonly TraceEvent[]): string[] {
   return texts;
 }
 
+export function collectSlackVisibleMessages(events: readonly TraceEvent[]): Map<string, string> {
+  const visible = new Map<string, string>();
+  for (const event of events) {
+    if (event.dir !== "out" || !event.data || typeof event.data !== "object") {
+      continue;
+    }
+    const data = event.data as { payload?: { ts?: string }; result?: { ts?: string } };
+    const id = data.result?.ts ?? data.payload?.ts;
+    if (!id) {
+      continue;
+    }
+    if (event.kind === "chat.delete") {
+      visible.delete(id);
+    } else if (["chat.postMessage", "chat.update", "chat.startStream"].includes(event.kind)) {
+      visible.set(id, JSON.stringify(data.payload));
+    } else if (["chat.appendStream", "chat.stopStream"].includes(event.kind)) {
+      visible.set(id, (visible.get(id) ?? "") + JSON.stringify(data.payload));
+    }
+  }
+  return visible;
+}
+
 export function buildSlackDeliveryProofVerdict(params: {
   scenario: string;
   events: readonly TraceEvent[];

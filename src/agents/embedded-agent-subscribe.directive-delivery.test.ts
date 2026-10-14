@@ -635,7 +635,7 @@ it("appends visible text across long blank runs without stalling the media scan"
   expect(performance.now() - started).toBeLessThan(1_000);
 });
 
-it("releases a long reply-tagged answer without a quadratic slowdown", () => {
+it("streams a long reply-tagged answer without a quadratic slowdown", () => {
   const body = `${"Paragraph with `code` and **bold** text.\n\n- item `one`\n- item two\n\n".repeat(100)}\`\`\`ts\nconst x = 1;\n\`\`\`\n\nDone.`;
   const text = `[[reply_to_current]] Intro.\n\n${body}`;
   const partials: ReplyPayload[] = [];
@@ -650,9 +650,6 @@ it("releases a long reply-tagged answer without a quadratic slowdown", () => {
   for (let end = 40; end - 40 < text.length; end += 40) {
     emitText(emit, "text_delta", text.slice(0, end), { delta: text.slice(end - 40, end) });
   }
-  expect(partials).toEqual([]);
-  emit({ type: "message_end", message: textMessage(text) });
   expect(performance.now() - started).toBeLessThan(1_000);
-  expect(partials).toHaveLength(1);
-  expect(partials[0]?.text).toBe(`Intro.\n\n${body}`);
+  expect(partials.at(-1)?.text).toBe(`Intro.\n\n${body}`);
 });

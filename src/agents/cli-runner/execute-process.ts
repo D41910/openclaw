@@ -138,8 +138,6 @@ export async function executeCliProcess(params: {
         parseJsonlEvent: context.backendResolved.parseJsonlEvent,
         parseJsonlLifecycleEvent: context.backendResolved.parseJsonlLifecycleEvent,
         onAssistantDelta: params.events.emitCliAssistantDelta,
-        onMessageReset: params.events.emitCliMessageReset,
-        onMessageEnd: params.events.emitCliMessageEnd,
         onCompletedReply: params.events.emitCliCompletedReply,
         onThinkingDelta: params.events.emitCliThinkingDelta,
         onThinkingProgress: params.events.emitCliThinkingProgress,

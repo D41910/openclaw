@@ -89,6 +89,7 @@ export type CliOutput = {
 export type CliStreamingDelta = {
   text: string;
   delta: string;
+  replace?: true;
   sessionId?: string;
   usage?: CliUsage;
 };
@@ -138,9 +139,6 @@ export type CliJsonlStreamingParserOptions = {
   parseJsonlEvent?: CliBackendParseJsonlEvent;
   parseJsonlLifecycleEvent?: CliBackendParseJsonlLifecycleEvent;
   onAssistantDelta: (delta: CliStreamingDelta) => void;
-  onMessageReset?: () => void;
-  onMessageEnd?: (text: string, hasToolUse: boolean) => void;
-  /** Result acceptance, distinct from a native message ending before Stop hooks. */
   onCompletedReply?: (text: string, assistantMessageIndex: number) => void;
   onThinkingDelta?: (delta: CliThinkingDelta) => void;
   onThinkingProgress?: (progress: CliThinkingProgress) => void;

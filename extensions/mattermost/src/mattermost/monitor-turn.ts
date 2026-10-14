@@ -172,6 +172,7 @@ export async function dispatchMattermostInboundTurn(
           clear: draftStream.clear,
         }
       : undefined,
+    cleanupUndelivered: true,
     onFinalStarted: () => progressDraft.markFinalReplyStarted(),
     onFinalDelivered: () => progressDraft.markFinalReplyDelivered(),
     onCleanupFailure: (err) =>
@@ -444,10 +445,26 @@ export async function dispatchMattermostInboundTurn(
             disableBlockStreaming: draftPreviewEnabled ? true : replyOptions.disableBlockStreaming,
             ...(draftPreviewEnabled ? { suppressDefaultToolProgressMessages: true } : {}),
             onModelSelected,
-            onPartialReply: (payloadResult) =>
-              account.streamingMode === "progress"
+            onPartialReply: (payloadResult) => {
+              if (
+                account.streamingMode === "block" &&
+                payloadResult.replace &&
+                payloadResult.text === "" &&
+                !previewLifecycle.finalStarted
+              ) {
+                lastPartialText = "";
+                hasStreamedPreview = false;
+                blockPreviewActivity = "none";
+                blockPreviewAssistantMessagePending = false;
+                firstAssistantPreviewPrefixPending ||= currentAssistantPreviewUsesPrefix;
+                currentAssistantPreviewUsesPrefix = false;
+                progressDraft.resetActivity({ suppressed: true });
+                return draftStream?.deleteCurrentMessage();
+              }
+              return account.streamingMode === "progress"
                 ? false
-                : updateDraftFromPartial(payloadResult.text),
+                : updateDraftFromPartial(payloadResult.text);
+            },
             onAssistantMessageStart: () => {
               lastPartialText = "";
               progressDraft.beginAssistantMessage();

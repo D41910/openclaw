@@ -16,6 +16,7 @@ import {
 import { withFetchPreconnect } from "openclaw/plugin-sdk/test-env";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { FeishuConfigSchema } from "./config-schema.js";
+import type { FeishuReplyDeliveryResultWithFinalization } from "./reply-delivery-result.js";
 import type { ResolvedFeishuAccount } from "./types.js";
 
 type RecordedWireCall = Parameters<WireRecorder["recordWireCall"]>[0];
@@ -388,7 +389,7 @@ function setupFeishuTrace(recorder: WireRecorder, scenario: DeliveryTraceScenari
         await options.onReplyStart?.();
         break;
       case "partial":
-        created.replyOptions.onPartialReply?.({ text: step.text });
+        await created.replyOptions.onPartialReply?.({ text: step.text });
         break;
       case "block-final":
         await created.delivery.deliver({ text: step.text }, { kind: "block" });
@@ -439,6 +440,105 @@ const FEISHU_TRACE_SCENARIOS: readonly DeliveryTraceScenarioName[] = [
 ];
 
 describe("feishu delivery trace goldens", () => {
+  it.each(["none", "closed", "pending", "block"] as const)(
+    "retracts an unfinished preview and keeps retry drafts with a %s earlier final",
+    async (earlierFinal) => {
+      const wire: RecordedWireCall[] = [];
+      const committed = "Earlier committed answer.";
+      const draft = "Unfinished reasoning that becomes silent.";
+      const retry = "Required retry answer.";
+      await runDeliveryTraceScenario({
+        scenario: { name: `feishu-retract-${earlierFinal}`, steps: [{ kind: "cancel" }] },
+        setup: (recorder) => {
+          setupFeishuTrace(
+            {
+              ...recorder,
+              recordWireCall: (call) => {
+                wire.push(call);
+                recorder.recordWireCall(call);
+              },
+            },
+            "final-only",
+          );
+          traceState.account = {
+            ...makeTraceAccount("final-only"),
+            config: FeishuConfigSchema.parse({
+              renderMode: "card",
+              streaming: { mode: "partial" },
+            }),
+          };
+          const dispatcher = createFeishuReplyDispatcher({
+            cfg: {} as never,
+            agentId: "agent",
+            runtime: {} as never,
+            chatId: "oc-trace-chat",
+            sendTarget: "oc-trace-chat",
+          });
+          return async () => {
+            let prior: FeishuReplyDeliveryResultWithFinalization | undefined;
+            if (earlierFinal !== "none") {
+              prior = (await dispatcher.delivery.deliver(
+                { text: committed },
+                { kind: earlierFinal === "block" ? "block" : "final" },
+              )) as FeishuReplyDeliveryResultWithFinalization;
+              if (earlierFinal === "closed") {
+                await dispatcher.dispatcherOptions.onIdle?.();
+                await expect(prior.finalization).resolves.toMatchObject({ content: committed });
+              }
+            }
+            await dispatcher.replyOptions.onPartialReply?.({ text: draft });
+            await vi.advanceTimersByTimeAsync(0);
+            await dispatcher.replyOptions.onPartialReply?.({ text: "", delta: "", replace: true });
+            await dispatcher.dispatcherOptions.onIdle?.();
+            if (prior) {
+              await expect(prior.finalization).resolves.toMatchObject({ content: committed });
+            }
+            await dispatcher.replyOptions.onPartialReply?.({ text: retry });
+            const final = (await dispatcher.delivery.deliver(
+              { text: retry },
+              { kind: "final" },
+            )) as FeishuReplyDeliveryResultWithFinalization;
+            await dispatcher.dispatcherOptions.onIdle?.();
+            await expect(final.finalization).resolves.toMatchObject({ content: retry });
+            dispatcher.dispatcherOptions.onCleanup?.();
+          };
+        },
+      });
+      const deleted = wire.filter((call) => call.method === "im.message.delete");
+      expect(deleted).toEqual(
+        earlierFinal === "pending" || earlierFinal === "block"
+          ? []
+          : [
+              expect.objectContaining({
+                target: earlierFinal === "closed" ? "om-2" : "om-1",
+              }),
+            ],
+      );
+      const closes = wire.filter((call) => call.method.endsWith("/settings"));
+      expect(closes).toHaveLength(earlierFinal === "none" ? 1 : 2);
+      expect(closes.at(-1)).toMatchObject({
+        payload: { settings: { config: { streaming_mode: false, summary: { content: retry } } } },
+      });
+      if (earlierFinal !== "none") {
+        expect(closes[0]).toMatchObject({
+          payload: { settings: { config: { summary: { content: committed } } } },
+        });
+      }
+      const writes = wire.filter((call) => call.method.includes("/elements/content"));
+      expect(writes).toContainEqual(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            content:
+              earlierFinal === "pending" || earlierFinal === "block"
+                ? `${committed}${draft}`
+                : draft,
+          }),
+        }),
+      );
+      expect(writes.at(-1)).toMatchObject({ payload: { content: retry } });
+    },
+  );
+
   it("updates the accepted card without a duplicate send when its message receipt is absent", async () => {
     const events = await runDeliveryTraceScenario({
       scenario: deliveryTraceScenarios["final-only"],

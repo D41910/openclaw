@@ -107,7 +107,6 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
   const {
     clearAssistantStream,
     clearDeferredBlockReplies,
-    deferAssistantMessageDelivery,
     emitAssistantStreamData,
     emitBlockReply,
     finalizeAssistantTexts,
@@ -267,7 +266,6 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
     blockChunker,
     emitBlockReply: replyDelivery.emitBlockReply,
     flushAssistantStream,
-    deferAssistantMessageDelivery,
     pendingBlockReplyTasks: replyDelivery.pendingBlockReplyTasks,
     discardPendingBlockReplies: replyDelivery.discardPendingBlockReplies,
     pushAssistantText: replyDelivery.pushAssistantText,
@@ -374,7 +372,6 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
     emitBlockReply,
     flushAssistantStream,
     releaseDeferredReplies,
-    deferAssistantMessageDelivery,
     settleAssistantMessageDelivery,
     clearAssistantStream,
     clearDeferredBlockReplies,

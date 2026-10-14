@@ -144,7 +144,11 @@ export function createAgentTurnPresentation(params: {
     return result;
   };
 
-  const presentPartialReply = async (payload: ReplyPayload, runtime: "cli" | "embedded") => {
+  const presentPartialReply = async (payload: PartialReplyPayload, runtime: "cli" | "embedded") => {
+    const onPartialReply = params.turn.opts?.onPartialReply;
+    if (payload.replace && payload.text === "") {
+      return await presentWithTyping(Promise.resolve(), () => onPartialReply?.(payload));
+    }
     const classified = classifyStreamingPartial(payload);
     if (classified.skip || !classified.text) {
       return runtime === "embedded" ? false : undefined;
@@ -170,7 +174,12 @@ export function createAgentTurnPresentation(params: {
             },
             mediaUrls: payload.mediaUrls,
           };
-    const onPartialReply = params.turn.opts?.onPartialReply;
+    if (payload.delta !== undefined) {
+      partialPayload.delta = payload.delta;
+    }
+    if (payload.replace) {
+      partialPayload.replace = true;
+    }
     return await presentWithTyping(params.turn.typingSignals.signalTextDelta(textForTyping), () =>
       !onPartialReply || (runtime === "cli" && !partialPayload.text)
         ? false

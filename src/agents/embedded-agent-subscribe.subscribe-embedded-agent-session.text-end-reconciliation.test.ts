@@ -136,7 +136,11 @@ describe("native snapshot reconciliation", () => {
     const draft = "```text\n[[reply_to:example-id]]\n```\n\nThe original draft continues here.";
     h.start();
     h.delta([draft], 0);
-    expect(onAgentEvent.mock.calls.filter(([event]) => event.stream === "assistant")).toEqual([]);
+    expect(onAgentEvent.mock.calls.at(-1)?.[0]).toMatchObject({
+      stream: "assistant",
+      data: { text: draft },
+    });
+    onAgentEvent.mockClear();
     const corrected = "[[reply_to:replacement]]Corrected";
     h.end([corrected], 0);
     await h.subscription.waitForPendingEvents();
@@ -148,7 +152,7 @@ describe("native snapshot reconciliation", () => {
       blocks: h.texts(),
       assistantTexts: h.subscription.assistantTexts,
     }).toMatchObject({
-      events: [{ stream: "assistant", data: { text: "Corrected", delta: "Corrected" } }],
+      events: [{ stream: "assistant", data: { text: "Corrected", delta: "", replace: true } }],
       blocks: ["Corrected"],
       assistantTexts: ["Corrected"],
     });
@@ -273,7 +277,10 @@ describe("native snapshot reconciliation", () => {
       await h.subscription.waitForPendingEvents();
       expect(h.texts()).toEqual([]);
       expect(h.subscription.assistantTexts).toEqual(expected);
-      expect(onAgentEvent.mock.calls.filter(([event]) => event.stream === "assistant")).toEqual([]);
+      expect(onAgentEvent.mock.calls.at(-1)?.[0]).toMatchObject({
+        stream: "assistant",
+        data: { text: expected.join("\n") },
+      });
     }
     h.emit({ type: "message_end", message: partial });
     await h.subscription.waitForPendingEvents();
@@ -317,11 +324,11 @@ describe("native snapshot reconciliation", () => {
       h.start();
       for (const [index, delta] of chunks.entries()) {
         h.delta(chunks.slice(0, index + 1), index, delta);
-        expect(visibleUpdates()).toEqual([]);
+        expect(visibleUpdates()).toEqual(index === chunks.length - 1 ? expected : []);
       }
       h.end(chunks, chunks.length - 1);
       await h.subscription.waitForPendingEvents();
-      expect(visibleUpdates()).toEqual([]);
+      expect(visibleUpdates()).toEqual(expected);
       expect(h.texts()).toEqual([]);
       h.emit({ type: "message_end", message: assistant(chunks) });
       await h.subscription.waitForPendingEvents();

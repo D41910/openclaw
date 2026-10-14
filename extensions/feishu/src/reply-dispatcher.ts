@@ -48,7 +48,10 @@ import {
   type FeishuReplyDeliveryResultWithFinalization,
   type FeishuReplyDeliverySource,
 } from "./reply-delivery-result.js";
-import { streamingStartBackoffUntilByAccount } from "./reply-dispatcher-state.js";
+import {
+  isStreamingStartBackedOff,
+  streamingStartBackoffUntilByAccount,
+} from "./reply-dispatcher-state.js";
 import { getFeishuRuntime } from "./runtime.js";
 import {
   chunkFeishuCardMarkdown,
@@ -62,23 +65,9 @@ import {
   FeishuStreamingSession,
   mergeStreamingText,
 } from "./streaming-card.js";
-import { queueFeishuStreamingUpdate } from "./streaming-update.js";
+import { mergeStreamingFinalText, queueFeishuStreamingUpdate } from "./streaming-update.js";
 import { resolveReceiveIdType } from "./targets.js";
 import { addTypingIndicator, removeTypingIndicator, type TypingIndicatorState } from "./typing.js";
-
-function mergeStreamingFinalText(
-  previousText: string,
-  nextText: string,
-  appendError: boolean,
-): string {
-  if (!appendError || !previousText || nextText.startsWith(previousText)) {
-    return nextText;
-  }
-  if (previousText.endsWith(`\n\n${nextText}`)) {
-    return previousText;
-  }
-  return `${previousText}\n\n${nextText}`;
-}
 
 /** Maximum age (ms) for a message to receive a typing indicator reaction.
  * Messages older than this are likely replays after context compaction (#30418). */
@@ -87,18 +76,6 @@ const MS_EPOCH_MIN = 1_000_000_000_000;
 const STREAMING_START_FAILURE_BACKOFF_MS = 60_000;
 const NO_VISIBLE_REPLY_FALLBACK_TEXT =
   "⚠️ This reply completed without visible content. The turn may have been interrupted; please retry or ask me to recover from recent context.";
-
-function isStreamingStartBackedOff(accountId: string, now = Date.now()): boolean {
-  const backoffUntil = streamingStartBackoffUntilByAccount.get(accountId);
-  if (backoffUntil === undefined) {
-    return false;
-  }
-  if (backoffUntil <= now) {
-    streamingStartBackoffUntilByAccount.delete(accountId);
-    return false;
-  }
-  return true;
-}
 
 function normalizeEpochMs(timestamp: number | undefined): number | undefined {
   if (!Number.isFinite(timestamp) || timestamp === undefined || timestamp <= 0) {
@@ -301,6 +278,8 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
   let lastSnapshotTextLength = 0;
   // Partial previews are replaceable; only committed final text may precede an error notice.
   let hasStreamingFinalText = false;
+  // Accepted blocks and finals survive a later message retracting its unfinished preview.
+  let committedStreamText = "";
   const deliveredFinalTexts = new Set<string>();
   type StreamingDisposition = "closed" | "discarded";
   type StreamingCloseOutcome = {
@@ -469,6 +448,7 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
     snapshotBaseText = "";
     lastSnapshotTextLength = 0;
     hasStreamingFinalText = false;
+    committedStreamText = "";
   };
 
   const performStreamingClose = async (
@@ -1309,12 +1289,14 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
               // Some runtimes emit block payloads without onPartial/final callbacks.
               // Mirror block text into streamText so onIdle close still sends content.
               queueStreamingUpdate(text, { mode: "delta", dedupeWithLastPartial: true });
+              committedStreamText = streamText;
             }
             if (info?.kind === "final") {
               // Final payloads can be cumulative snapshots or independent
               // notices. Preserve both when the latter arrives after an answer.
               streamText = text;
               hasStreamingFinalText = true;
+              committedStreamText = text;
               snapshotBaseText = "";
               lastSnapshotTextLength = text.length;
               flushStreamingCardUpdate(buildCombinedStreamText(reasoningText, streamText));
@@ -1390,7 +1372,22 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
       onModelSelected,
       disableBlockStreaming: !coreBlockStreamingEnabled,
       onPartialReply: previewStreamingEnabled
-        ? (payload: ReplyPayload) => {
+        ? async (payload: Parameters<NonNullable<GetReplyOptions["onPartialReply"]>>[0]) => {
+            if (payload.replace && payload.text === "") {
+              if (streaming || streamingStartPromise) {
+                if (committedStreamText) {
+                  streamText = committedStreamText;
+                  reasoningText = "";
+                  const outcome = await closeStreaming();
+                  if (outcome.error !== undefined) {
+                    throw toFeishuError(outcome.error);
+                  }
+                } else {
+                  await discardStreamingPreview();
+                }
+              }
+              return false;
+            }
             if (!payload.text) {
               return false;
             }

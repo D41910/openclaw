@@ -234,7 +234,7 @@ describe("Responses final delivery", () => {
           }
           if (update.type === "text_delta" && queuedText && queuedText.includes(update.delta)) {
             observedQueuedText += update.delta;
-            expect(onPartialReply).not.toHaveBeenCalled();
+            expect(onPartialReply.mock.calls.at(-1)?.[0].text).toContain("Final text.");
           }
         },
         undefined,
@@ -344,7 +344,6 @@ describe("terminal visible replies", () => {
           assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta, partial },
         });
         await h.subscription.waitForPendingEvents();
-        expect(onAgentEvent).not.toHaveBeenCalled();
       }
     }
     h.emit({ type: "message_end", message });
@@ -362,7 +361,7 @@ describe("terminal visible replies", () => {
           .filter(([event]) => event.stream === "assistant")
           .map(([event]) => event.data.text),
       )
-      .toEqual([text]);
+      .toEqual(["    const value = 1;", text]);
   });
 
   it("does not replay a source range assembled from multiple streamed chunks", async () => {
@@ -654,13 +653,15 @@ describe("unphased provider text delivery", () => {
         }
         yield makeCompletionsChunk({ content: "Initial text." });
         await subscription.waitForPendingEvents();
-        expect(onPartialReply).not.toHaveBeenCalled();
+        expect(onPartialReply).toHaveBeenCalledWith(
+          expect.objectContaining({ text: "Initial text." }),
+        );
         expect(onBlockReply).not.toHaveBeenCalled();
         yield makeCompletionsChunk({ reasoning_content: "Second thought." });
         if (interleaved) {
           yield makeCompletionsChunk({ content: "Final text." });
           await subscription.waitForPendingEvents();
-          expect(onPartialReply).not.toHaveBeenCalled();
+          expect(onPartialReply.mock.calls.at(-1)?.[0].text).toContain("Final text.");
           expect(onBlockReply).not.toHaveBeenCalled();
         }
         yield makeCompletionsChunk({}, "stop");
@@ -675,7 +676,6 @@ describe("unphased provider text delivery", () => {
       await subscription.waitForPendingEvents();
       const text = interleaved ? "Initial text.\nFinal text." : "Initial text.";
       expect(onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([text]);
-      expect(onPartialReply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text }));
     },
   );
 });

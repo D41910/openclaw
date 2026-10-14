@@ -1,4 +1,5 @@
 import { createChannelPartialDeliveryError } from "openclaw/plugin-sdk/channel-inbound";
+import { createDeferred } from "openclaw/plugin-sdk/extension-shared";
 import type { GetReplyOptions, ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
 import { expect, it, type Mock } from "vitest";
 import type { MatrixReplyDeliveryResult } from "./replies.js";
@@ -45,6 +46,47 @@ export function registerMatrixPreviewDeliveryTests(harness: PreviewDeliveryHarne
     waitForMatrixState,
     mockCalls,
   } = harness;
+  it.each([false, true])(
+    "settles only the current silent preview at completion (required: %s)",
+    async (required) => {
+      const { dispatch, redactEventMock } = createStreamingHarness({ streaming: "partial" });
+      const { deliver, opts, finish } = await dispatch();
+      const firstPublished = createDeferred<void>();
+      const secondPublished = createDeferred<void>();
+      sendSingleTextMessageMatrixMock
+        .mockImplementationOnce(async () => {
+          firstPublished.resolve();
+          return { messageId: "$earlier", roomId: "!room" };
+        })
+        .mockImplementationOnce(async () => {
+          secondPublished.resolve();
+          return { messageId: "$silent", roomId: "!room" };
+        });
+      try {
+        await opts.onPartialReply?.({ text: "Earlier answer" });
+        await firstPublished.promise;
+        await opts.onBlockReplyQueued?.({ text: "Earlier answer" });
+        await deliver({ text: "Earlier answer" }, { kind: "block" });
+        await opts.onAssistantMessageStart?.();
+        await opts.onPartialReply?.({ text: "The group needs no response" });
+        await secondPublished.promise;
+        expect(sendSingleTextMessageMatrixMock).toHaveBeenCalledTimes(2);
+        await opts.onPartialReply?.({ text: "", delta: "", replace: true });
+        if (required) {
+          await opts.onAssistantMessageStart?.();
+          await opts.onPartialReply?.({ text: "Retry answer" });
+          const result = await deliver({ text: "Retry answer" }, { kind: "final" });
+          expect(result).toMatchObject({ messageIds: ["$silent"], content: "Retry answer" });
+        }
+      } finally {
+        await finish();
+      }
+      expect(mockCalls(redactEventMock, "redactEvent").map(([, id]) => id)).toEqual(
+        required ? [] : ["$silent"],
+      );
+      expect(deliverMatrixRepliesMock).not.toHaveBeenCalled();
+    },
+  );
   it("retires a preview after source delivery and ignores late progress", async () => {
     const { dispatch, redactEventMock } = createStreamingHarness({
       streaming: "partial",

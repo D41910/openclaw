@@ -511,17 +511,6 @@ describe("subscribeEmbeddedAgentSession", () => {
       onReasoningStream,
     });
     emitThinkingEvent(emit, "Checking files", { type: "thinking_delta", delta: "Checking files" });
-    expect(onReasoningStream).not.toHaveBeenCalled();
-    emit({
-      type: "message_end",
-      message: {
-        role: "assistant",
-        content: [
-          { type: "thinking", thinking: "Checking files" },
-          { type: "text", text: "Final answer" },
-        ],
-      },
-    });
     if (enabled) {
       expect(onReasoningStream).toHaveBeenCalledWith({
         text: "Checking files",
@@ -594,11 +583,6 @@ describe("subscribeEmbeddedAgentSession", () => {
 
     emitAssistantTextDelta(emit, " files</think>\nFinal answer");
 
-    expect(onReasoningEnd).not.toHaveBeenCalled();
-    emit({
-      type: "message_end",
-      message: textAssistant("<think>Checking files</think>\nFinal answer"),
-    });
     expect(onReasoningEnd).toHaveBeenCalledTimes(1);
   });
 

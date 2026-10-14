@@ -550,6 +550,29 @@ describe("createCliJsonlStreamingParser", () => {
     );
   });
 
+  it("streams text before native message completion and reclassifies tool commentary", () => {
+    const deltas: Array<{ text: string; delta: string; replace?: true }> = [];
+    const commentary = vi.fn();
+    const parser = createClaudeParser({
+      onAssistantDelta: (delta) => deltas.push(delta),
+      onCommentaryText: commentary,
+    });
+    parser.push(joinJsonlFrames(messageStart, claudeTextDelta("Checking "), ""));
+    expect(deltas.map(({ text }) => text)).toEqual(["Checking "]);
+    expect(commentary).not.toHaveBeenCalled();
+    parser.push(joinJsonlFrames(claudeTextDelta("files."), toolStart(), ""));
+    expect(deltas.map(({ text, delta, replace }) => ({ text, delta, replace }))).toEqual([
+      { text: "Checking ", delta: "Checking ", replace: undefined },
+      { text: "Checking files.", delta: "files.", replace: undefined },
+      { text: "", delta: "", replace: true },
+    ]);
+    expect(commentary).toHaveBeenCalledExactlyOnceWith("Checking files.");
+    parser.push(joinJsonlFrames(messageStop, messageStart, claudeTextDelta("Done."), ""));
+    expect(deltas.at(-1)?.text).toBe("Done.");
+    finishFrames(parser, messageStop, result("Done."));
+    expect(parser.getOutput()?.text).toBe("Done.");
+  });
+
   it.each([
     { name: "no preceding text", frames: [toolStart("toolu_1", 0)], expected: [] },
     {

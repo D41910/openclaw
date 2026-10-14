@@ -265,7 +265,7 @@ export async function runCliFallbackCandidate(
                 }
               : undefined,
           preserveProgressCallbackStartOrder: params.preserveProgressCallbackStartOrder,
-          onAssistantText: (text) => params.presentation.presentPartialReply({ text }, "cli"),
+          onAssistantText: (payload) => params.presentation.presentPartialReply(payload, "cli"),
           onCompletedReply: async (text, assistantMessageIndex) => {
             params.runAbortSignal?.throwIfAborted();
             assertSettlementCurrent();

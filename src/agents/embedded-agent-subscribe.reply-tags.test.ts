@@ -192,8 +192,6 @@ describe("streamed final tags", () => {
     for (const delta of deltas) {
       emitAssistantTextDelta({ emit, delta });
     }
-    expect(reply).not.toHaveBeenCalled();
-    emit({ type: "message_end", message: textAssistant(deltas.join("")) });
     const payloads = partial
       ? reply.mock.calls.map(([p]) => p)
       : extractAgentEventPayloads(reply.mock.calls);
@@ -217,8 +215,6 @@ describe("streamed final tags", () => {
     for (const delta of deltas) {
       emitAssistantTextDelta({ emit, delta });
     }
-    expect(onPartialReply).not.toHaveBeenCalled();
-    emit({ type: "message_end", message: textAssistant(deltas.join("")) });
     expect(
       onPartialReply.mock.calls
         .map(([p]) => p.delta)
@@ -235,8 +231,6 @@ describe("streamed final tags", () => {
     for (const delta of deltas) {
       emitAssistantTextDelta({ emit, delta });
     }
-    expect(extractAgentEventPayloads(onAgentEvent.mock.calls)).toEqual([]);
-    emit({ type: "message_end", message: textAssistant(deltas.join("")) });
     const payloads = extractAgentEventPayloads(onAgentEvent.mock.calls);
     const text = payloads.map((payload) => payload.delta).join("");
     expect(text).toBe("Title\nLine one\nLine two");

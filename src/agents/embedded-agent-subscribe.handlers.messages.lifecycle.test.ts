@@ -26,12 +26,14 @@ describe("handleMessageEnd", () => {
     });
     await ctx.flushBlockReplyBuffer();
     expect(onBlockReply).not.toHaveBeenCalled();
-    expect(onAgentEvent).not.toHaveBeenCalled();
+    const streamedUiText = onAgentEvent.mock.calls[0]?.[0].data.text;
+    expect(streamedUiText).toBe("answer ending");
+    onAgentEvent.mockClear();
     await endMessage(ctx, { message });
     expect(onAgentEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         stream: "assistant",
-        data: expect.objectContaining({ text, delta: text }),
+        data: expect.objectContaining({ text, delta: text.slice(streamedUiText.length) }),
       }),
     );
     expect(onBlockReply.mock.calls.map(([reply]) => reply.text).join("")).toBe(text);
@@ -256,12 +258,7 @@ describe("handleMessageEnd", () => {
         usage: { input: 10, output: 5, total: 15 },
       },
     });
-    expect(onAgentEvent).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        stream: "assistant",
-        data: expect.objectContaining({ text: "", delta: "" }),
-      }),
-    );
+    expect(onAgentEvent).not.toHaveBeenCalled();
     expect(onBlockReply).not.toHaveBeenCalled();
     expect(ctx.state.assistantTexts).toEqual([]);
     expect(ctx.finalizeAssistantTexts).toHaveBeenCalledWith(expect.objectContaining({ text: "" }));

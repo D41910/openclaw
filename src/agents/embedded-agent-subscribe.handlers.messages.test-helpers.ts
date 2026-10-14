@@ -68,9 +68,6 @@ export function createMessageUpdateContext(
     emitReasoningStream: params.emitReasoningStream ?? vi.fn(),
     flushBlockReplyBuffer: params.flushBlockReplyBuffer ?? vi.fn(),
     flushAssistantStream: vi.fn(),
-    deferAssistantMessageDelivery: vi.fn<
-      EmbeddedAgentSubscribeContext["deferAssistantMessageDelivery"]
-    >((_key, deliver) => deliver(false)),
     settleAssistantMessageDelivery: vi.fn(),
     blockChunker: new EmbeddedBlockChunker(),
     resetAssistantMessageState: params.resetAssistantMessageState ?? vi.fn(),
@@ -141,7 +138,6 @@ export function createMessageEndContext(
   const delivery = createReplyDelivery(ctx);
   ctx.emitAssistantStreamData = delivery.emitAssistantStreamData;
   ctx.flushAssistantStream = delivery.flushAssistantStream;
-  ctx.deferAssistantMessageDelivery = delivery.deferAssistantMessageDelivery;
   ctx.settleAssistantMessageDelivery = delivery.settleAssistantMessageDelivery;
   ctx.emitBlockReply = vi.fn(delivery.emitBlockReply);
   ctx.finalizeAssistantTexts =

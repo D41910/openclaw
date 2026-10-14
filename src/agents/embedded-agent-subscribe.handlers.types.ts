@@ -11,10 +11,6 @@ import type { ReplyMediaAttachment } from "../auto-reply/reply-payload.js";
 import type { ReplyDirectiveParseResult } from "../auto-reply/reply/reply-directives.js";
 import type { ReasoningLevel } from "../auto-reply/thinking.js";
 import type { AgentItemEventData } from "../infra/agent-activity-events.js";
-import type {
-  AgentAssistantProjection,
-  AgentAssistantSourceReceipt,
-} from "../infra/agent-events.js";
 import type { AssistantMessage, ThinkingContent } from "../llm/types.js";
 import type { HookRunner } from "../plugins/hooks.js";
 import type { AssistantPhase } from "../shared/chat-message-content.js";
@@ -329,7 +325,6 @@ export type EmbeddedAgentSubscribeContext = {
   ) => void;
   flushAssistantStream: () => void;
   releaseDeferredReplies: () => void;
-  deferAssistantMessageDelivery: (key: string, deliver: (silent: boolean) => void) => void;
   settleAssistantMessageDelivery: (options: { silent: boolean }) => void;
   clearAssistantStream: () => void;
   clearDeferredBlockReplies: () => void;
@@ -351,28 +346,4 @@ export type ToolHandlerContext = Pick<
   params: Omit<SubscribeEmbeddedAgentSessionParams, "session">;
   state: EmbeddedAgentSubscribeState;
   consumeToolSendReceipt?: (toolCallId: string) => unknown;
-};
-
-export type AssistantStreamDelivery = {
-  assistantSource?: AgentAssistantSourceReceipt;
-  assistantProjection?: AgentAssistantProjection;
-  data: AssistantStreamData;
-  eventData?: AssistantStreamData;
-  emitPartialReply: boolean;
-  finalMessage: boolean;
-  blockIndex: number;
-  messageStartIndex: number;
-};
-
-export type AssistantStreamScope = {
-  delivery?: AssistantStreamDelivery;
-  active?: boolean;
-  pending?: boolean;
-  emitted?: boolean;
-};
-
-export type ReplyDeliveryParams = {
-  params: SubscribeEmbeddedAgentSessionParams;
-  state: EmbeddedAgentSubscribeContext["state"];
-  log: EmbeddedAgentSubscribeContext["log"];
 };

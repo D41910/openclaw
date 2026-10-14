@@ -544,6 +544,40 @@ describe("Telegram preview, presentation, and progress delivery through HTTP", (
   });
 
   it.each([false, true])(
+    "retracts a silent preview while preserving earlier replies (retry: %s)",
+    async (retry) => {
+      const previous = "The earlier completed answer remains visible.";
+      const preview = "The model is considering whether this conversation needs another answer.";
+      const answer = "Here is the required reply after the silent completion.";
+      let previewId: number | undefined;
+      await dispatchProgressTurn(async () => undefined, {
+        mode: "partial",
+        toolProgress: false,
+        producer: async ({ dispatcher, replyOptions }) => {
+          dispatcher.sendFinalReply({ text: previous });
+          await dispatcher.waitForIdle();
+          await replyOptions?.onAssistantMessageStart?.();
+          await replyOptions?.onPartialReply?.({ text: preview, delta: preview });
+          await waitForBotApiCall(
+            (call) => call.method === "sendMessage" && call.fields.text === preview,
+          );
+          previewId = [...visibleMessages].find(([, text]) => text === preview)?.[0];
+          expect([...visibleMessages.values()]).toEqual([previous, preview]);
+          await replyOptions?.onPartialReply?.({ text: "", delta: "", replace: true });
+          if (retry) {
+            await replyOptions?.onAssistantMessageStart?.();
+            await replyOptions?.onPartialReply?.({ text: answer });
+            dispatcher.sendFinalReply({ text: answer });
+          }
+          return { queuedFinal: true, counts: dispatcher.getQueuedCounts() };
+        },
+      });
+      expect([...visibleMessages.values()]).toEqual(retry ? [previous, answer] : [previous]);
+      expect(visibleMessages.get(previewId!)).not.toBe(preview);
+    },
+  );
+
+  it.each([false, true])(
     "keeps replay failure custody with a terminal provider failure=%s",
     async (terminalFailure) => {
       const context = http.createContext();

@@ -175,11 +175,12 @@ describe("cli tool result events", () => {
     const parser = displayParser(handlers);
     try {
       handlers.emitCliCommentaryText("Let me check that for you.");
-      handlers.emitCliCompletedReply("A completed answer.", 0);
-      expect(events.find((event) => event.data.kind === "preamble")).toMatchObject({
-        stream: "item",
-        data: { kind: "preamble", phase: "end", progressText: "Let me check that for you." },
-      });
+      expect(events).toMatchObject([
+        {
+          stream: "item",
+          data: { kind: "preamble", phase: "end", progressText: "Let me check that for you." },
+        },
+      ]);
       for (const [toolCallId, name, args, isError, quiet] of [
         ["poll", "mcp__openclaw__process", { action: "poll", sessionId: "process-1" }, false, true],
         ["failed", "mcp__openclaw__process", { action: "poll", sessionId: "missing" }, true, false],

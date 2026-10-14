@@ -21,9 +21,14 @@ import {
 } from "openclaw/plugin-sdk/channel-contract-testing";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { createDeferred } from "openclaw/plugin-sdk/extension-shared";
-import type { ReplyDispatchKind, ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
+import type {
+  GetReplyOptions,
+  ReplyDispatchKind,
+  ReplyPayload,
+} from "openclaw/plugin-sdk/reply-runtime";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { mergeSlackAccountConfig } from "./accounts.js";
+import { registerSlackSilentProgressCases } from "./delivery-trace.silent-progress.test-support.js";
 import {
   BLOCKS_FINAL_PRESENTATION,
   BLOCKS_FINAL_TEXT,
@@ -57,28 +62,17 @@ type CapturedDispatcherOptions = {
   };
 };
 
-type CapturedReplyOptions = {
-  commentaryProgressEnabled?: boolean;
-  commentaryPayloadsEnabled?: boolean;
-  suppressDefaultToolProgressMessages?: boolean;
-  onPartialReply?: (payload: { text: string }) => Promise<void> | void;
-  onToolStart?: (payload: {
-    name: string;
-    phase: "start" | "result";
-    itemId?: string;
-    toolCallId?: string;
-    args?: Record<string, unknown>;
-  }) => Promise<void> | void;
-  onItemEvent?: (payload: {
-    kind: string;
-    itemId?: string;
-    toolCallId?: string;
-    phase?: string;
-    status?: string;
-    progressText?: string;
-    name?: string;
-  }) => Promise<void> | void;
-};
+type CapturedReplyOptions = Pick<
+  GetReplyOptions,
+  | "commentaryProgressEnabled"
+  | "commentaryPayloadsEnabled"
+  | "suppressDefaultToolProgressMessages"
+  | "onPartialReply"
+  | "onToolStart"
+  | "onItemEvent"
+  | "onAssistantMessageStart"
+  | "onQueuedFollowupAdmitted"
+>;
 
 type TurnCounts = Record<ReplyDispatchKind, number>;
 
@@ -678,6 +672,12 @@ async function setupSlackTrace(
 }
 
 describe("slack delivery trace goldens", () => {
+  registerSlackSilentProgressCases({
+    setup: setupSlackTrace,
+    getReplyOptions: () => traceState.turn?.replyOptions,
+    assertNoRuntimeError: () => expect(traceRuntimeError).not.toHaveBeenCalled(),
+  });
+
   it.each(["compact", "inferred-compact", "partial", "card"] as const)(
     "keeps native mention policy through serialized %s posts and edits",
     async (mode) => {

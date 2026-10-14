@@ -67,28 +67,46 @@ function setup(options: { deferred?: boolean; reasoning?: "on" | "stream" } = {}
 
 describe("assistant message final-line silence", () => {
   it.each(["NO_REPLY", "**NO_REPLY**", "\tNO_REPLY.  \n\n"])(
-    "holds all answer presentation until the final %j is known",
+    "streams a live preview and retracts it when the final %j is known",
     async (token) => {
       const h = setup();
       const reasoning =
         "This is a group conversation.\nThe follow-up does not require another answer.";
       h.start();
       h.delta(reasoning);
-      expect(h.publishedText()).toEqual([]);
+      expect(h.onPartialReply).toHaveBeenCalledWith(expect.objectContaining({ text: reasoning }));
+      expect(h.assistantEvents()).toContainEqual([
+        expect.objectContaining({ data: expect.objectContaining({ text: reasoning }) }),
+      ]);
+      const previewItemId = h.assistantEvents().at(-1)?.[0].data.itemId;
+      expect(previewItemId).toEqual(expect.any(String));
+      expect(h.onBlockReply).not.toHaveBeenCalled();
       h.delta(`\n${token}`, `${reasoning}\n${token}`);
       h.end(`${reasoning}\n${token}`);
       await h.subscription.waitForPendingEvents();
-      expect(h.publishedText().filter(Boolean)).toEqual([]);
+      expect(h.onPartialReply).toHaveBeenLastCalledWith(expect.objectContaining({ text: "" }));
+      expect(h.assistantEvents().at(-1)).toEqual([
+        expect.objectContaining({
+          data: expect.objectContaining({
+            text: "",
+            delta: "",
+            replace: true,
+            itemId: previewItemId,
+          }),
+        }),
+      ]);
+      expect(h.onBlockReply).not.toHaveBeenCalled();
       expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
     },
   );
 
-  it("releases an ordinary answer once its assistant message completes", async () => {
+  it("streams an ordinary answer before committing it at message completion", async () => {
     const h = setup();
     const text = "The marker NO_REPLY can be mentioned in an ordinary answer.";
     h.start();
     h.delta(text);
-    expect(h.publishedText()).toEqual([]);
+    expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text }));
+    expect(h.onBlockReply).not.toHaveBeenCalled();
     h.end(text);
     await h.subscription.waitForPendingEvents();
     expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text }));
@@ -96,7 +114,7 @@ describe("assistant message final-line silence", () => {
     expect(h.assistantEvents()).toHaveLength(1);
   });
 
-  it("keeps attachments when final-line silence discards buffered prose", async () => {
+  it("keeps attachments when final-line silence retracts the preview", async () => {
     const h = setup();
     const reasoning =
       "The requested attachment is already prepared.\nNo extra explanation is needed.";
@@ -104,7 +122,8 @@ describe("assistant message final-line silence", () => {
     h.delta(reasoning);
     h.end(`${reasoning}\nNO_REPLY\nMEDIA:/tmp/final-silent-line.png`);
     await h.subscription.waitForPendingEvents();
-    expect(h.publishedText().filter(Boolean)).toEqual([]);
+    expect(h.onPartialReply).toHaveBeenLastCalledWith(expect.objectContaining({ text: "" }));
+    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text).filter(Boolean)).toEqual([]);
     expect(h.onBlockReply).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ mediaUrls: ["/tmp/final-silent-line.png"] }),
       expect.anything(),
@@ -112,18 +131,21 @@ describe("assistant message final-line silence", () => {
     expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
   });
 
-  it("reports rejected media without exposing the silent message's prose", async () => {
+  it("reports rejected media after retracting the silent message's preview", async () => {
     const h = setup();
     const reasoning = "The attachment finishes this task without another explanation.";
     h.start();
     h.delta(reasoning);
     h.end(`${reasoning}\nNO_REPLY\nMEDIA:media://inbound/`);
     await h.subscription.waitForPendingEvents();
-    expect(h.onPartialReply).not.toHaveBeenCalled();
-    expect(h.assistantEvents()).toEqual([]);
-    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([
-      "⚠️ Media not attached: Use a public HTTPS URL without credentials or attach a local file by a safe path.",
-    ]);
+    const warning =
+      "⚠️ Media not attached: Use a public HTTPS URL without credentials or attach a local file by a safe path.";
+    expect(h.onPartialReply).toHaveBeenCalledWith(expect.objectContaining({ text: reasoning }));
+    expect(h.onPartialReply).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: warning, replace: true }),
+    );
+    expect(h.assistantEvents().at(-1)?.[0].data).toMatchObject({ text: warning, replace: true });
+    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([warning]);
     expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
   });
 
@@ -166,16 +188,19 @@ describe("assistant message final-line silence", () => {
       });
       h.emit({ type: "message_end", message: silent });
       await h.subscription.waitForPendingEvents();
-      expect(h.publishedText().filter(Boolean)).toEqual([]);
+      expect(h.onPartialReply).toHaveBeenLastCalledWith(expect.objectContaining({ text: "" }));
+      expect(h.onBlockReply).not.toHaveBeenCalled();
       expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
       h.start();
       h.delta("Here is the requested answer.");
       h.end("Here is the requested answer.");
       await h.subscription.waitForPendingEvents();
-      expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(
+      expect(h.onPartialReply).toHaveBeenLastCalledWith(
         expect.objectContaining({ text: "Here is the requested answer." }),
       );
-      expect(h.publishedText().some((text) => text.includes(reasoning))).toBe(false);
+      expect(h.onBlockReply.mock.calls.some(([payload]) => payload.text?.includes(reasoning))).toBe(
+        false,
+      );
     },
   );
 
@@ -214,7 +239,12 @@ describe("assistant message final-line silence", () => {
         },
       });
     }
-    expect(h.onAgentEvent).not.toHaveBeenCalled();
+    expect(h.onAgentEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "item",
+        data: expect.objectContaining({ progressText: commentary }),
+      }),
+    );
     h.emit({
       type: "message_end",
       message: makeAgentAssistantMessage({ api: "openai-responses", content: blocks }),
@@ -254,12 +284,15 @@ describe("assistant message final-line silence", () => {
     expect(h.subscription.hasToolMediaBlockReply()).toBe(true);
   });
 
-  it("keeps terminal-hook custody after the assistant message completes", async () => {
+  it("streams previews while terminal-hook custody holds durable delivery", async () => {
     const h = setup({ deferred: true });
     h.start();
     h.delta("The answer is ready.");
     const message = h.end("The answer is ready.");
-    expect(h.publishedText()).toEqual([]);
+    expect(h.onPartialReply).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "The answer is ready." }),
+    );
+    expect(h.onBlockReply).not.toHaveBeenCalled();
     h.emit({ type: "agent_end", messages: [message], willRetry: false });
     await h.subscription.waitForPendingEvents();
     expect(h.onPartialReply).toHaveBeenCalledOnce();
@@ -278,7 +311,7 @@ describe("assistant message final-line silence", () => {
       const text = `An interrupted answer is still recoverable.${silent ? "\nNO_REPLY" : ""}`;
       h.start();
       h.delta(text);
-      expect(h.publishedText()).toEqual([]);
+      expect(h.onBlockReply).not.toHaveBeenCalled();
       h.emit({ type: "agent_end", messages: [], willRetry: false });
       await h.subscription.waitForPendingEvents();
       const delivered = h.onBlockReply.mock.calls.map(([payload]) => payload.text ?? "").join(" ");
@@ -292,7 +325,7 @@ describe("assistant message final-line silence", () => {
     { completion: "commentary", media: "https://example.invalid/result.png" },
     { completion: "commentary", media: "media://inbound/" },
   ] as const)(
-    "keeps native reasoning private when $completion silence precedes MEDIA:$media",
+    "retracts native reasoning when $completion silence precedes MEDIA:$media",
     async ({ completion, media }) => {
       const h = setup({ reasoning: "stream" });
       const thinkingEvents: unknown[] = [];
@@ -345,14 +378,18 @@ describe("assistant message final-line silence", () => {
         h.emit({ type: "message_end", message });
       }
       await h.subscription.waitForPendingEvents();
-      expect(h.onReasoningStream).not.toHaveBeenCalled();
-      expect(thinkingEvents).toEqual([]);
-      expect(h.publishedText().filter(Boolean)).toEqual([]);
-      expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+      expect(h.onReasoningStream).toHaveBeenCalledWith(
+        expect.objectContaining({ text: thinking.thinking }),
+      );
+      expect(h.onReasoningStream).toHaveBeenLastCalledWith(expect.objectContaining({ text: "" }));
+      expect(thinkingEvents.at(-1)).toMatchObject({ text: "", replace: true });
+      expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text).filter(Boolean)).toEqual(
+        [],
+      );
     },
   );
 
-  it("releases a completed commentary message before the next answer", async () => {
+  it("streams commentary before the message completes", async () => {
     const h = setup();
     const message: AssistantMessage = makeAgentAssistantMessage({
       content: [
@@ -377,7 +414,12 @@ describe("assistant message final-line silence", () => {
     expect(h.assistantEvents()).toEqual([]);
     expect(h.onPartialReply).not.toHaveBeenCalled();
     expect(h.publishedText()).toEqual([]);
-    expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+    expect(h.onAgentEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "item",
+        data: expect.objectContaining({ progressText: "I will inspect the attachment." }),
+      }),
+    );
     h.emit({ type: "message_end", message });
     await h.subscription.waitForPendingEvents();
     expect(h.onAgentEvent).toHaveBeenCalledWith(
@@ -389,7 +431,7 @@ describe("assistant message final-line silence", () => {
   });
 
   it.each(["on", "stream"] as const)(
-    "discards same-message commentary and native reasoning before a silent final (%s)",
+    "retracts same-message commentary and native reasoning after a silent final (%s)",
     async (reasoning) => {
       const h = setup({ reasoning });
       const thinkingEvents: unknown[] = [];
@@ -434,18 +476,31 @@ describe("assistant message final-line silence", () => {
           partial: progress,
         },
       });
-      expect(h.onReasoningStream).not.toHaveBeenCalled();
-      expect(thinkingEvents).toEqual([]);
-      expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+      if (reasoning === "stream") {
+        expect(h.onReasoningStream).toHaveBeenCalledWith(
+          expect.objectContaining({ text: thinking.thinking }),
+        );
+      }
+      expect(thinkingEvents).toContainEqual(expect.objectContaining({ text: thinking.thinking }));
+      expect(h.onAgentEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stream: "item",
+          data: expect.objectContaining({ progressText: commentary.text }),
+        }),
+      );
       h.emit({
         type: "message_end",
         message: makeAgentAssistantMessage({ content: [thinking, commentary, final] }),
       });
       await h.subscription.waitForPendingEvents();
-      expect(h.onReasoningStream).not.toHaveBeenCalled();
-      expect(thinkingEvents).toEqual([]);
-      expect(h.publishedText().filter(Boolean)).toEqual([]);
-      expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+      if (reasoning === "stream") {
+        expect(h.onReasoningStream).toHaveBeenLastCalledWith(expect.objectContaining({ text: "" }));
+      }
+      expect(thinkingEvents.at(-1)).toMatchObject({ text: "", replace: true });
+      expect(h.onBlockReply).not.toHaveBeenCalled();
+      expect(
+        h.onAgentEvent.mock.calls.findLast(([event]) => event.stream === "item")?.[0].data,
+      ).toMatchObject({ progressText: "" });
     },
   );
 });

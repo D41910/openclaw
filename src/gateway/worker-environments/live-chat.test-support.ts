@@ -1,4 +1,5 @@
 import type { ChatEvent } from "../../../packages/gateway-protocol/src/schema/logs-chat.js";
+import type { AgentEventPayload } from "../../infra/agent-events.js";
 import { clearAgentRunContext } from "../../infra/agent-run-registry.js";
 import { subscribeAgentEvents } from "../server-chat.agent-events.test-helpers.js";
 import {
@@ -10,10 +11,13 @@ import {
 
 export function createWorkerChatProjection(sessionKey: string) {
   const events: ChatEvent[] = [];
+  const agentEvents: AgentEventPayload[] = [];
   const state = createChatRunState();
   const captureChat = (event: string, payload: unknown) => {
     if (event === "chat") {
       events.push(payload as ChatEvent);
+    } else if (event === "agent") {
+      agentEvents.push(payload as AgentEventPayload);
     }
   };
   const sessionMessageSubscribers = createSessionMessageSubscriberRegistry();
@@ -36,6 +40,7 @@ export function createWorkerChatProjection(sessionKey: string) {
   const unsubscribe = subscribeAgentEvents(handler);
   return {
     events,
+    agentEvents,
     state,
     drain: unsubscribe.drain,
     async dispose() {

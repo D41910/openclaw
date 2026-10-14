@@ -16,10 +16,7 @@ import {
 } from "../infra/agent-events.js";
 import { normalizeTextForComparison } from "./embedded-agent-helpers.js";
 import type { BlockReplyPayload } from "./embedded-agent-payloads.js";
-import {
-  createPendingEventWaiter,
-  runBestEffortCallback,
-} from "./embedded-agent-subscribe.callback.js";
+import { runBestEffortCallback } from "./embedded-agent-subscribe.callback.js";
 import {
   consumePendingAssistantReplyDirectivesIntoReply,
   consumePendingToolMediaIntoReply,
@@ -29,90 +26,119 @@ import {
 } from "./embedded-agent-subscribe.handlers.messages.replies.js";
 import type {
   AssistantStreamData,
-  AssistantStreamDelivery,
-  AssistantStreamScope,
   EmbeddedAgentSubscribeContext,
-  ReplyDeliveryParams,
 } from "./embedded-agent-subscribe.handlers.types.js";
 import type { EmbeddedAgentEvent } from "./embedded-agent-subscribe.shared-types.js";
 import type { SubscribeEmbeddedAgentSessionParams } from "./embedded-agent-subscribe.types.js";
 import type { AgentMessage } from "./runtime/index.js";
 
+type AssistantStreamDelivery = {
+  assistantSource?: AgentAssistantSourceReceipt;
+  assistantProjection?: AgentAssistantProjection;
+  data: AssistantStreamData;
+  eventData?: AssistantStreamData;
+  emitPartialReply: boolean;
+  finalMessage: boolean;
+  blockIndex: number;
+};
+
+type AssistantStreamScope = {
+  delivery?: AssistantStreamDelivery;
+  active?: boolean;
+  pending?: boolean;
+  emitted?: boolean;
+};
+
+const isStreamAppend = ({ data, finalMessage }: AssistantStreamDelivery) =>
+  !finalMessage && !data.replace && !data.mediaUrls?.length && !data.managedMediaUrls?.length;
+const mergeStreamAppend = (previous: AssistantStreamData, next: AssistantStreamData) => ({
+  ...next,
+  delta: previous.delta + next.delta,
+});
+
+type ReplyDeliveryParams = {
+  params: SubscribeEmbeddedAgentSessionParams;
+  state: EmbeddedAgentSubscribeContext["state"];
+  log: EmbeddedAgentSubscribeContext["log"];
+};
+
 export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams) {
   const assistantTexts = state.assistantTexts;
-  const deferredAssistantScopes: AssistantStreamScope[] = [];
   const lastEmittedCommentaryByItem = new Map<string, string>();
   const pendingBlockReplyTasks = new Set<Promise<void>>();
   const pendingPartialReplyTasks = new Set<Promise<void>>();
   let streamScope: AssistantStreamScope = {};
-  // Retain each stream's latest snapshot, but keep every prepared block, until
-  // the complete assistant message decides whether any of its text is visible.
-  const messageDeliveries = new Map<
-    string,
-    { deliver: (silent: boolean) => void; onDiscard?: () => void }
-  >();
-  const messageSilence = new Map<number, boolean>();
-  const terminalMessageDeliveries: Array<() => void> = [];
+  // These payloads commit durable channel messages; live previews bypass this queue.
+  const pendingMessageBlocks: Array<{
+    messageIndex: number;
+    deliver: (silent: boolean) => void;
+    discard?: () => void;
+  }> = [];
   let settledMessageIndex = -1;
-  let blockDeliveryIndex = 0;
-  const deliverSettledMessage = (deliver: (silent: boolean) => void, silent: boolean) => {
-    if (state.deferBlockReplyDelivery) {
-      terminalMessageDeliveries.push(() => deliver(silent));
-    } else {
-      deliver(silent);
-    }
-  };
-  const deferAssistantMessageDelivery = (
-    key: string,
-    deliver: (silent: boolean) => void,
-    messageStartIndex = state.assistantMessageStartIndex,
-    onDiscard?: () => void,
-  ) => {
-    if (messageStartIndex <= settledMessageIndex) {
-      deliverSettledMessage(deliver, messageSilence.get(messageStartIndex) === true);
-    } else {
-      messageDeliveries.set(key, { deliver, onDiscard });
-    }
-  };
+  let settledMessageSilent = false;
   const settleAssistantMessageDelivery = ({ silent }: { silent: boolean }) => {
-    settledMessageIndex = state.assistantMessageIndex;
-    messageSilence.set(state.assistantMessageStartIndex, silent);
-    const deliveries = [...messageDeliveries.values()];
-    messageDeliveries.clear();
-    for (const { deliver } of deliveries) {
-      deliverSettledMessage(deliver, silent);
+    settledMessageIndex = state.assistantMessageStartIndex;
+    settledMessageSilent = silent;
+    if (silent) {
+      for (const itemId of lastEmittedCommentaryByItem.keys()) {
+        emitAssistantStreamData(
+          { text: "", delta: "", replace: true, phase: "commentary", itemId },
+          { finalMessage: true },
+        );
+      }
+    }
+    for (const pending of pendingMessageBlocks.splice(0)) {
+      pending.deliver(silent);
+    }
+    if (silent && state.lastStreamedReasoning) {
+      const source = readAgentAssistantSource(state.lastAssistant);
+      publishAgentEvent(
+        {
+          stream: "thinking",
+          data: { text: "", delta: "", replace: true, itemId: source?.itemId },
+        },
+        source,
+      );
+      runBestEffortCallback({
+        label: "reasoning clear",
+        log,
+        callback: () => params.onReasoningStream?.({ text: "" }),
+      });
     }
   };
   const discardPendingBlockReplies = (options?: { wholeMessage?: boolean }) => {
-    const prefix = options?.wholeMessage ? "block:" : `block:${state.assistantMessageIndex}:`;
-    const stale = [...messageDeliveries].filter(([key]) => key.startsWith(prefix));
-    if (stale.length === 0) {
-      return false;
+    let discarded = false;
+    let index = pendingMessageBlocks.length;
+    for (const pending of pendingMessageBlocks.toReversed()) {
+      index -= 1;
+      if (!options?.wholeMessage && pending.messageIndex !== state.assistantMessageIndex) {
+        continue;
+      }
+      pendingMessageBlocks.splice(index, 1);
+      pending.discard?.();
+      discarded = true;
     }
-    // Undo newest reservations first so restored tool media retain their order.
-    for (const [key, { onDiscard }] of stale.toReversed()) {
-      messageDeliveries.delete(key);
-      onDiscard?.();
+    if (discarded) {
+      if (options?.wholeMessage) {
+        state.assistantTextBaseline = state.assistantMessageTextBaseline;
+      }
+      assistantTexts.splice(state.assistantTextBaseline);
+      state.lastAssistantTextTrimmed = undefined;
+      state.lastAssistantTextNormalized = undefined;
+      state.hasFlushedPartialText = false;
     }
-    if (options?.wholeMessage) {
-      state.assistantTextBaseline = state.assistantMessageTextBaseline;
-    }
-    assistantTexts.splice(state.assistantTextBaseline);
-    state.lastAssistantTextTrimmed = undefined;
-    state.lastAssistantTextNormalized = undefined;
-    state.hasFlushedPartialText = false;
-    return true;
+    return discarded;
   };
-  const drainPartialReply = (scope: AssistantStreamScope, delivery = scope.delivery) => {
+  const drainPartialReply = (scope: AssistantStreamScope) => {
     if (
-      !delivery ||
+      !scope.delivery ||
       !scope.pending ||
       state.unsubscribed ||
       (scope === streamScope && scope.active)
     ) {
       return;
     }
-    const data = delivery.data;
+    const data = scope.delivery.data;
     scope.pending = false;
     // Reserve before invocation: callbacks may synchronously enqueue text or open another scope.
     scope.active = true;
@@ -202,57 +228,40 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     const delivery = scope.delivery;
     const { eventData } = delivery;
     scope.emitted = true;
+    scope.pending ||=
+      delivery.emitPartialReply && Boolean(params.onPartialReply) && state.shouldEmitPartialReplies;
     const itemId = eventData?.itemId ?? "";
     const progressText = eventData?.phase === "commentary" ? eventData.text.trimEnd() : "";
     const preamblePhase = delivery.finalMessage ? "end" : "update";
     // Completion must survive an identical last delta: first-notification
     // consumers wait for this boundary, not a timer or a repeated text snapshot.
     const commentarySignature = `${preamblePhase}\0${progressText}`;
-    const event = progressText.trim()
-      ? {
-          stream: "item" as const,
-          data: {
-            kind: "preamble",
-            title: "Preamble",
-            phase: preamblePhase,
-            progressText,
-            ...(itemId ? { itemId } : {}),
-          },
-        }
-      : !eventData || eventData.phase === "commentary"
-        ? undefined
-        : {
-            stream: "assistant" as const,
-            data: { ...eventData, delta: eventData.replace ? "" : eventData.text },
-          };
-    deferAssistantMessageDelivery(
-      `stream:${itemId}`,
-      (silent) => {
-        if (silent || state.unsubscribed) {
-          return;
-        }
-        scope.pending ||=
-          delivery.emitPartialReply &&
-          Boolean(params.onPartialReply) &&
-          state.shouldEmitPartialReplies;
-        if (
-          event &&
-          (event.stream !== "item" ||
-            lastEmittedCommentaryByItem.get(itemId) !== commentarySignature)
-        ) {
-          if (event.stream === "item") {
-            lastEmittedCommentaryByItem.set(itemId, commentarySignature);
+    const event =
+      progressText.trim() ||
+      (eventData?.phase === "commentary" && delivery.finalMessage && eventData.replace)
+        ? {
+            stream: "item" as const,
+            data: {
+              kind: "preamble",
+              title: "Preamble",
+              phase: preamblePhase,
+              progressText,
+              ...(itemId ? { itemId } : {}),
+            },
           }
-          publishAgentEvent(event, delivery.assistantSource, delivery.assistantProjection);
-        }
-        const text = delivery.assistantProjection?.text ?? delivery.data.text;
-        drainPartialReply(scope, {
-          ...delivery,
-          data: { ...delivery.data, text, delta: text },
-        });
-      },
-      delivery.messageStartIndex,
-    );
+        : !eventData || eventData.phase === "commentary"
+          ? undefined
+          : { stream: "assistant" as const, data: eventData };
+    if (
+      event &&
+      (event.stream !== "item" || lastEmittedCommentaryByItem.get(itemId) !== commentarySignature)
+    ) {
+      if (event.stream === "item") {
+        lastEmittedCommentaryByItem.set(itemId, commentarySignature);
+      }
+      publishAgentEvent(event, delivery.assistantSource, delivery.assistantProjection);
+    }
+    drainPartialReply(scope);
   };
   const emitAssistantStreamData: EmbeddedAgentSubscribeContext["emitAssistantStreamData"] = (
     data,
@@ -262,39 +271,35 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       return;
     }
     const assistantSource = readAgentAssistantSource(state.lastAssistant);
+    if (messageIndex !== state.assistantMessageStartIndex) {
+      messageIndex = state.assistantMessageStartIndex;
+      assistantItemId = `${streamId}:${messageIndex}`;
+      lastEmittedCommentaryByItem.clear();
+      for (const stream of [raw, display]) {
+        stream.prefix = stream.text = "";
+        stream.blockIndex = state.assistantMessageIndex;
+      }
+      finalText = "";
+      finalized = false;
+    }
     let eventData: AssistantStreamData | undefined;
     let assistantProjection: AgentAssistantProjection | undefined;
     if (data.phase === "commentary") {
       if (messageIndex === state.assistantMessageStartIndex && display.text !== finalText) {
         display.prefix = display.text = finalText;
         assistantProjection = { itemId: assistantItemId, text: finalText, replace: true };
-        // Reclassified text is still private; retire its queued answer frame before
-        // publishing commentary or a later authoritative answer.
-        messageDeliveries.delete(`stream:${assistantItemId}`);
-        discardPendingBlockReplies();
-        for (const scope of [streamScope, ...deferredAssistantScopes]) {
-          const delivery = scope.delivery;
-          if (
-            delivery &&
-            delivery.blockIndex >= messageIndex &&
-            delivery.data.phase !== "final_answer"
-          ) {
-            scope.delivery = undefined;
-          }
+        // The Gateway moves provisional text into the live commentary item.
+        const delivery = streamScope.delivery;
+        if (
+          delivery &&
+          delivery.blockIndex >= messageIndex &&
+          delivery.data.phase !== "final_answer"
+        ) {
+          delivery.assistantProjection = assistantProjection;
         }
       }
       eventData = data;
     } else {
-      if (messageIndex !== state.assistantMessageStartIndex) {
-        messageIndex = state.assistantMessageStartIndex;
-        assistantItemId = `${streamId}:${messageIndex}`;
-        for (const stream of [raw, display]) {
-          stream.prefix = stream.text = "";
-          stream.blockIndex = state.assistantMessageIndex;
-        }
-        finalText = "";
-        finalized = false;
-      }
       if (!finalized || options?.finalMessage) {
         eventData = advanceStream(raw, data, options?.finalMessage === true);
         const displayData = advanceStream(display, data, options?.finalMessage === true);
@@ -310,10 +315,6 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
               ? finalText
               : "";
         finalized = options?.finalMessage === true;
-      }
-      if (options?.finalMessage) {
-        // Replace the held draft even when completion repeats its last delta.
-        eventData = { ...data, ...eventData, text: raw.text, itemId: assistantItemId };
       }
       if (options?.finalMessage && state.lastAssistant?.stopReason === "error") {
         const itemId = assistantItemId;
@@ -336,72 +337,53 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     const delivery = {
       assistantSource,
       assistantProjection,
-      data: options?.finalMessage ? { ...data, delta: data.text } : data,
+      data,
       eventData,
-      emitPartialReply:
-        options?.emitPartialReply === true ||
-        (options?.finalMessage === true && data.phase !== "commentary" && Boolean(data.text)),
+      emitPartialReply: options?.emitPartialReply === true,
       finalMessage: options?.finalMessage === true,
       blockIndex: state.assistantMessageIndex,
-      messageStartIndex: state.assistantMessageStartIndex,
     };
     if (!eventData && !delivery.emitPartialReply) {
       return;
     }
-    const deferred = state.deferBlockReplyDelivery && data.phase !== "commentary";
-    let scope = streamScope;
-    if (
-      !deferred ||
-      !scope.delivery ||
-      scope.delivery.finalMessage ||
-      scope.delivery.blockIndex !== delivery.blockIndex ||
-      scope.delivery.assistantSource !== delivery.assistantSource
-    ) {
-      scope = flushAssistantStream(delivery);
-    } else {
+    const previous = streamScope.delivery;
+    const coalesce =
+      previous &&
+      isStreamAppend(previous) &&
+      isStreamAppend(delivery) &&
+      previous.blockIndex === delivery.blockIndex &&
+      previous.assistantSource === delivery.assistantSource &&
+      previous.data.phase === data.phase &&
+      previous.data.itemId === data.itemId &&
+      previous.emitPartialReply === delivery.emitPartialReply &&
+      Boolean(previous.eventData) === Boolean(eventData);
+    const scope = coalesce ? streamScope : flushAssistantStream(delivery);
+    if (coalesce) {
+      // A reentrant boundary may append before this scope has emitted its first snapshot.
+      if (!scope.emitted || scope.pending) {
+        delivery.data = mergeStreamAppend(previous.data, data);
+      }
+      if (!scope.emitted && previous.eventData && eventData) {
+        delivery.eventData = mergeStreamAppend(previous.eventData, eventData);
+      }
       scope.delivery = delivery;
+      scope.emitted = false;
     }
-    if (!deferred) {
-      emitAssistantStreamDataSafely(scope);
-    }
+    emitAssistantStreamDataSafely(scope);
   };
   const flushAssistantStream = (delivery?: AssistantStreamDelivery) => {
     // Publish the next scope before callbacks: a reentrant boundary can flush it exactly once.
     const previous = streamScope;
     const scope: AssistantStreamScope = { delivery };
     streamScope = scope;
-    if (delivery && state.deferBlockReplyDelivery && delivery.data.phase !== "commentary") {
-      deferredAssistantScopes.push(scope);
-    }
-    if (!state.deferBlockReplyDelivery) {
-      const latest = new Map<string, AssistantStreamScope>();
-      for (const deferred of deferredAssistantScopes.splice(0)) {
-        const deferredDelivery = deferred.delivery;
-        if (deferredDelivery) {
-          latest.set(
-            `${deferredDelivery.messageStartIndex}:${deferredDelivery.eventData?.itemId ?? ""}`,
-            deferred,
-          );
-        }
-      }
-      for (const deferred of latest.values()) {
-        emitAssistantStreamDataSafely(deferred);
-        deferred.delivery = undefined;
-      }
-    }
-    if (!state.deferBlockReplyDelivery || previous.delivery?.data.phase === "commentary") {
-      emitAssistantStreamDataSafely(previous);
-      drainPartialReply(previous);
-      previous.delivery = undefined;
-    }
+    emitAssistantStreamDataSafely(previous);
+    drainPartialReply(previous);
+    previous.delivery = undefined;
     return scope;
   };
   const clearAssistantStream = () => {
     streamScope.delivery = undefined;
     streamScope = {};
-    deferredAssistantScopes.length = 0;
-    messageDeliveries.clear();
-    terminalMessageDeliveries.length = 0;
   };
   const noteLastAssistant = (msg: AgentMessage) => {
     if (msg.role === "assistant") {
@@ -520,24 +502,23 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       }
       if (state.deferBlockReplyDelivery) {
         if (pendingToolMedia) {
-          deferredToolMediaReplies.set(taggedPayload, {
-            pendingToolMedia,
-            autoDeliveryMediaUrls,
-          });
+          deferredToolMediaReplies.set(taggedPayload, { pendingToolMedia, autoDeliveryMediaUrls });
         }
         state.deferredBlockReplies.push(taggedPayload);
       } else {
         emitBlockReplySafely(taggedPayload, { pendingToolMedia, autoDeliveryMediaUrls });
       }
     };
-    if (taggedPayload.text || options?.assistantMessageIndex !== undefined) {
-      const lane = payload.isReasoning ? "reasoning" : "block";
-      deferAssistantMessageDelivery(
-        `${lane}:${state.assistantMessageIndex}:${blockDeliveryIndex++}`,
+    if (state.assistantMessageStartIndex <= settledMessageIndex) {
+      deliver(settledMessageSilent);
+    } else if (taggedPayload.text || options?.assistantMessageIndex !== undefined) {
+      pendingMessageBlocks.push({
+        messageIndex: state.assistantMessageIndex,
         deliver,
-        state.assistantMessageStartIndex,
-        pendingToolMedia ? () => restorePendingToolMediaReply(state, pendingToolMedia) : undefined,
-      );
+        discard: pendingToolMedia
+          ? () => restorePendingToolMediaReply(state, pendingToolMedia)
+          : undefined,
+      });
     } else {
       deliver(false);
     }
@@ -547,11 +528,12 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       const silent = parseReplyDirectives(state.deltaBuffer).hasSilentIntent;
       if (silent) {
         replaceCurrentAssistantText(SILENT_REPLY_TOKEN);
+        emitAssistantStreamData(
+          { text: "", delta: "", replace: true },
+          { finalMessage: true, emitPartialReply: true },
+        );
       }
       settleAssistantMessageDelivery({ silent });
-    }
-    for (const deliver of terminalMessageDeliveries.splice(0)) {
-      deliver();
     }
     // A later answer supersedes deferred tool-turn text, not completed answers
     // to earlier user inputs, media, or reasoning. Reconcile both presentation
@@ -563,22 +545,6 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       const segment = state.answerSegments.find((candidate) => index <= candidate.messageEnd);
       return index < (segment?.finalMessageStart ?? state.assistantMessageStartIndex);
     };
-    for (const scope of deferredAssistantScopes) {
-      const delivery = scope.delivery;
-      if (delivery && isSuperseded(delivery.blockIndex)) {
-        if (!delivery.data.mediaUrls?.length) {
-          scope.delivery = undefined;
-        } else {
-          delivery.data = { ...delivery.data, text: "", delta: "" };
-          if (delivery.eventData) {
-            delivery.eventData = { ...delivery.eventData, text: "", delta: "" };
-          }
-          if (delivery.assistantProjection) {
-            delivery.assistantProjection = { ...delivery.assistantProjection, text: "" };
-          }
-        }
-      }
-    }
     const replies = state.deferredBlockReplies.splice(0);
     for (const payload of replies) {
       const index = getReplyPayloadMetadata(payload)?.assistantMessageIndex;
@@ -599,10 +565,9 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
   };
   const clearDeferredBlockReplies = () => {
     state.deferredBlockReplies.length = 0;
-    messageDeliveries.clear();
-    terminalMessageDeliveries.length = 0;
+    pendingMessageBlocks.length = 0;
     settledMessageIndex = -1;
-    messageSilence.clear();
+    settledMessageSilent = false;
   };
 
   const rememberAssistantText = (text: string, normalizedText?: string) => {
@@ -681,7 +646,19 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     state.assistantTextBaseline = assistantTexts.length;
   };
 
-  const waitForPendingEvents = createPendingEventWaiter(state, pendingPartialReplyTasks);
+  const waitForPendingEvents = async (options?: { includePartialReplies?: boolean }) => {
+    // Partial presentation stays concurrent with provider events, but terminal
+    // settlement must observe callbacks launched while the event chain drains.
+    const includePartialReplies = options?.includePartialReplies !== false;
+    while (true) {
+      const eventChain = state.pendingEventChain;
+      const partialReplyTasks = includePartialReplies ? [...pendingPartialReplyTasks] : [];
+      if (!eventChain && partialReplyTasks.length === 0) {
+        return;
+      }
+      await Promise.allSettled([...(eventChain ? [eventChain] : []), ...partialReplyTasks]);
+    }
+  };
 
   return {
     assistantTexts,
@@ -689,7 +666,6 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     clearDeferredBlockReplies,
     emitAssistantStreamData,
     emitBlockReply,
-    deferAssistantMessageDelivery,
     discardPendingBlockReplies,
     settleAssistantMessageDelivery,
     finalizeAssistantTexts,

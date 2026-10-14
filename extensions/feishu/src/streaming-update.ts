@@ -1,6 +1,20 @@
 import type { RuntimeEnv } from "../runtime-api.js";
 import type { FeishuStreamingSession } from "./streaming-card.js";
 
+export function mergeStreamingFinalText(
+  previousText: string,
+  nextText: string,
+  appendError: boolean,
+): string {
+  if (!appendError || !previousText || nextText.startsWith(previousText)) {
+    return nextText;
+  }
+  if (previousText.endsWith(`\n\n${nextText}`)) {
+    return previousText;
+  }
+  return `${previousText}\n\n${nextText}`;
+}
+
 /** Admit captured snapshots in order while the session owns provider writes. */
 export function queueFeishuStreamingUpdate(params: {
   queue: Promise<void>;

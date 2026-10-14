@@ -481,8 +481,8 @@ async function dispatchSlackMessageWithSetup(
             : undefined,
         allowToolLifecycleWhenProgressHidden: statusReactionsEnabled ? true : undefined,
         onPartialReply:
-          !useStreaming && previewStreamingEnabled
-            ? async (payload) => progress.updateDraftFromPartial(payload.text)
+          previewStreamingEnabled && (!useStreaming || progress.useNativeProgressStreaming)
+            ? async (payload) => progress.updateDraftFromPartial(payload.text, payload)
             : undefined,
         onAssistantMessageStart: progress.onDraftBoundary
           ? async () => {

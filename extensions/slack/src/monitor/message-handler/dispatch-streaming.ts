@@ -4,6 +4,7 @@ import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import type { ReplyDispatchKind, ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
 import { danger, logVerbose } from "openclaw/plugin-sdk/runtime-env";
+import { deleteSlackMessage } from "../../actions.js";
 import { trackSlackDraftMessage } from "../../draft-message-boundaries.js";
 import { formatSlackError } from "../../errors.js";
 import { SLACK_EDIT_TEXT_MAX_BYTES } from "../../limits.js";
@@ -283,6 +284,34 @@ export function createSlackStreamingDeliveryRuntime(setup: SlackDispatchSetup) {
     }
   };
 
+  const retractStream = async () => {
+    await state.nativeProgressStreamStartPromise;
+    const session = state.streamSession;
+    if (!session || session.stoppedBySlack) {
+      return;
+    }
+    state.streamBoundary?.stop();
+    state.streamBoundary = null;
+    let messageId = session.streamer.ts;
+    try {
+      const stopped = await stopStream(session);
+      messageId = stopped.messageId ?? messageId;
+    } catch (error) {
+      runtime.error?.(danger(`slack-stream: preview stop failed: ${formatSlackError(error)}`));
+    }
+    try {
+      if (messageId) {
+        await deleteSlackMessage(session.channel, messageId, { client: slackClient });
+      }
+    } catch (error) {
+      runtime.error?.(danger(`slack-stream: preview deletion failed: ${formatSlackError(error)}`));
+    }
+    state.streamSession = null;
+    state.interruptedThreadTs = session.threadTs;
+    state.streamInterrupted = false;
+    state.streamFailed = false;
+  };
+
   const rotateInterruptedStream = async (): Promise<string | undefined> => {
     if (!state.streamInterrupted) {
       return undefined;
@@ -517,6 +546,7 @@ export function createSlackStreamingDeliveryRuntime(setup: SlackDispatchSetup) {
     markPreviewPayloadDelivered,
     nativeFinalThreadTs,
     rememberDeliveredThreadTs,
+    retractStream,
     rotateInterruptedStream,
     startStream,
     resetDeliveryTracker: () => deliveredKeys.clear(),

@@ -115,7 +115,6 @@ type StreamRenderingParams = {
   blockChunker: EmbeddedAgentSubscribeContext["blockChunker"];
   emitBlockReply: EmbeddedAgentSubscribeContext["emitBlockReply"];
   flushAssistantStream: EmbeddedAgentSubscribeContext["flushAssistantStream"];
-  deferAssistantMessageDelivery: EmbeddedAgentSubscribeContext["deferAssistantMessageDelivery"];
   pendingBlockReplyTasks: Set<Promise<void>>;
   discardPendingBlockReplies: (options?: { wholeMessage?: boolean }) => boolean;
   pushAssistantText: (text: string, normalizedText?: string) => void;
@@ -129,7 +128,6 @@ export function createStreamRendering({
   blockChunker,
   emitBlockReply,
   flushAssistantStream,
-  deferAssistantMessageDelivery,
   pendingBlockReplyTasks,
   discardPendingBlockReplies,
   pushAssistantText,
@@ -635,6 +633,7 @@ export function createStreamRendering({
       typeof input !== "string" && reasoningRaw !== undefined
         ? readAssistantThinkingAppend(input, reasoningRaw)
         : undefined;
+    const previousProjectedText = reasoningProjection.text;
     let projected =
       append !== undefined ? reasoningProjection.append(append) : reasoningProjection.replace(text);
     reasoningRaw = text;
@@ -652,36 +651,43 @@ export function createStreamRendering({
     const source = readAgentAssistantSource(state.lastAssistant);
     const itemId = source ? (source.itemId ??= randomUUID()) : undefined;
     flushAssistantStream();
+    // Partial callbacks can advance reasoning while the assistant scope flushes.
+    const prior = state.lastStreamedReasoning ?? "";
+    const delta =
+      previousProjectedText === prior && projected.delta !== null
+        ? projected.delta
+        : trimmed.startsWith(prior)
+          ? trimmed.slice(prior.length)
+          : trimmed;
     state.lastStreamedReasoning = trimmed;
 
-    deferAssistantMessageDelivery("thinking", (silent) => {
-      if (silent) {
-        return;
-      }
-      emitAgentEventWithAssistantSourceIfCurrent(
-        {
-          runId: params.runId,
-          stream: "thinking",
-          data: { text: trimmed, delta: trimmed, ...(itemId ? { itemId } : {}) },
-        },
-        source,
-      );
-      if (
-        state.streamReasoning &&
-        !shouldSuppressSourceReplyOutput({ params, state }) &&
-        params.onReasoningStream
-      ) {
-        runBestEffortCallback({
-          label: "reasoning stream",
-          log,
-          callback: () =>
-            params.onReasoningStream?.({
-              text: trimmed,
-              ...(state.reasoningMode === "stream" ? {} : { requiresReasoningProgressOptIn: true }),
-            }),
-        });
-      }
-    });
+    // Archive thinking regardless of /reasoning; that setting gates the rendering hook.
+    emitAgentEventWithAssistantSourceIfCurrent(
+      {
+        runId: params.runId,
+        stream: "thinking",
+        data: { text: trimmed, delta, ...(itemId ? { itemId } : {}) },
+      },
+      source,
+    );
+
+    // A completed source reply suppresses later reasoning from channel rendering,
+    // including reasoning attached to tool calls. The archive above still receives it.
+    if (
+      state.streamReasoning &&
+      !shouldSuppressSourceReplyOutput({ params, state }) &&
+      params.onReasoningStream
+    ) {
+      runBestEffortCallback({
+        label: "reasoning stream",
+        log,
+        callback: () =>
+          params.onReasoningStream?.({
+            text: trimmed,
+            ...(state.reasoningMode === "stream" ? {} : { requiresReasoningProgressOptIn: true }),
+          }),
+      });
+    }
   };
 
   const resetPreparedBlockReplySource: EmbeddedAgentSubscribeContext["resetPreparedBlockReplySource"] =

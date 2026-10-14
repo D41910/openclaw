@@ -554,7 +554,25 @@ export function createSlackProgressRuntime(runtimeParams: {
     return await progressDraft.pushPlanProgress(steps, { explanation, explanationFormat });
   };
 
-  const updateDraftFromPartial = (text?: string) => {
+  const updateDraftFromPartial = async (text?: string, options?: { replace?: boolean }) => {
+    if (options?.replace && text === "") {
+      if (
+        (useNativeProgressStreaming || useDraftProgressCard) &&
+        !previewLifecycle.finalDelivered &&
+        !progressCard.hasTerminalized
+      ) {
+        progressDraft.markFinalReplyStarted();
+        progressDraft.suppress();
+        if (useNativeProgressStreaming) {
+          await cancelNativeUpdates();
+          await withNativeStreamOrder(() => delivery.retractStream());
+        } else {
+          await draftStream?.clear();
+          draftStream?.forceNewMessage();
+        }
+      }
+      return false;
+    }
     const trimmed = text && sanitizeAssistantVisibleText(text).trimEnd();
     if (!trimmed) {
       return false;
@@ -586,6 +604,9 @@ export function createSlackProgressRuntime(runtimeParams: {
     text?: string;
     isReasoningSnapshot?: boolean;
   }) => {
+    if (payload?.text === "") {
+      return await updateDraftFromPartial("", { replace: true });
+    }
     if (!payload?.text) {
       return false;
     }
@@ -612,9 +633,6 @@ export function createSlackProgressRuntime(runtimeParams: {
     return await progressDraft.pushReasoningProgress(payload.text, {
       snapshot: payload.isReasoningSnapshot === true,
     });
-  };
-  const resetDraftDeliveryState = () => {
-    appendState = { rendered: "", source: "" };
   };
   const beginNewProgressTurn = async (options?: { force?: boolean }) => {
     if (useNativeProgressStreaming) {
@@ -665,7 +683,7 @@ export function createSlackProgressRuntime(runtimeParams: {
           }
           // Model boundaries do not accept a provisional preview as a reply.
           // Keep editing it; the draft owner rotates separately when a human speaks.
-          resetDraftDeliveryState();
+          appendState = { rendered: "", source: "" };
           progressDraft.beginAssistantMessage();
         };
 
@@ -684,7 +702,7 @@ export function createSlackProgressRuntime(runtimeParams: {
             draftStream?.forceNewMessage();
           }
           delivery.resetDeliveryTracker();
-          resetDraftDeliveryState();
+          appendState = { rendered: "", source: "" };
           progressDraft.reset();
         };
   // A queued turn can drain after its dispatch returned, so dispatch closeout is

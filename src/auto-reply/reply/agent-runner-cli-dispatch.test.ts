@@ -14,6 +14,7 @@ import {
   onAgentEvent,
   resetAgentEventsForTest,
 } from "../../infra/agent-events.js";
+import type { PartialReplyPayload } from "../get-reply-options.types.js";
 import {
   createCliToolSummaryTracker,
   keepCliSessionBindingOnlyWhenReused,
@@ -275,7 +276,9 @@ describe("runCliAgentWithLifecycle", () => {
     });
     const onActivity = vi.fn();
     const onCompletedReply = vi.fn(async (_text: string) => {});
-    const onAssistantText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+    const onAssistantText = vi.fn<(payload: PartialReplyPayload) => Promise<void>>(
+      async () => undefined,
+    );
     const onReasoningProgress = vi.fn<(payload: ReasoningProgressPayload) => Promise<void>>(
       async () => undefined,
     );
@@ -324,7 +327,9 @@ describe("runCliAgentWithLifecycle", () => {
       return { payloads: [{ text: "Visible answer" }], meta: { durationMs: 1 } };
     });
     const onActivity = vi.fn();
-    const onAssistantText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+    const onAssistantText = vi.fn<(payload: PartialReplyPayload) => Promise<void>>(
+      async () => undefined,
+    );
     const assistantEvents: Record<string, unknown>[] = [];
     const stop = onAgentEvent((event) => {
       if (event.runId === "run-activity-assistant" && event.stream === "assistant") {
@@ -350,6 +355,41 @@ describe("runCliAgentWithLifecycle", () => {
       { text: "Visible answer", delta: "Visible answer" },
       { itemId: "cli-assistant:run-activity-assistant", text: "Visible answer" },
     ]);
+  });
+
+  it("forwards live previews and an empty replacement without retaining reasoning", async () => {
+    const runId = "run-silent-replacement";
+    cliDispatchState.runCliAgentMock.mockImplementationOnce(async () => {
+      for (const event of [
+        { stream: "assistant", data: { text: "Considering.", delta: "Considering." } },
+        { stream: "thinking", data: { text: "Checking.", isReasoningSnapshot: true } },
+        { stream: "assistant", data: { text: "", delta: "", replace: true } },
+        { stream: "thinking", data: { text: "", isReasoningSnapshot: true } },
+      ] as const) {
+        emitAgentEvent({ runId, ...event });
+      }
+      return {
+        payloads: [],
+        meta: { durationMs: 1, finalAssistantVisibleText: "" },
+      } satisfies EmbeddedAgentRunResult;
+    });
+    const onAssistantText = vi.fn<(payload: PartialReplyPayload) => Promise<void>>(async () => {});
+    const onReasoningText = vi.fn<(payload: ReasoningTextPayload) => Promise<void>>(async () => {});
+    const result = await runCliAgentWithLifecycle({
+      runId,
+      onAssistantText,
+      onReasoningText,
+      runParams: createRunParams(runId),
+    });
+    expect(onAssistantText.mock.calls.map(([payload]) => payload)).toEqual([
+      { text: "Considering.", delta: "Considering." },
+      { text: "", delta: "", replace: true },
+    ]);
+    expect(onReasoningText.mock.calls.map(([payload]) => payload)).toEqual([
+      { text: "Checking.", isReasoningSnapshot: true },
+      { text: "", isReasoningSnapshot: true },
+    ]);
+    expect(result.payloads).toEqual([]);
   });
 
   it.each(["Last answer.", ""])(

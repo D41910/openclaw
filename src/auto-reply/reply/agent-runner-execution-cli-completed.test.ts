@@ -153,12 +153,13 @@ it.each([
   ),
   { tool: false, accepted: "NO_REPLY", acceptFirst: true },
 ])(
-  "keeps native Stop-hook drafts private (tool=$tool, accepted=$accepted, prior accepted=$acceptFirst)",
+  "keeps native Stop-hook drafts out of accepted replies (tool=$tool, accepted=$accepted, prior accepted=$acceptFirst)",
   async ({ tool, accepted, acceptFirst }) => {
     const { setBlockReplyDelivery } = await import("./block-reply-delivery.js");
     const { onAgentEventForRun } = await import("../../infra/agent-events.js");
     const completed: string[] = [];
     const completionsAtMessageStop: string[][] = [];
+    const liveItems = new Map<string, string>();
     const onBlockReply = vi.fn<NonNullable<GetReplyOptions["onBlockReply"]>>(async () => {
       setBlockReplyDelivery(Promise.resolve({ outcome: "delivered" }));
     });
@@ -175,8 +176,6 @@ it.each([
           backend: { ...context.backendResolved.config, jsonlDialect: "claude-stream-json" },
           providerId: "claude-cli",
           onAssistantDelta: handlers.emitCliAssistantDelta,
-          onMessageReset: handlers.emitCliMessageReset,
-          onMessageEnd: handlers.emitCliMessageEnd,
           onCompletedReply: handlers.emitCliCompletedReply,
           onThinkingDelta: handlers.emitCliThinkingDelta,
           onCommentaryText: handlers.emitCliCommentaryText,
@@ -184,6 +183,9 @@ it.each([
         const stop = onAgentEventForRun(params.runId, (event) => {
           if (event.stream === "assistant" && typeof event.data.completedText === "string") {
             completed.push(event.data.completedText);
+          }
+          if (typeof event.data.itemId === "string" && typeof event.data.text === "string") {
+            liveItems.set(event.data.itemId, event.data.text);
           }
         });
         const push = (...frames: unknown[]) => parser.push(joinJsonlFrames(...frames, ""));
@@ -203,11 +205,20 @@ it.each([
             ...(interim ? { openclaw_interim_result: true } : {}),
           });
         try {
+          push(
+            claudeStreamEvent({
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "thinking_delta", thinking: "Checking." },
+            }),
+          );
           message("draft", "A");
+          expect(liveItems.get(`cli-assistant:${params.runId}`)).toBe("A");
           if (acceptFirst) {
             result("A", true);
           } else {
             push({ type: "system", subtype: "notification", key: "stop-hook-error" });
+            expect(liveItems.get(`cli-assistant:${params.runId}`)).toBe("");
           }
           if (tool) {
             push(
@@ -236,6 +247,12 @@ it.each([
           handlers.emitCliCompletedReply(
             output.rawFinalText ?? output.textParts?.at(-1) ?? output.text,
           );
+          expect(liveItems.get(`cli-assistant:${params.runId}`)).toBe(
+            accepted === "NO_REPLY" ? (acceptFirst ? "A" : "") : "B",
+          );
+          if (accepted === "NO_REPLY") {
+            expect(liveItems.get(`cli-thinking:${params.runId}`)).toBe("");
+          }
           return buildCliRunResult({
             context,
             output,
@@ -257,8 +274,10 @@ it.each([
     expect(completed).toEqual(expected);
     expect(onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual(expected);
     assert(execution.kind === "success");
-    expect(execution.runResult.payloads?.map((payload) => payload.text)).toEqual(
-      acceptFirst ? ["A", "NO_REPLY"] : [accepted],
-    );
+    expect(
+      execution.runResult.payloads
+        ?.filter((payload) => !payload.isReasoning)
+        .map((payload) => payload.text),
+    ).toEqual(acceptFirst ? ["A", "NO_REPLY"] : [accepted]);
   },
 );

@@ -1,10 +1,14 @@
 /** Test doubles and setup for CLI execution supervisor and event seams. */
 import { vi, type Mock } from "vitest";
 import type { enqueueSessionEventForHost } from "../../auto-reply/reply/session-event-handoff.js";
+import type { CliBackendParseJsonlEvent } from "../../plugins/cli-backend.types.js";
 import type { getProcessSupervisor } from "../../process/supervisor/index.js";
-import { withTestRunAdmission } from "../admitted-run-context.test-support.js";
+import {
+  createTestAdmittedRunContext,
+  withTestRunAdmission,
+} from "../admitted-run-context.test-support.js";
 import { executeDeps } from "./execute-deps.js";
-import type { PreparedCliRunContext } from "./types.js";
+import { captureCliRunStartTime, type PreparedCliRunContext } from "./types.js";
 export { buildCliExecLogLine } from "./execute-logging.js";
 
 type ProcessSupervisor = ReturnType<typeof getProcessSupervisor>;
@@ -165,5 +169,61 @@ export function createSuccessfulProcessExit(): MockRunExit {
     stderr: "",
     timedOut: false,
     noOutputTimedOut: false,
+  };
+}
+
+export function buildPreparedCliRunContext(params: {
+  output: "json" | "jsonl" | "text";
+  provider?: string;
+  runId?: string;
+  beforeExecution?: () => Promise<void>;
+  parseJsonlEvent?: CliBackendParseJsonlEvent;
+}): PreparedCliRunContext {
+  const provider = params.provider ?? "codex-cli";
+  const runId = params.runId ?? `run-${params.output}`;
+  const backend = {
+    command: "agent-cli",
+    args: [],
+    output: params.output,
+    input: "stdin" as const,
+    serialize: true,
+  };
+  return {
+    params: {
+      admittedRunContext: createTestAdmittedRunContext(runId),
+      agentId: "main",
+      sessionId: "session-1",
+      sessionKey: "agent:main:main",
+      sessionFile: "/tmp/session.jsonl",
+      workspaceDir: "/tmp",
+      prompt: "hi",
+      provider,
+      model: "model",
+      timeoutMs: 1_000,
+      runId,
+    },
+    ...captureCliRunStartTime(),
+    workspaceDir: "/tmp",
+    backendResolved: {
+      id: provider,
+      config: backend,
+      bundleMcp: false,
+      parseJsonlEvent: params.parseJsonlEvent,
+    },
+    executionTarget: { kind: "process" },
+    preparedBackend: {
+      backend,
+      env: {},
+      ...(params.beforeExecution ? { beforeExecution: params.beforeExecution } : {}),
+    },
+    reusableCliSession: { mode: "none" },
+    hadSessionFile: false,
+    contextEngineConfig: {},
+    modelId: "model",
+    normalizedModel: "model",
+    systemPrompt: "system",
+    systemPromptReport: {} as PreparedCliRunContext["systemPromptReport"],
+    claudeSkillsPluginArgs: [],
+    authEpochVersion: 2,
   };
 }

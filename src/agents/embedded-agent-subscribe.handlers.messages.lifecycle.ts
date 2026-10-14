@@ -128,9 +128,16 @@ export function handleMessageEnd(
       ? extractAssistantThinking(assistantMessage)
       : "";
     emitPersistentReasoning(ctx, suppressedTrimmedReasoning);
-    ctx.settleAssistantMessageDelivery({
-      silent: parseReplyDirectives(extractEmbeddedAssistantText(assistantMessage)).hasSilentIntent,
-    });
+    const silent = parseReplyDirectives(
+      extractEmbeddedAssistantText(assistantMessage),
+    ).hasSilentIntent;
+    if (silent) {
+      ctx.emitAssistantStreamData(
+        { text: "", delta: "", replace: true },
+        { finalMessage: true, emitPartialReply: true },
+      );
+    }
+    ctx.settleAssistantMessageDelivery({ silent });
     return;
   }
   const sourceContent = assistantMessage.content;
@@ -267,11 +274,12 @@ export function handleMessageEnd(
       {
         text: cleanedText,
         delta: "",
+        replace: parsedText.hasSilentIntent || undefined,
         mediaUrls: mediaUrls.length ? mediaUrls : undefined,
         managedMediaUrls: managedMediaUrls.length ? managedMediaUrls : undefined,
         phase: assistantPhase,
       },
-      { finalMessage: true },
+      { finalMessage: true, emitPartialReply: parsedText.hasSilentIntent },
     );
   }
 

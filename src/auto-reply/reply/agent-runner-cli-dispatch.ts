@@ -22,6 +22,7 @@ import { normalizeAgentPlanSteps } from "../../channels/streaming.js";
 import type { AgentEventPayload } from "../../infra/agent-events.js";
 import { emitAgentEvent, withAgentRunLifecycleGeneration } from "../../infra/agent-events.js";
 import { isAgentPlanProgressToolName } from "../../session-cards/progress-card-input.js";
+import type { PartialReplyPayload } from "../get-reply-options.types.js";
 import { FAST_MODE_AUTO_PROGRESS_KIND } from "../reply-payload.js";
 import { formatToolAggregate } from "../tool-meta.js";
 import type { GetReplyOptions } from "../types.js";
@@ -53,7 +54,7 @@ type ReasoningTextPayload = {
 };
 
 type AssistantTextDelivery =
-  | { text: string; completed: false }
+  | { partial: PartialReplyPayload; completed: false }
   | { text: string; completed: true; assistantMessageIndex: number };
 
 export function createCliReasoningStreamBridge(
@@ -212,7 +213,7 @@ type RunCliAgentWithLifecycleParams = {
    */
   onActivity?: () => void;
   preserveProgressCallbackStartOrder?: boolean;
-  onAssistantText?: (text: string) => Promise<boolean | void>;
+  onAssistantText?: (payload: PartialReplyPayload) => Promise<boolean | void>;
   onCompletedReply?: (text: string, assistantMessageIndex: number) => Promise<void>;
   onReasoningText?: (payload: ReasoningTextPayload) => Promise<void>;
   onReasoningProgress?: GetReplyOptions["onReasoningProgress"];
@@ -340,7 +341,7 @@ async function runCliAgentWithLifecycleInternal(
         if (payload.completed) {
           await onCompletedReply?.(payload.text, payload.assistantMessageIndex);
         } else {
-          await onAssistantText?.(payload.text);
+          await onAssistantText?.(payload.partial);
         }
       },
       read: (evt) => {
@@ -355,11 +356,18 @@ async function runCliAgentWithLifecycleInternal(
           };
         }
         const text = typeof evt.data.text === "string" ? evt.data.text : undefined;
-        if (text === undefined || text === lastAssistantText) {
+        if (text === undefined || (text === lastAssistantText && evt.data.replace !== true)) {
           return undefined;
         }
         lastAssistantText = text;
-        return { text, completed: false };
+        return {
+          completed: false,
+          partial: {
+            text,
+            ...(typeof evt.data.delta === "string" ? { delta: evt.data.delta } : {}),
+            ...(evt.data.replace === true ? { replace: true } : {}),
+          },
+        };
       },
     }),
     createProgressBridge<ReasoningTextPayload>("thinking", {

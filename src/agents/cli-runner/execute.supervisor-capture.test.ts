@@ -40,7 +40,6 @@ import { createStubChildAdapter } from "../../process/supervisor/supervisor.test
 import { createUserTurnTranscriptRecorder } from "../../sessions/user-turn-transcript.js";
 import { createTestUserTurnTranscriptTarget } from "../../sessions/user-turn-transcript.test-support.js";
 import { prepareSystemAgentRunAdmission } from "../admitted-run-context.js";
-import { createTestAdmittedRunContext } from "../admitted-run-context.test-support.js";
 import { hashCliImageTurnEntryId } from "../cli-image-turn-correlation.js";
 import { findCliTerminalStopError } from "../failover-error.js";
 import { resolveAgentRunErrorLifecycleFields } from "../run-termination.js";
@@ -48,12 +47,12 @@ import { buildCliDeliveredFailure, buildCliRunResult } from "./cli-run-settlemen
 import { getCliMessagingDeliveryEvidence } from "./delivery-evidence.js";
 import { executePreparedCliRun as executePreparedCliRunImpl } from "./execute.js";
 import {
+  buildPreparedCliRunContext,
   createManagedRun,
   createSuccessfulProcessExit,
   supervisorSpawnMock,
   wrapPreparedCliRunWithTestAdmission,
 } from "./execute.test-support.js";
-import { captureCliRunStartTime, type PreparedCliRunContext } from "./types.js";
 const executePreparedCliRun = wrapPreparedCliRunWithTestAdmission(executePreparedCliRunImpl);
 vi.mock("../../process/supervisor/adapters/child.js", () => ({ createChildAdapter: vi.fn() })); // Gateway unit coverage owns quiet-admission timing. These integration cases only
 // need to drain calls already in flight, so skip the repeated 250 ms quiet window.
@@ -154,62 +153,6 @@ function recordMcpLoopbackToolCallResult(params: {
     ...result,
   });
   markMcpLoopbackToolCallFinished(captureHandle);
-}
-
-function buildPreparedCliRunContext(params: {
-  output: "json" | "jsonl" | "text";
-  provider?: string;
-  runId?: string;
-  beforeExecution?: () => Promise<void>;
-  parseJsonlEvent?: CliBackendParseJsonlEvent;
-}): PreparedCliRunContext {
-  const provider = params.provider ?? "codex-cli";
-  const runId = params.runId ?? `run-${params.output}`;
-  const backend = {
-    command: "agent-cli",
-    args: [],
-    output: params.output,
-    input: "stdin" as const,
-    serialize: true,
-  };
-  return {
-    params: {
-      admittedRunContext: createTestAdmittedRunContext(runId),
-      agentId: "main",
-      sessionId: "session-1",
-      sessionKey: "agent:main:main",
-      sessionFile: "/tmp/session.jsonl",
-      workspaceDir: "/tmp",
-      prompt: "hi",
-      provider,
-      model: "model",
-      timeoutMs: 1_000,
-      runId,
-    },
-    ...captureCliRunStartTime(),
-    workspaceDir: "/tmp",
-    backendResolved: {
-      id: provider,
-      config: backend,
-      bundleMcp: false,
-      parseJsonlEvent: params.parseJsonlEvent,
-    },
-    executionTarget: { kind: "process" },
-    preparedBackend: {
-      backend,
-      env: {},
-      ...(params.beforeExecution ? { beforeExecution: params.beforeExecution } : {}),
-    },
-    reusableCliSession: { mode: "none" },
-    hadSessionFile: false,
-    contextEngineConfig: {},
-    modelId: "model",
-    normalizedModel: "model",
-    systemPrompt: "system",
-    systemPromptReport: {} as PreparedCliRunContext["systemPromptReport"],
-    claudeSkillsPluginArgs: [],
-    authEpochVersion: 2,
-  };
 }
 
 function requireSupervisorSpawnInput(index = 0): SupervisorSpawnInput {
@@ -870,9 +813,9 @@ describe("executePreparedCliRun supervisor output capture", () => {
     }
   });
 
-  it("publishes completed native thinking with supervisor capture disabled", async () => {
-    // The final authoritative snapshot comes from live chunks even when the
-    // supervisor does not retain stdout.
+  it("streams native thinking snapshots and text with supervisor capture disabled", async () => {
+    // Streaming events are emitted from live chunks, not from the final captured
+    // stdout string, so users still see deltas when captureOutput is false.
     const agentEvents: Array<{
       stream: string;
       text?: string;
@@ -927,14 +870,23 @@ describe("executePreparedCliRun supervisor output capture", () => {
       expect(spawnInput.captureOutput).toBe(false);
       expect(result.text).toBe("Hello world");
       expect(result.toolSummary).toEqual({ calls: 0, tools: [], failures: 0 });
-      expect(agentEvents.filter((event) => event.text || event.delta)).toEqual([
+      expect(agentEvents).toEqual([
+        { stream: "thinking", text: "Checking ", delta: "Checking ", isReasoningSnapshot: true },
+        { stream: "thinking", text: "Checking facts.", delta: "facts.", isReasoningSnapshot: true },
+        {
+          stream: "thinking",
+          text: "Checking the facts.",
+          delta: "the ",
+          isReasoningSnapshot: true,
+        },
         {
           stream: "thinking",
           text: "Checking the facts. Done.",
-          delta: "Checking the facts. Done.",
+          delta: " Done.",
           isReasoningSnapshot: true,
         },
-        { stream: "assistant", text: "Hello world", delta: "Hello world" },
+        { stream: "assistant", text: "Hello", delta: "Hello" },
+        { stream: "assistant", text: "Hello world", delta: " world" },
       ]);
       expect(context.params.onExecutionPhase).toHaveBeenCalledTimes(2);
       expect(context.params.onExecutionPhase).toHaveBeenNthCalledWith(2, {

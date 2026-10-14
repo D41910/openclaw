@@ -245,10 +245,18 @@ export function createTeamsReplyStreamController(params: {
   });
 
   return {
-    onPartialReply(payload: { text?: string }): void {
-      // Partial-token streaming only fires in "partial" mode. Progress-mode
-      // final payloads arrive at preparePayload instead.
-      if (!stream || !payload.text || wasCanceled() || streamMode !== "partial") {
+    async onPartialReply(payload: { text?: string; replace?: true }): Promise<void> {
+      if (!stream || wasCanceled()) {
+        return;
+      }
+      if (payload.replace && payload.text === "") {
+        if (!nativeDeliveryClaimed) {
+          await this.finalize({ discardPreview: true });
+        }
+        return;
+      }
+      // Progress-mode final payloads arrive at preparePayload instead.
+      if (!payload.text || streamMode !== "partial") {
         return;
       }
       if (replacementSettlementPending && replacementFinalPending) {
@@ -394,15 +402,48 @@ export function createTeamsReplyStreamController(params: {
       return true;
     },
 
-    async finalize(): Promise<MSTeamsNativeDeliveryFinalization> {
+    async finalize(options?: {
+      discardPreview?: boolean;
+    }): Promise<MSTeamsNativeDeliveryFinalization> {
+      const progressText =
+        options?.discardPreview && progressDraft.isVisible
+          ? flattenInformativeStatus(progressDraft.getText())
+          : undefined;
       // The SDK reopens closed streams on update; retire progress before close.
       progressDraft.markFinalReplyStarted();
-      if (!stream || !nativeDispatchStarted) {
-        releaseStreamChunkSubscription();
+      if (!stream || (!nativeDispatchStarted && !progressText)) {
+        if (options?.discardPreview) {
+          progressDraft.beginNewTurn({ force: true });
+        } else {
+          releaseStreamChunkSubscription();
+        }
         return { visibleReplySent: false };
       }
       let logicalContent: string | undefined;
       try {
+        if (options?.discardPreview) {
+          // Empty streams cannot close. Reuse only the current visible preview
+          // to complete the SDK cycle, then delete its receipt before retry.
+          if (!nativeDispatchStarted && progressText) {
+            stream.emit(progressText);
+          } else if (replacementFinalPending && pendingFinalPayload?.text) {
+            stream.emit(pendingFinalPayload.text);
+          }
+          const result = await stream.close();
+          const messageId = extractMessageId(result) ?? acknowledgedStreamId;
+          if (!messageId) {
+            throw new Error("Teams preview could not be retracted without a message receipt");
+          }
+          await params.context.deleteActivity(messageId);
+          tokensEmitted = false;
+          nativeDispatchStarted = false;
+          emittedText = "";
+          acknowledgedText = "";
+          acknowledgedLogicalText = "";
+          acknowledgedStreamId = undefined;
+          progressDraft.beginNewTurn({ force: true });
+          return { visibleReplySent: false };
+        }
         if (wasCanceled() || !streamFinalizationPending) {
           return acknowledgedNativeDelivery();
         }
@@ -455,6 +496,9 @@ export function createTeamsReplyStreamController(params: {
           ...(postNativePayloads.length > 0 ? { postNativePayloads } : {}),
         };
       } catch (err) {
+        if (options?.discardPreview) {
+          throw err;
+        }
         if (isStreamCancelledError(err)) {
           canceledLocally = true;
           return acknowledgedNativeDelivery();
@@ -473,7 +517,9 @@ export function createTeamsReplyStreamController(params: {
         replacementSettlementPending = false;
         replacementTextAwaitingAcknowledgement = undefined;
         deferredReplacementEntries = [];
-        releaseStreamChunkSubscription();
+        if (!options?.discardPreview) {
+          releaseStreamChunkSubscription();
+        }
       }
     },
 

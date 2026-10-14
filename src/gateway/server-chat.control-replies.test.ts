@@ -18,7 +18,7 @@ function controlReplyProjection() {
   registerAgentRunContext(runId, { sessionKey });
   return {
     ...projection,
-    async emit(data: { text: string; itemId: string }) {
+    async emit(data: { text: string; itemId: string; delta?: string; replace?: true }) {
       emitAgentEvent({ runId, stream: "assistant", data });
       await projection.drain();
     },
@@ -55,6 +55,65 @@ it("keeps repeated control-only items hidden while the next marker is incomplete
     await projection.dispose();
   }
 });
+
+it.each([false, true])(
+  "retracts only the silent assistant preview and keeps prior items (retry: %s)",
+  async (retry) => {
+    vi.useFakeTimers();
+    const projection = controlReplyProjection();
+    try {
+      await projection.emit({ itemId: "completed", text: "Earlier completed answer." });
+      await projection.emit({ itemId: "silent", text: "Provisional reasoning." });
+      vi.advanceTimersByTime(200);
+      expect(projection.events.at(-1)).toMatchObject({
+        state: "delta",
+        message: {
+          content: [{ type: "text", text: "Earlier completed answer.\n\nProvisional reasoning." }],
+        },
+      });
+      emitAgentEvent({
+        runId: "control-reply-run",
+        stream: "thinking",
+        data: { itemId: "silent", text: "Considering the turn.", delta: "Considering the turn." },
+      });
+      await projection.drain();
+      await projection.emit({ itemId: "silent", text: "", delta: "", replace: true });
+      expect(projection.events.at(-1)).toMatchObject({
+        state: "delta",
+        replace: true,
+        message: { content: [{ type: "text", text: "Earlier completed answer." }] },
+      });
+      emitAgentEvent({
+        runId: "control-reply-run",
+        stream: "thinking",
+        data: { itemId: "silent", text: "", delta: "", replace: true },
+      });
+      await projection.drain();
+      expect(
+        projection.agentEvents.findLast((event) => event.stream === "thinking")?.data,
+      ).toMatchObject({ itemId: "silent", text: "", delta: "", replace: true });
+      if (retry) {
+        await projection.emit({ itemId: "retry", text: "The required answer." });
+      }
+      await projection.finish();
+      expect(projection.events.at(-1)).toMatchObject({
+        state: "final",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: retry
+                ? "Earlier completed answer.\n\nThe required answer."
+                : "Earlier completed answer.",
+            },
+          ],
+        },
+      });
+    } finally {
+      await projection.dispose();
+    }
+  },
+);
 
 it("retracts a visible prefix when a replacement becomes a control-only reply", async () => {
   vi.useFakeTimers();

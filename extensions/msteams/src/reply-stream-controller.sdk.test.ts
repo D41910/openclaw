@@ -6,6 +6,7 @@ import { createTeamsReplyStreamController } from "./reply-stream-controller.js";
 
 type TeamsLoopbackRequest = {
   scenario: string;
+  method: string;
   type: string;
   text: string;
   status: number;
@@ -23,7 +24,7 @@ const provider = createServer((request, response) => {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   });
   request.on("end", () => {
-    const activity = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+    const activity = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as {
       type?: string;
       text?: string;
       entities?: unknown[];
@@ -39,6 +40,7 @@ const provider = createServer((request, response) => {
     const status = rejected ? 403 : 201;
     requests.push({
       scenario,
+      method: request.method ?? "POST",
       type: activity.type ?? "",
       text: activity.text ?? "",
       status,
@@ -169,7 +171,26 @@ function createLoopbackController(
   const controller = createTeamsReplyStreamController({
     allowProviderPreview: true,
     conversationType: "personal",
-    context: { activity: { type: "message" }, stream } as never,
+    context: {
+      activity: { type: "message" },
+      stream,
+      deleteActivity: async (activityId: string) => {
+        expect(activityId).toBe(`stream-${scenario}`);
+        await new Promise<void>((resolve, reject) => {
+          const outgoing = requestHttp(
+            `${providerUrl}/${scenario}`,
+            { method: "DELETE" },
+            (res) => {
+              res.resume();
+              res.on("end", resolve);
+              res.on("error", reject);
+            },
+          );
+          outgoing.on("error", reject);
+          outgoing.end("{}");
+        });
+      },
+    } as never,
     feedbackLoopEnabled: false,
     msteamsConfig,
   });
@@ -185,16 +206,90 @@ function createLoopbackController(
 }
 
 describe("Microsoft Teams SDK acknowledged stream fallback", () => {
+  it("retracts informative reasoning and lets the retry open a fresh native stream", async () => {
+    const scenario = "silent-informative-retry";
+    const { controller, stream } = createLoopbackController(scenario, {
+      streaming: { mode: "progress", progress: { label: "Working", toolProgress: true } },
+    });
+    const draft = "Reasoning that becomes silent.";
+    const acknowledgedReasoning = createDeferred<void>();
+    stream.events.on("chunk", (activity) => {
+      if (activity.text?.includes(draft)) {
+        acknowledgedReasoning.resolve();
+      }
+    });
+    await controller.pushPlanProgress([{ step: "Check context", status: "in_progress" }]);
+    await controller.pushReasoningProgress(draft);
+    await acknowledgedReasoning.promise;
+    await controller.onPartialReply({ text: "", replace: true });
+    const retry = "Required retry answer.";
+    expect(controller.preparePayload({ text: retry })).toBeUndefined();
+    expect(controller.claimNativeDelivery()).toBe(true);
+    await expect(controller.finalize()).resolves.toMatchObject({
+      visibleReplySent: true,
+      content: retry,
+    });
+    const wire = requests.filter((request) => request.scenario === scenario);
+    const deletion = wire.findIndex((request) => request.method === "DELETE");
+    const beforeDeletion = wire.slice(0, deletion);
+    const lastPreview = beforeDeletion.findLast((request) => request.type === "typing");
+    expect(lastPreview?.text).toContain(draft);
+    expect(beforeDeletion.at(-1)).toMatchObject({ type: "message", text: lastPreview?.text });
+    expect(wire.slice(deletion + 1).every((request) => request.text === retry)).toBe(true);
+    expect(wire.at(-1)).toMatchObject({ type: "message", text: retry });
+  });
+
+  it("retracts the native preview and opens a fresh stream for required retry text", async () => {
+    const scenario = "silent-retry";
+    const { controller, firstAcknowledgement } = createLoopbackController(scenario);
+    const draft = "Unfinished reasoning that becomes silent.";
+    const retry = "Required retry answer.";
+    await controller.onPartialReply({ text: draft });
+    await firstAcknowledgement;
+    await controller.onPartialReply({ text: "", replace: true });
+    await expect(controller.finalize()).resolves.toEqual({ visibleReplySent: false });
+    await controller.onPartialReply({ text: retry });
+    expect(controller.preparePayload({ text: retry })).toBeUndefined();
+    expect(controller.claimNativeDelivery()).toBe(true);
+    await expect(controller.finalize()).resolves.toMatchObject({
+      visibleReplySent: true,
+      content: retry,
+    });
+    const wire = requests.filter((request) => request.scenario === scenario);
+    const deletion = wire.findIndex((request) => request.method === "DELETE");
+    expect(deletion).toBeGreaterThan(0);
+    expect(wire.slice(0, deletion).at(-1)).toMatchObject({ type: "message", text: draft });
+    expect(wire.slice(deletion + 1).every((request) => request.text === retry)).toBe(true);
+    expect(wire.at(-1)).toMatchObject({ type: "message", text: retry });
+  });
+
+  it("keeps a claimed final native segment when a later message becomes silent", async () => {
+    const scenario = "silent-after-final";
+    const { controller, firstAcknowledgement } = createLoopbackController(scenario);
+    const text = "Earlier finalized answer.";
+    await controller.onPartialReply({ text });
+    await firstAcknowledgement;
+    expect(controller.preparePayload({ text })).toBeUndefined();
+    expect(controller.claimNativeDelivery()).toBe(true);
+    await controller.finalize();
+    await controller.onPartialReply({ text: "", replace: true });
+    const wire = requests.filter((request) => request.scenario === scenario);
+    expect(wire.some((request) => request.method === "DELETE")).toBe(false);
+    expect(wire.filter((request) => request.type === "message")).toMatchObject([
+      { method: "POST", type: "message", text },
+    ]);
+  });
+
   it("redelivers only text not acknowledged by the real Teams SDK and HTTP provider", async () => {
     const { acknowledgements, controller, firstAcknowledgement, firstFlushFailure, logger } =
       createLoopbackController("size-limit");
 
-    controller.onPartialReply({ text: acknowledgedPrefix });
+    await controller.onPartialReply({ text: acknowledgedPrefix });
     await firstAcknowledgement;
     expect(logger.error).not.toHaveBeenCalled();
     expect(acknowledgements).toEqual([{ id: "stream-size-limit", text: acknowledgedPrefix }]);
 
-    controller.onPartialReply({ text: completeReply });
+    await controller.onPartialReply({ text: completeReply });
     await firstFlushFailure;
     expect(
       requests.filter(
@@ -231,11 +326,11 @@ describe("Microsoft Teams SDK acknowledged stream fallback", () => {
       stream,
     } = createLoopbackController("cancel");
 
-    controller.onPartialReply({ text: acknowledgedPrefix });
+    await controller.onPartialReply({ text: acknowledgedPrefix });
     await firstAcknowledgement;
     expect(logger.error).not.toHaveBeenCalled();
     expect(acknowledgements).toEqual([{ id: "stream-cancel", text: acknowledgedPrefix }]);
-    controller.onPartialReply({ text: completeReply });
+    await controller.onPartialReply({ text: completeReply });
     await firstFlushFailure;
     await stream.close();
     expect(stream.canceled).toBe(true);
@@ -253,12 +348,12 @@ describe("Microsoft Teams SDK acknowledged stream fallback", () => {
     const { acknowledgements, controller, firstAcknowledgement, logger } =
       createLoopbackController("replacement");
 
-    controller.onPartialReply({ text: acknowledgedPrefix });
+    await controller.onPartialReply({ text: acknowledgedPrefix });
     await firstAcknowledgement;
     expect(logger.error).not.toHaveBeenCalled();
     expect(acknowledgements).toEqual([{ id: "stream-replacement", text: acknowledgedPrefix }]);
 
-    controller.onPartialReply({ text: replacementReply });
+    await controller.onPartialReply({ text: replacementReply });
     expect(
       controller.preparePayload({
         text: replacementReply,
@@ -288,14 +383,14 @@ describe("Microsoft Teams SDK acknowledged stream fallback", () => {
     const { acknowledgements, controller, firstAcknowledgement, logger, stream } =
       createLoopbackController("cancel-replacement");
 
-    controller.onPartialReply({ text: acknowledgedPrefix });
+    await controller.onPartialReply({ text: acknowledgedPrefix });
     await firstAcknowledgement;
     expect(logger.error).not.toHaveBeenCalled();
     expect(acknowledgements).toEqual([
       { id: "stream-cancel-replacement", text: acknowledgedPrefix },
     ]);
 
-    controller.onPartialReply({ text: replacementReply });
+    await controller.onPartialReply({ text: replacementReply });
     expect(
       controller.preparePayload({
         text: replacementReply,
@@ -347,7 +442,7 @@ describe("Teams native final text preparation", () => {
   it("preserves required AI metadata when the SDK completes a timed-out stream by update", async () => {
     const { controller, firstAcknowledgement } = createLoopbackController("presentation-timeout");
     const text = "# Status";
-    controller.onPartialReply({ text });
+    await controller.onPartialReply({ text });
     await firstAcknowledgement;
     controller.preparePayload({ text });
     await expect(controller.finalize()).resolves.toMatchObject({ visibleReplySent: true });
@@ -407,7 +502,7 @@ describe("Teams native final text preparation", () => {
     const { controller, firstAcknowledgement } = createLoopbackController(
       "presentation-close-failure",
     );
-    controller.onPartialReply({ text });
+    await controller.onPartialReply({ text });
     await firstAcknowledgement;
     controller.preparePayload({ text });
     await expect(controller.finalize()).resolves.toEqual({
@@ -426,7 +521,7 @@ describe("Teams native final text preparation", () => {
   it("retains the acknowledged preview when final rendering discovers Stop", async () => {
     const text = "# Deployment status";
     const { controller, firstAcknowledgement } = createLoopbackController("presentation-cancel");
-    controller.onPartialReply({ text });
+    await controller.onPartialReply({ text });
     await firstAcknowledgement;
     controller.preparePayload({ text });
     await expect(controller.finalize()).resolves.toEqual({

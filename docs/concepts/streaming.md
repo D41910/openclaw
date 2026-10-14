@@ -15,16 +15,14 @@ token-delta streaming** to channel messages:
 - **Preview streaming (Telegram/Discord/Slack/Matrix/Mattermost/MS Teams):**
   update a temporary **preview message** while generating (send + edits/appends).
 
-Text waits until its assistant message completes before either layer publishes it.
-If the final nonempty line is `NO_REPLY`, all preceding text in that message stays
-silent. This includes reasoning and commentary from the same message. Separately
-completed progress messages can still appear before the turn ends. Typing and
-non-text activity do not wait for this text decision. CLI backends without
-individual message boundaries hold text until a completed result segment or
-the turn ends.
+Text previews stream while the assistant writes. If the completed message's last
+nonempty line is `NO_REPLY`, its preview is cleared or deleted and none of its
+prose becomes a final reply. Reasoning may be briefly visible before retraction.
+A required turn uses the normal finalization retry; its answer replaces the draft.
+Separately completed messages remain visible.
 
-Native CLI tool commentary settles when its message completes. Terminal answers
-wait for an accepted result, so drafts rejected by a Stop hook remain unpublished.
+Native CLI previews also stream before message completion. Final answers wait for
+an accepted result; a Stop-hook rejection retracts the provisional draft.
 
 ## Control UI startup status
 
@@ -96,10 +94,10 @@ the nested shape before starting the Gateway. See the
 ### Text phases and final replies
 
 Providers that do not declare text phases, including ordinary Chat Completions
-and native Ollama (`api: "ollama"`, `/api/chat`), collect visible model text until
-the assistant message completes. A later tool call or reasoning continuation
-does not reclassify earlier text as commentary. Unless the completed message is
-silent, content before and after reasoning remains visible in order.
+and native Ollama (`api: "ollama"`, `/api/chat`), stream visible model text as it
+arrives. A later tool call or reasoning continuation does not reclassify earlier
+text as commentary. Content before and after reasoning remains visible in order,
+unless the completed message ends with a silent line and retracts its preview.
 
 For these providers, channels with block streaming off select their final text
 reply at turn end from the assistant text after the last tool call. When there
@@ -125,15 +123,13 @@ breaking-release approval. It cannot enable retroactive phase inference.
 ### Media delivery with block streaming
 
 When a plugin uses `before_agent_finalize` to validate the built-in runtime's
-answer, assistant replies stay deferred until that decision completes. A later
-answer supersedes deferred text from earlier tool turns, including when the
-final answer is `NO_REPLY`. This applies to both reply blocks and preview
-updates; it does not retract replies that were already sent. Commentary waits
-for its message's silence decision. Media, reasoning from non-silent messages,
-and completed answers to earlier user inputs are preserved. Each steered user
-input gets its own delivered answer, even when its pending tools were skipped.
-Media from a superseded answer is delivered without
-its old caption.
+answer, durable replies stay deferred until that decision completes. Previews
+remain live; rejection clears the current provisional answer. A later answer
+supersedes deferred text from earlier tool turns, including when the final answer
+is `NO_REPLY`. Media, reasoning from non-silent messages, and completed answers to
+earlier user inputs are preserved. Each steered user input gets its own delivered
+answer, even when its pending tools were skipped. Media from a superseded answer
+is delivered without its old caption.
 
 With block streaming off, media-bearing assistant messages can still be sent at
 message boundaries, with their captions attached. Preview updates do not count

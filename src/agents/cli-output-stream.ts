@@ -55,7 +55,7 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   const lineBuffer = { pending: "" };
   let assistantText = "";
   let customThinkingText = "";
-  let pendingClaudeText = "";
+  let unclassifiedClaudeText = "";
   let currentClaudeMessageId: string | undefined;
   let currentClaudeMessageText = "";
   let pendingMessageSeparator = false;
@@ -64,7 +64,7 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   // Streamed text from this offset on is still a candidate to outrank the
   // result envelope; every non-tool boundary or interim result restarts it.
   let preserveFrom = 0;
-  // Commentary-buffered text skips emitClaudeVisibleText's boundary handling;
+  // Commentary-classified text skips emitClaudeVisibleText's boundary handling;
   // this diagnostics-only offset marks where its current message starts.
   let flushedMessageStart = 0;
   let sawToolUseSinceText = false;
@@ -104,11 +104,11 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   };
 
   const flushPendingClaudeText = (kind: "assistant" | "commentary") => {
-    if (!pendingClaudeText) {
+    if (!unclassifiedClaudeText) {
       return;
     }
-    const text = kind === "commentary" ? pendingClaudeText.trim() : pendingClaudeText;
-    pendingClaudeText = "";
+    const text = kind === "commentary" ? unclassifiedClaudeText.trim() : unclassifiedClaudeText;
+    unclassifiedClaudeText = "";
     if (kind === "assistant") {
       // A flushed assistant segment after a boundary starts a fresh
       // final-message segment; commentary routing never touches it.
@@ -117,8 +117,9 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       }
       pendingMessageSeparator = false;
       sawToolUseSinceText = false;
-      appendAssistantText(text);
+      assistantText += text;
     } else if (text) {
+      params.onAssistantDelta({ text: assistantText, delta: "", replace: true, sessionId, usage });
       params.onCommentaryText?.(text);
     }
   };
@@ -128,7 +129,13 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       return;
     }
     if (classifyClaudeCommentary) {
-      pendingClaudeText = `${pendingClaudeText}${delta}`;
+      unclassifiedClaudeText += delta;
+      params.onAssistantDelta({
+        text: assistantText + unclassifiedClaudeText,
+        delta,
+        sessionId,
+        usage,
+      });
       return;
     }
     // A tool_use block starts a new post-tool segment even inside one assistant
@@ -183,7 +190,6 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     currentMessageHadToolUse = false;
     currentClaudeMessageId = messageId;
     currentClaudeMessageText = "";
-    params.onMessageReset?.();
   };
 
   // Diagnostics need the model's final message alone; `text` stays the
@@ -405,8 +411,9 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     }
 
     if (stopHookFeedback) {
+      assistantText = assistantText.slice(0, segmentStart);
+      params.onAssistantDelta({ text: assistantText, delta: "", replace: true, sessionId, usage });
       resetReplySegment();
-      params.onMessageReset?.();
     }
 
     let result = parseClaudeCliJsonlResult({
@@ -537,12 +544,6 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
           flushPendingClaudeText("commentary");
         } else if (evt.type === "content_block_start" || evt.type === "message_stop") {
           flushPendingClaudeText("assistant");
-        }
-      }
-      if (claudeStreamJson && evt.type === "message_stop" && !isClaudeSubagentRecord(parsed)) {
-        const message = partitionLeadingTaggedReasoning(currentClaudeMessageText, true);
-        if (!message.pending) {
-          params.onMessageEnd?.(message.visibleText, currentMessageHadToolUse);
         }
       }
     }

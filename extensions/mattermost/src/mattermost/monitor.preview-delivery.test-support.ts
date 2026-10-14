@@ -2,6 +2,7 @@ import { projectAgentToolActivity } from "openclaw/plugin-sdk/agent-harness-runt
 import { createChannelPartialDeliveryError } from "openclaw/plugin-sdk/channel-inbound";
 import { createMessageReceiptFromOutboundResults } from "openclaw/plugin-sdk/channel-outbound";
 import { expect, it, vi, type Mock } from "vitest";
+import type { MattermostClient } from "./client.js";
 import type { OpenClawConfig, ReplyPayload } from "./runtime-api.js";
 
 type DraftStream = ReturnType<typeof import("./draft-stream.js").createMattermostDraftStream>;
@@ -40,6 +41,7 @@ export function registerMattermostPreviewDeliveryTests(harness: {
     runtimeCore: unknown;
     abortController: AbortController | undefined;
     createMattermostDraftStream: Mock;
+    createMattermostClient: Mock;
     dispatchInboundMessage: Mock;
     createReplyDispatcherWithTyping: Mock;
     sendMessageMattermost: Mock;
@@ -57,6 +59,108 @@ export function registerMattermostPreviewDeliveryTests(harness: {
   ): OpenClawConfig => ({
     channels: { mattermost: { ...testConfig.channels?.mattermost, streaming, responsePrefix } },
   });
+  it.each([
+    { mode: "partial", required: false },
+    { mode: "block", required: false },
+    { mode: "progress", required: false },
+    { mode: "partial", required: true },
+    { mode: "block", required: true },
+    { mode: "progress", required: true },
+  ] as const)(
+    "settles a silent $mode preview at completion (required: $required)",
+    async ({ mode, required }) => {
+      const { createMattermostDraftStream } =
+        await vi.importActual<typeof import("./draft-stream.js")>("./draft-stream.js");
+      const { updateMattermostPost } =
+        await vi.importActual<typeof import("./client.js")>("./client.js");
+      const posts = new Map<string, string>();
+      const deleted: string[] = [];
+      let nextId = 1;
+      const request: MattermostClient["request"] = async <T>(
+        path: string,
+        init?: RequestInit,
+      ): Promise<T> => {
+        if (init?.method === "DELETE") {
+          const id = path.slice("/posts/".length);
+          deleted.push(id);
+          posts.delete(id);
+          return undefined as T;
+        }
+        if (typeof init?.body !== "string") {
+          throw new Error("expected Mattermost post request body");
+        }
+        const body = JSON.parse(init.body) as { message: string };
+        const id =
+          path === "/posts"
+            ? `post-${nextId++}`
+            : path.slice("/posts/".length).replace(/\/patch$/, "");
+        if (path !== "/posts" && !posts.has(id)) {
+          throw new Error("cannot edit a deleted Mattermost post");
+        }
+        posts.set(id, body.message);
+        return { id, message: body.message } as T;
+      };
+      const client: MattermostClient = {
+        baseUrl: "https://mattermost.example.com",
+        apiBaseUrl: "https://mattermost.example.com/api/v4",
+        token: "fixture-token",
+        request,
+        fetchImpl: vi.fn(),
+      };
+      const stream = createMattermostDraftStream({ client, channelId: "chan-1" });
+      const config = withStreaming({ mode, progress: { label: false } });
+      mockState.runtimeCore = createRuntimeCore(config);
+      mockState.createMattermostClient.mockReturnValue(client);
+      mockState.createMattermostDraftStream.mockReturnValue(stream);
+      mockState.updateMattermostPost.mockImplementation(updateMattermostPost);
+      mockState.dispatchInboundMessage.mockImplementation(async (params) => {
+        const preview = async (text: string) => {
+          if (mode === "progress") {
+            await params.replyOptions?.onPlanUpdate?.({
+              phase: "update",
+              explanation: text,
+              steps: [],
+            });
+          } else {
+            await params.replyOptions?.onPartialReply?.({ text });
+          }
+          await stream.flush();
+        };
+        try {
+          await params.replyOptions?.onAssistantMessageStart?.();
+          if (mode === "block") {
+            await preview("Earlier answer");
+            expect([...posts.values()]).toEqual(["Earlier answer"]);
+            await params.replyOptions?.onAssistantMessageStart?.();
+          }
+          await preview("The group needs no response");
+          const silentId = stream.postId();
+          expect(silentId).toBeDefined();
+          expect([...posts.values()].at(-1)).toContain("The group needs no response");
+
+          await params.replyOptions?.onPartialReply?.({ text: "", delta: "", replace: true });
+          if (required) {
+            await params.replyOptions?.onAssistantMessageStart?.();
+            await preview("Retry answer");
+            const dispatcherOptions =
+              mockState.createReplyDispatcherWithTyping.mock.results.at(-1)?.value?.options;
+            await dispatcherOptions.deliver({ text: "Retry answer" }, { kind: "final" });
+          }
+        } finally {
+          mockState.abortController?.abort();
+        }
+      });
+      await receivePost({ id: `post-retract-${mode}-${required}`, message: "run this" }, config);
+      expect([...posts.values()]).toEqual([
+        ...(mode === "block" ? ["Earlier answer"] : []),
+        ...(required ? ["Retry answer"] : []),
+      ]);
+      expect(deleted).toEqual(
+        required && mode !== "block" ? [] : [mode === "block" ? "post-2" : "post-1"],
+      );
+      expect(mockState.sendMessageMattermost).not.toHaveBeenCalled();
+    },
+  );
   it.each([{ toolProgress: false, mode: "progress" }] as const)(
     "keeps Mattermost $mode progress with tools $toolProgress and no label",
     async ({ toolProgress, mode }) => {

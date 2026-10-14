@@ -51,6 +51,32 @@ function createPresentation(
 }
 
 describe("agent runner streaming presentation", () => {
+  it.each(["cli", "embedded"] as const)(
+    "forwards live %s previews and explicit empty replacements",
+    async (runtime) => {
+      const onPartialReply = vi.fn<NonNullable<GetReplyOptions["onPartialReply"]>>();
+      const presentation = createPresentation({ onPartialReply });
+      await presentation.presentPartialReply(
+        { text: "A provisional answer.", delta: "answer." },
+        runtime,
+      );
+      expect(onPartialReply).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "A provisional answer.", delta: "answer." }),
+      );
+      await presentation.presentPartialReply({ text: "", delta: "", replace: true }, runtime);
+      expect(onPartialReply).toHaveBeenLastCalledWith({ text: "", delta: "", replace: true });
+      await presentation.presentPartialReply({ text: "" }, runtime);
+      expect(onPartialReply).toHaveBeenCalledTimes(2);
+      await presentation.presentPartialReply(
+        { text: "The required answer.", replace: true },
+        runtime,
+      );
+      expect(onPartialReply).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "The required answer.", replace: true }),
+      );
+    },
+  );
+
   it.each([
     { name: "cleaned silent token", caption: "NO_REPLY", silent: true },
     { name: "cleaned silent envelope", caption: '{"action":"NO_REPLY"}', silent: true },

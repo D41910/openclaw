@@ -322,6 +322,10 @@ export function handleAgentEnd(
 
   const applyBeforeTerminalDecision = (decision: BeforeTerminalDeliveryDecision) => {
     if (decision?.suppressTerminalDelivery === true) {
+      ctx.emitAssistantStreamData(
+        { text: "", delta: "", replace: true },
+        { finalMessage: true, emitPartialReply: true },
+      );
       ctx.clearAssistantStream();
       ctx.clearDeferredBlockReplies();
       finalizeAgentEnd();
