@@ -86,46 +86,8 @@ it("tabs into a nested inspection, dismisses only the flyout with Escape, and re
   expect(tooltip.hasAttribute("open")).toBe(true);
   anchor.focus();
   const summary = card.querySelector("summary")!;
-  const focusEvents: object[] = [];
-  const describeTarget = (target: EventTarget | null) =>
-    target instanceof Element ? `${target.localName}.${target.className}` : String(target);
-  const recordFocus = (event: Event) => {
-    focusEvents.push({
-      type: event.type,
-      phase: event.eventPhase,
-      target: describeTarget(event.target),
-      key: event instanceof KeyboardEvent ? event.key : undefined,
-      prevented: event.defaultPrevented,
-      active: describeTarget(document.activeElement),
-    });
-  };
-  const focusedBeforeTab = document.hasFocus();
-  for (const type of ["keydown", "focusin", "focusout"]) {
-    document.addEventListener(type, recordFocus, true);
-    document.addEventListener(type, recordFocus);
-  }
-  try {
-    await userEvent.tab();
-  } finally {
-    for (const type of ["keydown", "focusin", "focusout"]) {
-      document.removeEventListener(type, recordFocus, true);
-      document.removeEventListener(type, recordFocus);
-    }
-  }
-  expect(
-    document.activeElement,
-    JSON.stringify({
-      focusedBeforeTab,
-      focusedAfterTab: document.hasFocus(),
-      focusEvents,
-      summaryTabIndex: summary.tabIndex,
-      summaryRects: summary.getClientRects().length,
-      summaryVisibility: getComputedStyle(summary).visibility,
-      slot: summary.closest("[slot]")?.assignedSlot?.name,
-      popoverOpen: tooltip.shadowRoot?.querySelector("[popover]")?.matches(":popover-open"),
-      inert: tooltip.shadowRoot?.querySelector("[inert]")?.outerHTML,
-    }),
-  ).toBe(summary);
+  await userEvent.tab();
+  await expect.element(summary).toHaveFocus();
   await userEvent.keyboard("{Enter}");
   expect(card.querySelector("details")!.open).toBe(true);
   await userEvent.keyboard("{Escape}");
