@@ -11,7 +11,7 @@ import { t } from "../../i18n/index.ts";
 import type { SessionCapability } from "../../lib/sessions/index.ts";
 import { createApplicationContextProvider } from "../../test-helpers/application-context.ts";
 import { gatewayHelloForMethods } from "../../test-helpers/gateway-methods.ts";
-import { flush } from "../../test-helpers/solid-settle.ts";
+import { waitForSolid } from "../../test-helpers/solid-settle.ts";
 import { setChatHistoryLoad } from "./chat-history-state.ts";
 import { consumePaneSessionHandoff } from "./chat-pane-shared.ts";
 import {
@@ -557,7 +557,6 @@ describe("global chat pane feature ownership", () => {
       const draw = async () => {
         await pane.updateComplete;
         render(renderChat(pane.chatProps!), container);
-        flush();
         if (container.querySelector("openclaw-chat-question-card")) {
           await questionPanelIn(container);
         }
@@ -603,7 +602,11 @@ describe("global chat pane feature ownership", () => {
         await draw();
         expect(pane.chatProps?.gatewayQuestionPrompts).not.toBe(pendingQuestions);
         expect(container.querySelector(".chat-question-panel")).toBeNull();
-        expect(container.querySelector(".chat-question-summary")?.textContent).toContain("Skipped");
+        await waitForSolid(() =>
+          expect(container.querySelector(".chat-question-summary")?.textContent).toContain(
+            "Skipped",
+          ),
+        );
         await expectStableQuestions();
 
         select("main");

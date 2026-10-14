@@ -10,7 +10,7 @@ it.each([
   },
   {
     surface: "pull requests",
-    load: () => import("../pages/chat/components/chat-pull-requests.ts"),
+    load: () => import("../pages/chat/components/chat-pull-requests.tsx"),
   },
   {
     surface: "connections",
