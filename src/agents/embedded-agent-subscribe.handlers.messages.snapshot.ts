@@ -263,7 +263,14 @@ export function reconcileBlockReplySnapshot(
       restartPrefix = nextBoundary;
     }
   }
-  if (retainedPrefix && nextText.length < consumed && restartPrefix !== next.blockText) {
+  // These ranges are prepared, not delivered. Retire them before rebuilding the changed source.
+  const replacedPreparedSource = ctx.resetPreparedBlockReplySource();
+  if (
+    retainedPrefix &&
+    nextText.length < consumed &&
+    restartPrefix !== next.blockText &&
+    !replacedPreparedSource
+  ) {
     ctx.blockChunker.replace(nextText, 0, retainedPrefix);
     return;
   }

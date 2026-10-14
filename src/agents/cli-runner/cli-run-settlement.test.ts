@@ -23,6 +23,7 @@ import {
   buildBlockedCliRunResult,
   buildCliDeliveredFailure,
   buildCliRunResult,
+  resolveCliAssistantVisibleText,
   settleCliPreparationError,
   settlePreparedCliRun,
 } from "./cli-run-settlement.js";
@@ -139,6 +140,7 @@ describe("CLI native continuity projection", () => {
           : buildCliRunResult({
               context,
               output: { text: "done" },
+              assistantText: "done",
               effectiveCliSessionId: kind === "native" ? "next-native-session" : undefined,
               bindingFlushOk: kind !== "no-native-id",
               usedHistoryPrompt: false,
@@ -212,6 +214,7 @@ describe.each(["anthropic", undefined])(
                 : buildCliRunResult({
                     context,
                     output: { text: "done" },
+                    assistantText: "done",
                     effectiveCliSessionId: "next-native-session",
                     bindingFlushOk: true,
                     usedHistoryPrompt: false,
@@ -288,6 +291,7 @@ it("captures only the last CLI result as the model's final message", async () =>
   const context = buildPreparedCliRunContext({ provider: "claude-cli" });
   const result = buildCliRunResult({
     context,
+    assistantText: "Checking now\nDone",
     output: transformCliResultText({
       text: "Checking now\nDone",
       textParts: ["Checking now", "Done"],
@@ -306,6 +310,7 @@ it("captures nothing when the CLI's final message was empty after narration", as
   const context = buildPreparedCliRunContext({ provider: "claude-cli" });
   const result = buildCliRunResult({
     context,
+    assistantText: "Checking now",
     output: transformCliResultText({ text: "Checking now", rawFinalText: "" }),
     usedHistoryPrompt: false,
     userTurnHandled: true,
@@ -321,6 +326,7 @@ it("never captures host-synthesized optional silence as model output", async () 
   context.params.terminalReplyExpectation = "optional";
   const result = buildCliRunResult({
     context,
+    assistantText: "",
     output: { text: "" },
     usedHistoryPrompt: false,
     userTurnHandled: true,
@@ -331,28 +337,42 @@ it("never captures host-synthesized optional silence as model output", async () 
   expect(resolveDiagnosticModelResponse(result)).toBeUndefined();
 });
 
-it("preserves completed result boundaries for independent final delivery", async () => {
-  const context = buildPreparedCliRunContext({ provider: "claude-cli" });
-  const result = buildCliRunResult({
-    context,
-    output: { text: "First answer.\nLast answer.", textParts: ["First answer.", "Last answer."] },
-    usedHistoryPrompt: false,
-    userTurnHandled: true,
-    sessionBindingDisabled: true,
-    preparedContextAgentMeta: {},
-    assistantTranscriptOwned: true,
-    assistantTranscriptIdempotencyKey: "synthetic-turn",
-  });
-  expect(result.payloads).toEqual([{ text: "First answer." }, { text: "Last answer." }]);
-  const { getReplyPayloadMetadata } = await import("../../auto-reply/reply-payload.js");
-  for (const [assistantMessageIndex, payload] of (result.payloads ?? []).entries()) {
-    expect(getReplyPayloadMetadata(payload)).toMatchObject({
+it.each([
+  { parts: ["First answer.", "Last answer."], visible: "First answer.\nLast answer." },
+  { parts: ["This discussion is complete.\nNO_REPLY", "Last answer."], visible: "Last answer." },
+  {
+    parts: ["This discussion is complete.\nNO_REPLY", "Nobody needs a response.\nNO_REPLY"],
+    visible: "",
+  },
+])(
+  "preserves completed boundaries and projects only visible text: $parts",
+  async ({ parts, visible }) => {
+    const context = buildPreparedCliRunContext({ provider: "claude-cli" });
+    const output = transformCliResultText({ text: parts.join("\n"), textParts: parts });
+    const result = buildCliRunResult({
+      context,
+      output,
+      assistantText: resolveCliAssistantVisibleText(output),
+      usedHistoryPrompt: false,
+      userTurnHandled: true,
+      sessionBindingDisabled: true,
+      preparedContextAgentMeta: {},
       assistantTranscriptOwned: true,
       assistantTranscriptIdempotencyKey: "synthetic-turn",
-      assistantMessageIndex,
     });
-  }
-});
+    expect(result.payloads).toEqual(parts.map((text) => ({ text })));
+    expect(result.meta.finalAssistantVisibleText).toBe(visible);
+    expect(result.meta.finalAssistantRawText).toBe(parts.join("\n"));
+    const { getReplyPayloadMetadata } = await import("../../auto-reply/reply-payload.js");
+    for (const [assistantMessageIndex, payload] of (result.payloads ?? []).entries()) {
+      expect(getReplyPayloadMetadata(payload)).toMatchObject({
+        assistantTranscriptOwned: true,
+        assistantTranscriptIdempotencyKey: "synthetic-turn",
+        assistantMessageIndex,
+      });
+    }
+  },
+);
 
 describe("CLI MCP retirement", () => {
   let manager: ReturnType<typeof createSessionMcpRuntimeManager>;

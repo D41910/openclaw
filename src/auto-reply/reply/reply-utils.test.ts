@@ -131,30 +131,19 @@ describe("normalizeReplyPayload", () => {
     ).toBe("The user is saying hello");
   });
 
-  it("suppresses leaked reasoning when the final answer is NO_REPLY (#66701)", () => {
+  it.each([
+    "The participants already resolved this; another response would be noise.\nNO_REPLY",
+    "<think>internal reasoning</think>\nNO_REPLY.",
+  ])("suppresses the whole reply ending with a silent-token line: %j", (text) => {
     const onSkip = vi.fn();
-    expect(
-      normalizeReplyPayload(
-        {
-          text: "think\nCav is talking about a follow-up conversation.\nI will stay quiet here.NO_REPLY",
-        },
-        { onSkip },
-      ),
-    ).toBeNull();
+    expect(normalizeReplyPayload({ text }, { onSkip })).toBeNull();
     expect(onSkip.mock.calls).toEqual([["silent"]]);
   });
 
-  it("suppresses tagged leaked reasoning ending in silence narration (#66701)", () => {
-    const onSkip = vi.fn();
-    expect(
-      normalizeReplyPayload(
-        {
-          text: "<think>Cav is talking about a follow-up conversation.</think>\nI will stay quiet here.NO_REPLY",
-        },
-        { onSkip },
-      ),
-    ).toBeNull();
-    expect(onSkip.mock.calls).toEqual([["silent"]]);
+  it("strips an inline trailing token without suppressing the answer", () => {
+    expect(expectNormalizedReply(normalizeReplyPayload({ text: "Done. NO_REPLY" })).text).toBe(
+      "Done.",
+    );
   });
 
   it.each(['{"action":"NO_REPLY"}', "think\ninternal reasoning\nNO_REPLY."])(

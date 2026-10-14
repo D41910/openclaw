@@ -27,6 +27,7 @@ import {
   shouldPreserveAssistantControlReplyText,
   stripAssistantMediaDirectivesForDisplay,
   stripPrivateToolCallContextForDisplay,
+  suppressSilentAssistantMessageText,
   takeAssistantManagedMediaUrlsForDisplay,
   truncateChatHistoryText,
 } from "./chat-display-projection.helpers.js";
@@ -402,8 +403,9 @@ export function sanitizeChatHistoryMessage(
   if (!message || typeof message !== "object") {
     return { message, changed: false };
   }
-  const entry = { ...(message as Record<string, unknown>) };
-  let changed = false;
+  const projectedMessage = suppressSilentAssistantMessageText(message);
+  const entry = { ...(projectedMessage as Record<string, unknown>) };
+  let changed = projectedMessage !== message;
   let truncated = false;
   if ("providerReplay" in entry) {
     delete entry.providerReplay;
@@ -643,7 +645,7 @@ export function shouldDropAssistantHistoryMessage(message: unknown): boolean {
   if (text === undefined || !isSuppressedControlReplyText(text)) {
     return false;
   }
-  return !hasAssistantDisplayableNonTextContent(message);
+  return !hasAssistantDisplayableNonTextContent(message) && !hasTranscriptMediaFacts(entry);
 }
 
 export function sanitizeChatHistoryMessages(
@@ -657,8 +659,12 @@ export function sanitizeChatHistoryMessages(
   let changed = false;
   const next: unknown[] = [];
   for (const original of messages) {
-    let message = original;
-    if (opts?.includeCommentaryFallbacks === true) {
+    let message = suppressSilentAssistantMessageText(original);
+    changed ||= message !== original;
+    if (message !== original && shouldDropAssistantHistoryMessage(original)) {
+      continue;
+    }
+    if (opts?.includeCommentaryFallbacks === true && message === original) {
       const projection = projectAssistantCommentaryFallbacks(message, maxChars);
       message = projection.message;
       changed ||= message !== original;
@@ -685,7 +691,6 @@ export function sanitizeChatHistoryMessages(
     const res = sanitizeChatHistoryMessage(message, maxChars, opts?.toolResultMaxChars);
     changed ||= res.changed;
     if (res.changed && shouldDropAssistantHistoryMessage(res.message)) {
-      changed = true;
       continue;
     }
     next.push(res.message);

@@ -1,4 +1,5 @@
 import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
+import { normalizeReplyPayload } from "../../auto-reply/reply/normalize-reply.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
@@ -461,9 +462,19 @@ export function buildCliDeliveredFailure(params: {
   };
 }
 
+export function resolveCliAssistantVisibleText(
+  output: Pick<CliOutput, "text" | "textParts">,
+): string {
+  return (output.textParts ?? [output.text])
+    .map((text) => normalizeReplyPayload({ text })?.text?.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function buildCliRunResult(params: {
   context: PreparedCliRunContext;
   output: CliOutput;
+  assistantText: string;
   effectiveCliSessionId?: string;
   bindingFlushOk?: boolean;
   assistantTranscriptOwned?: boolean;
@@ -480,6 +491,7 @@ export function buildCliRunResult(params: {
     context,
     effectiveCliSessionId,
     output,
+    assistantText,
     preparedContextAgentMeta,
     sessionBindingDisabled,
     usedHistoryPrompt,
@@ -494,9 +506,6 @@ export function buildCliRunResult(params: {
     runParams,
     modelId: context.modelId,
   });
-  const finalAssistantVisibleText = sourceReplyMirror.delivered
-    ? sourceReplyMirror.visibleText
-    : text;
   const payloads =
     sourceReplyMirror.payloads.length > 0
       ? sourceReplyMirror.payloads
@@ -610,7 +619,7 @@ export function buildCliRunResult(params: {
     meta: {
       durationMs: Date.now() - context.started,
       ...(output.finalPromptText ? { finalPromptText: output.finalPromptText } : {}),
-      ...(finalAssistantVisibleText ? { finalAssistantVisibleText } : {}),
+      finalAssistantVisibleText: assistantText,
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
       // An empty final message is recorded as "" so capture never falls back to
       // the cumulative raw text.

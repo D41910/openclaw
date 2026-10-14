@@ -41,6 +41,7 @@ export function mergeReplyDirectiveResults(
     replyToTag: first.replyToTag || second.replyToTag,
     audioAsVoice: first.audioAsVoice || second.audioAsVoice || undefined,
     isSilent: first.isSilent || second.isSilent,
+    hasSilentIntent: first.hasSilentIntent || second.hasSilentIntent,
   };
 }
 
@@ -99,10 +100,9 @@ export function consumePendingToolMediaIntoReply(
   return mergedPayload;
 }
 
-/** Restores reserved tool media after its outbound delivery was rejected. */
+/** Restores reserved tool media ahead of newer pending media. */
 export function restorePendingToolMediaReply(
-  state: PendingToolMediaState &
-    Pick<EmbeddedAgentSubscribeState, "pendingToolMediaDeliveryFailed">,
+  state: PendingToolMediaState,
   payload: BlockReplyPayload,
 ): void {
   const pendingUrls = state.pendingToolMediaUrls;
@@ -125,7 +125,6 @@ export function restorePendingToolMediaReply(
     }
   }
   state.pendingToolAudioAsVoice ||= payload.audioAsVoice === true;
-  state.pendingToolMediaDeliveryFailed = true;
 }
 
 /** Reads queued tool media without clearing it. */

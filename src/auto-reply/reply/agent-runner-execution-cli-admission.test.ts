@@ -195,6 +195,7 @@ describe("executeAgentTurn: CLI admission", () => {
         ? buildCliRunResult({
             context: buildPreparedCliRunContext(),
             output: { text: GENERIC_EXTERNAL_RUN_FAILURE_TEXT },
+            assistantText: GENERIC_EXTERNAL_RUN_FAILURE_TEXT,
             effectiveCliSessionId: settledBinding.sessionId,
             bindingFlushOk: kind !== "rejected-clear",
             usedHistoryPrompt: false,
@@ -413,6 +414,8 @@ describe("executeAgentTurn: CLI admission", () => {
         output: {
           text: kind === "rejected-clear" ? GENERIC_EXTERNAL_RUN_FAILURE_TEXT : "Captured reply",
         },
+        assistantText:
+          kind === "rejected-clear" ? GENERIC_EXTERNAL_RUN_FAILURE_TEXT : "Captured reply",
         effectiveCliSessionId: "replacement-native-session",
         bindingFlushOk: kind !== "rejected-clear",
         usedHistoryPrompt: false,

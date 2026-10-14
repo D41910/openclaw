@@ -727,6 +727,44 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expect(payloads[0]?.text).toBeUndefined();
   });
 
+  it.each(["NO_REPLY", "The conversation is already settled.\nNO_REPLY."])(
+    "suppresses native reasoning from a silent final message: %j",
+    (text) => {
+      expect(
+        buildPayloads({
+          assistantTexts: [text],
+          reasoningLevel: "on",
+          lastAssistant: makeAgentAssistantMessage({
+            content: [
+              { type: "thinking", thinking: "Private decision to stay quiet." },
+              { type: "text", text },
+            ],
+          }),
+        }),
+      ).toEqual([]);
+    },
+  );
+
+  it("keeps an attachment failure without restoring silent text or native reasoning", () => {
+    const text = "The conversation is already settled.\nNO_REPLY\nMEDIA:media://inbound/";
+    const payloads = buildPayloads({
+      assistantTexts: ["NO_REPLY"],
+      reasoningLevel: "on",
+      lastAssistant: makeAgentAssistantMessage({
+        content: [
+          { type: "thinking", thinking: "Private decision to stay quiet." },
+          { type: "text", text },
+        ],
+      }),
+    });
+
+    expectSinglePayloadText(
+      payloads,
+      "⚠️ Media not attached: Use a public HTTPS URL without credentials or attach a local file by a safe path.",
+    );
+    expect(payloads[0]?.isReasoning).toBeUndefined();
+  });
+
   it("preserves media directives when stored assistant text was reduced to visible text only", () => {
     const payloads = buildPayloads({
       assistantTexts: ["Attached image"],

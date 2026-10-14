@@ -10,10 +10,18 @@ title: "Streaming and chunking"
 OpenClaw has two independent streaming layers, and there is **no true
 token-delta streaming** to channel messages:
 
-- **Block streaming (channels):** emit completed **blocks** as the assistant
-  writes. These are normal channel messages, not token deltas.
+- **Block streaming (channels):** emit completed **blocks** from assistant
+  messages. These are normal channel messages, not token deltas.
 - **Preview streaming (Telegram/Discord/Slack/Matrix/Mattermost/MS Teams):**
   update a temporary **preview message** while generating (send + edits/appends).
+
+Text waits until its assistant message completes before either layer publishes it.
+If the final nonempty line is `NO_REPLY`, all preceding text in that message stays
+silent. This includes reasoning and commentary from the same message. Separately
+completed progress messages can still appear before the turn ends. Typing and
+non-text activity do not wait for this text decision. CLI backends without
+individual message boundaries hold text until a completed result segment or
+the turn ends.
 
 ## Control UI startup status
 
@@ -32,16 +40,16 @@ reclaimed worker.
 
 ## Block streaming (channel messages)
 
-Block streaming sends assistant output in coarse chunks as it becomes available.
+Block streaming prepares assistant output in coarse chunks, then releases them
+when the assistant message completes without a final silent line.
 
 ```text
 Model output
   └─ text_delta/events
-       ├─ (blockStreamingBreak=text_end)
-       │    └─ chunker emits blocks as buffer grows
-       └─ (blockStreamingBreak=message_end)
-            └─ chunker flushes at message_end
-                   └─ channel send (block replies)
+       └─ chunker prepares blocks using blockStreamingBreak
+            └─ message_end
+                   └─ completed-message silence check
+                        └─ channel send (block replies)
 ```
 
 - `text_delta/events`: model stream events (may be sparse for non-streaming models).
@@ -74,7 +82,8 @@ the nested shape before starting the Gateway. See the
 
 **Boundary semantics** for `blockStreamingBreak`:
 
-- `text_end`: stream blocks as soon as the chunker emits; flush on each `text_end`.
+- `text_end`: prepare blocks as the chunker emits; flush on each `text_end`.
+  Delivery waits for the complete assistant message's silence decision.
 - `message_end`: wait until the assistant message finishes, then flush buffered
   output. Still uses the chunker if the buffered text exceeds `maxChars`, so it
   can emit multiple chunks at the end.
@@ -84,18 +93,17 @@ the nested shape before starting the Gateway. See the
 ### Text phases and final replies
 
 Providers that do not declare text phases, including ordinary Chat Completions
-and native Ollama (`api: "ollama"`, `/api/chat`), stream visible model text as it
-arrives. A later tool call or reasoning continuation does not reclassify earlier
-text as commentary. Content before reasoning remains visible, and text after
-reasoning continues streaming. ACP and the Control UI preserve that visible
-text in order without retroactively rewriting it.
+and native Ollama (`api: "ollama"`, `/api/chat`), collect visible model text until
+the assistant message completes. A later tool call or reasoning continuation
+does not reclassify earlier text as commentary. Unless the completed message is
+silent, content before and after reasoning remains visible in order.
 
 For these providers, channels with block streaming off select their final text
 reply at turn end from the assistant text after the last tool call. When there
 are no tool calls, the visible assistant text is the final reply. This selection
-does not retract text already shown in a live surface or channel preview. With
-block streaming on, durable blocks follow the configured chunking and flush
-boundaries.
+does not retract separately completed messages already shown in a live surface
+or channel preview. With block streaming on, durable blocks follow the configured
+chunking boundaries and wait for message completion before delivery.
 
 If a successfully settled tool batch intentionally ends the turn, any unphased
 narration remains the reply. OpenClaw does not replace that narration with a
@@ -117,10 +125,11 @@ When a plugin uses `before_agent_finalize` to validate the built-in runtime's
 answer, assistant replies stay deferred until that decision completes. A later
 answer supersedes deferred text from earlier tool turns, including when the
 final answer is `NO_REPLY`. This applies to both reply blocks and preview
-updates; it does not retract replies that were already sent. Commentary remains
-live, and media, reasoning, and completed answers to earlier user inputs are
-preserved. Each steered user input gets its own delivered answer, even when its
-pending tools were skipped. Media from a superseded answer is delivered without
+updates; it does not retract replies that were already sent. Commentary waits
+for its message's silence decision. Media, reasoning from non-silent messages,
+and completed answers to earlier user inputs are preserved. Each steered user
+input gets its own delivered answer, even when its pending tools were skipped.
+Media from a superseded answer is delivered without
 its old caption.
 
 With block streaming off, media-bearing assistant messages can still be sent at
@@ -190,7 +199,7 @@ replies**, not final replies or tool summaries.
 ## "Stream chunks or everything"
 
 - **Stream chunks:** `blockStreamingDefault: "on"` + `blockStreamingBreak: "text_end"`
-  (emit as you go). Non-Telegram channels also need
+  (prepare chunks as text arrives; deliver at message completion). Non-Telegram channels also need
   `*.streaming.block.enabled: true`.
 - **Stream everything at end:** `blockStreamingBreak: "message_end"` (flush
   once, possibly multiple chunks if very long).

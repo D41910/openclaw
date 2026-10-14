@@ -4,7 +4,7 @@ import {
   setReplyPayloadMetadata,
   type ReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
+import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import {
   SessionTranscriptWriterClaimReboundError,
   withOwnedSessionTranscriptWrites,
@@ -491,7 +491,7 @@ function buildSettledTurnFinalizationAttemptResult(input: {
   const authoredText = resolveFinalAssistantVisibleText(result.assistant) ?? "";
   const text =
     input.outcome === "empty"
-      ? isSilentReplyText(authoredText)
+      ? isSilentReplyPayloadText(authoredText)
         ? authoredText
         : ""
       : resolveSettledTurnFinalizationText(result);
@@ -584,7 +584,7 @@ function buildSettledToolFallbackAttemptResult(input: {
   }
   const result = buildSettledTurnFinalizationAttemptResult({
     ...input,
-    outcome: !input.error && isSilentReplyText(input.text) ? "empty" : "answered",
+    outcome: !input.error && isSilentReplyPayloadText(input.text) ? "empty" : "answered",
     result: {
       assistant,
       usage: input.sourceAttempt.attemptUsage,

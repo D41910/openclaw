@@ -168,7 +168,7 @@ describe("pending tool-media reply ownership", () => {
     expect(state.pendingToolAudioAsVoice).toBe(true);
   });
 
-  it("restores rejected media before newer pending media without widening trust", () => {
+  it("restores reserved media before newer pending media without widening trust", () => {
     const state = {
       pendingToolMediaUrls: ["/tmp/newer.png"],
       pendingToolMediaAttachments: [{ type: "image" as const, path: "/tmp/newer.png" }],
@@ -202,6 +202,6 @@ describe("pending tool-media reply ownership", () => {
         ["/tmp/untrusted.opus", false],
       ]),
     );
-    expect(state.pendingToolMediaDeliveryFailed).toBe(true);
+    expect(state.pendingToolMediaDeliveryFailed).toBe(false);
   });
 });

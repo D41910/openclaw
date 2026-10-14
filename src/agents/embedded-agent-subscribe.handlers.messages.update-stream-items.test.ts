@@ -151,7 +151,9 @@ describe("handleMessageUpdate text signatures", () => {
       const context = createMessageUpdateContext({ onAgentEvent });
       // Exercise the real projection/deduplication owner. A raw callback mock
       // mistakes completion metadata for another assistant text message.
-      context.emitAssistantStreamData = createReplyDelivery(context).emitAssistantStreamData;
+      const delivery = createReplyDelivery(context);
+      context.emitAssistantStreamData = delivery.emitAssistantStreamData;
+      context.settleAssistantMessageDelivery = delivery.settleAssistantMessageDelivery;
       const createPartial = (text: string) => ({
         ...createOpenAiResponsesPartial({
           text,
@@ -175,16 +177,13 @@ describe("handleMessageUpdate text signatures", () => {
           assistantMessageEvent: { ...event, contentIndex: 0 },
         });
       }
+      expect(onAgentEvent).not.toHaveBeenCalled();
       await endMessage(context, {
         message: finalPartial,
       });
 
       expect(onAgentEvent.mock.calls.map(([event]) => event)).toEqual(
-        [
-          ["Work", "update"],
-          ["Working...", "update"],
-          ["Working...", "end"],
-        ].map(([progressText, phase]) => ({
+        [["Working...", "end"]].map(([progressText, phase]) => ({
           stream: "item",
           data: {
             kind: "preamble",
@@ -204,7 +203,9 @@ describe("handleMessageUpdate text signatures", () => {
   it("keeps same-index commentary snapshot extensions on the original live item key", async () => {
     const onAgentEvent = vi.fn();
     const context = createMessageUpdateContext({ onAgentEvent });
-    context.emitAssistantStreamData = createReplyDelivery(context).emitAssistantStreamData;
+    const delivery = createReplyDelivery(context);
+    context.emitAssistantStreamData = delivery.emitAssistantStreamData;
+    context.settleAssistantMessageDelivery = delivery.settleAssistantMessageDelivery;
     const createPartial = (text: string, id: string) =>
       createOpenAiResponsesPartial({
         text,
@@ -225,12 +226,12 @@ describe("handleMessageUpdate text signatures", () => {
         assistantMessageEvent: { ...event, contentIndex: 0 },
       });
     }
+    expect(onAgentEvent).not.toHaveBeenCalled();
     await endMessage(context, { message: extendedPartial });
 
-    // Both snapshots finish the same logical item. The later message_end must
-    // not publish its already-observed completion again.
+    // Same-item snapshots coalesce to the final text on the original item key.
     expect(onAgentEvent.mock.calls.map(([event]) => event)).toEqual(
-      ["Working", "Working now"].map((progressText) => ({
+      ["Working now"].map((progressText) => ({
         stream: "item",
         data: { kind: "preamble", title: "Preamble", progressText, phase: "end", itemId: "item-1" },
       })),

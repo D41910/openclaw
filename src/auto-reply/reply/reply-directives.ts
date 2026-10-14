@@ -16,6 +16,8 @@ export type ReplyDirectiveParseResult = {
   replyToTag: boolean;
   audioAsVoice?: boolean;
   isSilent: boolean;
+  /** Silent authored text can still produce a visible attachment failure. */
+  hasSilentIntent: boolean;
 };
 
 export function parseReplyDirectives(
@@ -71,5 +73,6 @@ export function parseReplyDirectives(
     replyToTag: replyParsed?.hasReplyTag ?? false,
     audioAsVoice: split.audioAsVoice,
     isSilent: isSilent && !mediaFailures.length,
+    hasSilentIntent: isSilent,
   };
 }

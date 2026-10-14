@@ -1,3 +1,4 @@
+import { isSilentReplyPayloadText } from "../../auto-reply/tokens.js";
 import { projectAgentToolActivity } from "../../infra/agent-activity-events.js";
 import { emitAgentEvent, type AgentEventStream } from "../../infra/agent-events.js";
 import { emitTrustedDiagnosticEvent } from "../../infra/diagnostic-events.js";
@@ -371,16 +372,18 @@ export function createCliEventHandlers(params: {
       });
     }
   };
-  const emitCliCommentaryText = (text: string) => {
-    if (!emitLiveEvents) {
-      return;
-    }
+  let pendingThinkingText = "";
+  let settledThinkingText = "";
+  let publishedThinkingText = "";
+  const pendingCommentaryText: string[] = [];
+  let completedReplyText = "";
+  let lastCompletedReplyText: string | undefined;
+  let lastPublishedReplyText = "";
+  const publishCliCommentaryText = (text: string) => {
     commentaryCounter += 1;
     emitLiveEvent("item", () => ({
       kind: "preamble",
       itemId: `commentary-${runParams.runId}-${commentaryCounter}`,
-      // The JSONL parser flushes a complete pre-tool text segment here.
-      // Mark its boundary so channels can safely create their first notification.
       phase: "end",
       title: "commentary",
       status: "running",
@@ -395,36 +398,71 @@ export function createCliEventHandlers(params: {
       observedCliActivity = true;
       signalExecutionPhase("assistant_output_started");
     }
-    emitLiveEvent("assistant", () => ({
-      itemId: cliAssistantItemId(runParams.runId),
-      text: applyPluginTextReplacements(text, context.backendResolved.textTransforms?.output),
-      delta: applyPluginTextReplacements(delta, context.backendResolved.textTransforms?.output),
-    }));
+    // Keep activity live without exposing text a final silent line can retract.
+    emitLiveEvent("assistant", () => ({ itemId: cliAssistantItemId(runParams.runId) }));
   };
-  const emitCliCompletedReply = (text: string, assistantMessageIndex: number) => {
-    if (text) {
+  const emitCliCompletedReply = (rawText: string, assistantMessageIndex?: number) => {
+    if (rawText) {
       observedCliActivity = true;
     }
+    const completedText = applyPluginTextReplacements(
+      rawText,
+      context.backendResolved.textTransforms?.output,
+    );
+    const silent = isSilentReplyPayloadText(rawText) || isSilentReplyPayloadText(completedText);
+    // Custom CLI thinking is cumulative; native snapshots can restart per message.
+    const thinkingText = pendingThinkingText.startsWith(settledThinkingText)
+      ? pendingThinkingText.slice(settledThinkingText.length)
+      : pendingThinkingText;
+    settledThinkingText = pendingThinkingText;
+    if (!silent) {
+      if (thinkingText) {
+        publishedThinkingText += thinkingText;
+        emitLiveEvent("thinking", () => ({
+          text: publishedThinkingText,
+          delta: thinkingText,
+          isReasoningSnapshot: true,
+        }));
+      }
+      for (const text of pendingCommentaryText) {
+        publishCliCommentaryText(text);
+      }
+    }
+    pendingCommentaryText.length = 0;
+    if (assistantMessageIndex !== undefined) {
+      if (!silent) {
+        completedReplyText = [completedReplyText, completedText].filter(Boolean).join("\n");
+      }
+      lastCompletedReplyText = completedText;
+    }
+    if (silent) {
+      return;
+    }
+    const text =
+      assistantMessageIndex !== undefined || completedText === lastCompletedReplyText
+        ? completedReplyText
+        : [completedReplyText, completedText].filter(Boolean).join("\n");
+    if (!text || text === lastPublishedReplyText) {
+      return;
+    }
+    const delta = text.startsWith(lastPublishedReplyText)
+      ? text.slice(lastPublishedReplyText.length)
+      : "";
+    lastPublishedReplyText = text;
     emitLiveEvent("assistant", () => ({
-      assistantMessageIndex,
-      completedText: applyPluginTextReplacements(
-        text,
-        context.backendResolved.textTransforms?.output,
-      ),
+      itemId: cliAssistantItemId(runParams.runId),
+      text,
+      delta,
+      ...(assistantMessageIndex !== undefined ? { assistantMessageIndex, completedText } : {}),
     }));
   };
 
-  // Emit-always: thinking reaches the event bus and session archive like the
-  // embedded reasoning stream; /reasoning and /verbose gate presentation only.
-  const emitCliThinkingDelta = ({ text, delta, isReasoningSnapshot }: CliThinkingDelta) => {
+  const emitCliThinkingDelta = ({ text, delta }: CliThinkingDelta) => {
     if (text || delta) {
       observedCliActivity = true;
     }
-    emitLiveEvent("thinking", () => ({
-      text,
-      delta,
-      ...(isReasoningSnapshot ? { isReasoningSnapshot } : {}),
-    }));
+    pendingThinkingText = text;
+    emitLiveEvent("thinking", () => ({}));
   };
 
   const emitCliThinkingProgress = ({ progressTokens }: CliThinkingProgress) => {
@@ -447,7 +485,11 @@ export function createCliEventHandlers(params: {
     emitParsedToolResult,
     emitCliCompaction,
     finalizeParsedTools,
-    emitCliCommentaryText,
+    emitCliCommentaryText: (text: string) => {
+      observedCliActivity = true;
+      pendingCommentaryText.push(text);
+      emitLiveEvent("assistant", () => ({}));
+    },
     emitCliAssistantDelta,
     emitCliCompletedReply,
     emitCliThinkingDelta,

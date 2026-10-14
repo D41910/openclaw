@@ -25,20 +25,16 @@ describe("handleMessageEnd", () => {
       assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: text, partial: message },
     });
     await ctx.flushBlockReplyBuffer();
-    expect(onBlockReply).toHaveBeenCalledOnce();
-    const streamed = onBlockReply.mock.calls[0]?.[0].text;
-    const streamedUiText = onAgentEvent.mock.calls[0]?.[0].data.text;
-    onBlockReply.mockClear();
-    onAgentEvent.mockClear();
+    expect(onBlockReply).not.toHaveBeenCalled();
+    expect(onAgentEvent).not.toHaveBeenCalled();
     await endMessage(ctx, { message });
     expect(onAgentEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         stream: "assistant",
-        data: expect.objectContaining({ text, delta: text.slice(streamedUiText.length) }),
+        data: expect.objectContaining({ text, delta: text }),
       }),
     );
-    expect(onBlockReply).toHaveBeenCalledOnce();
-    expect(`${streamed}${onBlockReply.mock.calls[0]?.[0].text ?? ""}`).toBe(text);
+    expect(onBlockReply.mock.calls.map(([reply]) => reply.text).join("")).toBe(text);
     expect(ctx.finalizeAssistantTexts).toHaveBeenCalledWith(expect.objectContaining({ text }));
     expect(ctx.state.assistantTurnCount).toBe(1);
   });
@@ -179,7 +175,7 @@ describe("handleMessageEnd", () => {
     expect(finalizeAssistantTexts).not.toHaveBeenCalled();
   });
 
-  it("does not repeat a delivered text_end reply after terminal punctuation changes", async () => {
+  it("does not repeat a held text_end reply after terminal punctuation changes", async () => {
     const onBlockReply = vi.fn();
     const ctx = createMessageEndContext({ onBlockReply, state: { blockReplyBreak: "text_end" } });
     const message = textMessage("Hello world.");
@@ -194,12 +190,11 @@ describe("handleMessageEnd", () => {
         },
       });
     }
-    expect(onBlockReply.mock.calls.map(([reply]) => reply.text)).toEqual(["Hello world."]);
-    onBlockReply.mockClear();
+    expect(onBlockReply).not.toHaveBeenCalled();
     await endMessage(ctx, {
       message: { ...textMessage("Hello world"), usage: { input: 10, output: 5, total: 15 } },
     });
-    expect(onBlockReply).not.toHaveBeenCalled();
+    expect(onBlockReply.mock.calls.map(([reply]) => reply.text)).toEqual(["Hello world"]);
   });
 
   it("delivers final media and malformed pending text after the buffered caption", async () => {
@@ -215,12 +210,13 @@ describe("handleMessageEnd", () => {
       assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: text, partial: message },
     });
     await ctx.flushBlockReplyBuffer();
-    expect(onBlockReply).toHaveBeenCalledOnce();
-    expect(onBlockReply.mock.calls[0]?.[0].text).toBe("Caption ");
-    expect(onBlockReply.mock.calls.flatMap(([reply]) => reply.mediaUrls ?? [])).toEqual([]);
-    onBlockReply.mockClear();
+    expect(onBlockReply).not.toHaveBeenCalled();
     await endMessage(ctx, { message });
-    expect(onBlockReply).toHaveBeenCalledExactlyOnceWith(
+    expect(onBlockReply.mock.calls.map(([reply]) => reply.text).join("")).toBe("Caption [[oops");
+    expect(onBlockReply.mock.calls.flatMap(([reply]) => reply.mediaUrls ?? [])).toEqual([
+      "/tmp/final.png",
+    ]);
+    expect(onBlockReply).toHaveBeenCalledWith(
       expect.objectContaining({ text: "[[oops", mediaUrls: ["/tmp/final.png"] }),
       { assistantMessageIndex: 7 },
     );

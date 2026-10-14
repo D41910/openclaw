@@ -39,7 +39,10 @@ function fenceHarness(enforceFinalTag = false) {
     ...harness,
     chunks: () => extractTextPayloads(onBlockReply.mock.calls),
     delta: (delta: string) => emitAssistantTextDelta({ emit: harness.emit, delta }),
-    end: (content: string) => emitAssistantTextEnd({ emit: harness.emit, content }),
+    end: (content: string) => {
+      emitAssistantTextEnd({ emit: harness.emit, content });
+      harness.emit({ type: "message_end", message: textAssistant(content) });
+    },
   };
 }
 
@@ -50,10 +53,10 @@ describe("fenced block streaming", () => {
     const { emit, subscription, delta, end, chunks } = fenceHarness();
     try {
       delta(prefix);
-      expect(chunks()).toEqual(["Intro"]);
+      expect(chunks()).toEqual([]);
       emit({ type: "tool_execution_start", toolName: "bash", toolCallId: "fence", args: {} });
       await subscription.waitForPendingEvents();
-      expect(chunks()).toEqual(["Intro"]);
+      expect(chunks()).toEqual([]);
       delta(tail);
       end(prefix + tail);
       await subscription.waitForPendingEvents();
@@ -105,7 +108,7 @@ describe("fenced block streaming", () => {
   ])("preserves fenced code and final prose in $name", ({ text, expectedContent }) => {
     const harness = fenceHarness();
     harness.delta(text);
-    expect(harness.chunks().length).toBeGreaterThan(1);
+    expect(harness.chunks()).toEqual([]);
     harness.end(text);
     const chunks = harness.chunks();
     expect(chunks.at(-1)).toBe("After");
@@ -189,6 +192,8 @@ describe("streamed final tags", () => {
     for (const delta of deltas) {
       emitAssistantTextDelta({ emit, delta });
     }
+    expect(reply).not.toHaveBeenCalled();
+    emit({ type: "message_end", message: textAssistant(deltas.join("")) });
     const payloads = partial
       ? reply.mock.calls.map(([p]) => p)
       : extractAgentEventPayloads(reply.mock.calls);
@@ -212,6 +217,8 @@ describe("streamed final tags", () => {
     for (const delta of deltas) {
       emitAssistantTextDelta({ emit, delta });
     }
+    expect(onPartialReply).not.toHaveBeenCalled();
+    emit({ type: "message_end", message: textAssistant(deltas.join("")) });
     expect(
       onPartialReply.mock.calls
         .map(([p]) => p.delta)
@@ -224,9 +231,12 @@ describe("streamed final tags", () => {
     const onAgentEvent = vi.fn();
     const emit = subscribe({ onAgentEvent });
     emit({ type: "message_start", message: { role: "assistant" } });
-    for (const delta of ["<", "final>Title\n", "Line one\nLine two</", "final>"]) {
+    const deltas = ["<", "final>Title\n", "Line one\nLine two</", "final>"];
+    for (const delta of deltas) {
       emitAssistantTextDelta({ emit, delta });
     }
+    expect(extractAgentEventPayloads(onAgentEvent.mock.calls)).toEqual([]);
+    emit({ type: "message_end", message: textAssistant(deltas.join("")) });
     const payloads = extractAgentEventPayloads(onAgentEvent.mock.calls);
     const text = payloads.map((payload) => payload.delta).join("");
     expect(text).toBe("Title\nLine one\nLine two");
@@ -302,12 +312,13 @@ describe("subscribeEmbeddedAgentSession reply tags", () => {
       ],
       voice: true,
     },
-  ])("delivers $name before text_end without leaking metadata", async ({ chunks, voice }) => {
+  ])("delivers $name at message completion without leaking metadata", async ({ chunks, voice }) => {
     const h = replies();
-    for (const delta of [
+    const deltas = [
       ...chunks,
       "A second paragraph gives the first completed block enough text to drain.",
-    ]) {
+    ];
+    for (const delta of deltas) {
       h.emit({
         type: "message_update",
         message: h.message,
@@ -315,6 +326,8 @@ describe("subscribeEmbeddedAgentSession reply tags", () => {
       });
     }
     await h.subscription.waitForPendingEvents();
+    expect(h.payloads()).toEqual([]);
+    h.end(deltas.join(""));
     const payloads = h.payloads();
     if (voice) {
       expect(payloads[0]?.text).toBe("Hello.");
@@ -349,7 +362,6 @@ describe("subscribeEmbeddedAgentSession reply tags", () => {
       final: "Hello\nMEDIA:https://example.com/a.png",
       texts: ["Hello", ""],
       media: ["https://example.com/a.png"],
-      early: false,
     },
 
     {
@@ -358,15 +370,12 @@ describe("subscribeEmbeddedAgentSession reply tags", () => {
       final: "```text\nMEDIA:https://example.com/a.png",
       texts: ["```text\nMEDIA:https://example.com/a.png"],
       media: [],
-      early: true,
     },
-  ])("flushes trailing directive tails: $name", ({ text, final, texts, media, early }) => {
+  ])("flushes trailing directive tails: $name", ({ text, final, texts, media }) => {
     const h = replies();
     h.delta(text);
     emitAssistantTextEnd(h);
-    if (early) {
-      expect(h.payloads().map((payload) => payload.text)).toEqual(texts);
-    }
+    expect(h.payloads()).toEqual([]);
     h.end(final);
     expect(h.payloads().map((payload) => payload.text)).toEqual(texts);
     expect(h.payloads().flatMap((payload) => payload.mediaUrls ?? [])).toEqual(media);

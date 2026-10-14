@@ -352,6 +352,36 @@ describe("runCliAgentWithLifecycle", () => {
     ]);
   });
 
+  it.each(["Last answer.", ""])(
+    "uses the recorded visible CLI projection, including an empty one: %j",
+    async (visibleText) => {
+      const runId = "run-visible-projection";
+      const assistantTexts: string[] = [];
+      const stop = onAgentEvent((event) => {
+        if (
+          event.runId === runId &&
+          event.stream === "assistant" &&
+          typeof event.data.text === "string"
+        ) {
+          assistantTexts.push(event.data.text);
+        }
+      });
+      cliDispatchState.runCliAgentMock.mockResolvedValueOnce({
+        payloads: [
+          { text: "This discussion is complete.\nNO_REPLY" },
+          { text: visibleText || "NO_REPLY" },
+        ],
+        meta: { durationMs: 1, finalAssistantVisibleText: visibleText },
+      } satisfies EmbeddedAgentRunResult);
+      try {
+        await runCliAgentWithLifecycle({ runId, runParams: createRunParams(runId) });
+        expect(assistantTexts).toEqual(visibleText ? [visibleText] : []);
+      } finally {
+        stop();
+      }
+    },
+  );
+
   it("keeps the captured lifecycle generation on the start event", async () => {
     const events: Array<{
       stream?: string;

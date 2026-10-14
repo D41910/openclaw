@@ -131,6 +131,7 @@ export function createStreamingDirectiveAccumulator() {
       replyToTag,
       audioAsVoice: parsed?.audioAsVoice ?? false,
       isSilent,
+      hasSilentIntent: isSilent,
     };
 
     if (!hasOutboundReplyContent(combinedResult) && !combinedResult.audioAsVoice) {

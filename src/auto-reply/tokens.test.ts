@@ -59,10 +59,15 @@ describe("isSilentReplyText", () => {
     // Custom tokens whose first/last character is punctuation must still match
     expect(isSilentReplyText("*SILENT*", "*SILENT*")).toBe(true);
     expect(isSilentReplyText("**SILENT**", "*SILENT*")).toBe(false);
+    expect(isSilentReplyText("a+b?!", "a+b?")).toBe(true);
   });
 });
 
 describe("isSilentReplyPayloadText", () => {
+  it("preserves a fenced token example whose final line is not the silent token", () => {
+    expect(isSilentReplyPayloadText("```\nNO_REPLY\n```\n")).toBe(false);
+  });
+
   it.each(["NO_", "NO_R", "NO_RE", "NO_REP", "NO_REPL", " \nNO_R \n"])(
     "recognizes a truncated final silent token: %j",
     (text) => {
@@ -82,92 +87,31 @@ describe("isSilentReplyPayloadText", () => {
     expect(isSilentReplyPayloadText("NO_R", "NO_RESPONSE")).toBe(false);
   });
 
-  it("returns true when leaked reasoning text ends in NO_REPLY", () => {
-    expect(
-      isSilentReplyPayloadText(
-        "think\nCav is talking about a follow-up conversation.\nI will stay quiet here.NO_REPLY",
-      ),
-    ).toBe(true);
-    expect(isSilentReplyPayloadText("think\ninternal reasoning\nNO_REPLY")).toBe(true);
-    expect(isSilentReplyPayloadText("<think>internal reasoning</think>\nNO_REPLY")).toBe(true);
-    expect(
-      isSilentReplyPayloadText(
-        "<think>internal reasoning</think>\nI will stay quiet here.NO_REPLY",
-      ),
-    ).toBe(true);
-    expect(isSilentReplyPayloadText("<think>I will stay quiet here.NO_REPLY")).toBe(true);
-  });
-
   it.each([
-    ["closed", "<mm:think>internal reasoning</mm:think>\nNO_REPLY"],
-    ["open", "<mm:think>internal reasoning\nNO_REPLY"],
-  ])("returns true for %s MiniMax reasoning followed by NO_REPLY", (_kind, text) => {
+    "The participants already resolved this; another response would be noise.\nNO_REPLY",
+    "Tout a déjà été réglé.\nNO_REPLY.",
+    "analysis\nMeeting moved to 3 pm.\nNO_REPLY",
+    "Here is the actual answer.\n\n  no_reply!  \n\n",
+    "The NO_REPLY token is a control marker.\nNO_REPLY?",
+    "<think>internal reasoning</think>\nNO_REPLY",
+    "<mm:think>internal reasoning\nNO_REPLY",
+    "reasoning\r\nNO_REPLY\r\n \t",
+    "reasoning\rNO_REPLY\r \t",
+    "reasoning\n**NO_REPLY**",
+  ])("treats the final nonempty silent-token line as the whole payload's intent: %j", (text) => {
     expect(isSilentReplyPayloadText(text)).toBe(true);
   });
 
-  it("keeps substantive replies that also contain a trailing NO_REPLY token", () => {
-    expect(isSilentReplyPayloadText("Here is a helpful response.\n\nNO_REPLY")).toBe(false);
-    expect(
-      isSilentReplyPayloadText(
-        "think\nHere is the actual answer.\nI will stay quiet here.NO_REPLY",
-      ),
-    ).toBe(false);
-    expect(
-      isSilentReplyPayloadText("think\nCav is talking about a follow-up conversation.\nNO_REPLY"),
-    ).toBe(false);
-    expect(isSilentReplyPayloadText("analysis\nMeeting moved to 3 pm.\nNO_REPLY")).toBe(false);
-    expect(
-      isSilentReplyPayloadText(
-        "think\nThe user is asking whether the outage is resolved. Tell them the service is back up and they should retry.\nNO_REPLY",
-      ),
-    ).toBe(false);
-    expect(
-      isSilentReplyPayloadText("<think>internal reasoning</think>\nHere is the answer.\nNO_REPLY"),
-    ).toBe(false);
-    expect(isSilentReplyPayloadText("think\nHere is the actual answer.\nNO_REPLY")).toBe(false);
-    expect(
-      isSilentReplyPayloadText(
-        "<think>internal reasoning</think>\nYou should not reply to that email.\nNO_REPLY",
-      ),
-    ).toBe(false);
-    expect(
-      isSilentReplyPayloadText("<think>internal notes\nHere is the actual answer.\nNO_REPLY"),
-    ).toBe(false);
-    expect(
-      isSilentReplyPayloadText(
-        "<think>internal reasoning</think>\nHere is the answer: I will stay quiet in the meeting, but you should still send the agenda.NO_REPLY",
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps reasoning bodies that mention the token mid-text and close with it", () => {
-    // Mixed reasoning + prose bodies stay deliverable: a standalone in-body
-    // mention of the token is never treated as a silence decision, matching
-    // the answer-preservation contract (#165025 untagged path: #138662).
-    expect(
-      isSilentReplyPayloadText(
-        "think\nThe runtime context confirms another continuation event -- same inbound (msg 24682), and my reply already went out successfully (msg 24683).\n\nThe correct move: NO_REPLY. The user already has my response. Adding more text would be noise.\n\nNO_REPLY.",
-      ),
-    ).toBe(false);
-    expect(
-      isSilentReplyPayloadText(
-        "analysis\nMeeting moved to 3 pm. The NO_REPLY token is a control marker.\nNO_REPLY",
-      ),
-    ).toBe(false);
-  });
-
-  it.each([".", "!", "?"])("suppresses reasoning text with trailing NO_REPLY%s", (punctuation) => {
-    expect(isSilentReplyPayloadText(`think\ninternal reasoning\nNO_REPLY${punctuation}`)).toBe(
-      true,
-    );
-  });
-
-  it("keeps reasoning bodies that mention the token but decide to answer", () => {
-    expect(
-      isSilentReplyPayloadText(
-        "think\nThe user asked me to reply NO_REPLY only when there is nothing new.\nHere is the answer: 2+2=4.\nNO_REPLY",
-      ),
-    ).toBe(false);
+  it.each([
+    "Done. NO_REPLY",
+    "think\nI will stay quiet here.NO_REPLY",
+    "NO_REPLY\nThe answer is 42.",
+    "Use NO_REPLY only when there is nothing to add. The answer is 42.",
+    "Example:\nNO_REPLY\nThen continue normally.",
+    "reasoning\nNO_REPLY is the token",
+    "reasoning\nNO_REPLY_EXTRA",
+  ])("preserves inline, leading, and in-body token mentions: %j", (text) => {
+    expect(isSilentReplyPayloadText(text)).toBe(false);
   });
 });
 

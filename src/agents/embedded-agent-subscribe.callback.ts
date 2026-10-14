@@ -32,3 +32,21 @@ export function runBestEffortCallback(params: {
     failed(error);
   }
 }
+
+/** Joins presentation callbacks added while the serialized provider events settle. */
+export function createPendingEventWaiter(
+  state: { pendingEventChain: Promise<void> | null },
+  pendingPartialReplyTasks: ReadonlySet<Promise<void>>,
+) {
+  return async (options?: { includePartialReplies?: boolean }) => {
+    const includePartialReplies = options?.includePartialReplies !== false;
+    while (true) {
+      const eventChain = state.pendingEventChain;
+      const partialReplyTasks = includePartialReplies ? [...pendingPartialReplyTasks] : [];
+      if (!eventChain && partialReplyTasks.length === 0) {
+        return;
+      }
+      await Promise.allSettled([...(eventChain ? [eventChain] : []), ...partialReplyTasks]);
+    }
+  };
+}

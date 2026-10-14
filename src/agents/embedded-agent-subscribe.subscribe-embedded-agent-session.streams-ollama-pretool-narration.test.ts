@@ -49,7 +49,6 @@ describe("native Ollama pre-tool narration", () => {
         assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: narration },
       });
       await subscription.waitForPendingEvents();
-      expected.push(narration);
       expect(texts()).toEqual(expected);
 
       // Native Ollama keeps the same unsigned text through the tool boundary.
@@ -96,6 +95,7 @@ describe("native Ollama pre-tool narration", () => {
           content: [...unsigned.content, toolCall],
         },
       });
+      expected.push(narration);
       emit({
         type: "tool_execution_start",
         toolName: toolCall.name,
@@ -132,9 +132,9 @@ describe("native Ollama pre-tool narration", () => {
       },
     });
     await subscription.waitForPendingEvents();
-    expected.push(answer);
     expect(texts()).toEqual(expected);
     emit({ type: "message_end", message: finalMessage });
+    expected.push(answer);
     await subscription.waitForPendingEvents();
     expect(texts()).toEqual(expected);
   });
@@ -178,7 +178,7 @@ describe("native Ollama pre-tool narration", () => {
         assistantMessageEvent: { type: "text_end", contentIndex: 1, content: answer },
       });
       await subscription.waitForPendingEvents();
-      expect(onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([answer]);
+      expect(onBlockReply).not.toHaveBeenCalled();
       emit({ type: "message_end", message: finalMessage });
       await subscription.waitForPendingEvents();
       expect(onBlockReply).toHaveBeenCalledTimes(1);

@@ -704,6 +704,7 @@ it.each(["immediate", "paced", "slow"])(
     });
     try {
       cli.emitCliAssistantDelta({ text: "foo", delta: "foo" });
+      cli.emitCliCompletedReply("foo");
       await dispose.drain();
       chatRunState.flushPendingText(runId);
       if (mode === "slow") {
@@ -711,11 +712,13 @@ it.each(["immediate", "paced", "slow"])(
         broadcaster.broadcast("tick", {});
       }
       cli.emitCliAssistantDelta({ text: "foobar", delta: "bar" });
+      cli.emitCliCompletedReply("foobar");
       await dispose.drain();
       if (mode !== "paced") {
         chatRunState.flushPendingText(runId);
       }
       cli.emitCliAssistantDelta({ text: "foobarbaz", delta: "baz" });
+      cli.emitCliCompletedReply("foobarbaz");
       await dispose.drain();
       chatRunState.flushPendingText(runId);
       hold = false;
@@ -723,14 +726,18 @@ it.each(["immediate", "paced", "slow"])(
         callbacks.shift()?.();
       }
       const itemId = `cli-assistant:${runId}`;
-      expect(payloads(frames, "agent").map((payload) => payload.data)).toEqual([
+      expect(
+        payloads(frames, "agent")
+          .map((payload) => payload.data)
+          .filter((data) => data?.text || data?.delta),
+      ).toEqual([
         { itemId, text: "foo", delta: "foo" },
         ...(mode === "immediate"
           ? [
-              { itemId, text: replacement, delta: "bar" },
+              { itemId, text: replacement, delta: "baz" },
               { itemId, delta: "baz" },
             ]
-          : [{ itemId, text: `${replacement}baz`, delta: "barbaz" }]),
+          : [{ itemId, text: `${replacement}baz`, delta: "bazbaz" }]),
       ]);
     } finally {
       try {
@@ -777,6 +784,7 @@ it("retires a real CLI reply before its corrected source snapshot arrives", asyn
   const stopTranscript = onInternalSessionTranscriptUpdate(harness.handler.retireTranscript);
   try {
     cli.emitCliAssistantDelta({ text: "Preview", delta: "Preview" });
+    cli.emitCliCompletedReply("Preview");
     await stopEvents.drain();
     harness.chatRunState.flushPendingText(runId);
     expect(harness.chatRunState.resolveBuffer(runId).text).toBe("Preview");
@@ -794,6 +802,7 @@ it("retires a real CLI reply before its corrected source snapshot arrives", asyn
     expect(harness.chatRunState.resolveBuffer(runId).text).toBe("");
 
     cli.emitCliAssistantDelta({ text: "Selected", delta: "" });
+    cli.emitCliCompletedReply("Selected");
     await stopEvents.drain();
     harness.chatRunState.flushPendingText(runId);
     expect(harness.chatRunState.resolveBuffer(runId).text).toBe("");

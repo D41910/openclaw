@@ -1,6 +1,11 @@
 // Gateway control-reply text classifier.
 // Suppresses internal auto-reply tokens before they leak to chat surfaces.
-import { isSilentReplyText, SILENT_REPLY_TOKEN, stripSilentToken } from "../auto-reply/tokens.js";
+import {
+  isSilentReplyPayloadText,
+  isSilentReplyText,
+  SILENT_REPLY_TOKEN,
+  stripSilentToken,
+} from "../auto-reply/tokens.js";
 
 export const SUPPRESSED_CONTROL_REPLY_TOKENS = [
   SILENT_REPLY_TOKEN,
@@ -24,6 +29,9 @@ const CONTROL_REPLY_SEQUENCE_PREFIX = new RegExp(
  * Recognize control-only replies, including a repeated marker's unfinished tail.
  */
 export function isSuppressedControlReplyText(text: string): boolean {
+  if (isSilentReplyPayloadText(text)) {
+    return true;
+  }
   if (!POSSIBLE_CONTROL_REPLY_START.test(text)) {
     return false;
   }

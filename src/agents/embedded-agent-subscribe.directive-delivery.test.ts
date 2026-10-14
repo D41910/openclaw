@@ -288,13 +288,11 @@ it.each([...cases, ...prefixCorrectionCases])(
           throw new Error("transport ended before the pre-terminal checkpoint");
         }),
       ]);
-      expect(delivered.length).toBeGreaterThan(0);
-      const beforeTerminalCount = delivered.length;
-      if ("prefixCorrection" in scenario) {
-        expect(delivered.map((payload) => payload.text).join("\n")).toBe(
-          scenario.chunks.map((text) => text.trimEnd()).join("\n"),
-        );
-      }
+      expect(delivered).toEqual([]);
+      releaseTerminal.resolve();
+      await settled;
+      await subscription.waitForPendingEvents();
+      await pipeline.flush({ force: true });
       const text = delivered.map((payload) => payload.text ?? "").join("");
       if ("preservedLiteral" in scenario) {
         expect(text).toContain(scenario.preservedLiteral);
@@ -341,16 +339,10 @@ it.each([...cases, ...prefixCorrectionCases])(
           true,
         );
       }
-      releaseTerminal.resolve();
-      await settled;
-      await subscription.waitForPendingEvents();
-      await pipeline.flush({ force: true });
       if ("prefixCorrection" in scenario) {
         const recipientText = delivered.map((payload) => payload.text ?? "");
-        const additional = recipientText.slice(beforeTerminalCount);
-        if (scenario.correctedStatement) {
-          expect(additional.join(" ")).toContain(scenario.correctedStatement);
-        }
+        expect(recipientText.join(" ")).toContain(scenario.correctedStatement);
+        expect(recipientText.join(" ")).not.toContain("The current value is one for this item.");
         expect(recipientText.join(" ").split(scenario.marker)).toHaveLength(2);
         for (const sentence of scenario.unchangedLeadSentences) {
           expect.soft(recipientText.join(" ").split(sentence)).toHaveLength(2);
@@ -421,7 +413,7 @@ it("does not replay signed Google text when a later part shares its signature", 
     await subscription.waitForPendingEvents();
     await pipeline.flush({ force: true });
 
-    expect(firstCheckpoint).toBe("Alpha  beta.");
+    expect(firstCheckpoint).toBe("");
     const text = delivered
       .map((payload) => payload.text ?? "")
       .join(" ")
@@ -493,7 +485,7 @@ it.each(["literal", "voice", "silent"] as const)(
     } else {
       expect(
         blocks.map((payload) => ({
-          text: payload.text,
+          text: payload.text ?? "",
           audioAsVoice: payload.audioAsVoice === true,
           silentReply: getReplyPayloadMetadata(payload)?.silentReply,
         })),
@@ -504,12 +496,13 @@ it.each(["literal", "voice", "silent"] as const)(
   },
 );
 
-it("applies a directive-only text_end to already-buffered audio", async () => {
+it("applies completed directive-only text to already-buffered audio", async () => {
   const { delivered, pipeline, handler, emit, subscription } = createDeliveryHarness();
   await handler({ mediaUrls: [audioUrl] });
   emit({ type: "message_start", message: { role: "assistant" } });
   emitAssistantTextDelta({ emit, delta: "[[audio_as_voice]]" });
   emitAssistantTextEnd({ emit });
+  emit({ type: "message_end", message: textMessage("[[audio_as_voice]]") });
   await subscription.waitForPendingEvents();
   await pipeline.flush({ force: true });
 
@@ -527,33 +520,43 @@ it.each([
     name: "literal reclassification and restored authoritative text",
     expectedReplies: ["First reply."],
     updates: [
-      { type: "text_delta", text: first, item: 0, edges: 1 },
-      { type: "text_end", text: "```text\n" + corrected + "```\n\n", item: 0, edges: 1 },
-      { type: "text_end", text: corrected + nextParagraph, item: 0, edges: 2 },
+      { type: "text_delta", text: first, item: 0 },
+      { type: "text_end", text: "```text\n" + corrected + "```\n\n", item: 0 },
+      { type: "text_end", text: corrected + nextParagraph, item: 0 },
     ],
   },
   {
     name: "a new item owns its own genuine voice intent",
     expectedReplies: ["First reply.", "Second reply."],
     updates: [
-      { type: "text_delta", text: first, item: 0, edges: 1 },
+      { type: "text_delta", text: first, item: 0 },
       {
         type: "text_delta",
         text: "[[audio_as_voice]]Second reply.\n\n" + nextParagraph,
         item: 1,
-        edges: 2,
       },
     ],
   },
 ] as const)("preserves $name", async ({ updates, expectedReplies }) => {
-  const { delivered, blocks, handler, emit, flush } = createDeliveryHarness();
+  const { delivered, blocks, handler, emit, flush, subscription } = createDeliveryHarness();
   await handler({ mediaUrls: [audioUrl] });
+  const terminalParts = new Map<number, string>();
   emit({ type: "message_start", message: textMessage("", 0) });
   for (const update of updates) {
     emitText(emit, update.type, update.text, { item: update.item });
-    await flush();
-    expect.soft(blocks.filter((payload) => payload.audioAsVoice)).toHaveLength(update.edges);
+    terminalParts.set(update.item, update.text);
+    await subscription.waitForPendingEvents();
+    expect(blocks).toEqual([]);
   }
+  emit({
+    type: "message_end",
+    message: {
+      ...textMessage("", 0),
+      content: [...terminalParts].flatMap(([item, text]) => textMessage(text, item).content),
+    },
+  });
+  await flush();
+  expect(blocks.filter((payload) => payload.audioAsVoice)).toHaveLength(expectedReplies.length);
   for (const text of expectedReplies) {
     expect(delivered.filter((payload) => payload.text === text)).toHaveLength(1);
   }
@@ -586,7 +589,12 @@ it("appends visible text across long blank runs without stalling the media scan"
       previousCleaned: "",
       visibleDelta: delta,
       appendDelta: delta,
-      parsedStreamDirectives: { text: delta, replyToTag: false, isSilent: false },
+      parsedStreamDirectives: {
+        text: delta,
+        replyToTag: false,
+        isSilent: false,
+        hasSilentIntent: false,
+      },
       previousAudioDirectiveCount: 0,
     }),
   ).toEqual({
@@ -594,13 +602,13 @@ it("appends visible text across long blank runs without stalling the media scan"
     delta,
     replace: false,
     hasText: true,
-    replyDirectives: { text: delta, replyToTag: false, isSilent: false },
+    replyDirectives: { text: delta, replyToTag: false, isSilent: false, hasSilentIntent: false },
     audioDirectiveCount: 0,
   });
   expect(performance.now() - started).toBeLessThan(1_000);
 });
 
-it("streams a long reply-tagged answer without a quadratic slowdown", () => {
+it("releases a long reply-tagged answer without a quadratic slowdown", () => {
   const body = `${"Paragraph with `code` and **bold** text.\n\n- item `one`\n- item two\n\n".repeat(100)}\`\`\`ts\nconst x = 1;\n\`\`\`\n\nDone.`;
   const text = `[[reply_to_current]] Intro.\n\n${body}`;
   const partials: ReplyPayload[] = [];
@@ -615,6 +623,9 @@ it("streams a long reply-tagged answer without a quadratic slowdown", () => {
   for (let end = 40; end - 40 < text.length; end += 40) {
     emitText(emit, "text_delta", text.slice(0, end), { delta: text.slice(end - 40, end) });
   }
+  expect(partials).toEqual([]);
+  emit({ type: "message_end", message: textMessage(text) });
   expect(performance.now() - started).toBeLessThan(1_000);
-  expect(partials.at(-1)?.text).toBe(`Intro.\n\n${body}`);
+  expect(partials).toHaveLength(1);
+  expect(partials[0]?.text).toBe(`Intro.\n\n${body}`);
 });

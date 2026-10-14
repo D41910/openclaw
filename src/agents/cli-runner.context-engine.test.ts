@@ -246,6 +246,45 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
     });
   });
 
+  it.each([
+    {
+      parts: ["This discussion is complete.\nNO_REPLY", "A real answer."],
+      visible: "A real answer.",
+      expectation: "optional" as const,
+    },
+    {
+      parts: ["This discussion is complete.\nNO_REPLY", "Nobody needs a reply.\nNO_REPLY"],
+      visible: "",
+      expectation: "optional" as const,
+    },
+    {
+      parts: ["A real answer.", "This discussion is complete.\nNO_REPLY"],
+      visible: "A real answer.",
+      expectation: "required" as const,
+    },
+  ])(
+    "prepares only visible CLI text for the synthetic turn and result: $parts",
+    async ({ parts, visible, expectation }) => {
+      const { afterTurn } = createLifecycle();
+      const context = buildPreparedContext(createContextEngine({ afterTurn }));
+      context.params.terminalReplyExpectation = expectation;
+      executeMock.mockResolvedValueOnce({
+        text: parts.join("\n"),
+        rawText: parts.join("\n"),
+        textParts: parts,
+      });
+
+      const result = await runPreparedCliAgent(context);
+
+      expect(result.meta.finalAssistantVisibleText).toBe(visible);
+      expect(result.meta.finalAssistantRawText).toBe(parts.join("\n"));
+      expect(afterTurn.mock.calls[0]?.[0].messages.slice(2)).toMatchObject([
+        { role: "user", content: "transcript visible ask" },
+        ...(visible ? [{ role: "assistant", content: [{ type: "text", text: visible }] }] : []),
+      ]);
+    },
+  );
+
   it("runs a native control command on the existing session without turn side effects", async () => {
     const { bootstrap, afterTurn } = createLifecycle();
     const context = buildPreparedContext(createContextEngine({ bootstrap, afterTurn }));

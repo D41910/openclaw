@@ -1,4 +1,3 @@
-import { isSilentReplyPayloadText } from "../auto-reply/tokens.js";
 import { runWithCliHistoryWriter } from "../config/sessions/cli-history-boundary.js";
 import { prepareCronRootSessionGeneration } from "../config/sessions/session-delivery-generation.js";
 import { buildGenericCliContextEngineHostSupport } from "../context-engine/host-compat.js";
@@ -36,6 +35,7 @@ import {
   buildCliRunResult,
   formatCliTerminalInterruption,
   isClaudeCliBackend,
+  resolveCliAssistantVisibleText,
   resolveCliSourceReplyMirror,
   settleCliPreparationError,
   settlePreparedCliRun,
@@ -380,9 +380,9 @@ async function runPreparedCliAgentOwned(
     });
     const assistantText = sourceReplyMirror.delivered
       ? (sourceReplyMirror.visibleText ?? "")
-      : output.text.trim();
+      : resolveCliAssistantVisibleText(output);
     if (
-      (!output.text.trim() || isSilentReplyPayloadText(output.text)) &&
+      !assistantText &&
       resolveSourceReplyDelivery(output) === "missing" &&
       !output.toolMediaUrls?.length &&
       !output.yielded &&
@@ -482,10 +482,12 @@ async function runPreparedCliAgentOwned(
           `CLI backend ${context.backendResolved.id} cannot ${params.controlOperation} without a reusable native session.`,
         );
       }
-      const { output, usedHistoryPrompt } = await executeCliAttempt(reusableCliSessionId);
+      const { output, assistantText, usedHistoryPrompt } =
+        await executeCliAttempt(reusableCliSessionId);
       return buildCliRunResult({
         ...resultContext,
         output,
+        assistantText,
         ...(!isolatedCompletion ? { effectiveCliSessionId: reusableCliSessionId } : {}),
         bindingFlushOk: true,
         assistantTranscriptOwned: false,
@@ -552,6 +554,7 @@ async function runPreparedCliAgentOwned(
         const runResult = buildCliRunResult({
           ...resultContext,
           output,
+          assistantText,
           effectiveCliSessionId,
           bindingFlushOk,
           assistantTranscriptOwned: assistantTranscript.owned,

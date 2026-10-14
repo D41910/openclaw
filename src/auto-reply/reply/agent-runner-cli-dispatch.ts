@@ -469,8 +469,7 @@ async function runCliAgentWithLifecycleInternal(
     await stopAgentEventBridges(bridges);
 
     const cliText = result.payloads?.length
-      ? (normalizeOptionalString(result.meta.finalAssistantVisibleText) ??
-        normalizeOptionalString(result.payloads[0]?.text))
+      ? normalizeOptionalString(result.meta.finalAssistantVisibleText ?? result.payloads[0]?.text)
       : undefined;
     const resultWithReasoning = finalReasoningText
       ? {

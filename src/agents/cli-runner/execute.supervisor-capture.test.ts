@@ -870,9 +870,9 @@ describe("executePreparedCliRun supervisor output capture", () => {
     }
   });
 
-  it("streams native thinking snapshots and text with supervisor capture disabled", async () => {
-    // Streaming events are emitted from live chunks, not from the final captured
-    // stdout string, so users still see deltas when captureOutput is false.
+  it("publishes completed native thinking with supervisor capture disabled", async () => {
+    // The final authoritative snapshot comes from live chunks even when the
+    // supervisor does not retain stdout.
     const agentEvents: Array<{
       stream: string;
       text?: string;
@@ -927,23 +927,14 @@ describe("executePreparedCliRun supervisor output capture", () => {
       expect(spawnInput.captureOutput).toBe(false);
       expect(result.text).toBe("Hello world");
       expect(result.toolSummary).toEqual({ calls: 0, tools: [], failures: 0 });
-      expect(agentEvents).toEqual([
-        { stream: "thinking", text: "Checking ", delta: "Checking ", isReasoningSnapshot: true },
-        { stream: "thinking", text: "Checking facts.", delta: "facts.", isReasoningSnapshot: true },
-        {
-          stream: "thinking",
-          text: "Checking the facts.",
-          delta: "the ",
-          isReasoningSnapshot: true,
-        },
+      expect(agentEvents.filter((event) => event.text || event.delta)).toEqual([
         {
           stream: "thinking",
           text: "Checking the facts. Done.",
-          delta: " Done.",
+          delta: "Checking the facts. Done.",
           isReasoningSnapshot: true,
         },
-        { stream: "assistant", text: "Hello", delta: "Hello" },
-        { stream: "assistant", text: "Hello world", delta: " world" },
+        { stream: "assistant", text: "Hello world", delta: "Hello world" },
       ]);
       expect(context.params.onExecutionPhase).toHaveBeenCalledTimes(2);
       expect(context.params.onExecutionPhase).toHaveBeenNthCalledWith(2, {
@@ -1517,6 +1508,7 @@ describe("executePreparedCliRun supervisor output capture", () => {
         result = buildCliRunResult({
           context,
           output,
+          assistantText: "",
           usedHistoryPrompt: false,
           userTurnHandled: true,
           sessionBindingDisabled: true,

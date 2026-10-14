@@ -835,7 +835,6 @@ describe("CLI attempt execution", () => {
       const suppression =
         outcome === "heartbeat" || outcome === "preserved-state" ? outcome : undefined;
       const outerFallback = outcome === "outer-fallback" || suppression !== undefined;
-      const accepted = outcome === "accepted" || outerFallback;
       const previousBinding = { sessionId: "previous-native-session" };
       const sessionKey = "agent:main:cli-binding-settlement";
       const sessionEntry = makeSessionEntry("binding-settlement-session");
@@ -871,7 +870,7 @@ describe("CLI attempt execution", () => {
           firstStarted.resolve();
           await finishFirst.promise;
           const result = makeCliResult("parent completed");
-          if (!accepted) {
+          if (!outerFallback) {
             result.payloads = [{ text: GENERIC_EXTERNAL_RUN_FAILURE_TEXT }];
             result.meta.finalAssistantVisibleText = GENERIC_EXTERNAL_RUN_FAILURE_TEXT;
           }
@@ -920,7 +919,7 @@ describe("CLI attempt execution", () => {
         expect(firstRunCliAgentArg(0).model).toBe("sonnet");
         expect(firstRunCliAgentArg(1).model).toBe("opus");
       }
-      const expectedBinding = suppression ? previousBinding : accepted ? binding : undefined;
+      const expectedBinding = suppression ? previousBinding : outerFallback ? binding : undefined;
       expect(firstRunCliAgentArg(outerFallback ? 2 : 1)).toMatchObject({
         cliSessionId: expectedBinding?.sessionId,
         cliSessionBinding: expectedBinding,
@@ -949,6 +948,7 @@ describe("CLI attempt execution", () => {
     const cliResult = buildCliRunResult({
       context,
       output,
+      assistantText: output.text,
       effectiveCliSessionId: output.sessionId,
       bindingFlushOk: false,
       usedHistoryPrompt: false,
@@ -1085,7 +1085,6 @@ describe("CLI attempt execution", () => {
         );
         expect(runParams.abortSignal?.aborted).toBe(true);
         const context = buildPreparedCliRunContext({
-          provider: "claude-cli",
           sessionId: sessionEntry.sessionId,
           sessionKey,
           workspaceDir: tmpDir,
@@ -1094,6 +1093,7 @@ describe("CLI attempt execution", () => {
         return buildCliRunResult({
           context,
           output: { text: "partial reply", terminalInterruption: { reason } },
+          assistantText: "partial reply",
           effectiveCliSessionId: replacement ? successorCliSessionId : cliSessionId,
           bindingFlushOk: true,
           usedHistoryPrompt: false,

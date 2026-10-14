@@ -1,7 +1,11 @@
 import { isPromiseLike } from "@openclaw/normalization-core/promise-like";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
-import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import {
+  isSilentReplyPayloadText,
+  isSilentReplyText,
+  SILENT_REPLY_TOKEN,
+} from "../auto-reply/tokens.js";
 import { applyAssistantDeliveryDirectives } from "../config/sessions/transcript-assistant-delivery.js";
 import { resolveAssistantMessagePhase } from "../shared/chat-message-content.js";
 import {
@@ -124,6 +128,9 @@ export function handleMessageEnd(
       ? extractAssistantThinking(assistantMessage)
       : "";
     emitPersistentReasoning(ctx, suppressedTrimmedReasoning);
+    ctx.settleAssistantMessageDelivery({
+      silent: isSilentReplyPayloadText(extractEmbeddedAssistantText(assistantMessage)),
+    });
     return;
   }
   const sourceContent = assistantMessage.content;
@@ -264,6 +271,7 @@ export function handleMessageEnd(
   const chunkerHasBuffered = Boolean(ctx.params.onBlockReply) && ctx.blockChunker.hasBuffered();
   ctx.finalizeAssistantTexts({
     text: finalAssistantText,
+    hasSilentIntent: parsedText.hasSilentIntent,
     addedDuringMessage,
     chunkerHasBuffered,
   });
@@ -326,6 +334,7 @@ export function handleMessageEnd(
     // streamReasoning rendering setting (gated inside emitReasoningStream).
     ctx.emitReasoningStream(rawThinking);
   }
+  ctx.settleAssistantMessageDelivery({ silent: parsedText.hasSilentIntent });
 
   if (
     !ctx.params.silentExpected &&

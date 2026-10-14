@@ -210,7 +210,9 @@ still apply, and the current-prompt capability expires with its admitted turn.
 
 The silent token `NO_REPLY` (case-insensitive, so `no_reply` also matches) is reserved for sessions connected to external message channels and is never delivered as user-visible text. Subagents, the Control UI, and other internal sessions must return a result or continue unfinished work; a silent token cannot complete their task. When a turn also has pending tool media, such as generated TTS audio, OpenClaw strips the silent text but still delivers the media attachment.
 
-Token-only uppercase fragments from `NO_` through `NO_REPL` are also suppressed if a model stops before completing `NO_REPLY`. A final `NO`, mixed-case text such as `No`, and longer replies such as `NO_R alert` remain visible. Streaming previews hold shorter prefixes until the text diverges from the token or the final reply arrives.
+If the last nonempty line contains only `NO_REPLY` (including tolerated punctuation or whitespace), the entire message is silent, including any preceding prose. A required turn still needs a real answer and uses the normal finalization pass to recover one. An inline trailing token such as `Done. NO_REPLY` only removes the token; a leading token followed by an answer also preserves the answer. Text previews, reasoning, and text blocks wait until the assistant message ends so a final silent line cannot expose earlier prose. Separately completed progress messages remain visible.
+
+Token-only uppercase fragments from `NO_` through `NO_REPL` are also suppressed if a model stops before completing `NO_REPLY`. A final `NO`, mixed-case text such as `No`, and longer replies such as `NO_R alert` remain visible.
 
 Silence policy resolves by conversation type:
 

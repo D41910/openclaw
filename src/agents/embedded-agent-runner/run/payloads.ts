@@ -278,15 +278,6 @@ export function buildEmbeddedRunPayloads(params: {
         }),
       );
     }
-    const reasoningText =
-      suppressAssistantArtifacts || runAborted || lastAssistantNeedsErrorSurface
-        ? ""
-        : terminalAssistant && params.reasoningLevel === "on" && params.thinkingLevel !== "off"
-          ? extractAssistantThinking(terminalAssistant)
-          : "";
-    if (reasoningText) {
-      replyItems.push({ text: reasoningText, isReasoning: true });
-    }
     hasUserFacingReply ||= Boolean(errorText);
     if (!suppressAssistantArtifacts && !runAborted && !lastAssistantNeedsErrorSurface) {
       const fallbackAnswerText = assistantForPayload
@@ -296,6 +287,20 @@ export function buildEmbeddedRunPayloads(params: {
       const rawAnswerDirectiveState = fallbackRawAnswerText
         ? parseReplyDirectives(fallbackRawAnswerText)
         : null;
+      const reasoningText =
+        terminalAssistant && params.reasoningLevel === "on" && params.thinkingLevel !== "off"
+          ? extractAssistantThinking(terminalAssistant)
+          : "";
+      if (reasoningText) {
+        const reasoningIsSilent = (
+          terminalAssistant === assistantForPayload
+            ? rawAnswerDirectiveState
+            : parseReplyDirectives(resolveRawAssistantAnswerText(terminalAssistant) ?? "")
+        )?.hasSilentIntent;
+        if (!reasoningIsSilent) {
+          replyItems.push({ text: reasoningText, isReasoning: true });
+        }
+      }
       const rawAnswerHasMedia =
         (rawAnswerDirectiveState?.mediaUrls?.length ?? 0) > 0 ||
         rawAnswerDirectiveState?.audioAsVoice;
@@ -309,7 +314,7 @@ export function buildEmbeddedRunPayloads(params: {
           ? normalizeTextForComparison(nonEmptyAssistantTexts.join("\n\n"))
           : "";
       const shouldPreferRawAnswerText =
-        rawAnswerDirectiveState?.isSilent ||
+        rawAnswerDirectiveState?.hasSilentIntent ||
         (rawAnswerHasMedia &&
           (!nonEmptyAssistantTexts.length ||
             (normalizedAssistantTexts.length > 0 &&

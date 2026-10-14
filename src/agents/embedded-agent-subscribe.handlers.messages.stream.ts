@@ -205,10 +205,12 @@ export function emitReasoningEnd(ctx: EmbeddedAgentSubscribeContext) {
   }
   ctx.flushAssistantStream();
   ctx.state.reasoningStreamOpen = false;
-  runBestEffortCallback({
-    label: "reasoning end",
-    log: ctx.log,
-    callback: () => ctx.params.onReasoningEnd?.(),
+  ctx.deferAssistantMessageDelivery("reasoning-end", () => {
+    runBestEffortCallback({
+      label: "reasoning end",
+      log: ctx.log,
+      callback: () => ctx.params.onReasoningEnd?.(),
+    });
   });
 }
 

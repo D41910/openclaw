@@ -1,0 +1,321 @@
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { onAgentEventForRun } from "../infra/agent-events.js";
+import type { AssistantMessage } from "../llm/types.js";
+import { createSubscribedSessionHarness } from "./embedded-agent-subscribe.e2e-harness.js";
+import { makeAgentAssistantMessage } from "./test-helpers/agent-message-fixtures.js";
+
+const subscriptions: ReturnType<typeof createSubscribedSessionHarness>["subscription"][] = [];
+afterEach(() => {
+  for (const subscription of subscriptions.splice(0)) {
+    subscription.unsubscribe();
+  }
+});
+
+function setup(options: { deferred?: boolean; reasoning?: "on" | "stream" } = {}) {
+  const onPartialReply = vi.fn();
+  const onBlockReply = vi.fn();
+  const onAgentEvent = vi.fn();
+  const onReasoningStream = vi.fn();
+  const harness = createSubscribedSessionHarness({
+    runId: "final-line-silence",
+    onPartialReply,
+    onBlockReply,
+    onAgentEvent,
+    onReasoningStream,
+    ...(options.reasoning ? { reasoningMode: options.reasoning } : {}),
+    blockReplyBreak: "text_end",
+    blockReplyChunking: { minChars: 1, maxChars: 40, breakPreference: "newline" },
+    ...(options.deferred ? { onBeforeTerminalDelivery: async () => undefined } : {}),
+  });
+  subscriptions.push(harness.subscription);
+  const answer = (text: string) =>
+    makeAgentAssistantMessage({ api: "ollama", content: [{ type: "text", text }] });
+  const start = () => harness.emit({ type: "message_start", message: answer("") });
+  const delta = (text: string, fullText = text) => {
+    const message = answer(fullText);
+    harness.emit({
+      type: "message_update",
+      message,
+      assistantMessageEvent: { type: "text_delta", delta: text, contentIndex: 0, partial: message },
+    });
+  };
+  const end = (text: string) => {
+    const message = answer(text);
+    harness.emit({ type: "message_end", message });
+    return message;
+  };
+  const assistantEvents = () =>
+    onAgentEvent.mock.calls.filter(([event]) => event.stream === "assistant");
+  const publishedText = () => [
+    ...onPartialReply.mock.calls.map(([payload]) => payload.text ?? ""),
+    ...onBlockReply.mock.calls.map(([payload]) => payload.text ?? ""),
+    ...assistantEvents().map(([event]) => event.data.text ?? ""),
+  ];
+  return {
+    ...harness,
+    start,
+    delta,
+    end,
+    onPartialReply,
+    onBlockReply,
+    onAgentEvent,
+    onReasoningStream,
+    assistantEvents,
+    publishedText,
+  };
+}
+
+describe("assistant message final-line silence", () => {
+  it.each(["NO_REPLY", "**NO_REPLY**", "\tNO_REPLY.  \n\n"])(
+    "holds all answer presentation until the final %j is known",
+    async (token) => {
+      const h = setup();
+      const reasoning =
+        "This is a group conversation.\nThe follow-up does not require another answer.";
+      h.start();
+      h.delta(reasoning);
+      expect(h.publishedText()).toEqual([]);
+      h.delta(`\n${token}`, `${reasoning}\n${token}`);
+      h.end(`${reasoning}\n${token}`);
+      await h.subscription.waitForPendingEvents();
+      expect(h.publishedText().filter(Boolean)).toEqual([]);
+      expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
+    },
+  );
+
+  it("releases an ordinary answer once its assistant message completes", async () => {
+    const h = setup();
+    const text = "The marker NO_REPLY can be mentioned in an ordinary answer.";
+    h.start();
+    h.delta(text);
+    expect(h.publishedText()).toEqual([]);
+    h.end(text);
+    await h.subscription.waitForPendingEvents();
+    expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text }));
+    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text).join("")).toBe(text);
+    expect(h.assistantEvents()).toHaveLength(1);
+  });
+
+  it("keeps attachments when final-line silence discards buffered prose", async () => {
+    const h = setup();
+    const reasoning =
+      "The requested attachment is already prepared.\nNo extra explanation is needed.";
+    h.start();
+    h.delta(reasoning);
+    h.end(`${reasoning}\nNO_REPLY\nMEDIA:/tmp/final-silent-line.png`);
+    await h.subscription.waitForPendingEvents();
+    expect(h.publishedText().filter(Boolean)).toEqual([]);
+    expect(h.onBlockReply).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ mediaUrls: ["/tmp/final-silent-line.png"] }),
+      expect.anything(),
+    );
+    expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
+  });
+
+  it("reports rejected media without exposing the silent message's prose", async () => {
+    const h = setup();
+    const reasoning = "The attachment finishes this task without another explanation.";
+    h.start();
+    h.delta(reasoning);
+    h.end(`${reasoning}\nNO_REPLY\nMEDIA:media://inbound/`);
+    await h.subscription.waitForPendingEvents();
+    expect(h.onPartialReply).not.toHaveBeenCalled();
+    expect(h.assistantEvents()).toEqual([]);
+    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual([
+      "⚠️ Media not attached: Use a public HTTPS URL without credentials or attach a local file by a safe path.",
+    ]);
+    expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
+  });
+
+  it("discards earlier text blocks without suppressing the following message", async () => {
+    const h = setup();
+    const reasoning = "No additional reply is needed for this group discussion.";
+    h.start();
+    h.delta(reasoning);
+    const silent = makeAgentAssistantMessage({
+      api: "ollama",
+      content: [
+        { type: "text", text: reasoning },
+        { type: "text", text: "NO_REPLY" },
+      ],
+    });
+    h.emit({
+      type: "message_update",
+      message: silent,
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "NO_REPLY",
+        contentIndex: 1,
+        partial: silent,
+      },
+    });
+    h.emit({ type: "message_end", message: silent });
+    await h.subscription.waitForPendingEvents();
+    expect(h.publishedText().filter(Boolean)).toEqual([]);
+    expect(h.subscription.assistantTexts).toEqual(["NO_REPLY"]);
+    h.start();
+    h.delta("Here is the requested answer.");
+    h.end("Here is the requested answer.");
+    await h.subscription.waitForPendingEvents();
+    expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ text: "Here is the requested answer." }),
+    );
+    expect(h.publishedText().some((text) => text.includes(reasoning))).toBe(false);
+  });
+
+  it("replaces a prepared source correction without losing reserved tool media", async () => {
+    const h = setup();
+    await h.subscription.runToolLifecycle({
+      toolName: "read",
+      toolCallId: "prepared-voice",
+      args: {},
+      execute: async (onStart) => {
+        onStart();
+        return { details: { media: { mediaUrl: "/tmp/reply.opus", audioAsVoice: true } } };
+      },
+    });
+    h.start();
+    h.delta("[[audio_as_voice]]The current value is one for this item. Keep the final result.");
+    expect(h.onBlockReply).not.toHaveBeenCalled();
+    h.end(
+      "[[audio_as_voice]]The current value is thirty-three for this item. Keep the final result.",
+    );
+    await h.subscription.waitForPendingEvents();
+    const replies = h.onBlockReply.mock.calls.map(([payload]) => payload);
+    const text = replies.map((payload) => payload.text ?? "").join(" ");
+    expect(text).toContain("The current value is thirty-three for this item.");
+    expect(text).not.toContain("The current value is one for this item.");
+    expect(replies.flatMap((payload) => payload.mediaUrls ?? [])).toEqual(["/tmp/reply.opus"]);
+    expect(h.subscription.getPendingToolMediaReply()).toBeNull();
+    expect(h.subscription.hasToolMediaBlockReply()).toBe(true);
+  });
+
+  it("keeps terminal-hook custody after the assistant message completes", async () => {
+    const h = setup({ deferred: true });
+    h.start();
+    h.delta("The answer is ready.");
+    const message = h.end("The answer is ready.");
+    expect(h.publishedText()).toEqual([]);
+    h.emit({ type: "agent_end", messages: [message], willRetry: false });
+    await h.subscription.waitForPendingEvents();
+    expect(h.onPartialReply).toHaveBeenCalledOnce();
+    expect(h.onBlockReply).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { silent: false, deferred: false },
+    { silent: true, deferred: false },
+    { silent: false, deferred: true },
+    { silent: true, deferred: true },
+  ])(
+    "settles held text without message_end (silent: $silent, hook: $deferred)",
+    async ({ silent, deferred }) => {
+      const h = setup({ deferred });
+      const text = `An interrupted answer is still recoverable.${silent ? "\nNO_REPLY" : ""}`;
+      h.start();
+      h.delta(text);
+      expect(h.publishedText()).toEqual([]);
+      h.emit({ type: "agent_end", messages: [], willRetry: false });
+      await h.subscription.waitForPendingEvents();
+      const delivered = h.onBlockReply.mock.calls.map(([payload]) => payload.text ?? "").join("");
+      expect(delivered).toBe(silent ? "" : text);
+    },
+  );
+
+  it("releases a completed commentary message before the next answer", async () => {
+    const h = setup();
+    const message: AssistantMessage = makeAgentAssistantMessage({
+      content: [
+        {
+          type: "text",
+          text: "I will inspect the attachment.",
+          textSignature: JSON.stringify({ v: 1, id: "commentary", phase: "commentary" }),
+        },
+      ],
+    });
+    h.emit({ type: "message_start", message });
+    h.emit({
+      type: "message_update",
+      message,
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "I will inspect the attachment.",
+        contentIndex: 0,
+        partial: message,
+      },
+    });
+    expect(h.assistantEvents()).toEqual([]);
+    expect(h.onPartialReply).not.toHaveBeenCalled();
+    expect(h.publishedText()).toEqual([]);
+    expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+    h.emit({ type: "message_end", message });
+    await h.subscription.waitForPendingEvents();
+    expect(h.onAgentEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "item",
+        data: expect.objectContaining({ progressText: "I will inspect the attachment." }),
+      }),
+    );
+  });
+
+  it.each(["on", "stream"] as const)(
+    "discards same-message commentary and native reasoning before a silent final (%s)",
+    async (reasoning) => {
+      const h = setup({ reasoning });
+      const thinkingEvents: unknown[] = [];
+      onTestFinished(
+        onAgentEventForRun("final-line-silence", (event) => {
+          if (event.stream === "thinking") {
+            thinkingEvents.push(event.data);
+          }
+        }),
+      );
+      const thinking = { type: "thinking" as const, thinking: "Private model analysis." };
+      const commentary = {
+        type: "text" as const,
+        text: "I am considering whether to respond.",
+        textSignature: JSON.stringify({ v: 1, id: "progress", phase: "commentary" }),
+      };
+      const final = {
+        type: "text" as const,
+        text: "NO_REPLY",
+        textSignature: JSON.stringify({ v: 1, id: "final", phase: "final_answer" }),
+      };
+      h.emit({ type: "message_start", message: makeAgentAssistantMessage({ content: [] }) });
+      const thought = makeAgentAssistantMessage({ content: [thinking] });
+      h.emit({
+        type: "message_update",
+        message: thought,
+        assistantMessageEvent: {
+          type: "thinking_delta",
+          contentIndex: 0,
+          delta: thinking.thinking,
+          partial: thought,
+        },
+      });
+      const progress = makeAgentAssistantMessage({ content: [thinking, commentary] });
+      h.emit({
+        type: "message_update",
+        message: progress,
+        assistantMessageEvent: {
+          type: "text_delta",
+          contentIndex: 1,
+          delta: commentary.text,
+          partial: progress,
+        },
+      });
+      expect(h.onReasoningStream).not.toHaveBeenCalled();
+      expect(thinkingEvents).toEqual([]);
+      expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+      h.emit({
+        type: "message_end",
+        message: makeAgentAssistantMessage({ content: [thinking, commentary, final] }),
+      });
+      await h.subscription.waitForPendingEvents();
+      expect(h.onReasoningStream).not.toHaveBeenCalled();
+      expect(thinkingEvents).toEqual([]);
+      expect(h.publishedText().filter(Boolean)).toEqual([]);
+      expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
+    },
+  );
+});

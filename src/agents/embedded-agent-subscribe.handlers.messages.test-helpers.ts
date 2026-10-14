@@ -68,9 +68,14 @@ export function createMessageUpdateContext(
     emitReasoningStream: params.emitReasoningStream ?? vi.fn(),
     flushBlockReplyBuffer: params.flushBlockReplyBuffer ?? vi.fn(),
     flushAssistantStream: vi.fn(),
+    deferAssistantMessageDelivery: vi.fn<
+      EmbeddedAgentSubscribeContext["deferAssistantMessageDelivery"]
+    >((_key, deliver) => deliver(false)),
+    settleAssistantMessageDelivery: vi.fn(),
     blockChunker: new EmbeddedBlockChunker(),
     resetAssistantMessageState: params.resetAssistantMessageState ?? vi.fn(),
     captureModelEvent: vi.fn(),
+    resetPreparedBlockReplySource: vi.fn(() => false),
     resetPartialReplyDirectives: () => {
       partialReplyDirectiveAccumulator.reset();
       ctx.state.lastAssistantAudioDirectiveCount = 0;
@@ -136,12 +141,15 @@ export function createMessageEndContext(
   const delivery = createReplyDelivery(ctx);
   ctx.emitAssistantStreamData = delivery.emitAssistantStreamData;
   ctx.flushAssistantStream = delivery.flushAssistantStream;
+  ctx.deferAssistantMessageDelivery = delivery.deferAssistantMessageDelivery;
+  ctx.settleAssistantMessageDelivery = delivery.settleAssistantMessageDelivery;
   ctx.emitBlockReply = vi.fn(delivery.emitBlockReply);
   ctx.finalizeAssistantTexts =
     params.finalizeAssistantTexts ?? vi.fn(delivery.finalizeAssistantTexts);
   const rendering = createStreamRendering({
     ...ctx,
     pendingBlockReplyTasks: delivery.pendingBlockReplyTasks,
+    discardPendingBlockReplies: delivery.discardPendingBlockReplies,
     pushAssistantText: delivery.pushAssistantText,
     shouldSkipAssistantText: delivery.shouldSkipAssistantText,
   });

@@ -107,12 +107,14 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
   const {
     clearAssistantStream,
     clearDeferredBlockReplies,
+    deferAssistantMessageDelivery,
     emitAssistantStreamData,
     emitBlockReply,
     finalizeAssistantTexts,
     flushAssistantStream,
     noteLastAssistant,
     releaseDeferredReplies,
+    settleAssistantMessageDelivery,
   } = replyDelivery;
 
   // Suppress duplicate block replies only after confirmed messaging-tool delivery.
@@ -265,7 +267,9 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
     blockChunker,
     emitBlockReply: replyDelivery.emitBlockReply,
     flushAssistantStream,
+    deferAssistantMessageDelivery,
     pendingBlockReplyTasks: replyDelivery.pendingBlockReplyTasks,
+    discardPendingBlockReplies: replyDelivery.discardPendingBlockReplies,
     pushAssistantText: replyDelivery.pushAssistantText,
     shouldSkipAssistantText: replyDelivery.shouldSkipAssistantText,
   });
@@ -369,6 +373,8 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
     emitBlockReply,
     flushAssistantStream,
     releaseDeferredReplies,
+    deferAssistantMessageDelivery,
+    settleAssistantMessageDelivery,
     clearAssistantStream,
     clearDeferredBlockReplies,
     resetForCompactionRetry,

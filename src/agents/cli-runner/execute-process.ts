@@ -595,6 +595,9 @@ export async function executeCliProcess(params: {
   if (parsedError) {
     throw parsedError;
   }
+  params.events.emitCliCompletedReply(
+    parsed.rawFinalText ?? parsed.textParts?.at(-1) ?? parsed.text,
+  );
   const rawText = parsed.text;
   cliBackendLog.info(
     `cli turn: provider=${runParams.provider} model=${context.modelId} durationMs=${Date.now() - params.cliTurnStartedAt} ${formatCliBackendOutputDigest(rawText)}`,

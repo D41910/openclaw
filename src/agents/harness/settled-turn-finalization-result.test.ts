@@ -72,19 +72,22 @@ describe("assertSettledTurnFinalizationResult", () => {
     ).toThrow("returned a tool call");
   });
 
-  it("classifies a normally completed empty answer", () => {
-    const result = {
-      assistant: assistantMessage([{ type: "text", text: "  " }]),
-    };
+  it.each(["  ", "NO_REPLY", "No further response is needed.\nNO_REPLY."])(
+    "classifies a normally completed empty or silent answer: %j",
+    (text) => {
+      const result = {
+        assistant: assistantMessage([{ type: "text", text }]),
+      };
 
-    try {
-      assertSettledTurnFinalizationResult(result);
-      throw new Error("expected completed-empty classification");
-    } catch (error) {
-      expect(error).toBeInstanceOf(EmptySettledTurnFinalizationError);
-      expect((error as EmptySettledTurnFinalizationError).result).toBe(result);
-    }
-  });
+      try {
+        assertSettledTurnFinalizationResult(result);
+        throw new Error("expected completed-empty classification");
+      } catch (error) {
+        expect(error).toBeInstanceOf(EmptySettledTurnFinalizationError);
+        expect((error as EmptySettledTurnFinalizationError).result).toBe(result);
+      }
+    },
+  );
 
   it("rejects an assistant stopped at the length limit", () => {
     expect(() =>

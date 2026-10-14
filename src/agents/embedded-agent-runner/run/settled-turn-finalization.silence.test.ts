@@ -74,9 +74,25 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
     },
     { name: "unconfirmed receipt", expectation: "required", delivery: "unknown", phased: false },
     { name: "optional helper", expectation: "optional", delivery: "missing", phased: false },
+    {
+      name: "required prose with a final silent line",
+      expectation: "required",
+      delivery: "missing",
+      phased: false,
+      silentText:
+        "The participants already resolved this; another response would be noise.\nNO_REPLY",
+    },
+    {
+      name: "optional prose with a final silent line",
+      expectation: "optional",
+      delivery: "missing",
+      phased: false,
+      silentText: "Tout a déjà été réglé.\nNO_REPLY.",
+    },
   ] as const)("settles $name followed by NO_REPLY without replaying tools", async (testCase) => {
     const { expectation, delivery, phased } = testCase;
     const history = "history" in testCase ? testCase.history : undefined;
+    const silentText = "silentText" in testCase ? testCase.silentText : SILENT_REPLY_TOKEN;
     const earlierText = "## Result\n\n- **Saved** the note.";
     const attempt: EmbeddedRunAttemptWithReceiptEvidence = makeEmbeddedRunnerAttempt({
       sessionIdUsed: "session-settled",
@@ -110,11 +126,11 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
             },
             {
               type: "text",
-              text: SILENT_REPLY_TOKEN,
+              text: silentText,
               textSignature: JSON.stringify({ v: 1, id: "silent-answer", phase: "final_answer" }),
             },
           ]
-        : [{ type: "text", text: SILENT_REPLY_TOKEN }],
+        : [{ type: "text", text: silentText }],
     });
     attempt.messagesSnapshot = [
       { role: "user", content: "Save the note and confirm when it is saved.", timestamp: 0 },
@@ -125,7 +141,7 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
     ];
     attempt.toolMetas = [{ toolName: "message", meta: "react", replaySafe: false }];
     attempt.itemLifecycle = { startedCount: 1, completedCount: 1, activeCount: 0 };
-    attempt.assistantTexts = [earlierText, SILENT_REPLY_TOKEN];
+    attempt.assistantTexts = [earlierText, silentText];
     attempt.lastAssistant = assistant;
     attempt.currentAttemptAssistant = assistant;
     attempt.currentAttemptCompletedAssistant = assistant;
