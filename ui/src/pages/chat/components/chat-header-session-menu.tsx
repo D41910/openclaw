@@ -1,4 +1,4 @@
-import { createSignal, For, merge, onCleanup, onSettled, Show } from "solid-js";
+import { createSignal, For, merge, onSettled, Show } from "solid-js";
 import type { UiSettings } from "../../../app/settings.ts";
 import { BoardGrantedCapabilities } from "../../../components/board/board-widget-capabilities.solid.tsx";
 import type { BoardWidgetPageMenu } from "../../../components/board/board-widget-cell-options.ts";
@@ -16,15 +16,10 @@ import {
 } from "../../../components/session-menu-compact.ts";
 import { useSessionMenuControllers } from "../../../components/session-menu-controllers.ts";
 import { useSessionMenuView } from "../../../components/session-menu-view.tsx";
-import type { SessionCreatedActor } from "../../../components/session-owner-chip.ts";
 import { Icon, type IconName } from "../../../components/solid/icon.tsx";
-import { useOptionalApplication } from "../../../lib/reactive/context.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
-import {
-  connectLegacyApplicationContext,
-  defineSolidBridge,
-  type SolidBridgeElement,
-} from "../../../lit/solid-bridge.ts";
+import type { SessionCreatedActor } from "../../../lib/session-owner.ts";
+import { defineSolidBridge, type SolidBridgeElement } from "../../../lit/solid-bridge.ts";
 import { isChatBubbleMode, setChatBubbleMode } from "../chat-bubble-mode.ts";
 import { ChatQuickActionItem, type HeaderMenuSessionAction } from "./chat-quick-action.tsx";
 import {
@@ -93,11 +88,6 @@ function ChatHeaderSessionMenuContent(
   props: HeaderMenuProps,
   host: SolidBridgeElement<HeaderMenuProps>,
 ) {
-  const application = useOptionalApplication();
-  if (application) {
-    // Sharing still renders legacy owner-chip tags beneath this menu.
-    onCleanup(connectLegacyApplicationContext(host, application));
-  }
   const [revision, setRevision] = createSignal(0, { ownedWrite: true });
   const [compactView, setCompactView] = createSignal<CompactMenuView>("root");
   const [opened, setOpened] = createSignal(false);
