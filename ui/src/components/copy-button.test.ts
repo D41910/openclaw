@@ -5,7 +5,7 @@ import { solidContent } from "../lit/solid-content.tsx";
 import { renderWorkspaceConflictNotice } from "../pages/chat/components/chat-workspace-conflict.ts";
 import { DevicePairSetup } from "../pages/devices/view-pairing.tsx";
 import { renderCopyButton } from "./copy-button.ts";
-import { renderWizardStepControls } from "./wizard-step-controls.ts";
+import { WizardStepControls } from "./wizard-step-controls.tsx";
 
 let owner: HTMLElement;
 const writeText = vi.fn<(text: string) => Promise<void>>();
@@ -38,7 +38,7 @@ const surfaces = [
   {
     name: "wizard code",
     view: (text: string) =>
-      renderWizardStepControls({
+      solidContent(WizardStepControls, {
         step: {
           id: "sign-in",
           type: "progress",
