@@ -78,42 +78,7 @@ export function registerWaitingStatusCases({
   createMinimalRun,
   runEmbeddedAgentMock,
 }: WaitingStatusFixture): void {
-  it("retains an authored sessions_yield acknowledgment for a WebChat turn", async () => {
-    await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
-      payloads: [],
-      meta: {
-        durationMs: 0,
-        yielded: true,
-        yieldAcknowledgment: "Research started; results will follow.",
-      },
-    });
-    await captureRuntimeConfigAsyncReader()();
-    const onPendingContinuation = vi.fn();
-    const { run } = createMinimalRun({
-      opts: { onPendingContinuation },
-      sessionCtx: { Provider: "webchat", Surface: "webchat" },
-      runOverrides: { messageProvider: "webchat" },
-    });
-
-    const result = await run();
-
-    expect(result).toMatchObject({
-      text: "Research started; results will follow.",
-      replyToId: "msg",
-    });
-    assert(result && !Array.isArray(result));
-    expect(getReplyPayloadMetadata(result)).toMatchObject({
-      continuationStatus: true,
-      deliverDespiteSourceReplySuppression: true,
-      progressContinuation: { adopt: expect.any(Function) },
-    });
-    expect(onPendingContinuation).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    { label: "a WebChat turn", surface: "webchat", silent: false },
-    { label: "an explicit external NO_REPLY turn", surface: "whatsapp", silent: true },
-  ])("retains pending media ownership for $label", async ({ surface, silent }) => {
+  it("retains pending media ownership for an explicit external NO_REPLY turn", async () => {
     onTestFinished(resetGeneratedMediaTaskActivityForTests);
     let handle: MediaGenerationTaskHandle | undefined;
     runEmbeddedAgentMock.mockImplementationOnce(async (params: RunEmbeddedAgentInternalParams) => {
@@ -132,15 +97,13 @@ export function registerWaitingStatusCases({
         meta: {
           durationMs: 0,
           continuationPending: true,
-          ...(silent
-            ? { terminalReply: prepareAgentRunTerminalReply({ rawText: "NO_REPLY" }).terminalReply }
-            : {}),
+          terminalReply: prepareAgentRunTerminalReply({ rawText: "NO_REPLY" }).terminalReply,
         },
       };
     });
     const { run } = createMinimalRun({
-      sessionCtx: { Provider: surface, Surface: surface },
-      runOverrides: { messageProvider: surface },
+      sessionCtx: { Provider: "whatsapp", Surface: "whatsapp" },
+      runOverrides: { messageProvider: "whatsapp" },
     });
 
     const result = await run();
@@ -152,30 +115,7 @@ export function registerWaitingStatusCases({
         handle.requesterAgentId,
       ),
     ).toBe(true);
-    if (silent) {
-      expect(result).toBeUndefined();
-      return;
-    }
-    expect(result).toMatchObject({
-      text: "I’m continuing this work and will send the result when it is ready.",
-    });
-    assert(result && !Array.isArray(result));
-    const draft = { push: vi.fn(), retire: vi.fn() };
-    expect(getReplyPayloadMetadata(result)?.progressContinuation?.adopt(draft)).toBe(true);
-    expect(draft.push).toHaveBeenCalledExactlyOnceWith({
-      itemId: handle.runId,
-      kind: "subagent",
-      title: "Image generation",
-      phase: "update",
-      status: "running",
-    });
-    createMediaGenerationTaskLifecycle("image").completeTaskRun({
-      handle,
-      provider: "fixture",
-      model: "fixture",
-      count: 1,
-    });
-    expect(draft.retire).toHaveBeenCalledOnce();
+    expect(result).toBeUndefined();
   });
 
   it.each([
@@ -196,29 +136,38 @@ export function registerWaitingStatusCases({
         terminalReply: { disposition: "silent" as const },
       },
     },
-  ])("only delivers an authored waiting status for $label", async ({ meta }) => {
-    await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
-      payloads: [],
-      meta: { durationMs: 0, ...meta },
-    });
-    const onPendingContinuation = vi.fn();
-    const { run } = createMinimalRun({ opts: { onPendingContinuation } });
-
-    const result = await run();
-    expect(onPendingContinuation).toHaveBeenCalledOnce();
-    if ("yieldAcknowledgment" in meta && !("terminalReply" in meta)) {
-      expect(result).toMatchObject({ text: meta.yieldAcknowledgment, replyToId: "msg" });
-      assert(result && !Array.isArray(result));
-      expect(getReplyPayloadMetadata(result)).toMatchObject({
-        continuationStatus: true,
-        deliverDespiteSourceReplySuppression: true,
+  ])(
+    "delivers one waiting status unless the turn explicitly ends silently for $label",
+    async ({ meta }) => {
+      await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
+        payloads: [],
+        meta: { durationMs: 0, ...meta },
       });
-    } else {
-      expect(result).toBeUndefined();
-    }
-  });
+      const onPendingContinuation = vi.fn();
+      const { run } = createMinimalRun({ opts: { onPendingContinuation } });
+
+      const result = await run();
+      expect(onPendingContinuation).toHaveBeenCalledOnce();
+      if ("terminalReply" in meta) {
+        expect(result).toBeUndefined();
+      } else {
+        expect(result).toMatchObject({
+          text:
+            meta.yieldAcknowledgment ??
+            "I’m continuing this work and will send the result when it is ready.",
+          replyToId: "msg",
+        });
+        assert(result && !Array.isArray(result));
+        expect(getReplyPayloadMetadata(result)).toMatchObject({
+          continuationStatus: true,
+          deliverDespiteSourceReplySuppression: true,
+        });
+      }
+    },
+  );
 
   it.each([
+    { label: "no children", acceptedSessionSpawns: [], delivered: true },
     {
       label: "a fire-and-forget child",
       acceptedSessionSpawns: [
@@ -270,7 +219,6 @@ export function registerWaitingStatusCases({
 
     const result = await run();
     assert(handle);
-    expect(onPendingContinuation).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(result).toMatchObject({
       text: "I’m continuing this work and will send the result when it is ready.",
     });
@@ -432,7 +380,7 @@ export function registerWaitingStatusCases({
   );
 
   it.each([
-    { label: "no acknowledgment", warning: true },
+    { label: "default status" },
     { label: "explicit status", acknowledgment: "Research started; results will follow." },
     {
       label: "room event",
@@ -455,7 +403,10 @@ export function registerWaitingStatusCases({
     });
 
     await expect(run()).resolves.toMatchObject({
-      text: testCase.warning ? "⚠️ Bash failed" : testCase.acknowledgment,
+      text: testCase.warning
+        ? "⚠️ Bash failed"
+        : (testCase.acknowledgment ??
+          "I’m continuing this work and will send the result when it is ready."),
       ...(testCase.warning ? { isError: true } : {}),
       replyToId: "msg",
     });

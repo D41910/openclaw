@@ -12,6 +12,7 @@ import {
 } from "./dispatch-from-config.shared.test-harness.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAgentHarnesses } from "../../agents/harness/registry.js";
+import { resolveReplyCompletion } from "../../agents/reply-completion.js";
 import {
   OutboundDeliveryError,
   PlatformMessageNotDispatchedError,
@@ -26,6 +27,7 @@ import {
   dispatchMemorySessionScope,
 } from "./dispatch-memory-session.test-support.js";
 import { createReplyDispatcher } from "./reply-dispatcher.js";
+import { resolveReplyOperationRunState } from "./reply-operation-run-state.js";
 import { assertSessionWriterDeliveryAuthorized } from "./session-writer-delivery-authority.js";
 
 let dispatchReplyFromConfig: typeof import("./dispatch-from-config.js").dispatchReplyFromConfig;
@@ -162,8 +164,8 @@ describe("accepted continuation status delivery", () => {
           },
         },
       );
-      const settle = vi.fn(async (outcome: string) => {
-        order.push(`settle:${outcome}`);
+      const settle = vi.fn(async (statusDelivered: boolean) => {
+        order.push(`settle:${statusDelivered}`);
       });
       const dispatcher = createReplyDispatcher({
         deliver: async (payload, info) => {
@@ -190,7 +192,7 @@ describe("accepted continuation status delivery", () => {
 
       expect(order).toEqual([
         `deliver:${statusPayload.text}${usageLine ? `\n${usageLine}` : ""}`,
-        "settle:delivered",
+        "settle:true",
       ]);
       expect(adopt()).toBe(false);
     },
@@ -226,7 +228,7 @@ describe("accepted continuation status delivery", () => {
 
       expect(mocks.routeReply).toHaveBeenCalledOnce();
       expect(deliver).not.toHaveBeenCalled();
-      expect(settle).toHaveBeenCalledExactlyOnceWith(delivered ? "delivered" : "cancelled");
+      expect(settle).toHaveBeenCalledExactlyOnceWith(delivered);
     },
   );
 
@@ -236,9 +238,9 @@ describe("accepted continuation status delivery", () => {
       { text: "Continuing work; the result will follow." },
       { continuationStatus: true },
     );
-    const settle = vi.fn(async (outcome: string) => {
-      order.push(`settle:${outcome}`);
-      if (outcome === "delivered") {
+    const settle = vi.fn(async (statusDelivered: boolean) => {
+      order.push(`settle:${statusDelivered}`);
+      if (statusDelivered) {
         throw new Error("continuation batch is unavailable");
       }
     });
@@ -264,8 +266,8 @@ describe("accepted continuation status delivery", () => {
 
     expect(order).toEqual([
       "deliver:Continuing work; the result will follow.",
-      "settle:delivered",
-      "settle:cancelled",
+      "settle:true",
+      "settle:false",
     ]);
   });
 
@@ -295,7 +297,7 @@ describe("accepted continuation status delivery", () => {
         }),
     });
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith("cancelled");
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it("releases a continuation before propagating a retryable no-send drain failure", async () => {
@@ -330,7 +332,7 @@ describe("accepted continuation status delivery", () => {
       }),
     ).rejects.toBe(failure);
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith("cancelled");
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it("releases an accepted continuation when finalization aborts before status dispatch", async () => {
@@ -368,7 +370,7 @@ describe("accepted continuation status delivery", () => {
         }),
     });
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith("cancelled");
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
     expect(adopt()).toBe(false);
   });
 
@@ -420,33 +422,39 @@ describe("accepted continuation status delivery", () => {
         }),
       ).rejects.toThrow("queue unavailable");
 
-      expect(settle).toHaveBeenCalledExactlyOnceWith(
-        failurePosition === "after" ? "delivered" : "cancelled",
-      );
+      expect(settle).toHaveBeenCalledExactlyOnceWith(failurePosition === "after");
       expect(adopt()).toBe(false);
     },
   );
 
-  it("settles a successful silent continuation without delivering a status", async () => {
-    const settle = vi.fn(async () => {});
-    const dispatcher = createReplyDispatcher({ deliver: vi.fn() });
+  it.each(["empty", "silent"] as const)(
+    "settles an accepted continuation after a %s final without a status",
+    async (outcome) => {
+      const settle = vi.fn(async () => {});
+      const dispatcher = createReplyDispatcher({ deliver: vi.fn() });
 
-    await withReplyDispatcher({
-      dispatcher,
-      run: () =>
-        dispatchReplyFromConfig({
-          ctx: createHookCtx(),
-          cfg: emptyConfig,
-          dispatcher,
-          replyResolver: async (_ctx, opts) => {
-            opts?.onPendingContinuation?.({ settle });
-            return undefined;
-          },
-        }),
-    });
+      await withReplyDispatcher({
+        dispatcher,
+        run: () =>
+          dispatchReplyFromConfig({
+            ctx: createHookCtx(),
+            cfg: emptyConfig,
+            dispatcher,
+            replyResolver: async (_ctx, opts) => {
+              const runState = resolveReplyOperationRunState(opts);
+              if (!runState) {
+                throw new Error("expected reply operation run state");
+              }
+              runState.replyCompletion = resolveReplyCompletion("required", outcome);
+              opts?.onPendingContinuation?.({ settle });
+              return undefined;
+            },
+          }),
+      });
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith("silent");
-  });
+      expect(settle).toHaveBeenCalledExactlyOnceWith(outcome === "silent");
+    },
+  );
 
   it.each(["resolver", "session metadata"])(
     "releases an accepted continuation when %s fails before finalization",
@@ -482,7 +490,7 @@ describe("accepted continuation status delivery", () => {
         }),
       ).rejects.toThrow(failure);
 
-      expect(settle).toHaveBeenCalledExactlyOnceWith("cancelled");
+      expect(settle).toHaveBeenCalledExactlyOnceWith(false);
     },
   );
 
@@ -520,7 +528,7 @@ describe("accepted continuation status delivery", () => {
       }),
     ).rejects.toThrow("commentary delivery unavailable");
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith("cancelled");
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it("releases an accepted continuation when session-writer delivery is revoked", async () => {
@@ -575,7 +583,7 @@ describe("accepted continuation status delivery", () => {
         }),
     });
 
-    expect(settle).toHaveBeenCalledExactlyOnceWith("cancelled");
+    expect(settle).toHaveBeenCalledExactlyOnceWith(false);
     expect(adopt()).toBe(false);
   });
 

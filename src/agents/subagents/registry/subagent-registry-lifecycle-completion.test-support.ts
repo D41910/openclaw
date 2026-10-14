@@ -396,6 +396,7 @@ export function makeKilledSubagentCompletion(
   return makeSubagentCompletion(entry, {
     outcome: { status: "error", error: "agent run aborted" },
     reason: SUBAGENT_ENDED_REASON_KILLED,
+    terminalReply: undefined,
     ...overrides,
   });
 }
@@ -408,6 +409,7 @@ export function makeInterruptedSubagentCompletion(
     outcome: { status: "error", error: "restart interrupted run" },
     reason: SUBAGENT_ENDED_REASON_ERROR,
     recoverInterrupted: true,
+    terminalReply: undefined,
     ...overrides,
   });
 }
@@ -499,7 +501,7 @@ export function registerNativeCompletionAuthorityTest({
         },
       });
       const pending = completeRun(controller, entry, {
-        terminalReply: { disposition: "visible", text: "old result" },
+        terminalReply: undefined,
         triggerCleanup: false,
         recoveryCurrent: {
           prepare: async () => true,

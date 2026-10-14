@@ -164,11 +164,16 @@ describe("resolveFollowupDeliveryDecision", () => {
           execution,
           accounting: createAccounting(privatePartial ? [{ text: "Private partial output." }] : []),
         }),
-      ).toMatchObject(
-        yieldAcknowledgment
-          ? { kind: "deliver", payloads: [{ text: yieldAcknowledgment }] }
-          : { kind: "suppress", reason: "silent" },
-      );
+      ).toMatchObject({
+        kind: "deliver",
+        payloads: [
+          {
+            text:
+              yieldAcknowledgment ??
+              "I’m continuing this work and will send the result when it is ready.",
+          },
+        ],
+      });
     },
   );
 
