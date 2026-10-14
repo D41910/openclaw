@@ -48,6 +48,32 @@ describe("Gateway Claw Add plan", () => {
     expect(pinned.planIntegrity).toBe(first.planIntegrity);
   });
 
+  it("allocates copy 11 after copy 10 and gives it the numbered display name", async () => {
+    const stateDir = tempDirs.make("openclaw-claws-double-digit-add-");
+    vi.stubEnv("OPENCLAW_STATE_DIR", stateDir);
+    const source = await readClawManifestFile(
+      path.resolve("src/claws/fixtures/workspace-agent.claw.json"),
+    );
+    expect(source.ok).toBe(true);
+    if (!source.ok) {
+      return;
+    }
+    const config = {
+      agents: {
+        entries: {
+          "workspace-agent": { name: "Workspace Agent" },
+          "workspace-agent-10": { name: "Workspace Agent 10" },
+        },
+      },
+    };
+
+    const plan = await buildGatewayClawAddPlan(source, { config, sourceMcpServers: {} });
+
+    expect(plan.agent.finalId).toBe("workspace-agent-11");
+    expect(plan.agent.config.name).toBe("Workspace Agent 11");
+    expect(plan.blockers).toEqual([]);
+  });
+
   it("uses the canonical planner and keeps source paths out of reviewed facts", async () => {
     const fixture = path.resolve("src/claws/fixtures/workspace-agent.claw.json");
     const source = await readClawManifestFile(fixture);

@@ -13,7 +13,7 @@ import { normalizeWindowsPathForComparison } from "../infra/path-guards.js";
 import type { PluginInstallBatchReload } from "../plugins/install-runtime-batch.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { readAgentDeletionJournal } from "../state/agent-deletion-journal.js";
+import { readAgentDeletionJournalAsync } from "../state/agent-deletion-journal.js";
 import { resolveUserPath } from "../utils.js";
 import { addClawAgentToConfig } from "./add-agent-config.js";
 import { ClawAddMutationError } from "./add-mutation-error.js";
@@ -363,7 +363,7 @@ export async function stageClawAddHostRequirementsStateless(
           stageOptions(),
         );
         workspaceBeforeExposure = await workspaceIdentity(workspace);
-        const deletion = readAgentDeletionJournal(plan.agent.finalId, {}, "runtime");
+        const deletion = await readAgentDeletionJournalAsync(plan.agent.finalId);
         if (deletion && !deletion.cleanupCompleted) {
           throw new ClawAddMutationError(
             "agent_deletion_pending",
