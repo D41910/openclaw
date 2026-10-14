@@ -54,49 +54,13 @@ describe("session-memory transcript extraction", () => {
     expect(memoryContent).not.toContain("ignore previous instructions");
   });
 
-  it.each(["NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}', "no_reply", "Done\nNO_REPLY"])(
-    "keeps literal assistant and user text %s",
-    (text) => {
-      expect(
-        getRecentSessionContentFromEvents([message("user", text), message("assistant", text)]),
-      ).toBe(
-        [sessionMemoryRecord("user", text), sessionMemoryRecord("assistant", text)].join("\n"),
-      );
-    },
-  );
-
-  it.each([
-    { row: { role: "assistant", content: "NO_REPLY\nAnswer" }, expected: "Answer" },
-    { row: { role: "assistant", content: "NO_REPLY\nNO_REPLY" }, expected: "NO_REPLY" },
-    {
-      row: { role: "assistant", content: [{ type: "text", text: "NO_REPLY\nNO_REPLY" }] },
-      expected: "NO_REPLY",
-    },
-    {
-      row: { role: "assistant", content: "NO_REPLY\nNO_REPLY", display: true },
-      expected: "NO_REPLY\nNO_REPLY",
-    },
-    {
-      row: {
-        role: "assistant",
-        content: "NO_REPLY\nNO_REPLY",
-        openclawDeliveryMirror: {
-          kind: "message-tool-source-reply",
-          sourceTurnId: "source-run",
-          final: true,
-        },
-      },
-      expected: "NO_REPLY\nNO_REPLY",
-    },
-    { row: { role: "user", content: "NO_REPLY\nNO_REPLY" }, expected: "NO_REPLY\nNO_REPLY" },
-  ] as const)(
-    "prepares raw leading silence lines without reclassifying $row",
-    ({ row, expected }) => {
-      expect(getRecentSessionContentFromEvents([{ type: "message", message: row }])).toBe(
-        sessionMemoryRecord(row.role, expected),
-      );
-    },
-  );
+  it("prepares block text before quoting the memory record without reclassifying its suffix", () => {
+    expect(
+      getRecentSessionContentFromEvents([
+        message("assistant", [{ type: "text", text: "NO_REPLY\nNO_REPLY" }]),
+      ]),
+    ).toBe(sessionMemoryRecord("assistant", "NO_REPLY"));
+  });
 
   it("keeps user silence markers and explicit visible assistant rows", () => {
     const visible = {

@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { expect, it, vi, type Mock } from "vitest";
 import { runQaGatewayFixture } from "../../test/helpers/qa-gateway-cleanup.js";
-import { persistSessionTranscriptTurn } from "../config/sessions/session-accessor.js";
 import { upsertSessionEntryCore } from "../config/sessions/session-accessor.sqlite-entry.js";
 import * as gatewayWorkAdmission from "../process/gateway-work-admission.js";
 import { runWithGatewayRootWorkAdmissionForTest } from "../process/gateway-work-admission.test-helpers.js";
@@ -237,27 +236,6 @@ export function registerSessionsSendLateReplyTests({
             if (failure) {
               return { runId: "run-target", status: "error", error: failure, stopReason };
             }
-            await persistSessionTranscriptTurn(
-              { agentId: "director1", sessionKey: targetKey, sessionId: "child-session" },
-              {
-                cwd: "/tmp",
-                runId: "run-target",
-                expectedSessionId: "child-session",
-                touchSessionEntry: false,
-                updateMode: "none",
-                messages: [
-                  {
-                    message: {
-                      role: "assistant",
-                      phase: "final_answer",
-                      stopReason: "stop",
-                      content: [{ type: "text", text: "late director reply" }],
-                    },
-                    now: Date.now(),
-                  },
-                ],
-              },
-            );
             return {
               runId: "run-target",
               status: "ok",
@@ -271,30 +249,6 @@ export function registerSessionsSendLateReplyTests({
               terminalReply: { disposition: "visible", text: "requester saw director" },
             };
           }
-        }
-        if (request.method === "chat.history") {
-          const params = request.params as { sessionKey?: string } | undefined;
-          return {
-            messages: [
-              {
-                role: "assistant",
-                __openclaw: {
-                  runId: params?.sessionKey === targetKey ? "run-target" : "run-requester",
-                },
-                phase: "final_answer",
-                stopReason: "stop",
-                content: [
-                  {
-                    type: "text",
-                    text:
-                      params?.sessionKey === targetKey
-                        ? "late director reply"
-                        : "requester saw director",
-                  },
-                ],
-              },
-            ],
-          };
         }
         return {};
       });

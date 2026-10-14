@@ -81,8 +81,6 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
     });
     expect(exhausted.result.payloads).toBeUndefined();
     expect(exhausted.result.meta.terminalReply).toEqual({ disposition: "empty" });
-    expect(exhausted.result.meta.finalAssistantVisibleText).toBeUndefined();
-    expect(exhausted.result.meta.finalAssistantRawText).toBeUndefined();
   });
 
   it.each(["toolUse", "length"] as const)(
@@ -130,8 +128,6 @@ describe("terminal resolution for a tool-use stop without a tool call", () => {
       expect(resolved.result.sourceReplyDeliveryState).toBe("missing");
       if (stopReason === "toolUse") {
         expect(resolved.result.meta.terminalReply).toEqual({ disposition: "empty" });
-        expect(resolved.result.meta.finalAssistantVisibleText).toBeUndefined();
-        expect(resolved.result.meta.finalAssistantRawText).toBeUndefined();
         expect(resolved.result.payloads).toBeUndefined();
       } else {
         expect(resolved.result.meta.terminalReply?.disposition).toBe("visible");

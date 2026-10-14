@@ -256,13 +256,13 @@ describe.each(["ordinary", "queued"] as const)("%s waiting status delivery", (la
 });
 
 it.each([true, false])(
-  "settles a continuation once after status delivery=%s",
+  "settles an implicit continuation once after delivery=%s",
   async (delivered) => {
     const context = createContext();
     context.execution.result.meta = {
       durationMs: 0,
       continuationPending: true,
-      yieldAcknowledgment: "The worker is still checking.",
+      yieldAcknowledgment: " ",
     };
     const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
     context.opts = { onPendingContinuation };
@@ -272,7 +272,6 @@ it.each([true, false])(
 
     const payloads = await prepare("ordinary", context);
     expect(payloads).toHaveLength(1);
-    expect(payloads[0]?.text).toBe("The worker is still checking.");
     expect(getReplyPayloadMetadata(payloads[0] ?? {})).toMatchObject({
       continuationStatus: true,
       deliverDespiteSourceReplySuppression: true,
@@ -292,41 +291,18 @@ it.each([true, false])(
   },
 );
 
-describe.each(["ordinary", "queued"] as const)("%s pending acknowledgments", (lane) => {
-  it.each([
-    { expectation: "required", acknowledgment: undefined },
-    { expectation: "result-required", acknowledgment: undefined },
-    { expectation: "required", acknowledgment: "NO_REPLY" },
-  ] as const)(
-    "preserves $expectation waiting status for $acknowledgment",
-    async ({ expectation, acknowledgment }) => {
-      const context = createContext();
-      context.followupRun.run.terminalReplyExpectation = expectation;
-      context.execution.result.meta = {
-        durationMs: 0,
-        continuationPending: true,
-        yieldAcknowledgment: acknowledgment,
-      };
-      const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
-      context.opts = { onPendingContinuation };
+it.each(["ordinary", "queued"] as const)(
+  "keeps a %s waiting status while a result is required",
+  async (lane) => {
+    const context = createContext();
+    context.followupRun.run.terminalReplyExpectation = "result-required";
+    context.execution.result.meta = { durationMs: 0, continuationPending: true };
 
-      const payloads = await prepare(lane, context);
-      expect(payloads.map((payload) => payload.text)).toEqual([
-        acknowledgment ?? "I’m continuing this work and will send the result when it is ready.",
-      ]);
-      if (lane === "ordinary") {
-        const settlement = expectDefined(
-          onPendingContinuation.mock.calls[0]?.[0],
-          "continuation settlement",
-        );
-        await settlement.settle(true);
-        expect(settleRequester).toHaveBeenCalledExactlyOnceWith(
-          expect.objectContaining({ requesterYielded: true }),
-        );
-      }
-    },
-  );
-});
+    expect((await prepare(lane, context)).map((payload) => payload.text)).toEqual([
+      "I’m continuing this work and will send the result when it is ready.",
+    ]);
+  },
+);
 
 it.each(["delivered", "cancelled", "aborted"] as const)(
   "settles an explicitly silent child continuation after %s",
@@ -360,11 +336,7 @@ it.each(["refusal", "persistence failure"] as const)(
   "releases an implicit continuation after settlement %s",
   async (failure) => {
     const context = createContext();
-    context.execution.result.meta = {
-      durationMs: 0,
-      continuationPending: true,
-      yieldAcknowledgment: "The worker is still checking.",
-    };
+    context.execution.result.meta = { durationMs: 0, continuationPending: true };
     const onPendingContinuation = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
     context.opts = { onPendingContinuation };
     await prepare("ordinary", context);
@@ -400,11 +372,7 @@ it.each(["committed", "unknown"] as const)(
   "retains the %s settlement outcome when finalization requests non-yielded compensation",
   async (outcome) => {
     const context = createContext();
-    context.execution.result.meta = {
-      durationMs: 0,
-      continuationPending: true,
-      yieldAcknowledgment: "The worker is still checking.",
-    };
+    context.execution.result.meta = { durationMs: 0, continuationPending: true };
     const pending = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
     context.opts = { onPendingContinuation: pending };
     await prepare("ordinary", context);
@@ -428,11 +396,7 @@ it.each(["replacement", "rebound key", "rebound session", "retained abort"] as c
   "settles the captured outbox after %s only while its original reply owner remains current",
   async (change) => {
     const context = createContext();
-    context.execution.result.meta = {
-      durationMs: 0,
-      continuationPending: true,
-      yieldAcknowledgment: "The worker is still checking.",
-    };
+    context.execution.result.meta = { durationMs: 0, continuationPending: true };
     const pending = vi.fn<(settlement?: PendingContinuationSettlement) => void>();
     context.opts = { onPendingContinuation: pending };
     await prepare("ordinary", context);

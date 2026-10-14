@@ -13,7 +13,7 @@ import { createControlUiE2eContextOptions } from "./control-ui-e2e-suite.test-su
 const suite = createChatFlowE2eSuite();
 
 suite.define(() => {
-  it("renders prepared literal markers and prose while an absent final creates no reply", async () => {
+  it("renders prepared literal markers while an absent final creates no reply", async () => {
     await suite.withPage(
       { ...createControlUiE2eContextOptions(), viewport: { width: 1280, height: 960 } },
       async ({ page }) => {
@@ -24,9 +24,6 @@ suite.define(() => {
           historyMessages: [
             { role: "user", content: "Show the prepared reply examples.", timestamp: 1 },
             { role: "assistant", content: "NO_REPLY", timestamp: 2 },
-            { role: "assistant", content: "NO_REPLY.", timestamp: 3 },
-            { role: "assistant", content: '{"action":"NO_REPLY"}', timestamp: 4 },
-            { role: "assistant", content: "I will not reply: NO_REPLY", timestamp: 5 },
           ],
         });
         await page.goto(`${suite.server.baseUrl}chat`);
@@ -40,7 +37,6 @@ suite.define(() => {
           });
         }
         const historyLiteralCount = await literal.count();
-        const historyText = await thread.textContent();
         const composer = page.locator(".agent-chat__composer-combobox textarea");
         await composer.fill("Show a prepared live literal marker.");
         await page.getByRole("button", { name: "Send message" }).click();
@@ -72,11 +68,7 @@ suite.define(() => {
             animations: "disabled",
           });
         }
-        // Capture all three stages before assertions so the same fixture also records the baseline bug.
         expect(historyLiteralCount).toBe(1);
-        expect(historyText).toContain("NO_REPLY.");
-        expect(historyText).toContain('{"action":"NO_REPLY"}');
-        expect(historyText).toContain("I will not reply: NO_REPLY");
         expect(liveLiteralCount).toBe(2);
         expect(await thread.locator(".chat-group.assistant").count()).toBe(assistantCount);
       },

@@ -186,58 +186,60 @@ export function registerWaitingStatusCases({
       delivered: true,
     },
     { label: "a failed run", acceptedSessionSpawns: [], delivered: false },
-  ])("hands the progress card to a media-run continuation with $label", async (scenario) => {
-    const { acceptedSessionSpawns, runtimePolicySessionKey, delivered } = scenario;
-    onTestFinished(resetGeneratedMediaTaskActivityForTests);
-    let handle: MediaGenerationTaskHandle | undefined;
-    runEmbeddedAgentMock.mockImplementationOnce(async (params: RunEmbeddedAgentInternalParams) => {
-      assert(params.preparedRunAdmission);
-      assert(params.sessionKey);
-      await params.preparedRunAdmission.admit("embedded");
-      // Media tools admit their runs under the attempt's sandbox (runtime policy) key.
-      handle = admitMediaHandle({
-        taskId: "waiting-image",
-        runId: `tool:image_generate:${randomUUID()}`,
-        requesterSessionKey: params.sandboxSessionKey ?? params.sessionKey,
-        requesterAgentId: params.agentId,
-        taskLabel: "waiting image",
-      });
-      return {
-        payloads: [],
-        meta: {
-          durationMs: 0,
-          continuationPending: true,
+  ])(
+    "hands the progress card to a media-run continuation with $label",
+    async ({ acceptedSessionSpawns, runtimePolicySessionKey, delivered }) => {
+      onTestFinished(resetGeneratedMediaTaskActivityForTests);
+      let handle: MediaGenerationTaskHandle | undefined;
+      runEmbeddedAgentMock.mockImplementationOnce(
+        async (params: RunEmbeddedAgentInternalParams) => {
+          assert(params.preparedRunAdmission);
+          assert(params.sessionKey);
+          await params.preparedRunAdmission.admit("embedded");
+          // Media tools admit their runs under the attempt's sandbox (runtime policy) key.
+          handle = admitMediaHandle({
+            taskId: "waiting-image",
+            runId: `tool:image_generate:${randomUUID()}`,
+            requesterSessionKey: params.sandboxSessionKey ?? params.sessionKey,
+            requesterAgentId: params.agentId,
+            taskLabel: "waiting image",
+          });
+          return {
+            payloads: [],
+            meta: { durationMs: 0, continuationPending: true },
+            acceptedSessionSpawns,
+          };
         },
-        acceptedSessionSpawns,
-      };
-    });
-    const onPendingContinuation = vi.fn();
-    const { run } = createMinimalRun({
-      opts: { onPendingContinuation },
-      runtimePolicySessionKey,
-    });
+      );
+      const onPendingContinuation = vi.fn();
+      const { run } = createMinimalRun({
+        opts: { onPendingContinuation },
+        runtimePolicySessionKey,
+      });
 
-    const result = await run();
-    assert(handle);
-    expect(result).toMatchObject({
-      text: "I’m continuing this work and will send the result when it is ready.",
-    });
-    assert(result && !Array.isArray(result) && handle);
-    const draft = { push: vi.fn(), retire: vi.fn() };
-    expect(getReplyPayloadMetadata(result)?.progressContinuation?.adopt(draft)).toBe(true);
-    const item = { itemId: handle.runId, kind: "subagent", title: "Image generation" };
-    expect(draft.push.mock.calls).toEqual([[{ ...item, phase: "update", status: "running" }]]);
-    const lifecycle = createMediaGenerationTaskLifecycle("image");
-    if (delivered) {
-      lifecycle.completeTaskRun({ handle, provider: "fixture", model: "fixture", count: 1 });
-      expect(draft.retire).toHaveBeenCalledOnce();
-    } else {
-      // An undelivered result keeps the card as the chat's visible outcome.
-      lifecycle.failTaskRun({ handle, error: new Error("provider failed") });
-      expect(draft.push.mock.calls.at(-1)).toEqual([{ ...item, phase: "end", status: "failed" }]);
-      expect(draft.retire).not.toHaveBeenCalled();
-    }
-  });
+      const result = await run();
+      expect(result).toMatchObject({
+        text: "I’m continuing this work and will send the result when it is ready.",
+      });
+      // Delivering the status must not require a child that never owns the reply.
+      await onPendingContinuation.mock.calls[0]?.[0]?.settle(true);
+      assert(result && !Array.isArray(result) && handle);
+      const draft = { push: vi.fn(), retire: vi.fn() };
+      expect(getReplyPayloadMetadata(result)?.progressContinuation?.adopt(draft)).toBe(true);
+      const item = { itemId: handle.runId, kind: "subagent", title: "Image generation" };
+      expect(draft.push.mock.calls).toEqual([[{ ...item, phase: "update", status: "running" }]]);
+      const lifecycle = createMediaGenerationTaskLifecycle("image");
+      if (delivered) {
+        lifecycle.completeTaskRun({ handle, provider: "fixture", model: "fixture", count: 1 });
+        expect(draft.retire).toHaveBeenCalledOnce();
+      } else {
+        // An undelivered result keeps the card as the chat's visible outcome.
+        lifecycle.failTaskRun({ handle, error: new Error("provider failed") });
+        expect(draft.push.mock.calls.at(-1)).toEqual([{ ...item, phase: "end", status: "failed" }]);
+        expect(draft.retire).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it.each([false, true])(
     "uses direct delivery completeness at settlement for waiting status (complete=%s)",

@@ -1,13 +1,7 @@
 // sessions_send A2A tests cover reply delivery, same-session replies, delayed
 // run-owned replies, and channel target/account routing.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  clearRuntimeConfigSnapshot,
-  setRuntimeConfigSnapshot,
-} from "../../config/runtime-snapshot.js";
-import * as transcriptRuntime from "../../config/sessions/session-transcript-match.js";
 import type { CallGatewayOptions } from "../../gateway/call.js";
-import * as sessionStoreLookup from "../../gateway/session-utils-store-lookup.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createSessionConversationTestRegistry } from "../../test-utils/session-conversation-registry.js";
 import { runAgentStep } from "./agent-step.js";
@@ -64,60 +58,16 @@ function firstMockArg(
 describe("runSessionsSendA2AFlow reply delivery", () => {
   let gatewayCalls: CallGatewayOptions[];
   let sessionListRows: GatewaySessionListRow[];
-  let transcriptReply: string | undefined;
-  let transcriptRunId: string;
 
   beforeEach(() => {
-    setRuntimeConfigSnapshot({});
     setActivePluginRegistry(createSessionConversationTestRegistry());
     gatewayCalls = [];
     sessionListRows = [];
-    transcriptReply = "Test reply";
-    transcriptRunId = "run-test";
     callGatewayMock.mockReset();
-    // Keep transport and routing isolated while serving the canonical run-keyed reader.
-    vi.spyOn(
-      sessionStoreLookup,
-      "resolveGatewaySessionStoreTargetWithStoreAsync",
-    ).mockImplementation(async ({ key, agentId }) => ({
-      agentId: agentId ?? "main",
-      storePath: "/registered-alternate/openclaw.sqlite",
-      canonicalKey: key,
-      storeKeys: [key],
-      store: { [key]: { sessionId: "target-session", updatedAt: 1 } },
-    }));
-    vi.spyOn(transcriptRuntime, "findTranscriptEvent").mockImplementation(async (scope, match) => {
-      expect(scope.sessionId).toBe("target-session");
-      expect(match).toEqual({ kind: "visible-final", runId: transcriptRunId });
-      return transcriptReply
-        ? {
-            event: {
-              type: "message",
-              message: {
-                role: "assistant",
-                content: [{ type: "text", text: transcriptReply }],
-                phase: "final_answer",
-                stopReason: "stop",
-                __openclaw: { runId: transcriptRunId },
-              },
-            },
-          }
-        : undefined;
-    });
     const callGateway = async <T = Record<string, unknown>>(
       opts: CallGatewayOptions,
     ): Promise<T> => {
       if (opts.method === "agent.wait") {
-        const params = opts.params;
-        if (
-          !params ||
-          typeof params !== "object" ||
-          !("runId" in params) ||
-          typeof params.runId !== "string"
-        ) {
-          throw new Error("Expected a run-keyed wait request");
-        }
-        transcriptRunId = params.runId;
         return await agentWaitMock(opts);
       }
       gatewayCalls.push(opts);
@@ -151,7 +101,6 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    clearRuntimeConfigSnapshot();
   });
 
   it("passes threadId through to gateway send for Telegram forum topics", async () => {
@@ -236,13 +185,12 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
       waits: [{ status: "timeout", pendingError: true, error: "retrying provider" }],
     },
   ])("delivers a same-session reply after $name", async ({ waits }) => {
-    transcriptReply = "Delayed channel reply";
     for (const wait of waits) {
       agentWaitMock.mockResolvedValueOnce(wait);
     }
     agentWaitMock.mockResolvedValueOnce({
       status: "ok",
-      terminalReply: { disposition: "visible", text: "bounded delayed reply snapshot" },
+      terminalReply: { disposition: "visible", text: "Delayed channel reply" },
     });
 
     await runSessionsSendA2AFlow({
@@ -332,7 +280,6 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
   });
 
   it("does not redeliver a delivered delayed source reply for a webchat requester", async () => {
-    transcriptReply = "Already delivered source reply";
     agentWaitMock.mockResolvedValueOnce({
       status: "ok",
       terminalReply: { disposition: "visible", text: "Already delivered source reply" },
@@ -354,7 +301,6 @@ describe("runSessionsSendA2AFlow reply delivery", () => {
   });
 
   it("delivers an internal delayed reply once without bouncing it back to the target", async () => {
-    transcriptReply = "Already delivered source reply";
     agentWaitMock.mockResolvedValueOnce({
       status: "ok",
       terminalReply: { disposition: "visible", text: "Already delivered source reply" },

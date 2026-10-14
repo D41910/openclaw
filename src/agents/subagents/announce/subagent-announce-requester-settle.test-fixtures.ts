@@ -143,7 +143,13 @@ export function createRequesterSettleCases() {
     ),
     settleCase(
       "records a non-yielded visible final without requiring a reply",
-      { payloads: [{ text: finalText }], meta: { finalAssistantVisibleText: finalText } },
+      {
+        payloads: [{ text: finalText }],
+        meta: {
+          finalAssistantVisibleText: finalText,
+          terminalReply: { disposition: "visible", text: finalText },
+        },
+      },
       {
         ...visibleFinal,
         routes: localSettleRoutes,

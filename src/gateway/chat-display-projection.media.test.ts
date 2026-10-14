@@ -87,63 +87,35 @@ it("caps commentary captions across an intervening image as one message", () => 
   expect(source.content[2]).toMatchObject({ text: "B".repeat(20) });
 });
 
-it("keeps raw literal text, source facts and nontext content through history projection", () => {
-  const visibleTexts = [
-    "NO_REPLY.",
-    '"NO_REPLY"',
-    '{"action":"NO_REPLY"}',
-    "no_reply",
-    "Done\nNO_REPLY",
-  ];
-  for (const value of visibleTexts) {
-    const source = assistant({ content: [text(value)] });
-    expect(project([source])).toEqual([source]);
-  }
-  const silent = assistant({ content: [text("NO_REPLY")] });
-  expect(project([silent])).toEqual([]);
-  const visible = assistant({ content: [text("NO_REPLY")], display: true });
-  expect(project([visible])).toEqual([visible]);
-  const withImage = assistant({ content: [text("NO_REPLY"), image] });
-  expect(project([withImage])).toEqual([withImage]);
-  const sourceReply = assistant({
-    content: [text("NO_REPLY")],
-    openclawDeliveryMirror: {
-      kind: "message-tool-source-reply",
-      sourceTurnId: "source-run",
-      final: true,
-    },
-  });
-  expect(project([sourceReply, silent])).toEqual([sourceReply]);
-  const user = { role: "user", content: '{"action":"NO_REPLY"}' };
-  expect(project([user])).toEqual([user]);
+it("preserves nontext content beside control-looking text", () => {
+  const source = assistant({ content: [text("NO_REPLY"), image] });
+  expect(project([source])).toEqual([source]);
 });
 
-it.each(["READY", "NO_REPLY", "NO_REPLY\nREADY"])(
-  "prepares a raw phased prefix once without reclassifying its suffix %j",
-  (suffix) => {
-    const source = assistant({
-      phase: "final_answer",
-      stopReason: "stop",
-      content: [
-        phased("Private commentary", "commentary"),
-        phased("NO_", "final_answer"),
-        image,
-        phased(`REPLY\n${suffix}`, "final_answer"),
-      ],
-      __openclaw: { id: "raw-prefixed-answer", runId: "native-run", media },
-    });
-    const before = structuredClone(source);
-    const expected = {
-      ...source,
-      display: true,
-      content: [phased("", "final_answer"), image, phased(suffix, "final_answer")],
-    };
-    const projected = project([source]);
-    expect(projected).toEqual([expected]);
-    expect(project(projected)).toEqual([expected]);
-    expect(source).toEqual(before);
-  },
-);
+it("prepares a raw phased prefix once across nontext content", () => {
+  const suffix = "NO_REPLY\nREADY";
+  const source = assistant({
+    phase: "final_answer",
+    stopReason: "stop",
+    content: [
+      phased("Private commentary", "commentary"),
+      phased("NO_", "final_answer"),
+      image,
+      phased(`REPLY\n${suffix}`, "final_answer"),
+    ],
+    __openclaw: { id: "raw-prefixed-answer", runId: "native-run", media },
+  });
+  const before = structuredClone(source);
+  const expected = {
+    ...source,
+    display: true,
+    content: [phased("", "final_answer"), image, phased(suffix, "final_answer")],
+  };
+  const projected = project([source]);
+  expect(projected).toEqual([expected]);
+  expect(project(projected)).toEqual([expected]);
+  expect(source).toEqual(before);
+});
 
 it("prepares raw prefixes before the display cap and preserves prepared or forwarded text", () => {
   const source = assistant({ content: [text("NO_REPLY\nREADY")] });

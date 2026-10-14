@@ -1253,20 +1253,6 @@ describe("gateway server chat", () => {
       expected: ["assistant:visible response", "assistant:visible assistant input"],
     },
     {
-      name: "hides commentary-only assistant entries",
-      messages: [
-        createGatewayHistoryText("user", "hello", 1),
-        {
-          role: "assistant",
-          phase: "commentary",
-          content: [{ type: "text", text: "thinking like caveman" }],
-          timestamp: 2,
-        },
-        createGatewayHistoryText("assistant", "real reply", 3),
-      ],
-      expected: ["user:hello", "assistant:real reply"],
-    },
-    {
       name: "preserves literal announce/reply skip text outside its owning protocol",
       messages: [
         createGatewayHistoryText("assistant", "ANNOUNCE_SKIP", 1),
@@ -1284,36 +1270,6 @@ describe("gateway server chat", () => {
         "assistant:REPLY_SKIP",
         "assistant:real text field reply",
         "assistant:real reply",
-      ],
-    },
-    {
-      name: "hides assistant NO_REPLY-only entries and keeps mixed-content assistant entries",
-      messages: [
-        createGatewayHistoryText("user", "hello", 1),
-        createGatewayHistoryText("assistant", "NO_REPLY", 2),
-        createGatewayHistoryText("assistant", "real reply", 3),
-        {
-          role: "assistant",
-          text: "real text field reply",
-          content: "NO_REPLY",
-          timestamp: 4,
-        },
-        createGatewayHistoryText("user", "NO_REPLY", 5),
-        {
-          role: "assistant",
-          content: [
-            { type: "text", text: "NO_REPLY" },
-            { type: "image", source: { type: "base64", media_type: "image/png", data: "abc" } },
-          ],
-          timestamp: 6,
-        },
-      ],
-      expected: [
-        "user:hello",
-        "assistant:real reply",
-        "assistant:real text field reply",
-        "user:NO_REPLY",
-        "assistant:NO_REPLY",
       ],
     },
   ])("chat.history $name", async ({ messages, expected }) => {

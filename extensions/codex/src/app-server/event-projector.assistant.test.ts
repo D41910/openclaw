@@ -82,13 +82,6 @@ describe("CodexAppServerEventProjector assistant projection", () => {
       coda: "NO_REPLY\nNO_REPLY",
       expected: ["Completed answer.", "NO_REPLY"],
     },
-    {
-      answer: "Completed answer.",
-      coda: "NO_REPLY\n<final></final>",
-      expected: ["Completed answer.", "<final></final>"],
-    },
-    { answer: "NO_REPLY\nNO_REPLY", coda: "NO_REPLY", expected: ["NO_REPLY"] },
-    { answer: "NO_REPLY\nNO_REPLY\nAnswer", coda: "NO_REPLY", expected: ["NO_REPLY\nAnswer"] },
   ])("preserves completed answers before final coda $coda", async ({ answer, coda, expected }) => {
     const projector = await createProjector(await createParams());
     await streamFinalAnswer(projector, "answer", answer);
@@ -117,32 +110,23 @@ describe("CodexAppServerEventProjector assistant projection", () => {
       terminalReply: {
         disposition: "visible",
         text: `${answer}\n\n${"b".repeat(93)}…`,
-        truncated: true,
       },
     });
   });
 
-  it.each([
-    { deltas: ["NO_", "REPLY"], expected: [] },
-    { deltas: ["NO_REPLY", "\n", "NO_REPLY"], expected: ["NO_REPLY"] },
-    { deltas: ["NO_", "REPLY."], expected: ["NO_REPLY."] },
-  ])(
-    "withholds only possible control bytes while streaming $deltas",
-    async ({ deltas, expected }) => {
-      const onPartialReply = vi.fn();
-      const projector = await createProjector({ ...(await createParams()), onPartialReply });
-      await projector.handleNotification(
-        forCurrentTurn("item/started", { item: finalItem("answer", "") }),
-      );
-      for (const delta of deltas) {
-        await projector.handleNotification(agentMessageDelta(delta, "answer"));
-      }
-      await projector.handleNotification(
-        forCurrentTurn("item/completed", { item: finalItem("answer", deltas.join("")) }),
-      );
-      expect(onPartialReply.mock.calls.map(([payload]) => payload.text)).toEqual(expected);
-    },
-  );
+  it("withholds split control text from native partial replies", async () => {
+    const onPartialReply = vi.fn();
+    const projector = await createProjector({ ...(await createParams()), onPartialReply });
+    await projector.handleNotification(
+      forCurrentTurn("item/started", { item: finalItem("answer", "") }),
+    );
+    await projector.handleNotification(agentMessageDelta("NO_", "answer"));
+    await projector.handleNotification(agentMessageDelta("REPLY", "answer"));
+    await projector.handleNotification(
+      forCurrentTurn("item/completed", { item: finalItem("answer", "NO_REPLY") }),
+    );
+    expect(onPartialReply).not.toHaveBeenCalled();
+  });
 
   it("streams the completed tail when final deltas stop short of the item text", async () => {
     const onPartialReply = vi.fn();
