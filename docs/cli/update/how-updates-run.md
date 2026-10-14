@@ -1114,7 +1114,24 @@ The same bounded wait applies if the owner exits or changes while Doctor waits;
 only acquiring the physical maintenance lock permits repair. Lost update
 authority or unresolved contention stops maintenance with recovery guidance.
 Ordinary Doctor commands and older update
-drivers without delegated Doctor authority retain their immediate refusal.
+drivers without delegated Doctor authority retain their immediate refusal for a
+Gateway holder.
+
+If another OpenClaw process that is not a Gateway holds state ownership when
+updater-run Doctor enters maintenance (for example a CLI or plugin command, an
+embedded agent run, or another Doctor), Doctor waits for it with the same
+11-minute allowance, with or without delegated Doctor authority. It prints which
+process and database it is waiting on, repeats progress every 30 seconds, and
+continues once ownership is released. The wait holds no OpenClaw lock, so the
+other process can finish. With the slowest measured update Doctor (258 s on 1 CPU
+with 10 MB/s disk), the wait stays well inside the 30-minute update step timeout.
+If the holder is still running afterward, maintenance stops with the holder's PID
+and the usual deferred-maintenance warning: let that process finish or stop it,
+then run `openclaw update repair`. A holder whose role was not recorded is treated
+as a Gateway. The wait is part of the new version's Doctor, so it applies to any
+update to a release that contains it, regardless of the installed updater's
+version. Manual `openclaw doctor --fix` keeps failing immediately so the operator
+can decide.
 
 An active Gateway suspension keeps installation changes under its host operation’s
 control. The installation watcher does not independently restart the Gateway

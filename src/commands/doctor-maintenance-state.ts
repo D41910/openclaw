@@ -221,6 +221,7 @@ export async function createDoctorMaintenanceState(options: {
           ...params,
           assertCurrent: options.assertCurrent,
           deadlineMs: options.deadline(),
+          signal: options.signal,
         },
       );
       await enterResources(acquired);
