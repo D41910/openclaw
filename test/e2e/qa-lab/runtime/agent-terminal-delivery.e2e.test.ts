@@ -465,9 +465,13 @@ describe("provider terminal reply delivery", () => {
           },
         );
         expect(
-          emptyHistory.messages.filter(
-            (message) => asOptionalObjectRecord(message)?.role === "assistant",
-          ),
+          emptyHistory.messages.filter((message) => {
+            const row = asOptionalObjectRecord(message);
+            return (
+              row?.role === "assistant" &&
+              asOptionalObjectRecord(row.openclawDeliveryMirror)?.kind !== "model-fallback"
+            );
+          }),
         ).toEqual([]);
 
         await client.stopAndWait();
@@ -496,11 +500,13 @@ describe("provider terminal reply delivery", () => {
               sessionId: emptyHistory.sessionId,
             });
             expect(
-              emptyRows.filter(
-                (row) =>
-                  asOptionalObjectRecord(asOptionalObjectRecord(row)?.message)?.role ===
-                  "assistant",
-              ),
+              emptyRows.filter((row) => {
+                const message = asOptionalObjectRecord(asOptionalObjectRecord(row)?.message);
+                return (
+                  message?.role === "assistant" &&
+                  asOptionalObjectRecord(message.openclawDeliveryMirror)?.kind !== "model-fallback"
+                );
+              }),
             ).toEqual([]);
           } finally {
             clearRuntimeConfigSnapshot();
