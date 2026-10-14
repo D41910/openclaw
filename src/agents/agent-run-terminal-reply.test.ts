@@ -3,7 +3,7 @@ import { resolveRawAssistantAnswerText } from "../shared/assistant-answer-text.j
 import {
   normalizeAgentRunTerminalReplySnapshot,
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
+  sanitizeAgentRunTerminalReply,
 } from "./agent-run-terminal-reply.js";
 
 describe("prepareAgentRunTerminalReply", () => {
@@ -74,7 +74,7 @@ describe("prepareAgentRunTerminalReply", () => {
 
   it("sanitizes known-visible tool-owned text without silence classification", () => {
     for (const text of ["NO_REPLY", "NO_REPLY\nAnswer"]) {
-      expect(sanitizeAgentRunTerminalReplyText(text)).toBe(text);
+      expect(sanitizeAgentRunTerminalReply(text)).toEqual({ disposition: "visible", text });
     }
   });
 
@@ -91,7 +91,24 @@ describe("prepareAgentRunTerminalReply", () => {
     expect(prepared.terminalReply.disposition).toBe("visible");
     if (prepared.terminalReply.disposition === "visible") {
       expect(prepared.terminalReply.text.length).toBeLessThanOrEqual(4_096);
+      expect(prepared.terminalReply.truncated).toBe(true);
       expect(prepared.terminalReply.text).toMatch(/^answer .*…$/);
     }
   });
+
+  it.each(["x".repeat(4_094) + "😀tail", "x".repeat(4_094) + "  tail"])(
+    "records actual cuts even when a Unicode or whitespace boundary shortens the snapshot",
+    (rawText) => {
+      const prepared = prepareAgentRunTerminalReply({ rawText });
+      expect(prepared.text).toBe(rawText);
+      expect(prepared.terminalReply).toEqual({
+        disposition: "visible",
+        text: "x".repeat(4_094) + "…",
+        truncated: true,
+      });
+      expect(normalizeAgentRunTerminalReplySnapshot(prepared.terminalReply)).toEqual(
+        prepared.terminalReply,
+      );
+    },
+  );
 });

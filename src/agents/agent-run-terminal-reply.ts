@@ -14,17 +14,22 @@ function isMessageToolNotCalledTerminalReply(
   return reply?.disposition === "empty" && reply.code === "message-tool-not-called";
 }
 
-/** Sanitizes and caps producer-owned text before it enters lifecycle or durable state. */
-export function sanitizeAgentRunTerminalReplyText(text: string): string {
-  return truncateWithMarker(
-    stripInternalMetadataForDisplay(text).trim(),
-    AGENT_RUN_TERMINAL_REPLY_MAX_CHARS,
-    {
-      marker: "…",
-      reserve: 1,
-      trimEnd: true,
-    },
-  );
+/** Sanitizes known-visible text and records whether the snapshot cap cuts it. */
+export function sanitizeAgentRunTerminalReply(rawText: string): AgentRunTerminalReplySnapshot {
+  const visibleText = stripInternalMetadataForDisplay(rawText).trim();
+  const text = truncateWithMarker(visibleText, AGENT_RUN_TERMINAL_REPLY_MAX_CHARS, {
+    marker: "…",
+    reserve: 1,
+    trimEnd: true,
+  });
+  if (!text) {
+    return { disposition: "empty" };
+  }
+  const snapshot: AgentRunTerminalReplySnapshot = { disposition: "visible", text };
+  if (visibleText.length > AGENT_RUN_TERMINAL_REPLY_MAX_CHARS) {
+    snapshot.truncated = true;
+  }
+  return snapshot;
 }
 
 export type PreparedAgentRunTerminalReply = {
@@ -41,12 +46,9 @@ export function prepareAgentRunTerminalReply(params: {
     return { text: "", terminalReply: { disposition: "silent" } };
   }
   const text = rawText.startsWith("NO_REPLY\n") ? rawText.slice("NO_REPLY\n".length) : rawText;
-  const snapshotText = sanitizeAgentRunTerminalReplyText(text);
   return {
     text,
-    terminalReply: snapshotText
-      ? { disposition: "visible", text: snapshotText }
-      : { disposition: "empty" },
+    terminalReply: sanitizeAgentRunTerminalReply(text),
   };
 }
 
@@ -74,11 +76,17 @@ export function normalizeAgentRunTerminalReplySnapshot(
   if (typeof rawText !== "string") {
     return undefined;
   }
-  const text = sanitizeAgentRunTerminalReplyText(rawText);
-  const modelRouteChange = normalizeAgentRunRouteChange(value.modelRouteChange);
-  return text
-    ? { disposition: "visible", text, ...(modelRouteChange ? { modelRouteChange } : {}) }
-    : { disposition: "empty" };
+  const snapshot = sanitizeAgentRunTerminalReply(rawText);
+  if (snapshot.disposition === "visible") {
+    if (value.truncated === true) {
+      snapshot.truncated = true;
+    }
+    const modelRouteChange = normalizeAgentRunRouteChange(value.modelRouteChange);
+    if (modelRouteChange) {
+      snapshot.modelRouteChange = modelRouteChange;
+    }
+  }
+  return snapshot;
 }
 
 /** Reply evidence merges independently from sticky timeout/cancellation precedence. */

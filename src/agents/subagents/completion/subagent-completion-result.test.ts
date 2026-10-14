@@ -38,20 +38,14 @@ describe("resolveSubagentCompletionResultText", () => {
     },
   );
 
-  it.each(["NO_REPLY", "unproven visible result", ""])(
-    "does not use retained text without producer terminal evidence (%j)",
-    (resultText) => {
-      expect(
-        resolveSubagentCompletionResultText({
-          completion: {
-            resultText,
-            fallbackResultText: "older visible fallback",
-          },
-          execution: { outcome: { status: "ok" } },
-        }),
-      ).toBeUndefined();
-    },
-  );
+  it("keeps the released-writer warning when only its retained prefix survives", () => {
+    expect(
+      resolveSubagentCompletionResultText({
+        completion: { resultText: "released capped prefix" },
+        execution: { outcome: { status: "ok" } },
+      }),
+    ).toBe("[truncated-by-retention: complete child answer unavailable]\nreleased capped prefix");
+  });
 
   it.each(["NO_REPLY", "NO_REPLY\nNO_REPLY", " \n\t ", ""])(
     "preserves prepared visible bytes without parsing or fallback (%j)",

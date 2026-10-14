@@ -13,7 +13,7 @@ import {
 } from "../../agents/admitted-run-context.js";
 import {
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
+  sanitizeAgentRunTerminalReply,
 } from "../../agents/agent-run-terminal-reply.js";
 import {
   isDefaultAgentRuntimeId,
@@ -434,10 +434,7 @@ export async function finalizeWorkerTurnResult(
   const parsedReply = parseReplyDirectives(renderedText);
   const { text } = parsedReply;
   if (preparedReply.terminalReply.disposition === "visible") {
-    const snapshotText = sanitizeAgentRunTerminalReplyText(text);
-    preparedReply.terminalReply = snapshotText
-      ? { disposition: "visible", text: snapshotText }
-      : { disposition: "empty" };
+    preparedReply.terminalReply = sanitizeAgentRunTerminalReply(text);
   }
   const baseIndex = completed.getBranch().findIndex((entry) => entry.id === params.baseLeafId);
   const workerMessages = completed

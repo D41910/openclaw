@@ -1,7 +1,7 @@
 import { setReplyPayloadMetadata } from "../../auto-reply/reply-payload.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { sanitizeAgentRunTerminalReplyText } from "../agent-run-terminal-reply.js";
+import { sanitizeAgentRunTerminalReply } from "../agent-run-terminal-reply.js";
 import {
   externalCliDiscoveryForProviderAuth,
   loadAuthProfileStoreForRuntimeAsync,
@@ -338,7 +338,7 @@ export function buildBlockedCliRunResult(params: {
       finalAssistantVisibleText: message,
       finalAssistantRawText: message,
       livenessState: "blocked",
-      terminalReply: { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(message) },
+      terminalReply: sanitizeAgentRunTerminalReply(message),
       error: {
         kind: "hook_block",
         message,
@@ -397,21 +397,18 @@ export function buildCliDeliveredFailure(params: {
           shouldDeliverMissingReplyNotice(runParams)
         ? [createMissingReplyNotice()]
         : undefined;
-  const terminalText =
+  const terminalReply = sanitizeAgentRunTerminalReply(
     resolveExplicitFinalSourceReplyDeliveryEvidence(evidence) === true &&
-    hasCompletedSourceReplyDeliveryEvidence(evidence)
-      ? sanitizeAgentRunTerminalReplyText(
-          payloads.map((payload) => payload.text ?? "").join("\n\n"),
-        )
-      : "";
+      hasCompletedSourceReplyDeliveryEvidence(evidence)
+      ? payloads.map((payload) => payload.text ?? "").join("\n\n")
+      : "",
+  );
   return {
     ...(visiblePayloads ? { payloads: visiblePayloads } : {}),
     meta: {
       durationMs: Date.now() - context.started,
       systemPromptReport: context.systemPromptReport,
-      terminalReply: terminalText
-        ? { disposition: "visible", text: terminalText }
-        : { disposition: "empty" },
+      terminalReply,
       stopReason: "error",
       error: { kind: "incomplete_turn", message, fallbackSafe: false },
       ...buildCliExecutionMetadata(context, { result: "error", reason: message }),

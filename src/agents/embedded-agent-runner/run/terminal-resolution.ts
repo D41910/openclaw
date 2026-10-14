@@ -13,7 +13,7 @@ import {
   classifyAgentRunTerminalOutcome,
   projectAgentRunAttemptTerminal,
 } from "../../agent-run-terminal-outcome.js";
-import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
+import { sanitizeAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import type { AuthProfileFailureReason, AuthProfileStore } from "../../auth-profiles.js";
 import type { ResolvedProviderAuth } from "../../model-auth.js";
 import {
@@ -608,17 +608,11 @@ async function completeEmbeddedRun(
     (payload) => payload.sourceReplyFinal === true && payload.text?.trim(),
   );
   const terminalReply = sourceFinal
-    ? {
-        disposition: "visible" as const,
-        text: sanitizeAgentRunTerminalReplyText(sourceFinal.text ?? ""),
-      }
+    ? sanitizeAgentRunTerminalReply(sourceFinal.text ?? "")
     : isMissingReplyNotice
       ? { disposition: "empty" as const }
       : error || incompleteText !== undefined
-        ? {
-            disposition: "visible" as const,
-            text: sanitizeAgentRunTerminalReplyText(incompleteText ?? error?.message ?? ""),
-          }
+        ? sanitizeAgentRunTerminalReply(incompleteText ?? error?.message ?? "")
         : input.emptyAssistantReplyIsSilent
           ? { disposition: "silent" as const }
           : input.prepared.preparedTerminalReply.terminalReply;

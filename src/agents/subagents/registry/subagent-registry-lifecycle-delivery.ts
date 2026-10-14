@@ -270,7 +270,11 @@ export const captureSubagentRunResult = async (
             },
           )
         : await capture(transcriptTarget?.sessionId);
-    resultText = captured?.trim() ? captured : terminalReply.text || null;
+    resultText = captured?.trim()
+      ? captured
+      : terminalReply.truncated
+        ? null
+        : terminalReply.text || null;
   } catch (error) {
     if (hasSqliteWorkerOutcomeUnknown(error)) {
       throw error;

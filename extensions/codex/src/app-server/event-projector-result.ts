@@ -254,18 +254,25 @@ export abstract class CodexTurnProjection {
         terminalReply.disposition === "visible" ? terminalReply.text : [],
       )
       .join("\n\n");
+    const aggregateTruncated = terminalSnapshotText.length > TERMINAL_REPLY_SNAPSHOT_MAX_CHARS;
+    const truncated =
+      aggregateTruncated ||
+      preparedReplies.some(
+        ({ terminalReply }) =>
+          terminalReply.disposition === "visible" && terminalReply.truncated === true,
+      );
     const preparedTerminalReply = visibleReplies.length
       ? {
           text: terminalText,
           terminalReply: {
             disposition: "visible" as const,
-            text:
-              terminalSnapshotText.length > TERMINAL_REPLY_SNAPSHOT_MAX_CHARS
-                ? `${truncateUtf16Safe(
-                    terminalSnapshotText,
-                    TERMINAL_REPLY_SNAPSHOT_MAX_CHARS - 1,
-                  ).trimEnd()}…`
-                : terminalSnapshotText,
+            text: aggregateTruncated
+              ? `${truncateUtf16Safe(
+                  terminalSnapshotText,
+                  TERMINAL_REPLY_SNAPSHOT_MAX_CHARS - 1,
+                ).trimEnd()}…`
+              : terminalSnapshotText,
+            ...(truncated ? { truncated: true as const } : {}),
           },
         }
       : (preparedReplies.at(-1) ?? prepareAgentRunTerminalReply({}));

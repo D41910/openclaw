@@ -109,17 +109,38 @@ describe("prepared announcement results", () => {
     },
   );
 
-  it("uses an uncapped snapshot when the full prepared output is missing", async () => {
-    const child = completedChild("bounded evidence");
-    child.completion!.resultText = undefined;
-    await expect(
-      readSubagentRunAnnounceResultUsing(child, {
-        ...resultDeps(() => child),
-        findTranscriptEvent: async () => undefined,
-        findSessionTranscriptArchiveEventReadOnly: async () => undefined,
-      }),
-    ).resolves.toMatchObject({ text: "bounded evidence" });
-  });
+  it.each([
+    {
+      name: "full retained result",
+      rawText: "x".repeat(5_000),
+      resultText: "x".repeat(5_000),
+      expected: "x".repeat(5_000),
+    },
+    {
+      name: "surrogate-shortened capped snapshot",
+      rawText: "x".repeat(4_094) + "😀tail",
+      resultText: undefined,
+      expected: `[truncated-by-retention: complete child answer unavailable]\n${"x".repeat(4_094)}…`,
+    },
+    {
+      name: "uncapped snapshot",
+      rawText: "bounded evidence",
+      resultText: undefined,
+      expected: "bounded evidence",
+    },
+  ])(
+    "recovers $name without guessing from its length",
+    async ({ rawText, resultText, expected }) => {
+      const child = completedChild(rawText);
+      child.completion!.resultText = resultText;
+      await expect(
+        readSubagentRunAnnounceResultUsing(
+          child,
+          resultDeps(() => child),
+        ),
+      ).resolves.toMatchObject({ text: expected });
+    },
+  );
 
   it("retrieves full visible output from the recorded run rather than a snapshot", async () => {
     const text = `${"full report ".repeat(700)}required-tail`;
@@ -191,7 +212,7 @@ describe("prepared announcement results", () => {
     const text = `${"retained report ".repeat(600)}required-field: complete`;
     const child = completedChild(text);
     const retained = text.slice(0, 4_096);
-    child.completion!.resultText = retained;
+    child.completion = { required: true, resultText: retained };
     const prepared = await readSubagentRunAnnounceResultUsing(
       child,
       resultDeps(() => child),
@@ -207,7 +228,11 @@ describe("prepared announcement results", () => {
       recordedFact: true,
       expected: "retained prepared result",
     },
-    { recordedFact: false, expected: undefined },
+    {
+      recordedFact: false,
+      expected:
+        "[truncated-by-retention: complete child answer unavailable]\nretained prepared result",
+    },
   ])(
     "preserves retained-result eligibility when recordedFact=$recordedFact and the transcript is unavailable",
     async ({ recordedFact, expected }) => {

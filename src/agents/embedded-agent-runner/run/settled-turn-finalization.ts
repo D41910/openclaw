@@ -12,7 +12,7 @@ import { resolveAdmittedRunActiveAssertion } from "../../admitted-run-context.js
 import { classifyAgentRunTerminalOutcome } from "../../agent-run-terminal-outcome.js";
 import {
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
+  sanitizeAgentRunTerminalReply,
 } from "../../agent-run-terminal-reply.js";
 import { extractAssistantVisibleText } from "../../embedded-agent-utils.js";
 import { runAgentHarnessSettledTurnFinalization } from "../../harness/selection.js";
@@ -432,10 +432,7 @@ function buildSettledTurnFinalizationAttemptResult(input: {
     preparedTerminalReply.text = parseReplyDirectives(
       extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
     ).text;
-    const snapshotText = sanitizeAgentRunTerminalReplyText(preparedTerminalReply.text);
-    preparedTerminalReply.terminalReply = snapshotText
-      ? { disposition: "visible", text: snapshotText }
-      : { disposition: "empty" };
+    preparedTerminalReply.terminalReply = sanitizeAgentRunTerminalReply(preparedTerminalReply.text);
   }
   const text =
     input.outcome === "empty"

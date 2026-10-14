@@ -4,8 +4,8 @@ import { isTransientNetworkError } from "../../../infra/retryable-network-errors
 import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
 import {
-  sanitizeAgentRunTerminalReplyText,
   prepareAgentRunTerminalReply,
+  sanitizeAgentRunTerminalReply,
 } from "../../agent-run-terminal-reply.js";
 import { isCloudCodeAssistFormatError } from "../../embedded-agent-helpers.js";
 import type { CompletedAssistantAnswer } from "../../embedded-agent-subscribe.handlers.types.js";
@@ -261,8 +261,9 @@ export function completeEmbeddedAttemptResult(
     closingReply.text = extractAssistantVisibleText(terminalAssistant, (_text, final) =>
       final ? rawText : "",
     );
-    const text = sanitizeAgentRunTerminalReplyText(parseReplyDirectives(closingReply.text).text);
-    closingReply.terminalReply = text ? { disposition: "visible", text } : { disposition: "empty" };
+    closingReply.terminalReply = sanitizeAgentRunTerminalReply(
+      parseReplyDirectives(closingReply.text).text,
+    );
   }
   const progressIsReply =
     subscription.endsWithSourceProgress() &&
@@ -294,8 +295,9 @@ export function completeEmbeddedAttemptResult(
     keptReply.text = extractAssistantVisibleText(keptAnswer.assistant, (_text, final) =>
       final ? rawText : "",
     );
-    const text = sanitizeAgentRunTerminalReplyText(parseReplyDirectives(keptReply.text).text);
-    keptReply.terminalReply = text ? { disposition: "visible", text } : { disposition: "empty" };
+    keptReply.terminalReply = sanitizeAgentRunTerminalReply(
+      parseReplyDirectives(keptReply.text).text,
+    );
   }
   const result: EmbeddedRunAttemptWithReceiptEvidence = {
     ...state,

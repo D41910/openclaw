@@ -1,4 +1,4 @@
-import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
+import { sanitizeAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import { FailoverError, resolveFailoverStatus } from "../../failover-error.js";
 import type {
   EmbeddedRunLivenessState,
@@ -41,7 +41,7 @@ export function handleRetryLimitExhaustion(params: {
     meta: {
       durationMs: params.durationMs,
       agentMeta: params.agentMeta,
-      terminalReply: { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(text) },
+      terminalReply: sanitizeAgentRunTerminalReply(text),
       finalAssistantVisibleText: text,
       ...(params.replayInvalid ? { replayInvalid: true } : {}),
       ...(params.livenessState ? { livenessState: params.livenessState } : {}),

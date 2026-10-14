@@ -3,7 +3,7 @@ import { resolveRawAssistantAnswerText } from "../../shared/assistant-answer-tex
 import { normalizeAgentRunAttemptTerminal } from "../agent-run-terminal-outcome.js";
 import {
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
+  sanitizeAgentRunTerminalReply,
 } from "../agent-run-terminal-reply.js";
 import { extractAssistantVisibleText } from "../embedded-agent-utils.js";
 import { EmptySettledTurnFinalizationError } from "./settled-turn-finalization-outcome.js";
@@ -73,10 +73,7 @@ export function assertSettledTurnFinalizationResult(
     preparedTerminalReply.text = parseReplyDirectives(
       extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
     ).text;
-    const text = sanitizeAgentRunTerminalReplyText(preparedTerminalReply.text);
-    preparedTerminalReply.terminalReply = text
-      ? { disposition: "visible", text }
-      : { disposition: "empty" };
+    preparedTerminalReply.terminalReply = sanitizeAgentRunTerminalReply(preparedTerminalReply.text);
   }
   const preparedResult = { ...result, preparedTerminalReply };
   resolveSettledTurnFinalizationText(preparedResult);
@@ -96,8 +93,7 @@ export function resolveSettledTurnFinalizationText(
     prepared.text = parseReplyDirectives(
       extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
     ).text;
-    const text = sanitizeAgentRunTerminalReplyText(prepared.text);
-    prepared.terminalReply = text ? { disposition: "visible", text } : { disposition: "empty" };
+    prepared.terminalReply = sanitizeAgentRunTerminalReply(prepared.text);
   }
   if (prepared.terminalReply.disposition !== "visible") {
     throw new EmptySettledTurnFinalizationError({ ...result, preparedTerminalReply: prepared });

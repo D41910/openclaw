@@ -1,4 +1,4 @@
-import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
+import { sanitizeAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import type { EmbeddedAgentMeta, EmbeddedAgentRunResult } from "../types.js";
 import type { EmbeddedRunAttemptResult } from "./types.js";
 
@@ -20,10 +20,7 @@ export function buildEmbeddedRunBlockedResult(input: {
       systemPromptReport: input.attempt?.systemPromptReport,
       finalAssistantVisibleText: input.text,
       finalAssistantRawText: input.text,
-      terminalReply: {
-        disposition: "visible",
-        text: sanitizeAgentRunTerminalReplyText(input.text),
-      },
+      terminalReply: sanitizeAgentRunTerminalReply(input.text),
       finalPromptText: input.finalPromptText,
       replayInvalid: input.replayInvalid,
       livenessState: "blocked",

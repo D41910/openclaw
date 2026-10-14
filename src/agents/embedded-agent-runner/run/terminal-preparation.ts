@@ -7,7 +7,7 @@ import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome
 import type { AgentRunTerminalReceipt } from "../../agent-run-terminal-receipt.js";
 import {
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
+  sanitizeAgentRunTerminalReply,
 } from "../../agent-run-terminal-reply.js";
 import type { AuthProfileStore } from "../../auth-profiles.js";
 import {
@@ -194,10 +194,7 @@ export function prepareEmbeddedRunTerminal(input: {
   }
   const finalAssistantVisibleText = parseReplyDirectives(preparedTerminalReply.text).text;
   if (preparedTerminalReply.terminalReply.disposition === "visible") {
-    const text = sanitizeAgentRunTerminalReplyText(finalAssistantVisibleText);
-    preparedTerminalReply.terminalReply = text
-      ? { disposition: "visible", text }
-      : { disposition: "empty" };
+    preparedTerminalReply.terminalReply = sanitizeAgentRunTerminalReply(finalAssistantVisibleText);
   }
   // Diagnostics record only the model's own latest message. The latest
   // current-attempt message outranks the last completed one so a later partial

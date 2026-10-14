@@ -1,7 +1,7 @@
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
 import {
   prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
+  sanitizeAgentRunTerminalReply,
   type PreparedAgentRunTerminalReply,
 } from "../agent-run-terminal-reply.js";
 import type { CliOutput } from "../cli-output-contracts.js";
@@ -76,14 +76,11 @@ export function prepareCliRunTerminalReply(
   // A delivery receipt without a mirrored body must not replace authored silence with empty output.
   if (sourceReplyMirror.visibleText !== undefined) {
     const text = sourceReplyMirror.visibleText;
-    const snapshotText = sanitizeAgentRunTerminalReplyText(text);
     return {
       sourceReplyMirror,
       completedFinalSource,
       text,
-      terminalReply: snapshotText
-        ? { disposition: "visible", text: snapshotText }
-        : { disposition: "empty" },
+      terminalReply: sanitizeAgentRunTerminalReply(text),
     };
   }
   const rawText = output.rawFinalText ?? output.rawText ?? output.text;
@@ -109,7 +106,7 @@ export function prepareCliRunTerminalReply(
     text,
     terminalReply:
       prepared.terminalReply.disposition === "visible"
-        ? { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(finalText) }
+        ? sanitizeAgentRunTerminalReply(finalText)
         : prepared.terminalReply,
   };
 }

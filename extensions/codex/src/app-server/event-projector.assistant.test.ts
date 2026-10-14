@@ -117,6 +117,7 @@ describe("CodexAppServerEventProjector assistant projection", () => {
       terminalReply: {
         disposition: "visible",
         text: `${answer}\n\n${"b".repeat(93)}…`,
+        truncated: true,
       },
     });
   });

@@ -35,7 +35,7 @@ import { createDeferredCore } from "../../shared/deferred.js";
 import { createStageTimingTracker } from "../../shared/stage-timing.js";
 import { resolveUserPath } from "../../utils.js";
 import { isMarkdownCapableMessageChannel } from "../../utils/message-channel.js";
-import { sanitizeAgentRunTerminalReplyText } from "../agent-run-terminal-reply.js";
+import { sanitizeAgentRunTerminalReply } from "../agent-run-terminal-reply.js";
 import {
   resolveAgentDir,
   resolveAgentWorkspaceDir,
@@ -499,15 +499,14 @@ async function runEmbeddedAgentForSession(
                   notifyExecutionPhase("runtime_plugins", { provider, model: modelId }),
               });
               if (hookResult?.handled) {
-                const text = sanitizeAgentRunTerminalReplyText(hookResult.reply?.text ?? "");
                 return {
                   payloads: buildHandledBeforeAgentReplyPayloads(hookResult.reply),
                   meta: {
                     durationMs: Date.now() - started,
                     agentMeta: { sessionId: params.sessionId, provider, model: modelId },
-                    terminalReply: text
-                      ? { disposition: "visible", text }
-                      : { disposition: hookResult.reply ? "empty" : "silent" },
+                    terminalReply: hookResult.reply
+                      ? sanitizeAgentRunTerminalReply(hookResult.reply.text ?? "")
+                      : { disposition: "silent" },
                     providerStarted: false,
                   },
                 } satisfies EmbeddedAgentRunResult;
