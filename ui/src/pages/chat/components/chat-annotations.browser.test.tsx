@@ -1,18 +1,20 @@
-import { html, nothing, render } from "lit";
+import { For, flush } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
+import type { ChatAttachment } from "../../../lib/chat/chat-types.ts";
 import "../../../styles.css";
 import "../../../styles/chat.ts";
 import "../../../styles/chat/composer.css";
-import type { ChatAttachment } from "../../../lib/chat/chat-types.ts";
+import { mountSolid } from "../../../test-helpers/mount-solid.ts";
 import "./chat-comment-pins.tsx";
-import { renderCommentPreviewChip, renderCommentPreviewRow } from "./chat-comment-preview.ts";
+import { CommentPreviewChip, CommentPreviewRow } from "./chat-comment-preview.tsx";
 import { removeChatSelectionPopup, showChatAnnotationEditor } from "./chat-selection-popup.ts";
 
 const longSelection = "Selected passage with enough words to exceed a compact preview. ".repeat(8);
 const longComment =
   "Please verify the deployment checklist and retain the original context. ".repeat(24);
 let container: HTMLDivElement;
+let unmountComments: (() => void) | undefined;
 let originalTheme: string | undefined;
 let originalPalette: string | undefined;
 
@@ -26,7 +28,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   removeChatSelectionPopup();
-  render(nothing, container);
+  unmountComments?.();
+  unmountComments = undefined;
   container.remove();
   if (originalTheme === undefined) {
     delete document.documentElement.dataset.themeMode;
@@ -42,17 +45,20 @@ afterEach(() => {
 
 function mountComments(count: number, top: number) {
   container.style.cssText = `position: fixed; right: 16px; top: ${top}px`;
-  render(
-    renderCommentPreviewChip(
-      count,
-      html`<ol class="chat-comment-preview__list">
-        ${Array.from({ length: count }, () =>
-          renderCommentPreviewRow({ text: longSelection, comment: longComment }),
-        )}
-      </ol>`,
+  unmountComments?.();
+  unmountComments = mountSolid(
+    () => (
+      <CommentPreviewChip count={count}>
+        <ol class="chat-comment-preview__list">
+          <For each={Array.from({ length: count }, (_, index) => index)}>
+            {() => <CommentPreviewRow comment={{ text: longSelection, comment: longComment }} />}
+          </For>
+        </ol>
+      </CommentPreviewChip>
     ),
-    container,
-  );
+    { container },
+  ).unmount;
+  flush();
   return container.querySelector<HTMLElement>(".chat-selection-annotations__chip")!;
 }
 
@@ -99,6 +105,17 @@ function contrast(element: HTMLElement) {
 }
 
 describe("annotation chip and hovercard", () => {
+  it("keeps comment rows adjacent for list numbering and spacing", () => {
+    mountComments(3, 430);
+    const list = container.querySelector(".chat-comment-preview__list")!;
+    expect(list.querySelectorAll(":scope > .chat-comment-preview__item")).toHaveLength(3);
+    const following = list.querySelectorAll<HTMLElement>(
+      ".chat-comment-preview__item + .chat-comment-preview__item",
+    );
+    expect(following).toHaveLength(2);
+    expect(getComputedStyle(following[0]!).marginTop).toBe("12px");
+  });
+
   it.each([1440, 390])(
     "reads the final line of a long comment by keyboard (%ipx)",
     async (width) => {
