@@ -1,8 +1,8 @@
-import type { ReactiveController } from "lit";
 import { t } from "../i18n/index.ts";
 import { projectPresencePayload } from "../lib/presence-users.ts";
 import { showToast } from "../lib/toast.ts";
 import { createPresenceActivityController } from "../lit/presence-activity-controller.ts";
+import type { SolidController } from "../lit/solid-controller-host.ts";
 import type { AppSidebarSessionNavigationElement } from "./app-sidebar-session-navigation.ts";
 import { PersonActivityDataController } from "./person-activity-data.ts";
 import type { SidebarPeopleRuntime } from "./sidebar-people.runtime.ts";
@@ -13,7 +13,7 @@ export type SidebarPeopleSortMode = "presence" | "running" | "open" | "name";
 const EVENTS = ["pointerover", "pointerout", "focusin", "focusout", "click", "keydown"] as const;
 
 /** One lazy interaction owner per sidebar; the data stays in SessionDataController. */
-export class SidebarPeopleController implements ReactiveController {
+export class SidebarPeopleController implements SolidController {
   statusFilter: SidebarPeopleStatusFilter = "all";
   sortMode: SidebarPeopleSortMode = "presence";
 
