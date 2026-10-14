@@ -328,9 +328,14 @@ test("delivers a recovered artifact once while preserving its inter-session tran
                   { timeout: 30_000 },
                 )
                 .toBe(true);
-              const session = (await sessions()).sessions.find(
-                (row) => row.lastChannel === "telegram" && row.lastTo === String(CHAT_ID),
+              const matchingSessions = (await sessions()).sessions.filter(
+                (row) =>
+                  row.lastChannel === "telegram" &&
+                  row.lastTo === `telegram:${CHAT_ID}` &&
+                  row.lastAccountId === "proof",
               );
+              expect(matchingSessions).toHaveLength(1);
+              const session = matchingSessions[0];
               expect(session?.key).toBeTypeOf("string");
               const sessionKey = session!.key;
               await expect
