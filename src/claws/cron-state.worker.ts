@@ -7,13 +7,13 @@ import {
 } from "../state/openclaw-state-db.js";
 import {
   CLAW_CRON_REF_SCHEMA_VERSION,
-  ClawCronInstallError,
-  refToRow,
-  rowToRef,
+  clawCronRefToRow,
+  rowToClawCronRef,
   type CronRefDatabase,
   type CronRefRow,
   type PersistedClawCronRef,
-} from "./cron.js";
+} from "./cron-records.js";
+import { ClawCronInstallError } from "./cron.js";
 import type { ClawAddPlan, ClawCronJob } from "./types.js";
 
 export function persistClawCronPendingRef(
@@ -36,7 +36,7 @@ export function persistClawCronPendingRef(
       // SAFETY: Compiled predicates bind strings; the canonical schema supplies the row shape.
       .get(...(query.parameters as SQLInputValue[])) as CronRefRow | undefined;
   if (existing) {
-    const ref = rowToRef(existing);
+    const ref = rowToClawCronRef(existing);
     if (ref.schemaVersion !== CLAW_CRON_REF_SCHEMA_VERSION) {
       throw new ClawCronInstallError(
         "cron_provenance_conflict",
@@ -71,7 +71,7 @@ export function persistClawCronPendingRef(
       db,
       getNodeSqliteKysely<CronRefDatabase>(db)
         .insertInto("claw_cron_refs")
-        .values(refToRow(record)),
+        .values(clawCronRefToRow(record)),
     );
   }, options);
   return record;

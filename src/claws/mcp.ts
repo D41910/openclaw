@@ -1,19 +1,11 @@
-import type { DatabaseSync } from "node:sqlite";
 import { coerceErrorMessage } from "@openclaw/normalization-core";
 import { setConfiguredMcpServer } from "../agents/mcp-config-mutation.js";
 import { withClawMcpLifecycleLease } from "../agents/mcp-lifecycle-lease.js";
 import { canonicalizeConfiguredMcpServer } from "../config/mcp-config-normalize.js";
 import { listConfiguredMcpServers } from "../config/mcp-config.js";
-import { tableExists } from "../state/openclaw-state-db-schema-helpers.js";
-import type { ClawAddStateOptions } from "./add-state-write.js";
 import { digestClawValue } from "./digest.js";
-import {
-  CLAW_MCP_REF_SCHEMA_VERSION,
-  rowToRef,
-  selectMcpRefs,
-  type McpRefRow,
-  type PersistedClawMcpServerRef,
-} from "./mcp-records.js";
+import { CLAW_MCP_REF_SCHEMA_VERSION, type PersistedClawMcpServerRef } from "./mcp-records.js";
+import type { ClawMutationStateOptions } from "./state-mutation-options.js";
 import type { ClawAddPlan, ClawMcpServer } from "./types.js";
 
 export type { PersistedClawMcpServerRef } from "./mcp-records.js";
@@ -41,7 +33,7 @@ export function digestClawMcpServer(server: Record<string, unknown>): string {
 /** Add a shared MCP requirement without creating a Claw ownership record. */
 export async function installClawMcpServersStateless(
   plan: ClawAddPlan,
-  options: ClawAddStateOptions & {
+  options: ClawMutationStateOptions & {
     assertForwardCurrent?: () => void;
     setMcpServer?: typeof setConfiguredMcpServer;
     listMcpServers?: typeof listConfiguredMcpServers;
@@ -115,16 +107,4 @@ export async function installClawMcpServersStateless(
     });
   }
   return refs;
-}
-
-export function readAllClawMcpServerRefsInDatabase(db: DatabaseSync): PersistedClawMcpServerRef[] {
-  if (!tableExists(db, "claw_mcp_server_refs")) {
-    return [];
-  }
-  const query = selectMcpRefs(db).orderBy("agent_id").orderBy("name").compile();
-  const rows = db /* sqlite-allow-raw: read-only Claw MCP reference inventory. */
-    .prepare(query.sql)
-    // SAFETY: the query projects every persisted Claw MCP reference column.
-    .all() as McpRefRow[];
-  return rows.map(rowToRef);
 }

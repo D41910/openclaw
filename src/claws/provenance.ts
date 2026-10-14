@@ -33,7 +33,7 @@ import {
   clawBootstrapProvenanceFromRow,
   selectClawBootstrapProvenanceColumns,
 } from "./provenance-bootstrap.js";
-import { legacySafeColumnProjection } from "./provenance-legacy-columns.js";
+import { readClawPackageRefsInDatabase } from "./provenance-read.kernel.js";
 import {
   cacheClawInstallSchemaVersion,
   deleteCachedClawInstallSchemaVersion,
@@ -151,14 +151,6 @@ function selectClawInstallRow(db: DatabaseSync, agentId: string): ClawInstallRow
         WHERE agent_id = ?`,
     )
     .get(agentId) as ClawInstallRow | undefined; // SAFETY: The explicit projection matches ClawInstallRow; SQLite returns no row as undefined.
-}
-
-export function readClawInstallRecordFromDatabase(
-  db: DatabaseSync,
-  agentId: string,
-): PersistedClawInstall | undefined {
-  const row = selectClawInstallRow(db, agentId);
-  return row ? rowToRecord(row) : undefined;
 }
 
 export function persistClawInstallRecord(
@@ -314,24 +306,6 @@ export function deleteClawInstallRecord(
   deleteCachedClawInstallSchemaVersion(agentId, options);
 }
 
-export function readClawInstallRecordsInDatabase(db: DatabaseSync): PersistedClawInstall[] {
-  const bootstrapColumns = selectClawBootstrapProvenanceColumns(db);
-  const rows =
-    db /* sqlite-allow-raw: read-only Claw install inventory ordered by stable agent id. */
-      .prepare(
-        `SELECT schema_version, source_kind, claw_name, claw_version, package_root,
-              manifest_path, integrity_kind, integrity, source_byte_length,
-              manifest_schema_version, plan_integrity, agent_id, workspace,
-              agent_config_digest, agent_owned_paths_json, ${bootstrapColumns},
-              status, added_at_ms,
-              updated_at_ms
-         FROM claw_installs
-        ORDER BY agent_id`,
-      )
-      .all() as ClawInstallRow[]; // SAFETY: The fixed install inventory projection matches ClawInstallRow.
-  return rows.map(rowToRecord);
-}
-
 export function persistClawPackageRef(
   plan: ClawAddPlan,
   pkg: ResolvedClawPackage,
@@ -469,65 +443,4 @@ export function readClawPackageRefs(
   } = {},
 ): PersistedClawPackageRef[] {
   return readClawPackageRefsInDatabase(openOpenClawStateDatabase(options).db, options);
-}
-
-export function readClawPackageRefsInDatabase(
-  db: DatabaseSync,
-  options: {
-    readOnly?: boolean;
-    agentId?: string;
-    kind?: ClawPackage["kind"];
-    source?: ClawPackage["source"];
-    ref?: string;
-    version?: string;
-    integrity?: string;
-    status?: ClawPackageRefStatus;
-  } = {},
-): PersistedClawPackageRef[] {
-  if (
-    options.readOnly &&
-    !db /* sqlite-allow-raw: read-only Claw package-ref table-existence probe. */
-      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'claw_package_refs'")
-      .get()
-  ) {
-    return [];
-  }
-  const conditions: string[] = [];
-  const params: Record<string, string> = {};
-  for (const [column, value] of [
-    ["agent_id", options.agentId],
-    ["package_kind", options.kind],
-    ["package_source", options.source],
-    ["package_ref", options.ref],
-    ["package_version", options.version],
-    ["package_integrity", options.integrity],
-    ["package_status", options.status],
-  ] as const) {
-    if (value !== undefined) {
-      conditions.push(`${column} = @${column}`);
-      params[column] = value;
-    }
-  }
-  const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
-  const extensionColumns = legacySafeColumnProjection(db, "claw_package_refs", [
-    "extension_id",
-    "extension_format",
-    "extension_detected_format",
-    "extension_mapped_json",
-    "extension_unavailable_json",
-    "extension_adapter_identity",
-  ]);
-  const rows =
-    db /* sqlite-allow-raw: read-only Claw package reference lookup with closed column filters. */
-      .prepare(
-        `SELECT schema_version, agent_id, claw_name, package_kind, package_source,
-              package_ref, package_version, package_integrity, package_status, relationship, origin,
-              independent_owner, ${extensionColumns},
-              installed_at_ms,
-              updated_at_ms
-         FROM claw_package_refs${where}
-        ORDER BY agent_id, package_kind, package_ref`,
-      )
-      .all(params) as PackageRefRow[]; // SAFETY: The closed package-ref inventory projection matches PackageRefRow.
-  return rows.map(rowToPackageRef);
 }

@@ -1,16 +1,16 @@
-import type { WorkspaceSetupState } from "../agents/workspace-state-store.js";
+import type { WorkspaceSetupState } from "../agents/workspace-state-store.kernel.js";
 import type { ClawPackageLifecycleLeaseIdentity } from "../state/claw-package-lifecycle-lease.js";
-import type { PersistedClawCronRef } from "./cron.js";
-import type { PersistedClawMcpServerRef } from "./mcp.js";
+import type { PersistedClawCronRef } from "./cron-records.js";
+import type { PersistedClawMcpServerRef } from "./mcp-records.js";
 import type {
   ClawPackageOrigin,
   ClawPackageRefStatus,
   ClawPackageRelationship,
   PersistedClawPackageRef,
 } from "./package-extension-provenance.js";
-import type { ClawInstallStatus, PersistedClawInstall } from "./provenance.js";
+import type { ClawInstallStatus, PersistedClawInstall } from "./provenance-types.js";
 import type { ClawAddPlan, ClawCronJob, ClawMcpServer, ResolvedClawPackage } from "./types.js";
-import type { PersistedClawWorkspaceFile } from "./workspace.js";
+import type { PersistedClawWorkspaceFile } from "./workspace-state.js";
 
 export type ClawAddStateWorkerOperations = {
   "claws.add.persistInstall": {

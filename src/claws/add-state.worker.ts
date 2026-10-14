@@ -11,11 +11,11 @@ import { readOpenClawStateLeaseExpiry } from "../state/openclaw-state-lease-stor
 import type { ClawAddStateCommand } from "./add-state-worker-contract.js";
 import { persistClawCronPendingRef, updateClawCronRef } from "./cron-state.worker.js";
 import { persistClawMcpPendingRef, updateClawMcpRef } from "./mcp-state.worker.js";
+import { readClawInstallRecordFromDatabase } from "./provenance-read.kernel.js";
 import {
   deleteClawInstallRecord,
   persistClawInstallRecord,
   persistClawPackageRef,
-  readClawInstallRecordFromDatabase,
   updateClawInstallRecordStatus,
   updateClawPackageRefStatus,
 } from "./provenance.js";
