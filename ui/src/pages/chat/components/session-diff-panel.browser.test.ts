@@ -110,13 +110,14 @@ describe.runIf(browserMode)("Review header layout", () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
     onTestFinished(() => writeText.mockRestore());
     const fileMenu = panel.querySelector<HTMLButtonElement>(".session-diff__file-menu")!;
-    await userEvent.click(fileMenu);
+    fileMenu.focus();
+    await userEvent.keyboard("{Enter}");
     const fileSurface = panel.querySelector<HTMLElement>(".session-diff-menu__surface")!;
     await waitForSolid(() => expect(fileSurface.matches(":popover-open")).toBe(true));
     const copyPath = fileSurface.querySelector<HTMLButtonElement>(
       'button[aria-label="Copy Path"]',
     )!;
-    copyPath.focus();
+    await waitForSolid(() => expect(document.activeElement).toBe(copyPath));
     for (const key of ["{Enter}", " "]) {
       const calls = writeText.mock.calls.length;
       await userEvent.keyboard(key);

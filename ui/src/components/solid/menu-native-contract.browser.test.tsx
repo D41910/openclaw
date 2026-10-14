@@ -84,6 +84,51 @@ it("routes arrow navigation from an embedded button through the menu", async () 
   await expect.poll(() => document.activeElement).toBe(item("Last"));
 });
 
+it("keeps native embedded controls in the menu keyboard flow", async () => {
+  const activate = vi.fn();
+  const navigate = vi.fn((event: MouseEvent) => event.preventDefault());
+  const select = vi.fn();
+  mountMenu({
+    onSelect: select,
+    items: [
+      { id: "first", label: "First" },
+      { id: "last", label: "Last" },
+      {
+        kind: "content",
+        id: "header-actions",
+        content: (
+          <>
+            <button type="button" onClick={activate}>
+              Clear
+            </button>
+            <a href="#help" onClick={navigate}>
+              Help
+            </a>
+          </>
+        ),
+      },
+    ],
+  });
+  await openMenu();
+  expect(document.activeElement).toBe(item("First"));
+  await userEvent.tab();
+  const button = surface().querySelector<HTMLButtonElement>("button:not([role])")!;
+  expect(document.activeElement).toBe(button);
+  await userEvent.keyboard("{Enter}");
+  expect(activate).toHaveBeenCalledOnce();
+  expect(select).not.toHaveBeenCalled();
+  expect(surface().matches(":popover-open")).toBe(true);
+  await userEvent.tab();
+  expect(document.activeElement).toBe(surface().querySelector("a"));
+  await userEvent.keyboard("{Enter}");
+  expect(navigate).toHaveBeenCalledOnce();
+  expect(select).not.toHaveBeenCalled();
+  await userEvent.tab({ shift: true });
+  expect(document.activeElement).toBe(button);
+  await userEvent.keyboard("{ArrowUp}");
+  await expect.poll(() => document.activeElement).toBe(item("Last"));
+});
+
 it.each([false, true])(
   "rolls rejected controlled visibility back to accepted state (initial=%s)",
   async (initial) => {

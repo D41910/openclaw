@@ -66,6 +66,9 @@ export type MenuNavigationOptions = {
   value?: () => string | null;
 };
 
+export const MENU_FORM_CONTROL_SELECTOR =
+  ':is(input, textarea, select, [data-form-control], button, a[href]):not([role^="menuitem"])';
+
 export function useMenuMachine(
   overlay: Overlay,
   direction: () => "ltr" | "rtl",
@@ -315,7 +318,7 @@ export function useMenuMachine(
     const fromButton =
       options.surface !== "listbox" &&
       event.target instanceof HTMLButtonElement &&
-      event.target.hasAttribute("data-form-control");
+      event.target.matches(MENU_FORM_CONTROL_SELECTOR);
     const type =
       event.key === "ArrowDown"
         ? fromButton
@@ -526,7 +529,7 @@ export function useMenuMachine(
             }
             return;
           }
-          if (e.key === "Tab" || target.matches("input,textarea,select,[data-form-control]")) {
+          if (e.key === "Tab" || target.matches(MENU_FORM_CONTROL_SELECTOR)) {
             return;
           }
           focusFromKeyboard = true;

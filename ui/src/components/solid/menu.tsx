@@ -13,7 +13,7 @@ import { acquireNativeOverlaySurface } from "../../lib/native-overlay-occlusion.
 import { createOverlayAnchor, type OverlayPlacement } from "../overlay-anchor.ts";
 import { createOverlay, findOverlayParent, type Overlay } from "../overlay-lifecycle.ts";
 import { containsComposed } from "../overlay-registry.ts";
-import { useMenuMachine, type MenuBinding } from "./menu-machine.ts";
+import { MENU_FORM_CONTROL_SELECTOR, useMenuMachine, type MenuBinding } from "./menu-machine.ts";
 import { retainShadowStyles } from "./shadow-styles.ts";
 import overlayStyles from "./overlay.css?inline";
 import "./overlay.css";
@@ -157,7 +157,10 @@ export function Menu(props: BranchProps): JSX.Element {
       const initial = [
         ...overlay.surface.querySelectorAll<HTMLElement>("[data-initial-focus], [autofocus]"),
       ].find((node) => node.closest('[role="menu"]') === overlay.surface);
-      (intent === "last" ? items.at(-1) : (initial ?? items[0]))?.focus({ preventScroll: true });
+      (intent === "last"
+        ? (items.at(-1) ?? formControls().at(-1))
+        : (initial ?? items[0] ?? formControls()[0])
+      )?.focus({ preventScroll: true });
     },
     onEscape(event) {
       const target = event.target;
@@ -173,6 +176,18 @@ export function Menu(props: BranchProps): JSX.Element {
       return false;
     },
   });
+  const formControls = (): HTMLElement[] =>
+    [...overlay.surface.querySelectorAll<HTMLElement>(MENU_FORM_CONTROL_SELECTOR)].filter(
+      (control) =>
+        control.closest('[role="menu"]') === overlay.surface &&
+        ![...overlay.children].some(
+          (child) => child.open && containsComposed(child.surface, control),
+        ) &&
+        (control.tabIndex >= 0 || control.closest('[role^="menuitem"]')) &&
+        !control.matches(':disabled, [aria-disabled="true"]') &&
+        !control.closest("[inert]") &&
+        control.checkVisibility({ checkVisibilityCSS: true }),
+    );
   const menuRoot = identity.root ?? overlay;
   const placement = () =>
     props.placement ??
@@ -259,7 +274,7 @@ export function Menu(props: BranchProps): JSX.Element {
       const first = ownItems(overlay.surface)[0];
       if (
         target instanceof HTMLButtonElement &&
-        target.hasAttribute("data-form-control") &&
+        target.matches(MENU_FORM_CONTROL_SELECTOR) &&
         ["ArrowDown", "ArrowUp"].includes(event.key)
       ) {
         binding.keydown(event);
@@ -279,16 +294,7 @@ export function Menu(props: BranchProps): JSX.Element {
       if (event.key !== "Tab" || event.defaultPrevented || event.isComposing) {
         return;
       }
-      const controls = [
-        ...overlay.surface.querySelectorAll<HTMLElement>("[data-form-control]"),
-      ].filter(
-        (control) =>
-          control.closest('[role="menu"]') === overlay.surface &&
-          (control.tabIndex >= 0 || control.closest('[role^="menuitem"]')) &&
-          !control.matches(':disabled, [aria-disabled="true"]') &&
-          !control.closest("[inert]") &&
-          control.checkVisibility({ checkVisibilityCSS: true }),
-      );
+      const controls = formControls();
       const row = target.closest<HTMLElement>('[role^="menuitem"]');
       const firstControl = row ? controls.find((control) => row.contains(control)) : undefined;
       if (
@@ -300,8 +306,17 @@ export function Menu(props: BranchProps): JSX.Element {
         return;
       }
       const index = controls.indexOf(target);
-      const next = controls[index + (event.shiftKey ? -1 : 1)];
-      if (index >= 0 && next) {
+      const next =
+        index >= 0
+          ? controls[index + (event.shiftKey ? -1 : 1)]
+          : (event.shiftKey ? controls.toReversed() : controls).find(
+              (control) =>
+                target.compareDocumentPosition(control) &
+                (event.shiftKey
+                  ? Node.DOCUMENT_POSITION_PRECEDING
+                  : Node.DOCUMENT_POSITION_FOLLOWING),
+            );
+      if (next) {
         event.preventDefault();
         next.focus();
       } else {

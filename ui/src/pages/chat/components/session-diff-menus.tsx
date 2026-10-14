@@ -146,7 +146,13 @@ function SessionDiffMenuContent(props: SessionDiffMenuProps) {
         {
           kind: "content",
           id: "path",
-          content: <CopyRow value={menu.path} label={t("chat.sessionDiff.copyPath")} />,
+          content: (
+            <CopyRow
+              value={menu.path}
+              label={t("chat.sessionDiff.copyPath")}
+              menuControl="initial"
+            />
+          ),
         },
         {
           ...menuItem("open-file", t("chat.sessionDiff.openFile")),
