@@ -399,8 +399,10 @@ suite.define(() => {
         }
         await navigateInApp(page, "new-session", "?agent=main");
         const composer = page.locator(".new-session-page__message");
-        // Acceptance can already retire the submitted text. New input must win
-        // whether the returning draft is still populated or has been cleared.
+        if (readiness) {
+          // Accepted input retires even while preview readiness is pending.
+          await expect.poll(() => composer.inputValue()).toBe("");
+        }
         await composer.fill(message);
         const newerUrl = page.url();
         if (readiness) {

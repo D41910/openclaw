@@ -50,7 +50,7 @@ describe("file path tooltip", () => {
     // The closing popup can stay visible after its owner clears [open].
     await expect.poll(card).not.toBeNull();
     await expect.element(copyButton()).toBeVisible();
-    expect(card()?.textContent).not.toContain("Copied!");
+    await expect.poll(() => card()?.textContent?.trim()).toBe(filePath);
     await page.elementLocator(anchor()).click();
     expect(open).toHaveBeenCalledOnce();
     expect(card()).toBeNull();
