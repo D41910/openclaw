@@ -113,7 +113,7 @@ suite.define(() => {
           "none",
         );
         await expect
-          .poll(() => create.evaluate((element) => element.getBoundingClientRect().right))
+          .poll(() => nav.evaluate((element) => element.getBoundingClientRect().right))
           .toBeLessThanOrEqual(0);
         await page
           .locator(".topbar-nav-toggle:visible, .chat-pane__nav-toggle:visible")
