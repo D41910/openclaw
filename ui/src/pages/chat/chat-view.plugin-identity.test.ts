@@ -1,8 +1,8 @@
 /* @vitest-environment jsdom */
 
 import type { BoardGetParams } from "@openclaw/gateway-protocol";
-import { html, LitElement } from "lit";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { createComponent } from "solid-js";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type {
   ControlUiHost,
   ControlUiSurface,
@@ -13,10 +13,13 @@ import {
   createApplicationContextProvider,
   createApplicationGateway,
 } from "../../test-helpers/application-context.ts";
+import { mountSolid } from "../../test-helpers/mount-solid.ts";
+import { createSolidApplicationContextProvider } from "../../test-helpers/solid-application-context.tsx";
+import { flush } from "../../test-helpers/solid-settle.ts";
 import { createComposerProps, resetComposerFixture } from "./chat-composer.test-support.ts";
 import { createTestTranscript } from "./chat-view.test-helpers.ts";
-import { renderChat, type ChatProps } from "./chat-view.tsx";
-import { renderGroupedMessage } from "./components/chat-message-bubble.ts";
+import { ChatView, type ChatProps } from "./chat-view.tsx";
+import { GroupedMessage } from "./components/chat-message-bubble-view.tsx";
 import { prepareChatMessageRender } from "./components/chat-message-markdown.ts";
 import "../../plugins/control-ui-view.solid.tsx";
 import "../../plugins/control-ui-contributions.solid.tsx";
@@ -69,7 +72,7 @@ describe("native chat view session identity", () => {
         reportError,
       },
     } as unknown as ApplicationContext;
-    const provider = createApplicationContextProvider(context);
+    const provider = document.body.appendChild(createApplicationContextProvider(context));
     const props: ChatProps = {
       ...threadProps("native-owner", "global", []),
       ...createComposerProps({
@@ -83,33 +86,37 @@ describe("native chat view session identity", () => {
       onRefresh: vi.fn(),
       agentsList: null,
     };
-    class ChatHost extends LitElement {
-      override createRenderRoot() {
-        return this;
-      }
-
-      override render() {
-        return html`${renderChat(props, context)}
-        ${renderGroupedMessage(
-          prepareChatMessageRender({
+    const view = mountSolid(
+      () => [
+        createComponent(ChatView, { props }),
+        createComponent(GroupedMessage, {
+          preparation: prepareChatMessageRender({
             role: "toolResult",
             toolCallId: "identity-result",
             toolName: "inspect",
             content: [{ type: "text", text: "Inspection complete" }],
           }),
-          "identity-message",
-          {
+          messageKey: "identity-message",
+          options: {
             isStreaming: false,
             showReasoning: false,
             sessionKey: props.sessionKey,
             agentId: props.currentAgentId,
           },
-        )}`;
-      }
-    }
-    customElements.define("native-chat-owner-test-host", ChatHost);
-    provider.append(document.createElement("native-chat-owner-test-host"));
-    document.body.append(provider);
+        }),
+      ],
+      { container: provider, wrapper: createSolidApplicationContextProvider(context).wrapper },
+    );
+    flush();
+    props.transcript.hostConnected();
+    props.transcript.hostUpdated();
+    flush();
+    onTestFinished(() => {
+      view.unmount();
+      props.transcript.hostDisconnected();
+      lifetime.abort();
+      provider.remove();
+    });
 
     await vi.waitFor(() => {
       expect(reportError).not.toHaveBeenCalled();

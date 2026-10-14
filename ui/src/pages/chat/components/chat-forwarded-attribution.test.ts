@@ -1,10 +1,13 @@
 /* @vitest-environment jsdom */
-import { render } from "lit";
+
 import { afterEach, expect, it, vi } from "vitest";
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
+import { cleanupSolid } from "../../../test-helpers/mount-solid.ts";
 import { createTestTranscript } from "../chat-view.test-helpers.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
-import { renderChatThread } from "./chat-thread.test-support.ts";
+import {
+  createMessageGroupHarness,
+  createChatThreadHarness,
+} from "./chat-message-native.test-support.tsx";
 import {
   installTranscriptDomMocks,
   resetTranscriptTestDom,
@@ -14,7 +17,7 @@ import {
 let container: HTMLDivElement;
 afterEach(() => {
   if (container) {
-    render(null, container);
+    cleanupSolid();
     container.remove();
   }
 });
@@ -44,18 +47,15 @@ it.each([
     ],
     senderSession: { sessionKey: key, agentId: key.split(":")[1] },
   };
-  render(
-    renderMessageGroup(group, {
-      showReasoning: false,
-      showToolCalls: false,
-      avatarPlacement: "none",
-      agentId: "main",
-      agents: [{ id: "main" }, { id: "research", identity: { name: "Research Agent" } }],
-      mainKey: "main",
-      senderAgentAvatars: new Map([["research", "blob:research-avatar"]]),
-    }),
-    container,
-  );
+  createMessageGroupHarness(container).render(group, {
+    showReasoning: false,
+    showToolCalls: false,
+    avatarPlacement: "none",
+    agentId: "main",
+    agents: [{ id: "main" }, { id: "research", identity: { name: "Research Agent" } }],
+    mainKey: "main",
+    senderAgentAvatars: new Map([["research", "blob:research-avatar"]]),
+  });
 
   const chip = container.querySelector<HTMLAnchorElement>(
     `a.markdown-session-link[data-session-key="${key}"]`,
@@ -102,7 +102,7 @@ it("routes forwarded cron runs with primary and keyboard activation, preserving 
   const transcript = createTestTranscript();
   onTestFinished(() => transcript.hostDisconnected());
   container = document.body.appendChild(document.createElement("div"));
-  render(renderChatThread(props, transcript), container);
+  createChatThreadHarness(container, transcript).render(props);
   const link = container.querySelector<HTMLAnchorElement>(".chat-reply-attribution a")!;
   expect(link).not.toBeNull();
   expect(link.getAttribute("href")).toBe("/control/automations?job=daily&run=first");

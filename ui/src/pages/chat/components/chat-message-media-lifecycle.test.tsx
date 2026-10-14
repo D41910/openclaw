@@ -1,13 +1,14 @@
 /* @vitest-environment jsdom */
 
-import { html, render } from "lit";
-import { guard } from "lit/directives/guard.js";
+import { createSignal } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred } from "../../../../../test/helpers/promise.js";
 import { notifyBrowserAuthRestored } from "../../../app/browser-http.ts";
+import { SolidContentPresentation } from "../../../lit/solid-content.tsx";
+import { cleanupSolid, mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { flush } from "../../../test-helpers/solid-settle.ts";
 import { resolveAssistantAttachmentAvailability } from "./chat-message-attachment-availability.ts";
-import { renderMessageImages } from "./chat-message-images.ts";
+import { MessageImages, type MessageImagesProps } from "./chat-message-images-solid.tsx";
 import {
   isChatMediaResourceCurrent,
   observeChatMediaResource,
@@ -17,6 +18,53 @@ import {
   type ImageRenderOptions,
 } from "./chat-message-media.ts";
 
+const mounts = new Map<
+  HTMLElement,
+  {
+    update: (props: MessageImagesProps) => void;
+    unmount: () => void;
+    setConnected: (connected: boolean) => void;
+  }
+>();
+function renderImages(container: HTMLElement, images: ImageBlock[], options?: ImageRenderOptions) {
+  const props = { images, options };
+  let mounted = mounts.get(container);
+  if (mounted) {
+    mounted.update(props);
+    flush();
+  } else {
+    const [current, update] = createSignal<MessageImagesProps>(props, { ownedWrite: true });
+    const [presented, setPresented] = createSignal(true);
+    const root = mountSolid(
+      () => (
+        <SolidContentPresentation value={presented}>
+          <MessageImages {...current()} />
+        </SolidContentPresentation>
+      ),
+      { container },
+    );
+    mounted = {
+      update,
+      unmount: root.unmount,
+      setConnected(connected) {
+        setPresented(connected);
+        flush();
+      },
+    };
+    mounts.set(container, mounted);
+  }
+  return mounted;
+}
+function unmountImages(container: HTMLElement) {
+  mounts.get(container)?.unmount();
+  mounts.delete(container);
+}
+function cleanupImages() {
+  for (const container of mounts.keys()) {
+    unmountImages(container);
+  }
+}
+
 const subscribers = new Set<() => void>();
 
 beforeEach(() => {
@@ -25,6 +73,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanupImages();
+  cleanupSolid();
   for (const subscriber of subscribers) {
     releaseChatMediaResourceSubscriber(subscriber);
   }
@@ -85,7 +135,7 @@ function renderManagedImage(
     alt: "Managed image",
     ...(artifactId ? { artifactId } : {}),
   };
-  render(renderMessageImages([image], options), container);
+  renderImages(container, [image], options);
 }
 
 function observeSubscriber(subscriber: () => void): () => void {
@@ -155,10 +205,7 @@ describe("chat media resource lifecycle", () => {
       const container = document.createElement("div");
       const options = { sessionKey: "first-session", connectionEpoch: 1, resolveArtifactDownload };
       const rerender = observeSubscriber(() =>
-        render(
-          renderMessageImages([{ artifactId }], { ...options, onRequestUpdate: rerender }),
-          container,
-        ),
+        renderImages(container, [{ artifactId }], { ...options, onRequestUpdate: rerender }),
       );
       rerender();
       options.sessionKey = "second-session";
@@ -185,7 +232,7 @@ describe("chat media resource lifecycle", () => {
       if (!http) {
         expect(fetchMock.mock.calls[1]?.[0]).toBe(imageSource);
       }
-      render(null, container);
+      unmountImages(container);
     },
   );
 
@@ -229,15 +276,12 @@ describe("chat media resource lifecycle", () => {
     const protectedPane = document.createElement("div");
     const openPane = document.createElement("div");
     const renderPane = (container: HTMLElement, sessionKey: string, onRequestUpdate: () => void) =>
-      render(
-        renderMessageImages([{ url: source, fileName: "preview.png" }], {
-          sessionKey,
-          agentId: "main",
-          authToken: "image-test-token",
-          onRequestUpdate,
-        }),
-        container,
-      );
+      renderImages(container, [{ url: source, fileName: "preview.png" }], {
+        sessionKey,
+        agentId: "main",
+        authToken: "image-test-token",
+        onRequestUpdate,
+      });
     const renderProtected = observeSubscriber(() =>
       renderPane(protectedPane, "protected", renderProtected),
     );
@@ -281,7 +325,7 @@ describe("chat media resource lifecycle", () => {
         width: count === 1 ? 16 : 640,
         height: count === 1 ? 16 : 640,
       }));
-      render(renderMessageImages(images), container);
+      renderImages(container, images);
       const gallery = container.querySelector(".chat-message-images");
       expect(gallery?.classList.contains("chat-message-images--single")).toBe(count === 1);
       expect(gallery?.classList.contains("chat-message-images--gallery")).toBe(count > 1);
@@ -317,7 +361,7 @@ describe("chat media resource lifecycle", () => {
       for (const [item] of [...previousOpen.mock.calls, ...currentOpen.mock.calls]) {
         item.release?.();
       }
-      render(null, container);
+      unmountImages(container);
       container.remove();
     });
     renderManagedImage(container, source, {
@@ -383,7 +427,7 @@ describe("chat media resource lifecycle", () => {
         url: source,
         alt: "Managed image",
       }));
-      render(renderMessageImages(images, { onRequestUpdate: rerender }), container);
+      renderImages(container, images, { onRequestUpdate: rerender });
     });
 
     rerender();
@@ -411,7 +455,7 @@ describe("chat media resource lifecycle", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("resubscribes a guarded managed image when its Lit root reconnects", async () => {
+  it("resubscribes a retained managed image when its Solid owner reconnects", async () => {
     const { blobUrl } = installManagedImageUrls();
     const fetchMock = vi.fn(async () => imageResponse());
     vi.stubGlobal("fetch", fetchMock);
@@ -419,10 +463,18 @@ describe("chat media resource lifecycle", () => {
     const container = document.createElement("div");
     const source = managedImageSource();
     const image = { url: source, alt: "Managed image" };
-    const renderImageRow = vi.fn(() => renderMessageImages([image], { onRequestUpdate: rerender }));
-    let root!: ReturnType<typeof render>;
+    const [presented, setPresented] = createSignal(true);
+    const renderImageRow = vi.fn(() => (
+      <MessageImages images={[image]} options={{ onRequestUpdate: rerender }} />
+    ));
+    let root: ReturnType<typeof mountSolid> | undefined;
     const rerender = observeSubscriber(() => {
-      root = render(html`${guard([source], renderImageRow)}`, container);
+      root ??= mountSolid(
+        () => (
+          <SolidContentPresentation value={presented}>{renderImageRow()}</SolidContentPresentation>
+        ),
+        { container },
+      );
     });
 
     rerender();
@@ -433,11 +485,11 @@ describe("chat media resource lifecycle", () => {
     );
     expect(originalResource.subscribers.size).toBe(1);
 
-    root.setConnected(false);
+    setPresented(false);
     flush();
     expect(isChatMediaResourceCurrent(originalResource)).toBe(false);
 
-    root.setConnected(true);
+    setPresented(true);
     await vi.advanceTimersByTimeAsync(0);
 
     const reconnectedResource = observeChatMediaResource<string | null>(
@@ -449,20 +501,17 @@ describe("chat media resource lifecycle", () => {
     expect(container.querySelector<HTMLImageElement>(".chat-message-image")?.src).toBe(blobUrl);
   });
 
-  it("does not subscribe or fetch a managed image while its Lit root is disconnected", async () => {
+  it("does not subscribe or fetch a managed image while its Solid owner is disconnected", async () => {
     installManagedImageUrls();
     const fetchMock = vi.fn(async () => imageResponse());
     vi.stubGlobal("fetch", fetchMock);
 
     const container = document.createElement("div");
     let source = managedImageSource();
-    let root!: ReturnType<typeof render>;
+    let root!: ReturnType<typeof renderImages>;
     const rerender = observeSubscriber(() => {
       const image = { url: source, alt: "Managed image" };
-      root = render(
-        html`${guard([source], () => renderMessageImages([image], { onRequestUpdate: rerender }))}`,
-        container,
-      );
+      root = renderImages(container, [image], { onRequestUpdate: rerender });
     });
 
     rerender();

@@ -1,11 +1,12 @@
 /* @vitest-environment jsdom */
-import { nothing, render } from "lit";
+import { createComponent } from "solid-js";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ImageLightboxItem } from "../../../components/image-lightbox.types.ts";
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
+import { cleanupSolid, mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { buildCachedChatItems, resetChatThreadState } from "../chat-thread.ts";
 import * as turnBoundary from "../chat-turn-boundary.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import { MessageGroup as MessageGroupView } from "./chat-message-group-view.tsx";
 import {
   createAssistantMessage,
   createAttachmentBlock,
@@ -15,7 +16,7 @@ import { projectTurnVideoMessages } from "./chat-turn-video-gallery.ts";
 
 const container = document.createElement("div");
 afterEach(() => {
-  render(nothing, container);
+  cleanupSolid();
   container.remove();
   vi.restoreAllMocks();
   resetChatThreadState();
@@ -142,21 +143,22 @@ it("keeps duplicate positioned video slots and sibling messages, but not persist
   ];
   let opened: ImageLightboxItem | undefined;
   document.body.append(container);
-  render(
-    renderMessageGroup(
-      createMessageGroup(message, "assistant", { messages: [{ key: "first", message }] }),
-      {
-        showReasoning: false,
-        showToolCalls: false,
-        assistantName: "OpenClaw",
-        assistantAvatar: null,
-        getTurnVideoMessages: () => turn,
-        onOpenImage: (item) => {
-          opened = item;
+  mountSolid(
+    () =>
+      createComponent(MessageGroupView, {
+        group: createMessageGroup(message, "assistant", { messages: [{ key: "first", message }] }),
+        options: {
+          showReasoning: false,
+          showToolCalls: false,
+          assistantName: "OpenClaw",
+          assistantAvatar: null,
+          getTurnVideoMessages: () => turn,
+          onOpenImage: (item) => {
+            opened = item;
+          },
         },
-      },
-    ),
-    container,
+      }),
+    { container },
   );
   const players = [...container.querySelectorAll("openclaw-chat-video-player")];
   expect(players).toHaveLength(2);
