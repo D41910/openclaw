@@ -306,12 +306,20 @@ describe("provider terminal reply delivery", () => {
         const sessionKeys = cases.map(({ id }) =>
           id === "retained" ? `agent:qa:subagent:terminal-${id}` : `agent:qa:qa:terminal-${id}`,
         );
+        const deliveredTexts = (target: string) =>
+          deliveries.filter((delivery) => delivery.to === target).map((delivery) => delivery.text);
         const sessionIds: string[] = [];
         for (const [index, testCase] of cases.entries()) {
           const runId = `terminal-${testCase.id}`;
           const sessionKey = sessionKeys[index]!;
           const target = `dm:terminal-${testCase.id}`;
           const script = scripts[index]!;
+          const expected =
+            testCase.id === "retained"
+              ? [testCase.raw]
+              : testCase.expected
+                ? [testCase.expected]
+                : [];
           await client.request("sessions.messages.subscribe", { key: sessionKey });
           const accepted = await client.request("agent", {
             sessionKey,
@@ -350,7 +358,7 @@ describe("provider terminal reply delivery", () => {
             for (let length = 1; length < PREFIX.length; length++) {
               await appendAndObserve(PREFIX[length - 1]!, `[prefix-${length}]`);
               expect(streamed(), `strict prefix length ${length}`).toBe("");
-              expect(deliveries.filter((delivery) => delivery.to === target)).toEqual([]);
+              expect(deliveredTexts(target)).toEqual([]);
               expect(
                 events
                   .filter(
@@ -385,28 +393,14 @@ describe("provider terminal reply delivery", () => {
               event.payload?.runId === runId &&
               event.payload.state === "final",
           );
-          expect(
-            deliveries
-              .filter((delivery) => delivery.to === target)
-              .map((delivery) => delivery.text),
-          ).toEqual(
-            testCase.id === "retained"
-              ? [testCase.raw]
-              : testCase.expected
-                ? [testCase.expected]
-                : [],
-          );
+          expect(deliveredTexts(target)).toEqual(expected);
           const history = await client.request<{ sessionId: string; messages: unknown[] }>(
             "chat.history",
             { sessionKey, limit: 20, maxChars: 50_000 },
           );
           sessionIds.push(history.sessionId);
           expect(history.messages.map(assistantText).filter((text) => text !== undefined)).toEqual(
-            testCase.id === "retained"
-              ? [testCase.raw]
-              : testCase.expected
-                ? [testCase.expected]
-                : [],
+            expected,
           );
         }
 
@@ -537,11 +531,7 @@ describe("provider terminal reply delivery", () => {
           sessionKey: sessionKeys[1],
           idempotencyKey: "retention-warning",
         });
-        expect(
-          deliveries
-            .filter((delivery) => delivery.to === "dm:retention-warning")
-            .map((delivery) => delivery.text),
-        ).toEqual([retainedWarning]);
+        expect(deliveredTexts("dm:retention-warning")).toEqual([retainedWarning]);
         const requesterHistory = (await gateway.call("chat.history", {
           sessionKey: sessionKeys[1],
           limit: 20,

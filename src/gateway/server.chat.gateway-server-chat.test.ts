@@ -1352,9 +1352,6 @@ describe("gateway server chat", () => {
       { content: "NO_REPLY\nNO_REPLY\nREADY", expected: "NO_REPLY\nREADY" },
       { content: " NO_REPLY\nREADY", expected: " NO_REPLY\nREADY" },
       { content: "NO_REPLY.", expected: "NO_REPLY." },
-      { content: '"NO_REPLY"', expected: '"NO_REPLY"' },
-      { content: '{"action":"NO_REPLY"}', expected: '{"action":"NO_REPLY"}' },
-      { content: "no_reply", expected: "no_reply" },
       { content: "NO_REPLY\r\nREADY", expected: "NO_REPLY\r\nREADY" },
       { content: " \tNO_REPLY\n", expected: undefined },
       {

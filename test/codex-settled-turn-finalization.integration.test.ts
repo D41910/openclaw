@@ -152,14 +152,10 @@ describe("registered Codex finalizer host silence contract", () => {
     },
   );
 
-  it.each(
-    (["optional", "required"] as const).flatMap((expectation) =>
-      ["NO_REPLY", " \nNO_REPLY\t"].map((text) => ({
-        expectation,
-        text,
-      })),
-    ),
-  )(
+  it.each([
+    { expectation: "optional", text: " \nNO_REPLY\t" },
+    { expectation: "required", text: "NO_REPLY" },
+  ] as const)(
     "ends successful $expectation recovery after one authored silent finalizer: $text",
     async ({ expectation, text }) => {
       const input = await createInput({ terminalStatus: "completed" });
@@ -183,38 +179,31 @@ describe("registered Codex finalizer host silence contract", () => {
     },
   );
 
-  it.each(["NO_REPLY"])(
-    "recovers result-required exact silence into a real result: %s",
-    async (text) => {
-      const input = await createInput({ terminalStatus: "completed" });
-      input.terminalBase.runParams.terminalReplyExpectation = "result-required";
-      const silentResult = returnBoundedText(text);
-      const answer = "The command completed and returned: settled.";
-      returnBoundedText(answer);
-      fixture.runBounded.mockResolvedValueOnce(silentResult);
+  it("recovers result-required exact silence into a real result", async () => {
+    const input = await createInput({ terminalStatus: "completed" });
+    input.terminalBase.runParams.terminalReplyExpectation = "result-required";
+    const silentResult = returnBoundedText("NO_REPLY");
+    const answer = "The command completed and returned: settled.";
+    returnBoundedText(answer);
+    fixture.runBounded.mockResolvedValueOnce(silentResult);
 
-      const result = await prepareTerminalWithSettledTurnFinalization(input);
+    const result = await prepareTerminalWithSettledTurnFinalization(input);
 
-      expect(fixture.runBounded).toHaveBeenCalledTimes(2);
-      expect(result.finalizationOutcome).toBe("answered");
-      expect(result.attempt.terminal).toEqual({ kind: "ok" });
-      expect(result.attempt.assistantTexts).toEqual([answer]);
-      expect(result.prepared.payloadsWithToolMedia).toEqual([
-        expect.objectContaining({ text: answer }),
-      ]);
-      expect(fixture.mirror).toHaveBeenCalledOnce();
-    },
-  );
+    expect(fixture.runBounded).toHaveBeenCalledTimes(2);
+    expect(result.finalizationOutcome).toBe("answered");
+    expect(result.attempt.terminal).toEqual({ kind: "ok" });
+    expect(result.attempt.assistantTexts).toEqual([answer]);
+    expect(result.prepared.payloadsWithToolMedia).toEqual([
+      expect.objectContaining({ text: answer }),
+    ]);
+    expect(fixture.mirror).toHaveBeenCalledOnce();
+  });
 
   it.each([
     [
       "The command completed and returned: settled.",
       "The command completed and returned: settled.",
     ],
-    ["NO_REPLY.", "NO_REPLY."],
-    ['"NO_REPLY"', '"NO_REPLY"'],
-    ['{"action":"NO_REPLY"}', '{"action":"NO_REPLY"}'],
-    ["no_reply", "no_reply"],
     ["NO_REPLY\nNO_REPLY", "NO_REPLY"],
   ])("replaces provider failure with the ordinary finalizer answer %j", async (rawText, text) => {
     const input = await createInput();

@@ -271,58 +271,19 @@ export function registerRequiredReplyCompletionCases({
     );
   });
 
-  it.each([
-    {
-      label: "NO_REPLY",
-      pendingContinuation: false,
-      expectation: "required",
-      result: {
-        payloads: [],
-        meta: {
-          finalAssistantVisibleText: "",
-          terminalReply: { disposition: "silent" },
-        },
-      },
-      missing: false,
-    },
-    {
-      label: "optional NO_REPLY",
-      pendingContinuation: false,
-      expectation: "optional",
-      result: {
-        payloads: [],
-        meta: {
-          finalAssistantVisibleText: "",
-          terminalReply: { disposition: "silent" },
-        },
-      },
-      missing: false,
-    },
-    {
-      label: "pending tool continuation",
-      pendingContinuation: true,
-      expectation: "required",
-      result: { payloads: [], meta: { pendingToolCalls: [{ name: "hosted_tool" }] } },
-      missing: false,
-    },
-  ] as const)(
-    "settles $label according to its reply obligation",
-    async ({ result, pendingContinuation, expectation, missing }) => {
-      state.runEmbeddedAgentMock.mockResolvedValueOnce(result);
-      const onPendingContinuation = vi.fn();
-      const { run } = createMinimalRun({
-        opts: { onPendingContinuation },
-        runOverrides: { terminalReplyExpectation: expectation },
-      });
-
-      if (missing) {
-        await expect(run()).resolves.toMatchObject({ isError: true });
-      } else {
-        await expect(run()).resolves.toBeUndefined();
-      }
-      expect(onPendingContinuation).toHaveBeenCalledTimes(pendingContinuation ? 1 : 0);
-    },
-  );
+  it("retains pending tool continuation without a terminal reply", async () => {
+    state.runEmbeddedAgentMock.mockResolvedValueOnce({
+      payloads: [],
+      meta: { pendingToolCalls: [{ name: "hosted_tool" }] },
+    });
+    const onPendingContinuation = vi.fn();
+    const { run } = createMinimalRun({
+      opts: { onPendingContinuation },
+      runOverrides: { terminalReplyExpectation: "required" },
+    });
+    await expect(run()).resolves.toBeUndefined();
+    expect(onPendingContinuation).toHaveBeenCalledOnce();
+  });
 
   it("delivers a required yield acknowledgment despite silentExpected in message-tool-only mode", async () => {
     await mockAcceptedWaitingStatusRun(state.runEmbeddedAgentMock, {

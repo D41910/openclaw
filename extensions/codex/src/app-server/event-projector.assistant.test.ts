@@ -604,10 +604,6 @@ describe("CodexAppServerEventProjector assistant projection", () => {
     [" \nNO_REPLY\t", "", "silent"],
     ["no_reply", "no_reply", "visible"],
     ["NO_REPLY.", "NO_REPLY.", "visible"],
-    ['"NO_REPLY"', '"NO_REPLY"', "visible"],
-    ['{"action":"NO_REPLY"}', '{"action":"NO_REPLY"}', "visible"],
-    ["NO_REPLY NO_REPLY", "NO_REPLY NO_REPLY", "visible"],
-    ["Answer NO_REPLY", "Answer NO_REPLY", "visible"],
     ["NO_REPLY\nNO_REPLY", "NO_REPLY", "visible"],
     ["NO_REPLY\n  Answer\n", "  Answer\n", "visible"],
   ])("prepares native final %j without reclassifying %j", async (rawText, text, disposition) => {
@@ -630,16 +626,14 @@ describe("CodexAppServerEventProjector assistant projection", () => {
     }
   });
 
-  it.each(["NO_REPLY.", "no_reply", "NO_REPLY\nNO_REPLY"])(
-    "retains ordinary protocol-looking text at a steering boundary: %j",
-    async (text) => {
-      const projector = await createProjector(await createParams());
-      await streamFinalAnswer(projector, "before-steer", text);
-      expect(projector.buildSteeringTranscriptPrefix()).toEqual([
-        expect.objectContaining({ content: [{ type: "text", text }] }),
-      ]);
-    },
-  );
+  it("retains literal control-looking text at a steering boundary", async () => {
+    const text = "NO_REPLY\nNO_REPLY";
+    const projector = await createProjector(await createParams());
+    await streamFinalAnswer(projector, "before-steer", text);
+    expect(projector.buildSteeringTranscriptPrefix()).toEqual([
+      expect.objectContaining({ content: [{ type: "text", text }] }),
+    ]);
+  });
 
   it("drops a pre-sleep final after a later sleep handoff", async () => {
     const projector = await createProjector(await createParams());

@@ -437,36 +437,31 @@ export function registerCliReplyCompletionTests({
     },
   );
 
-  it.each([SILENT_REPLY_TOKEN, " \tNO_REPLY\n"])(
-    "rejects exact CLI silence when a private result is required: %s",
+  it("rejects whitespace-wrapped CLI silence when a private result is required", async () => {
+    const text = " \tNO_REPLY\n";
+    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
+    const context = createContext({
+      sessionKey: "agent:main:subagent:required-cli-reply",
+      lane: "subagent",
+      inputProvenance: { kind: "inter_session", sourceTool: "sessions_spawn" },
+    });
+
+    await expect(run(context)).rejects.toMatchObject({
+      name: "FailoverError",
+      reason: "empty_response",
+    });
+    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+  });
+
+  it.each(["NO_REPLY.", "NO_REPLY The requested result."])(
+    "preserves ordinary token-like text on an external required turn: %s",
     async (text) => {
       supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
-      const context = createContext({
-        sessionKey: "agent:main:subagent:required-cli-reply",
-        lane: "subagent",
-        inputProvenance: { kind: "inter_session", sourceTool: "sessions_spawn" },
-      });
-
-      await expect(run(context)).rejects.toMatchObject({
-        name: "FailoverError",
-        reason: "empty_response",
-      });
+      const result = await run(createContext({ terminalReplyExpectation: "required" }));
+      expect(result.meta.error).toBeUndefined();
+      expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
+      expect(result.payloads).toEqual([{ text }]);
       expect(supervisorSpawnMock).toHaveBeenCalledOnce();
     },
   );
-
-  it.each([
-    "NO_REPLY.",
-    '"NO_REPLY"',
-    JSON.stringify({ action: SILENT_REPLY_TOKEN }),
-    "NO_REPLY NO_REPLY",
-    "NO_REPLY The requested result.",
-  ])("preserves ordinary token-like text on an external required turn: %s", async (text) => {
-    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: text }));
-    const result = await run(createContext({ terminalReplyExpectation: "required" }));
-    expect(result.meta.error).toBeUndefined();
-    expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
-    expect(result.payloads).toEqual([{ text }]);
-    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-  });
 }

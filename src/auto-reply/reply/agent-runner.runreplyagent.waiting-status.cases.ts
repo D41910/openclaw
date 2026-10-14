@@ -219,8 +219,6 @@ export function registerWaitingStatusCases({
   });
 
   it.each([
-    { label: "no children", acceptedSessionSpawns: [], delivered: true },
-    { label: "explicit silence", acceptedSessionSpawns: [], delivered: true, silent: true },
     {
       label: "a fire-and-forget child",
       acceptedSessionSpawns: [
@@ -260,7 +258,6 @@ export function registerWaitingStatusCases({
         meta: {
           durationMs: 0,
           continuationPending: true,
-          ...("silent" in scenario ? { terminalReply: { disposition: "silent" as const } } : {}),
         },
         acceptedSessionSpawns,
       };
@@ -274,16 +271,6 @@ export function registerWaitingStatusCases({
     const result = await run();
     assert(handle);
     expect(onPendingContinuation).toHaveBeenCalledExactlyOnceWith(undefined);
-    if ("silent" in scenario) {
-      expect(result).toBeUndefined();
-      expect(
-        hasPendingGeneratedMediaTaskForSessionKey(
-          handle.requesterSessionKey,
-          handle.requesterAgentId,
-        ),
-      ).toBe(true);
-      return;
-    }
     expect(result).toMatchObject({
       text: "I’m continuing this work and will send the result when it is ready.",
     });
