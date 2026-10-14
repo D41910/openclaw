@@ -4,6 +4,7 @@ import type { MessageGroup } from "../../lib/chat/chat-types.ts";
 import { extractTextCached } from "../../lib/chat/message-extract.ts";
 import {
   assistantMessageIsInterrupted,
+  isProviderVoiceTranscript,
   resolveAssistantReplyPhase,
 } from "./chat-assistant-reply.ts";
 import {
@@ -105,6 +106,7 @@ function messageCanOwnCompletedFrame(message: unknown, explicitOnly: boolean): b
   if (
     !(extractTextCached(message)?.trim() || extractMessageMediaText(message)) ||
     assistantMessageIsInterrupted(message) ||
+    isProviderVoiceTranscript(message) ||
     phase === "commentary" ||
     stopReason === "toolUse" ||
     stopReason === "error" ||

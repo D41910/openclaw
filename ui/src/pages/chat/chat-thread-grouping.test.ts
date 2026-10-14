@@ -59,6 +59,24 @@ function signed(text: string, phase: string) {
 }
 beforeEach(() => resetChatThreadState());
 
+describe("provider-owned voice transcript presentation", () => {
+  it("keeps speech separate from answer ownership and completed-work rollups", () => {
+    const answer = message("assistant", "The command exited with code 0.", 2);
+    const speech = message("assistant", "The command exited with code zero.", 3, {
+      __openclaw: { voiceTranscript: "provider-owned" },
+    });
+    const groups = cachedGroups([message("user", "Check the command.", 1), answer, speech]);
+    expect(groups.map((group) => group.messages.map((item) => item.message))).toEqual([
+      [expect.objectContaining({ role: "user" })],
+      [answer],
+      [speech],
+    ]);
+    expect(assistantGroupCanOwnActiveRunStatus(groups[1]!)).toBe(true);
+    expect(assistantGroupCanOwnActiveRunStatus(groups[2]!)).toBe(false);
+    expect(collapseCompletedTurnWork(groups, { sessionKey, runWorking: false })).toEqual(groups);
+  });
+});
+
 describe("queued input group continuity", () => {
   it("keeps each queued message in the same row through acceptance and persistence", () => {
     const queue: ChatQueueItem[] = ["First queued input", "Second queued input"].map(

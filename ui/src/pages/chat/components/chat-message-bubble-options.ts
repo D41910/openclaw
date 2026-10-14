@@ -17,6 +17,8 @@ import type { ToolRenderOptions } from "./chat-tool-render-model.ts";
 export type GroupedMessageOptions = {
   isStreaming: boolean;
   isForwarded?: boolean;
+  /** Search reveals matching transcript text inside disclosures. */
+  searchResult?: boolean;
   sessionKey?: string;
   presented?: boolean;
   transcriptVisible?: PresentationValue;

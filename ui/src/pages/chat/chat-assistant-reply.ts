@@ -6,6 +6,15 @@ import {
 import { isKeyedAssistantStreamFallbackMessage } from "./chat-thread-run-identity.ts";
 import { readLiveTerminalDisposition } from "./terminal-message-identity.ts";
 
+/** Host-stamped provider speech is a call transcript, not a backing-agent answer. */
+export function isProviderVoiceTranscript(message: unknown): boolean {
+  const record = asRecord(message);
+  return (
+    record?.role === "assistant" &&
+    asRecord(record["__openclaw"])?.voiceTranscript === "provider-owned"
+  );
+}
+
 export function assistantMessageIsInterrupted(message: unknown): boolean {
   const record = asRecord(message);
   const stopReason = typeof record?.stopReason === "string" ? record.stopReason.toLowerCase() : "";
