@@ -417,7 +417,7 @@ it.each([
         () => {
           previewUpdateComplete = true;
         },
-        (error) => {
+        (error: unknown) => {
           previewUpdateError = String(error);
         },
       );
