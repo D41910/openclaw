@@ -1,21 +1,25 @@
 /* @vitest-environment jsdom */
 
+import { createComponent } from "solid-js";
 import { expect, it } from "vitest";
 import { mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { chatStartupStatusLabel } from "../chat-run-startup.ts";
 import { resolveMessageGroupSenderLabel } from "./chat-message-sender.ts";
-import { renderSolidStreamGroup } from "./chat-message-stream-view.tsx";
+import { StreamGroup } from "./chat-message-stream-view.tsx";
 
 it("renders the startup status with elapsed time instead of a working phrase", () => {
   const container = document.createElement("div");
 
   mountSolid(
     () =>
-      renderSolidStreamGroup([{ kind: "reading-indicator", key: "reading", startedAt: 1_000 }], {
-        startupLabel: chatStartupStatusLabel(
-          { state: "status", runId: "startup-run", phase: "waiting_for_state" },
-          null,
-        ),
+      createComponent(StreamGroup, {
+        parts: [{ kind: "reading-indicator", key: "reading", startedAt: 1_000 }],
+        options: {
+          startupLabel: chatStartupStatusLabel(
+            { state: "status", runId: "startup-run", phase: "waiting_for_state" },
+            null,
+          ),
+        },
       }),
     { container },
   );
@@ -55,16 +59,19 @@ it.each([
   const container = document.createElement("div");
   mountSolid(
     () =>
-      renderSolidStreamGroup([{ kind: "reading-indicator", key: "reading", startedAt: 1_000 }], {
-        startupLabel: chatStartupStatusLabel(
-          null,
-          {
-            sessionKey: "agent:main:cloud-status",
-            phase: "provisioning",
-            startedAt: 1_000,
-          },
-          startStatus,
-        ),
+      createComponent(StreamGroup, {
+        parts: [{ kind: "reading-indicator", key: "reading", startedAt: 1_000 }],
+        options: {
+          startupLabel: chatStartupStatusLabel(
+            null,
+            {
+              sessionKey: "agent:main:cloud-status",
+              phase: "provisioning",
+              startedAt: 1_000,
+            },
+            startStatus,
+          ),
+        },
       }),
     { container },
   );
