@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { useAutoCleanupTempDirTracker } from "../helpers/temp-dir.js";
 import { createNestedGitEnv } from "../helpers/temp-repo.js";
+import { runWorkflowShellScript } from "./ci-workflow.test-support.js";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 const workflow = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"), {
@@ -28,16 +29,11 @@ describe("CI ratchet comparison ownership", () => {
     const fork = "d".repeat(40);
     const output = path.join(root, "output");
     const apiLog = path.join(root, "api");
-    const run = spawnSync(
-      "/bin/bash",
-      [
-        "-c",
-        'gh() { printf "%s\\n" "$*" >> "$API_LOG"; printf "%s\\n" "$FORK_SHA"; }\n' +
-          step("preflight", "Resolve checkout comparison base"),
-      ],
+    const run = runWorkflowShellScript(
+      'gh() { printf "%s\\n" "$*" >> "$API_LOG"; printf "%s\\n" "$FORK_SHA"; }\n' +
+        step("preflight", "Resolve checkout comparison base"),
       {
         cwd: root,
-        encoding: "utf8",
         env: {
           ...process.env,
           GITHUB_OUTPUT: output,
@@ -50,6 +46,7 @@ describe("CI ratchet comparison ownership", () => {
         },
       },
     );
+    expect(run.error).toBeUndefined();
     expect(run.status, run.stderr).toBe(0);
     expect(fs.readFileSync(output, "utf8")).toBe(`sha=${merged ? base : fork}\n`);
     if (merged) {
@@ -64,12 +61,10 @@ describe("CI ratchet comparison ownership", () => {
   it("refuses an unavailable API ancestor without publishing a fallback", () => {
     const root = tempDirs.make("openclaw-ci-ratchet-error-");
     const output = path.join(root, "output");
-    const run = spawnSync(
-      "/bin/bash",
-      ["-c", "gh() { return 1; }\n" + step("preflight", "Resolve checkout comparison base")],
+    const run = runWorkflowShellScript(
+      "gh() { return 1; }\n" + step("preflight", "Resolve checkout comparison base"),
       {
         cwd: root,
-        encoding: "utf8",
         env: {
           ...process.env,
           GITHUB_OUTPUT: output,
@@ -80,7 +75,8 @@ describe("CI ratchet comparison ownership", () => {
         },
       },
     );
-    expect(run.status).not.toBe(0);
+    expect(run.error).toBeUndefined();
+    expect(run.status, run.stderr).toBe(1);
     expect(fs.existsSync(output)).toBe(false);
   });
 
