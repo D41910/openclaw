@@ -399,10 +399,8 @@ suite.define(() => {
         }
         await navigateInApp(page, "new-session", "?agent=main");
         const composer = page.locator(".new-session-page__message");
-        if (readiness) {
-          // Wait for the retained draft before fill selects and replaces it.
-          await expect.poll(() => composer.inputValue()).toBe(submitted);
-        }
+        // Acceptance can already retire the submitted text. New input must win
+        // whether the returning draft is still populated or has been cleared.
         await composer.fill(message);
         const newerUrl = page.url();
         if (readiness) {
