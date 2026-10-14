@@ -220,7 +220,7 @@ export class ShellChromeOwner {
         this.navDrawerSwipe.reset();
         const drawer = host.querySelector<HTMLElement>(".shell-nav");
         if (drawer) {
-          (navDrawerFocusableElements(drawer)[0] ?? drawer).focus({ preventScroll: true });
+          focusWithoutTooltip(navDrawerFocusableElements(drawer)[0] ?? drawer);
         }
       });
       return;
