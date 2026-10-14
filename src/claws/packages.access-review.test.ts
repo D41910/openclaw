@@ -44,7 +44,15 @@ describe("Claw package reviewed access", () => {
               .mockResolvedValue({ ok: true, action: "install", integrity: skillIntegrity }),
             persistPackageRef,
             completePackageRef: vi.fn((ref, status) => ({ ...ref, status })),
-            acquirePackageLease: vi.fn(() => ({ heartbeat: vi.fn(), release: vi.fn() })),
+            acquirePackageLease: vi.fn(async () => ({
+              identity: {
+                scope: "claw-package-lifecycle" as const,
+                key: "test-package",
+                owner: "test-owner",
+              },
+              heartbeat: vi.fn(),
+              release: vi.fn(),
+            })),
           },
         },
       ),

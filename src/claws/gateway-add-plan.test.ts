@@ -55,7 +55,7 @@ describe("Gateway Claw Add plan", () => {
     if (!source.ok) {
       return;
     }
-    const config = { agents: { list: [] } };
+    const config = { agents: { entries: {} } };
     const plan = await buildGatewayClawAddPlan(source, {
       config,
       agentId: "claw-gateway-add-fixture",
@@ -92,7 +92,7 @@ describe("Gateway Claw Add plan", () => {
     if (!source.ok) {
       return;
     }
-    const config = { agents: { list: [{ id: "claw-gateway-add-fixture" }] } };
+    const config = { agents: { entries: { "claw-gateway-add-fixture": {} } } };
     const plan = await buildGatewayClawAddPlan(source, {
       config,
       agentId: "claw-gateway-add-fixture",
@@ -160,7 +160,7 @@ describe("Gateway Claw Add plan", () => {
     }
 
     const plan = await buildGatewayClawAddPlan(source, {
-      config: { agents: { list: [] } },
+      config: { agents: { entries: {} } },
       agentId: "claw-gateway-state-root-fixture",
       sourceMcpServers: {},
     });
@@ -183,7 +183,7 @@ describe("Gateway Claw Add plan", () => {
     if (!source.ok) {
       return;
     }
-    const config = { agents: { list: [] } };
+    const config = { agents: { entries: {} } };
 
     const plan = await buildGatewayClawAddPlan(source, {
       config,
@@ -224,7 +224,7 @@ describe("Gateway Claw Add plan", () => {
     }
 
     const plan = await buildGatewayClawAddPlan(source, {
-      config: { agents: { list: [] } },
+      config: { agents: { entries: {} } },
       agentId: "workflow-operator",
       sourceMcpServers: {},
     });
@@ -249,7 +249,7 @@ describe("Gateway Claw Add plan", () => {
     }
 
     const plan = await buildGatewayClawAddPlan(source, {
-      config: { agents: { list: [] } },
+      config: { agents: { entries: {} } },
       agentId: "workflow-operator",
       sourceMcpServers: {},
     });
@@ -293,7 +293,7 @@ describe("Gateway Claw Add plan", () => {
     if (!source.ok) {
       return;
     }
-    const config = { agents: { list: [] } };
+    const config = { agents: { entries: {} } };
     const trust = {
       riskAcknowledgementRequired: false,
       trustRecord: {
@@ -453,7 +453,7 @@ describe("Gateway Claw Add plan", () => {
     if (!source.ok) {
       return;
     }
-    const config = { agents: { list: [] } };
+    const config = { agents: { entries: {} } };
     const plan = await buildGatewayClawAddPlan(source, {
       config,
       sourceMcpServers: {},

@@ -49,7 +49,15 @@ const baseDeps = {
     action: "install" as const,
     request: { rawSpec: params.rawSpec, installKind: "plugin" as const },
   })),
-  acquirePackageLease: vi.fn(() => ({ heartbeat: vi.fn(), release: vi.fn() })),
+  acquirePackageLease: vi.fn(async () => ({
+    identity: {
+      scope: "claw-package-lifecycle" as const,
+      key: "test-package",
+      owner: "test-owner",
+    },
+    heartbeat: vi.fn(),
+    release: vi.fn(),
+  })),
 };
 
 describe("Claw plugin install consent", () => {

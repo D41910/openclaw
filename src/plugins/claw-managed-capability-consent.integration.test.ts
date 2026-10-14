@@ -7,14 +7,16 @@ import { bindClawPluginBeforeCommit } from "../claws/package-plugin-before-commi
 import { inspectClawPluginCapabilities } from "../claws/plugin-capability-probe.js";
 import { closeOpenClawStateDatabaseForTest } from "../state/openclaw-state-db.js";
 import { withEnvAsync } from "../test-utils/env.js";
+import { clawHubSecurityResponse } from "./clawhub.test-fixtures.js";
 import { createClawHubArchiveFactory } from "./clawhub.test-support.js";
 import { resolveDefaultPluginExtensionsDir } from "./install-paths.js";
-import { readPersistedInstalledPluginIndexInstallRecords } from "./installed-plugin-index-records.js";
+import { readPersistedInstalledPluginIndexInstallRecordsAsync } from "./installed-plugin-index-records.js";
 import { installManagedPlugin } from "./management-mutations.js";
 
 const clawhub = vi.hoisted(() => ({
   detail: vi.fn(),
   artifact: vi.fn(),
+  security: vi.fn(),
   download: vi.fn(),
   officialCatalog: vi.fn(async () => ({ source: "hosted" as const, entries: [] })),
 }));
@@ -23,6 +25,7 @@ vi.mock("../infra/clawhub-packages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../infra/clawhub-packages.js")>()),
   fetchClawHubPackageDetail: clawhub.detail,
   fetchClawHubPackageArtifact: clawhub.artifact,
+  fetchClawHubPackageSecurity: clawhub.security,
 }));
 vi.mock("../infra/clawhub-artifacts.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../infra/clawhub-artifacts.js")>()),
@@ -104,6 +107,7 @@ describe("Claw-managed plugin capability consent", () => {
       version: { version: "1.0.0", sha256hash: archive.integrity },
     });
     clawhub.download.mockResolvedValue({ ...archive, cleanup: async () => {} });
+    clawhub.security.mockResolvedValue(clawHubSecurityResponse("@openclaw/diffs", "1.0.0"));
     const env = {
       OPENCLAW_HOME: path.join(root, "home"),
       OPENCLAW_STATE_DIR: path.join(root, "state"),
@@ -132,7 +136,9 @@ describe("Claw-managed plugin capability consent", () => {
       await expect(
         fs.stat(path.join(resolveDefaultPluginExtensionsDir(env), "diffs")),
       ).rejects.toMatchObject({ code: "ENOENT" });
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.diffs).toBeFalsy();
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.diffs,
+      ).toBeFalsy();
 
       const accepted = vi.fn(async (review: { reviewToken: string }) => ({
         reviewToken: review.reviewToken,
@@ -141,7 +147,9 @@ describe("Claw-managed plugin capability consent", () => {
         installManagedPlugin({ request, env, clawManaged: true, onCapabilityConsent: accepted }),
       ).resolves.toMatchObject({ plugin: { id: "diffs", installed: true } });
       expect(accepted).toHaveBeenCalledOnce();
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.diffs).toMatchObject({
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.diffs,
+      ).toMatchObject({
         source: "clawhub",
         clawhubPackage: "@openclaw/diffs",
         integrity: archive.integrity,
@@ -173,7 +181,9 @@ describe("Claw-managed plugin capability consent", () => {
       await expect(
         fs.stat(path.join(resolveDefaultPluginExtensionsDir(env), "claw-audit")),
       ).rejects.toMatchObject({ code: "ENOENT" });
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.["claw-audit"]).toBeFalsy();
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.["claw-audit"],
+      ).toBeFalsy();
     });
   });
 
@@ -203,9 +213,9 @@ describe("Claw-managed plugin capability consent", () => {
       expect(reviewed).toEqual([["audit.read"]]);
       const artifactDir = path.join(resolveDefaultPluginExtensionsDir(env), "claw-audit");
       const originalArtifact = await fs.readFile(path.join(artifactDir, "openclaw.plugin.json"));
-      const originalRecord = readPersistedInstalledPluginIndexInstallRecords({ env })?.[
-        "claw-audit"
-      ];
+      const originalRecord = (
+        await readPersistedInstalledPluginIndexInstallRecordsAsync({ env })
+      )?.["claw-audit"];
       expect(originalRecord?.acceptedSurface?.tools).toEqual(["audit.read"]);
 
       await writePluginSource(root, "audit.write");
@@ -225,9 +235,9 @@ describe("Claw-managed plugin capability consent", () => {
       expect(await fs.readFile(path.join(artifactDir, "openclaw.plugin.json"))).toEqual(
         originalArtifact,
       );
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.["claw-audit"]).toEqual(
-        originalRecord,
-      );
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.["claw-audit"],
+      ).toEqual(originalRecord);
     });
   });
 
@@ -273,7 +283,9 @@ describe("Claw-managed plugin capability consent", () => {
       await expect(
         fs.stat(path.join(resolveDefaultPluginExtensionsDir(env), "claw-audit")),
       ).rejects.toMatchObject({ code: "ENOENT" });
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.["claw-audit"]).toBeFalsy();
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.["claw-audit"],
+      ).toBeFalsy();
     });
   });
 
@@ -359,7 +371,9 @@ describe("Claw-managed plugin capability consent", () => {
       await expect(
         fs.stat(path.join(resolveDefaultPluginExtensionsDir(env), "claw-audit")),
       ).rejects.toMatchObject({ code: "ENOENT" });
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.["claw-audit"]).toBeFalsy();
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.["claw-audit"],
+      ).toBeFalsy();
     });
   });
 
@@ -387,9 +401,9 @@ describe("Claw-managed plugin capability consent", () => {
       });
       const artifactDir = path.join(resolveDefaultPluginExtensionsDir(env), "claw-audit");
       const originalArtifact = await fs.readFile(path.join(artifactDir, "openclaw.plugin.json"));
-      const originalRecord = readPersistedInstalledPluginIndexInstallRecords({ env })?.[
-        "claw-audit"
-      ];
+      const originalRecord = (
+        await readPersistedInstalledPluginIndexInstallRecordsAsync({ env })
+      )?.["claw-audit"];
 
       await writePluginSource(root, "audit.write");
       const onExternalMutation = vi.fn();
@@ -427,9 +441,9 @@ describe("Claw-managed plugin capability consent", () => {
       expect(await fs.readFile(path.join(artifactDir, "openclaw.plugin.json"))).toEqual(
         originalArtifact,
       );
-      expect(readPersistedInstalledPluginIndexInstallRecords({ env })?.["claw-audit"]).toEqual(
-        originalRecord,
-      );
+      expect(
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.["claw-audit"],
+      ).toEqual(originalRecord);
 
       const successfulMutation = vi.fn();
       const successfulCommit = bindClawPluginBeforeCommit(
@@ -448,8 +462,8 @@ describe("Claw-managed plugin capability consent", () => {
       });
       expect(successfulMutation).toHaveBeenCalledOnce();
       expect(
-        readPersistedInstalledPluginIndexInstallRecords({ env })?.["claw-audit"]?.acceptedSurface
-          ?.tools,
+        (await readPersistedInstalledPluginIndexInstallRecordsAsync({ env }))?.["claw-audit"]
+          ?.acceptedSurface?.tools,
       ).toEqual(["audit.write"]);
     });
   });

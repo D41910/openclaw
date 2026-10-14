@@ -104,7 +104,11 @@ async function installClawPackages(
     deps: { inspectPluginCapabilities, ...options.deps },
   });
 }
-const acquirePackageLease = vi.fn(() => ({ heartbeat: vi.fn(), release: vi.fn() }));
+const acquirePackageLease = vi.fn(async () => ({
+  identity: { scope: "claw-package-lifecycle" as const, key: "test-package", owner: "test-owner" },
+  heartbeat: vi.fn(),
+  release: vi.fn(),
+}));
 const probePlugin = vi.fn(async (request: Parameters<typeof installPluginFromClawHub>[0]) => {
   const { spec } = request;
   const pluginId = spec.slice(spec.lastIndexOf("/") + 1).split("@")[0]!;

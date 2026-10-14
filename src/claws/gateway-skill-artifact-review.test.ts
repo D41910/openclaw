@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizeClawHubSha256Integrity } from "../infra/clawhub-integrity.js";
 import { projectClawAddPlan } from "./gateway-plan-projection.js";
 import type { ClawAddPlan, ClawAddPlanAction } from "./types.js";
@@ -6,7 +7,7 @@ import type { ClawAddPlan, ClawAddPlanAction } from "./types.js";
 const root = "/tmp/claw-skill-artifact-review";
 const oldIntegrity = `sha256:${"a".repeat(64)}`;
 const newIntegrity = `sha256:${"b".repeat(64)}`;
-const addConfig = { agents: { list: [] } };
+const addConfig: OpenClawConfig = { agents: { entries: {} } };
 
 function skillAction(version: string, integrity: string): ClawAddPlanAction {
   return {

@@ -23,7 +23,15 @@ describe("stateless Claw package install", () => {
       deps: {
         installSkill: installed,
         preflightSkill: vi.fn().mockResolvedValue({ ok: true, action: "install", integrity }),
-        acquirePackageLease: vi.fn(() => ({ heartbeat: vi.fn(), release: vi.fn() })),
+        acquirePackageLease: vi.fn(async () => ({
+          identity: {
+            scope: "claw-package-lifecycle" as const,
+            key: "test-package",
+            owner: "test-owner",
+          },
+          heartbeat: vi.fn(),
+          release: vi.fn(),
+        })),
       },
     });
 

@@ -31,6 +31,18 @@ afterEach(() => closeOpenClawStateDatabaseForTest());
 const integrity = `sha256:${"a".repeat(64)}`;
 type InstallOptions = NonNullable<Parameters<typeof installClawPackages>[1]>;
 
+function testPackageLease(onRelease: () => void = () => {}) {
+  return {
+    identity: {
+      scope: "claw-package-lifecycle" as const,
+      key: "test-package",
+      owner: "test-owner",
+    },
+    heartbeat: () => {},
+    release: onRelease,
+  };
+}
+
 function packageDeps(
   root: string,
   loadInstallRecords: () => Promise<Record<string, PluginInstallRecord>>,
@@ -137,7 +149,7 @@ describe("Claw committed plugin requirement handoff", () => {
               ...packageDeps(root, async () => ({})),
               preflightPlugin: vi.fn().mockResolvedValue({ ok: true, action: "install" }),
               installPlugin,
-              acquirePackageLease: vi.fn(() => ({ heartbeat: vi.fn(), release: vi.fn() })),
+              acquirePackageLease: vi.fn(async () => testPackageLease()),
             },
           },
         ),
@@ -175,12 +187,7 @@ describe("Claw committed plugin requirement handoff", () => {
           },
           deps: {
             ...packageDeps(root, async () => ({})),
-            withPackageLease: async (_artifact, operation) =>
-              operation({
-                signal: new AbortController().signal,
-                assertOwned() {},
-                assertOwnedInTransaction() {},
-              }),
+            acquirePackageLease: async () => testPackageLease(),
           },
         },
       ).catch((error: unknown) => error);
@@ -239,17 +246,11 @@ describe("Claw committed plugin requirement handoff", () => {
           assertForwardCurrent,
           deps: {
             ...packageDeps(root, async () => records),
-            withPackageLease: async (_artifact, operation) => {
+            acquirePackageLease: async () => {
               heldPackages++;
-              try {
-                return await operation({
-                  signal: new AbortController().signal,
-                  assertOwned() {},
-                  assertOwnedInTransaction() {},
-                });
-              } finally {
+              return testPackageLease(() => {
                 heldPackages--;
-              }
+              });
             },
             installPlugin: async (params) => {
               if (params.request.source !== "clawhub" || !params.request.expectedPluginId) {
@@ -490,7 +491,7 @@ describe("Claw source-host plugin collision", () => {
             preflightPlugin,
             probePlugin,
             persistPackageRef,
-            acquirePackageLease: () => ({ heartbeat: () => true, release: () => {} }),
+            acquirePackageLease: async () => testPackageLease(),
           },
           onExternalMutation,
         }),
