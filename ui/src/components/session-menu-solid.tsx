@@ -1,6 +1,5 @@
 import { createSignal, For, merge, onSettled, Show } from "solid-js";
 import { t } from "../i18n/index.ts";
-import { useOptionalApplication } from "../lib/reactive/context.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../lit/solid-bridge.ts";
 import { DropdownMenuController } from "./dropdown-menu-controller.ts";
 import { activateMenuShortcut } from "./menu-shortcuts.ts";
@@ -72,10 +71,8 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
     },
   });
   const readState = () => state;
-  const application = useOptionalApplication();
   const controllerHost = useSessionMenuControllers(
     host,
-    application,
     () => setRevision((value) => value + 1),
     () => {
       revision();
