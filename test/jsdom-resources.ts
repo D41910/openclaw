@@ -13,6 +13,7 @@ export function trackJsdomResources(): JsdomResourceTracking | undefined {
     return undefined;
   }
   const ownerDocument = document;
+  const ownerWindow = window;
   const listeners: [EventTarget, string, EventListenerOrEventListenerObject, boolean][] = [];
   const observers = new Set<MutationObserver>();
   // Native methods are captured once and always invoked with their original target.
@@ -20,12 +21,38 @@ export function trackJsdomResources(): JsdomResourceTracking | undefined {
   const add = EventTarget.prototype.addEventListener;
   // oxlint-disable-next-line typescript/unbound-method -- called with the native EventTarget as this.
   const remove = EventTarget.prototype.removeEventListener;
+  const addWindow = ownerWindow.addEventListener.bind(ownerWindow);
+  const removeWindow = ownerWindow.removeEventListener.bind(ownerWindow);
+  const forgetListener = (
+    target: EventTarget,
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ) => {
+    const capture = typeof options === "boolean" ? options : Boolean(options?.capture);
+    // Native registration deduplicates matching listeners. Forget every tracked copy.
+    for (let index = listeners.length - 1; index >= 0; index--) {
+      const [registeredTarget, event, listener, capturing] = listeners[index]!;
+      if (
+        registeredTarget === target &&
+        event === type &&
+        listener === callback &&
+        capturing === capture
+      ) {
+        listeners.splice(index, 1);
+      }
+    }
+  };
+  EventTarget.prototype.removeEventListener = function (type, callback, options) {
+    forgetListener(this, type, callback, options);
+    return remove.call(this, type, callback, options);
+  };
   EventTarget.prototype.addEventListener = function (type, callback, options) {
     // Only these targets survive body replacement. Avoid a stack capture for
     // the ordinary short-lived element listeners in every rendered view.
     if (
       callback &&
-      (this === window ||
+      (this === ownerWindow ||
         this === ownerDocument ||
         this === ownerDocument.body ||
         this === ownerDocument.head ||
@@ -43,16 +70,14 @@ export function trackJsdomResources(): JsdomResourceTracking | undefined {
   };
   // Vitest captures window.addEventListener before tests to count error handlers;
   // that own method bypasses EventTarget.prototype and needs the same ownership.
-  const addWindow = window.addEventListener.bind(window);
-  const removeWindow = window.removeEventListener.bind(window);
-  window.addEventListener = function (
+  ownerWindow.addEventListener = function (
     type: string,
     callback: EventListenerOrEventListenerObject,
     options?: boolean | AddEventListenerOptions,
   ) {
     if (callback && isRepoOwnedRegistrationStack(new Error().stack)) {
       listeners.push([
-        window,
+        ownerWindow,
         type,
         callback,
         typeof options === "boolean" ? options : Boolean(options?.capture),
@@ -60,21 +85,12 @@ export function trackJsdomResources(): JsdomResourceTracking | undefined {
     }
     return addWindow(type, callback, options);
   };
-  window.removeEventListener = function (
+  ownerWindow.removeEventListener = function (
     type: string,
     callback: EventListenerOrEventListenerObject,
     options?: boolean | EventListenerOptions,
   ) {
-    const capture = typeof options === "boolean" ? options : Boolean(options?.capture);
-    const index = listeners.findIndex(
-      ([target, event, listener, capturing]) =>
-        target === window && event === type && listener === callback && capturing === capture,
-    );
-    if (index >= 0) {
-      // Vitest decrements its Window error-handler count even for a no-op native
-      // removal. Retire only the registrations not already removed by their owner.
-      listeners.splice(index, 1);
-    }
+    forgetListener(ownerWindow, type, callback, options);
     return removeWindow(type, callback, options);
   };
   const NativeMutationObserver = MutationObserver;
@@ -87,7 +103,7 @@ export function trackJsdomResources(): JsdomResourceTracking | undefined {
     }
   }
   // Vitest's jsdom globals and window are distinct objects. Source may use either.
-  globalThis.MutationObserver = window.MutationObserver = TrackedMutationObserver;
+  globalThis.MutationObserver = ownerWindow.MutationObserver = TrackedMutationObserver;
   return {
     document: ownerDocument,
     retire() {
@@ -96,7 +112,7 @@ export function trackJsdomResources(): JsdomResourceTracking | undefined {
       }
       observers.clear();
       for (const [target, type, callback, capture] of listeners) {
-        if (target === window) {
+        if (target === ownerWindow) {
           removeWindow(type, callback, capture);
         } else {
           remove.call(target, type, callback, capture);
