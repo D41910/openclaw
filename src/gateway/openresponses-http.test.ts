@@ -340,7 +340,7 @@ describe("OpenResponses HTTP API (e2e)", () => {
     },
   );
 
-  it("keeps embedded late commentary append-only while the final answer streams", async () => {
+  it("keeps late-classified commentary separate from the final answer", async () => {
     agentCommandMock.mockImplementationOnce(emitEmbeddedLateCommentary);
     const stream = createStream();
     const content: string[] = [];
@@ -349,7 +349,7 @@ describe("OpenResponses HTTP API (e2e)", () => {
     stream.on("response.failed", () => terminals.push("failed"));
     stream.on("response.completed", () => terminals.push("completed"));
     const response = await stream.finalResponse();
-    expect(content.join("")).toBe("I will inspect the workspace.\n\nThe check is complete.");
+    expect(content.join("")).toBe("The check is complete.");
     expect(response.output_text).toBe(content.join(""));
     expect(terminals).toEqual(["completed"]);
     expect(response.status).toBe("completed");
