@@ -37,10 +37,40 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar agent menu scrolling
       return bounds.top >= list.top - 1 && bounds.bottom <= list.bottom + 1;
     };
 
+    let afterShowEvents = 0;
+    const onAfterShow = (event: Event) => {
+      if (event.target === sidebar.querySelector(".sidebar-agent-menu")) {
+        afterShowEvents++;
+      }
+    };
+    sidebar.addEventListener("overlay-after-show", onAfterShow, true);
+    onTestFinished(() => sidebar.removeEventListener("overlay-after-show", onAfterShow, true));
+
     trigger.click();
     await expect.poll(() => activeRow()?.dataset.value).toBe("agent:agent-39");
     await expect.poll(() => document.activeElement).toBe(activeRow());
-    await expect.poll(selectedAgentIsVisible).toBe(true);
+    try {
+      await expect.poll(selectedAgentIsVisible).toBe(true);
+    } catch (error) {
+      const row = activeRow();
+      const list = row?.parentElement;
+      const menu = row?.closest<HTMLElement>(".sidebar-agent-menu");
+      console.error(
+        "Sidebar selected-agent visibility diagnostics",
+        JSON.stringify({
+          row: row?.getBoundingClientRect().toJSON() ?? null,
+          list: list?.getBoundingClientRect().toJSON() ?? null,
+          scrollTop: list?.scrollTop ?? null,
+          clientHeight: list?.clientHeight ?? null,
+          scrollHeight: list?.scrollHeight ?? null,
+          availableHeight: menu
+            ? getComputedStyle(menu).getPropertyValue("--oc-overlay-available-height")
+            : null,
+          afterShowEvents,
+        }),
+      );
+      throw error;
+    }
     await userEvent.keyboard("{Escape}");
     await expect.poll(() => sidebar.querySelector(".sidebar-agent-menu")).toBeNull();
 
