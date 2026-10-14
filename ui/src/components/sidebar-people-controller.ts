@@ -1,6 +1,7 @@
 import { t } from "../i18n/index.ts";
 import { createPresenceActivityLifecycle } from "../lib/presence-activity-lifecycle.ts";
 import { projectPresencePayload } from "../lib/presence-users.ts";
+import { profileDirectory } from "../lib/profile-directory.ts";
 import { showToast } from "../lib/toast.ts";
 import type { SolidController } from "../lit/solid-controller-host.ts";
 import type { AppSidebarSessionNavigationElement } from "./app-sidebar-session-navigation.ts";
@@ -8,14 +9,23 @@ import { PersonActivityDataController } from "./person-activity-data.ts";
 import type { SidebarPeopleRuntime } from "./sidebar-people.runtime.ts";
 
 export type SidebarPeopleStatusFilter = "all" | "running";
+export type SidebarPeoplePresenceFilter = "online" | "all";
 export type SidebarPeopleSortMode = "presence" | "running" | "open" | "name";
 
 const EVENTS = ["pointerover", "pointerout", "focusin", "focusout", "click", "keydown"] as const;
 
 /** One lazy interaction owner per sidebar; the data stays in SessionDataController. */
 export class SidebarPeopleController implements SolidController {
+  presenceFilter: SidebarPeoplePresenceFilter = "online";
   statusFilter: SidebarPeopleStatusFilter = "all";
   sortMode: SidebarPeopleSortMode = "presence";
+  directory: ReturnType<typeof profileDirectory> | null = null;
+  private stopDirectory: (() => void) | undefined;
+
+  setPresenceFilter(value: SidebarPeoplePresenceFilter): void {
+    this.presenceFilter = value;
+    this.host.requestUpdate();
+  }
 
   setStatusFilter(value: SidebarPeopleStatusFilter): void {
     this.statusFilter = value;
@@ -59,6 +69,16 @@ export class SidebarPeopleController implements SolidController {
 
   hostUpdate(): void {
     this.activityExpiry.sync();
+    const gateway = this.host.sessionDataContext?.gateway;
+    const directory =
+      gateway && this.host.navigationView === "online" && this.presenceFilter === "all"
+        ? profileDirectory(gateway)
+        : null;
+    if (directory !== this.directory) {
+      this.stopDirectory?.();
+      this.directory = directory;
+      this.stopDirectory = directory?.subscribe(() => this.host.requestUpdate());
+    }
   }
 
   hostUpdated(): void {
@@ -72,6 +92,9 @@ export class SidebarPeopleController implements SolidController {
   }
 
   hostDisconnected(): void {
+    this.stopDirectory?.();
+    this.stopDirectory = undefined;
+    this.directory = null;
     for (const event of EVENTS) {
       this.host.removeEventListener(event, this.handleEvent);
     }
