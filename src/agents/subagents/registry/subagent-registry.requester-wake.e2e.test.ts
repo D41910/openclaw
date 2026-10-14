@@ -3,7 +3,6 @@ import { createDeferred } from "../../../../test/helpers/promise.js";
 import { getRuntimeConfig, type OpenClawConfig } from "../../../config/config.js";
 import { clearRuntimeConfigSnapshot, setRuntimeConfigSnapshot } from "../../../config/io.js";
 import {
-  appendTranscriptMessage,
   loadExactSessionEntryReadOnly,
   replaceSessionEntry,
 } from "../../../config/sessions/session-accessor.js";
@@ -76,6 +75,7 @@ let lifecycleHandler: Parameters<typeof onAgentEvent>[0] | undefined;
 let agentCallGates = new Map<string, Promise<void>>();
 let releaseAgentCallGate: (() => void) | undefined;
 let agentCallObserved = createDeferred();
+let chatHistoryBySessionKey = new Map<string, Array<Record<string, unknown>>>();
 let sessionStore: Record<string, SessionStoreEntry> = {};
 let sessionStorePath: string;
 let rejectNextRequesterWake = false;
@@ -98,6 +98,9 @@ const callGatewayMock = vi.fn(async (request: GatewayRequest): Promise<GatewayRe
   if (request.method === "agent.wait") {
     return { status: "pending" };
   }
+  if (request.method === "chat.history") {
+    return { messages: chatHistoryBySessionKey.get(request.params?.sessionKey ?? "") ?? [] };
+  }
   if (request.method === "agent") {
     agentCallObserved.resolve();
     agentCallObserved = createDeferred();
@@ -112,10 +115,6 @@ const callGatewayMock = vi.fn(async (request: GatewayRequest): Promise<GatewayRe
     return {
       result: {
         payloads: [{ text: "completion delivered" }],
-        meta: {
-          durationMs: 1,
-          terminalReply: { disposition: "visible", text: "completion delivered" },
-        },
         deliveryStatus: { status: "sent", resultCount: 1 },
       },
     };
@@ -228,6 +227,7 @@ describe("requester settle wake product flow", () => {
     });
     agentCallGates = new Map();
     agentCallObserved = createDeferred();
+    chatHistoryBySessionKey = new Map();
     rejectNextRequesterWake = false;
     rejectNextRequesterWakePersistence = false;
     armRequesterWakePersistenceFailure = false;
@@ -344,28 +344,13 @@ describe("requester settle wake product flow", () => {
     getSessionStorePath: () => sessionStorePath,
   });
 
-  const emitCompleted = async (
+  const emitCompleted = (
     runId: string,
     childSessionKey: string,
     text: string,
     modelRouteChange?: string,
   ) => {
-    const sessionId = sessionStore[childSessionKey]?.sessionId;
-    if (!sessionId) {
-      throw new Error("Completed child session was not prepared");
-    }
-    await appendTranscriptMessage(
-      { agentId: "main", storePath: sessionStorePath, sessionKey: childSessionKey, sessionId },
-      {
-        message: {
-          role: "assistant",
-          __openclaw: { runId },
-          phase: "final_answer",
-          stopReason: "stop",
-          content: [{ type: "text", text }],
-        },
-      },
-    );
+    chatHistoryBySessionKey.set(childSessionKey, [{ role: "assistant", content: text }]);
     if (!lifecycleHandler) {
       throw new Error("Fixture lifecycle listener was not registered before completion");
     }
@@ -519,7 +504,7 @@ describe("requester settle wake product flow", () => {
       const completionOrder = firstCompleted === "alpha" ? children : children.toReversed();
       const first = completionOrder[0]!;
       const second = completionOrder[1]!;
-      await emitCompleted(first.runId, first.childSessionKey, `${first.name} complete`);
+      emitCompleted(first.runId, first.childSessionKey, `${first.name} complete`);
       await flushOwnedWork();
       await waitForDeliveredCleanup(first.runId, {
         allowPendingRequesterSettleWake: first.name !== yieldedParent,
@@ -560,7 +545,7 @@ describe("requester settle wake product flow", () => {
         }
         expect(row.requesterTurnRunId).toBeUndefined();
       });
-      await emitCompleted(second.runId, second.childSessionKey, `${second.name} complete`);
+      emitCompleted(second.runId, second.childSessionKey, `${second.name} complete`);
       await flushOwnedWork();
       await waitForDeliveredCleanup(second.runId, { allowPendingRequesterSettleWake: true });
       await activate();
@@ -827,7 +812,7 @@ describe("requester settle wake product flow", () => {
             await spawnVisibleChild({ ...alpha, requesterTurnRunId: initialRequesterTurnRunId });
             await yieldTurn(initialRequesterTurnRunId, [alpha]);
             attachment?.releaseProvisional();
-            await emitCompleted(alpha.runId, alpha.childSessionKey, "alpha findings");
+            emitCompleted(alpha.runId, alpha.childSessionKey, "alpha findings");
             await flushOwnedWork();
             await vi.waitFor(() => {
               expect(firstWakeReturned).toBe(true);
@@ -857,7 +842,7 @@ describe("requester settle wake product flow", () => {
                   requesterYieldBatch: true,
                 },
               });
-              await emitCompleted(beta.runId, beta.childSessionKey, "beta findings");
+              emitCompleted(beta.runId, beta.childSessionKey, "beta findings");
             } else {
               expect(registry.getSubagentRunByRunId(beta.runId)).toBeUndefined();
             }
@@ -948,7 +933,7 @@ describe("requester settle wake product flow", () => {
         }),
       );
 
-      await emitCompleted(child.runId, child.childSessionKey, "CRON CHILD ANSWER");
+      emitCompleted(child.runId, child.childSessionKey, "CRON CHILD ANSWER");
       await flushOwnedWork();
       await vi.waitFor(() => {
         expect(maybeWakeRequesterAfterAllChildrenSettled).toHaveBeenCalledWith(
@@ -960,6 +945,7 @@ describe("requester settle wake product flow", () => {
       });
       await flushOwnedWork();
       // Delete cleanup removed the child session; the cron run reads the captured result.
+      chatHistoryBySessionKey.delete(child.childSessionKey);
       if (restart) {
         await registry.resetSubagentRegistryForTests({ persist: false });
         await registry.initSubagentRegistry();

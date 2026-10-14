@@ -24,7 +24,7 @@ export function registerRequesterWakeSettlementBoundaryTests({
     childSessionKey: string;
     requesterTurnRunId: string;
   }) => Promise<void>;
-  emitCompleted: (runId: string, childSessionKey: string, text: string) => Promise<void>;
+  emitCompleted: (runId: string, childSessionKey: string, text: string) => void;
   flushOwnedWork: () => Promise<void>;
   waitForDeliveredCleanup: (runId: string) => Promise<void>;
   getRequesterWakeCalls: () => GatewayRequest[];
@@ -92,7 +92,7 @@ export function registerRequesterWakeSettlementBoundaryTests({
         },
       }),
     );
-    await emitCompleted(child.runId, child.childSessionKey, "current counting result");
+    emitCompleted(child.runId, child.childSessionKey, "current counting result");
     await flushOwnedWork();
     await waitForDeliveredCleanup(child.runId);
 

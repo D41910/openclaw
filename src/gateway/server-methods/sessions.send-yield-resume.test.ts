@@ -29,10 +29,7 @@ import { writeSubagentSessionEntry } from "../../agents/subagents/registry/subag
 import * as requesterAuthority from "../../agents/subagents/requester-cron-authority.js";
 import { createSessionsYieldTool } from "../../agents/tools/sessions-yield-tool.js";
 import { getRuntimeConfig } from "../../config/config.js";
-import {
-  appendTranscriptMessage,
-  loadSessionEntry,
-} from "../../config/sessions/session-accessor.js";
+import { loadSessionEntry } from "../../config/sessions/session-accessor.js";
 import * as transcriptArchive from "../../config/sessions/session-accessor.sqlite-archive.js";
 import { emitAgentEvent } from "../../infra/agent-events.js";
 import { SqliteWorkerError } from "../../infra/sqlite-worker-contract.js";
@@ -132,15 +129,7 @@ it("resumes a yielded child through sessions.send and wakes its original parent 
   const dispatch = vi.spyOn(delivery, "dispatch").mockImplementation(async () => {
     return {
       status: "ok",
-      result: {
-        payloads: [{ text: "Both results received; parent continues." }],
-        meta: {
-          terminalReply: {
-            disposition: "visible",
-            text: "Both results received; parent continues.",
-          },
-        },
-      },
+      result: { payloads: [{ text: "Both results received; parent continues." }], meta: {} },
     };
   });
   setSubagentAnnounceDeliveryDepsForTest({ dispatchGatewayMethodInProcess: delivery.dispatch });
@@ -262,22 +251,6 @@ it("resumes a yielded child through sessions.send and wakes its original parent 
     return { value: undefined, postimages: new Map([[next.runId, next]]) };
   });
   const complete = async (runId: string, sessionKey: string, text: string) => {
-    const session = expectDefined(
-      loadSessionEntry({ agentId: "main", sessionKey }),
-      "completed child session",
-    );
-    await appendTranscriptMessage(
-      { agentId: "main", sessionKey, sessionId: session.sessionId },
-      {
-        message: {
-          role: "assistant",
-          __openclaw: { runId },
-          phase: "final_answer",
-          stopReason: "stop",
-          content: [{ type: "text", text }],
-        },
-      },
-    );
     const announceEntered = createDeferred();
     fixture.announce.mockImplementationOnce((params) => {
       announceEntered.resolve();

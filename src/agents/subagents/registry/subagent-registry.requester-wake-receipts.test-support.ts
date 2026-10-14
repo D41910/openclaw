@@ -223,7 +223,7 @@ export function registerRequesterWakeReceiptBoundaryTests({
     childSessionKey: string,
     text: string,
     modelRouteChange?: string,
-  ) => Promise<void>;
+  ) => void;
   flushOwnedWork: () => Promise<void>;
   waitForDeliveredCleanup: ReturnType<typeof createLifecycleWaits>["waitForDeliveredCleanup"];
   waitForAgentCallCount: (count: number) => Promise<void>;
@@ -302,13 +302,13 @@ export function registerRequesterWakeReceiptBoundaryTests({
         : undefined;
 
     holdAgentCall(beta.childSessionKey);
-    await emitCompleted(alpha.runId, alpha.childSessionKey, "alpha complete");
+    emitCompleted(alpha.runId, alpha.childSessionKey, "alpha complete");
     await waitForAgentCallCount(1);
     const beforeCleanup = Date.now();
     await waitForDeliveredCleanup(alpha.runId, { allowPendingRequesterSettleWake: true });
     expect(Date.now(), "cleanup observation must not spend the retry clock").toBe(beforeCleanup);
     const modelRouteChange = "Model route changed: requested/model → actual/model.";
-    await emitCompleted(beta.runId, beta.childSessionKey, "beta complete", modelRouteChange);
+    emitCompleted(beta.runId, beta.childSessionKey, "beta complete", modelRouteChange);
     await waitForAgentCallCount(2);
 
     const betaBeforeYield = registry.getSubagentRunByRunId(beta.runId);
@@ -555,7 +555,7 @@ export function registerRequesterWakeReceiptBoundaryTests({
       const held = holdRequesterWakeReceipts({
         failCompletePublication: change === "callback-failure",
       });
-      await emitCompleted(runId, childSessionKey, "Quiet child complete");
+      emitCompleted(runId, childSessionKey, "Quiet child complete");
       const members = await held.complete.entered.promise;
       expect(members).toHaveLength(1);
       const member = members[0];

@@ -28,7 +28,7 @@ export function registerRequesterSelfYieldFollowupTests<Response>({
   getLifecycleHandler: () => Parameters<typeof onAgentEvent>[0];
   callGatewayMock: Mock<(request: GatewayRequest) => Promise<Response>>;
   getAgentCalls: () => GatewayRequest[];
-  emitCompleted: (runId: string, childSessionKey: string, text: string) => Promise<void>;
+  emitCompleted: (runId: string, childSessionKey: string, text: string) => void;
   flushOwnedWork: () => Promise<void>;
   flushAsync: () => Promise<void>;
   wakeRequester: typeof maybeWakeRequesterAfterAllChildrenSettled;
@@ -110,7 +110,7 @@ export function registerRequesterSelfYieldFollowupTests<Response>({
       wakes.push(work);
       return work;
     });
-    await emitCompleted(followupRunId, childSessionKey, "follow-up completed");
+    emitCompleted(followupRunId, childSessionKey, "follow-up completed");
     const completion = flushOwnedWork();
     try {
       await awaitGateBeforeSettlement(

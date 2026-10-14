@@ -246,6 +246,7 @@ src/agents/agent-dir-registry.ts
 src/agents/agent-roster.ts
 src/agents/agent-run-terminal-receipt.ts
 src/agents/agent-run-terminal-reply.ts
+src/agents/agent-run-terminal-reply.types.ts
 src/agents/agent-runtime-id.ts
 src/agents/agent-scope-config.ts
 src/agents/agent-scope.ts
