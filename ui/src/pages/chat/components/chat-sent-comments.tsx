@@ -148,6 +148,7 @@ export function SentCommentAttachments(props: {
     JSON.stringify([
       props.options.sessionKey,
       props.options.agentId,
+      props.options.messageId,
       props.options.connectionEpoch,
       props.options.resourceBasePath,
       props.options.authToken,

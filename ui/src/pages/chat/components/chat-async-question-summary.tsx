@@ -1,6 +1,7 @@
 import { createMemo, For, Show } from "solid-js";
 import type { QuestionDraft } from "../../../app/question-prompt.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
+import { isChatSendReconnecting } from "../chat-send-presentation.ts";
 import type { AsyncQuestionPresentation, AsyncQuestions } from "./chat-async-question.types.ts";
 import { questionDraftValues } from "./chat-question-answer-controls.ts";
 
@@ -87,7 +88,7 @@ export function AsyncQuestionSummary(props: {
                 ? "chat.asyncQuestions.failed"
                 : queued.sendState === "unconfirmed"
                   ? "chat.queue.deliveryUnconfirmed"
-                  : queued.sendState === "waiting-reconnect"
+                  : isChatSendReconnecting(queued.sendState, presentation.connected)
                     ? "chat.queue.states.waitingForReconnect"
                     : queued.sendState === "sending"
                       ? "chat.asyncQuestions.sending"
