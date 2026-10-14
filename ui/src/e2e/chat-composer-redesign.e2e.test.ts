@@ -678,6 +678,9 @@ suite.define(() => {
         .toBe(true);
 
       await page.setViewportSize({ width: 1280, height: 900 });
+      await expect
+        .poll(() => page.locator(".chat-details-toggle").getAttribute("aria-expanded"))
+        .toBe("false");
       const [compactChatMainBox, compactComposerShellBox] = await Promise.all([
         chatMain.boundingBox(),
         composerShell.boundingBox(),
