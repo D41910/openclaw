@@ -28,6 +28,7 @@ export function createResultFixture(params?: {
   yieldAcknowledgment?: string;
   yieldMessageWaitRegistered?: boolean;
   assistantTexts?: readonly string[];
+  allowedToolNames?: string[];
   toolMetas?: Array<{
     toolName: string;
     toolCallId?: string;
@@ -128,6 +129,9 @@ export function createResultFixture(params?: {
       }),
     },
     prepared: {
+      toolCatalog: {
+        toolSearchRunPlan: { liveAllowedToolNames: new Set(params?.allowedToolNames) },
+      },
       bootstrap: { bootstrapPromptWarning: {} },
       systemPrompt: { systemPromptReport: undefined },
       sessionRuntime: {
