@@ -234,6 +234,20 @@ it("keeps descendant-only native overlap leased through closing and releases aft
   expect(view.handle.close()).toBe(true);
   const closing = branch.flatMap((menu) => {
     const animations = menu.getAnimations();
+    if (animations.length === 0) {
+      const style = getComputedStyle(menu);
+      console.error("Menu exit animation missing", {
+        id: menu.id,
+        phase: menu.dataset.phase,
+        nativeOpen: menu.matches(":popover-open"),
+        opacity: style.opacity,
+        scale: style.scale,
+        display: style.display,
+        transitionDuration: style.transitionDuration,
+        transitionProperty: style.transitionProperty,
+        reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      });
+    }
     expect(animations.length).toBeGreaterThan(0);
     return animations;
   });
