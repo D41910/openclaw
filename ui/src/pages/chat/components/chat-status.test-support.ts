@@ -12,7 +12,7 @@ export function renderWorkingIndicator(
   options: WorkingProps["options"],
   container: HTMLElement,
 ) {
-  const props = { part, options };
+  const props: WorkingProps = { part, options };
   const view = workingViews.get(container);
   if (view) {
     view.update(props);
@@ -27,7 +27,7 @@ export function renderTypingIndicator(
   avatarPlacement?: TypingProps["avatarPlacement"],
   overflow?: TypingProps["overflow"],
 ) {
-  const props = { actors, avatarPlacement, overflow };
+  const props: TypingProps = { actors, avatarPlacement, overflow };
   const view = typingViews.get(container);
   if (view) {
     view.update(props);

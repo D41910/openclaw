@@ -252,7 +252,11 @@ describe("forwarded message attribution", () => {
       expect(attribution?.textContent).toContain("From");
       expect(link?.textContent).toBe("agent:main:main");
       expect(link?.tabIndex).toBe(0);
-      expect(attribution?.nextElementSibling?.classList.contains("chat-bubble")).toBe(true);
+      const bubble = expectDefined(
+        forwardedGroup?.querySelector(".chat-bubble"),
+        "forwarded message bubble",
+      );
+      expect(attribution?.compareDocumentPosition(bubble)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(container.querySelector(".chat-avatar, .chat-avatar-slot")).toBeNull();
       expect(container.querySelector(".chat-group-footer .chat-sender-name")).toBeNull();
       expect(container.querySelector(".chat-group-footer .chat-group-timestamp")).not.toBeNull();

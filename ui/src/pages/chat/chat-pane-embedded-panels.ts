@@ -275,7 +275,7 @@ export function sidebarPanelDefinitions(
           .tabsInHeader=${sidebarMainPanel(state.sidebarLayout)?.slot !== "workspace"}
           .previews=${presentedProperty(params.panePresentation ?? true, workspace.previews, [])}
           .activeId=${presentedProperty(params.panePresentation ?? true, workspace.activePreviewId, null)}
-          .browser=${params.workspace}
+          .browser=${html`${params.workspace}`}
           .renderDetail=${params.renderDetail}
           .onSelect=${(id: string | null) => selectSessionWorkspacePreview(state, id)}
           .onClose=${(id: string) => closeSessionWorkspacePreview(state, id)}

@@ -24,7 +24,7 @@ export function RealtimeTalkConversation(props: {
                 {entry().role === "user"
                   ? props.userName?.trim() || t("chat.reactions.you")
                   : props.assistantName}
-              </span>
+              </span>{" "}
               <span class="agent-chat__voice-turn-text">{entry().text}</span>
               {entry().isStreaming ? (
                 <span

@@ -167,9 +167,11 @@ describe.skipIf(!hasPopoverApi)("sidebar menu stacking", () => {
     expect(menu.contains(hit)).toBe(true);
     expect(surface.getBoundingClientRect().width).toBe(0);
     menu.style.left = "250px";
+    await new Promise(requestAnimationFrame);
     await expect.poll(() => nearby).toEqual([false, true]);
     expect(distant).toEqual([false]);
     menu.style.left = "850px";
+    await new Promise(requestAnimationFrame);
     await expect.poll(() => nearby).toEqual([false, true, false]);
     await expect.poll(() => distant).toEqual([false, true]);
   });

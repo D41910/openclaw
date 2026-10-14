@@ -14,7 +14,7 @@ function drawNotice(
   onPermissionRetry?: Parameters<typeof ChatNotice>[0]["onPermissionRetry"],
   recovery?: Parameters<typeof ChatNotice>[0]["recovery"],
 ) {
-  const props = { item, onPermissionRetry, recovery };
+  const props: Parameters<typeof ChatNotice>[0] = { item, onPermissionRetry, recovery };
   if (noticeView) {
     noticeView.update(props);
   } else {

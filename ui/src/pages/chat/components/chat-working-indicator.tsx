@@ -244,9 +244,10 @@ export function TurnRecapRow(props: {
       </Show>
       <span>{t("chat.turnRecap.doneIn", { duration: duration() })}</span>
       <Show when={tokens() !== null}>
+        {" "}
         <span class="chat-turn-recap__sep" aria-hidden="true">
           ·
-        </span>
+        </span>{" "}
         <span>{tokens()}</span>
       </Show>
     </div>
