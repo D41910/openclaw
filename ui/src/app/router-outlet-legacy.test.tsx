@@ -1,42 +1,78 @@
 /* @vitest-environment jsdom */
 import { createRouter, definePage } from "@openclaw/uirouter";
-import { untrack } from "solid-js";
-import { expect, it } from "vitest";
-import { defineSolidBridge } from "../lit/solid-bridge.ts";
-import { solidContent } from "../lit/solid-content.tsx";
-import { mountRouterOutlet, settleRouterOutlet } from "./router-outlet.test-support.tsx";
+import { afterEach, expect, it, vi } from "vitest";
+import type { RouteId } from "../app-route-paths.ts";
+import { ApplicationProvider } from "../lib/reactive/context.ts";
+import {
+  createChatPageNavigationContext,
+  settleChatPage,
+  stubMatchMedia,
+} from "../pages/chat/chat-page.test-support.ts";
+import type { ChatPage } from "../pages/chat/chat-page.ts";
+import * as chatRoute from "../pages/chat/route-entry.ts";
+import { mountSolid } from "../test-helpers/mount-solid.ts";
+import { createStorageMock } from "../test-helpers/storage.ts";
+import type { ApplicationContext } from "./context.ts";
+import type { ControlUiReadinessOutlet } from "./control-ui-readiness.ts";
+import { settleRouterOutlet } from "./router-outlet.test-support.tsx";
+import { RouterOutlet } from "./router-outlet.tsx";
 
-const InitialRoute = defineSolidBridge<{ sessionKey: string }>(
-  "openclaw-test-initial-route",
-  (props) => {
-    // A session owner captures its initial identity when the view is created.
-    const initialSession = untrack(() => props.sessionKey);
-    return <output>{initialSession}</output>;
-  },
-  { properties: { sessionKey: { default: "uninitialized", attribute: false } } },
-);
+// mock-isolation: Observe the real page's pane bindings without starting pane domain owners.
+vi.mock("../pages/chat/chat-pane.tsx", async () => {
+  const { mockChatPagePane } = await import("../pages/chat/chat-page-pane.test-support.ts");
+  return { ChatPaneView: mockChatPagePane };
+});
 
-it("publishes legacy route props before a nested bridge creates its session owner", async () => {
-  const router = createRouter({
+afterEach(() => vi.unstubAllGlobals());
+
+it("mounts one pane for the legacy chat route and retains it through revalidation", async () => {
+  vi.stubGlobal("localStorage", createStorageMock());
+  vi.stubGlobal("sessionStorage", createStorageMock());
+  stubMatchMedia(false);
+  const { context } = createChatPageNavigationContext();
+  const sessionKey = "agent:main:main";
+  const router = createRouter<RouteId, ApplicationContext, typeof chatRoute, unknown>({
     routes: [
       definePage({
-        id: "session",
-        path: "/session",
-        loader: () => "session-one",
-        component: () => ({
-          render: (sessionKey: string | undefined) => solidContent(InitialRoute, { sessionKey }),
+        id: "chat",
+        path: "/chat",
+        loader: () => ({
+          kind: "session",
+          sessionKey,
+          agentId: "main",
+          face: "chat",
+          shortId: "main",
         }),
+        component: () => chatRoute,
       }),
     ],
   });
-  const outlet = mountRouterOutlet({ router });
+  const view = mountSolid(() => (
+    <ApplicationProvider value={context}>
+      <RouterOutlet router={router} retryContext={context} />
+    </ApplicationProvider>
+  ));
   try {
-    await router.navigate("session", {});
+    await router.navigate("chat", context);
+    const outlet =
+      view.container.querySelector<ControlUiReadinessOutlet>("openclaw-router-outlet")!;
     await settleRouterOutlet(outlet);
-    expect(outlet.querySelectorAll("output")).toHaveLength(1);
-    expect(outlet.querySelector("output")?.textContent).toBe("session-one");
+    const page = outlet.querySelector<ChatPage>("openclaw-chat-page")!;
+    expect(page).not.toBeNull();
+    await settleChatPage(page);
+    const pane = page.querySelector<HTMLElement & { sessionKey: string }>("openclaw-chat-pane")!;
+    expect(page.querySelectorAll("openclaw-chat-pane")).toHaveLength(1);
+    expect(pane.sessionKey).toBe(sessionKey);
+
+    await router.navigate("chat", context, { revalidate: true });
+    await settleRouterOutlet(outlet);
+    await settleChatPage(page);
+    expect(outlet.querySelector("openclaw-chat-page")).toBe(page);
+    expect(page.querySelectorAll("openclaw-chat-pane")).toHaveLength(1);
+    expect(page.querySelector("openclaw-chat-pane")).toBe(pane);
+    expect(pane.sessionKey).toBe(sessionKey);
   } finally {
-    outlet.dispose();
+    view.unmount();
     router.stop();
   }
 });
