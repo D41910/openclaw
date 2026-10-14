@@ -1,5 +1,5 @@
 import { html } from "lit";
-import { ConnectCommand } from "../../../components/connect-command.tsx";
+import { ConnectCommand } from "../../../components/solid/connect-command.tsx";
 import "../../../components/modal-dialog.ts";
 import { t } from "../../../i18n/index.ts";
 import { solidContent } from "../../../lit/solid-content.tsx";

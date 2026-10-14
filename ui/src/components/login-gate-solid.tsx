@@ -14,13 +14,13 @@ import { classifyGatewaySecret } from "../lib/gateway-secret-shape.ts";
 import { registerEnglishCatalog, t } from "../lib/reactive/i18n.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../lit/solid-bridge.ts";
 import type { JSX as SolidJSX } from "../types/solid-elements.d.ts";
-import { ConnectCommand } from "./connect-command.tsx";
 import {
   type LoginFailureFeedback,
   type LoginFailureFeedbackParams,
   type LoginFailureStep,
   resolveLoginFailureFeedback,
 } from "./login-gate-feedback.ts";
+import { ConnectCommand } from "./solid/connect-command.tsx";
 import { Icon, type IconName } from "./solid/icon.tsx";
 import "./theme-brand-icon.ts";
 import "./tooltip.ts";

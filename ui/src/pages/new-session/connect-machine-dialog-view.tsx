@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { ConnectCommand } from "../../components/connect-command.tsx";
+import { ConnectCommand } from "../../components/solid/connect-command.tsx";
 import { Icon } from "../../components/solid/icon.tsx";
 import "../../components/modal-dialog.ts";
 import { formatTimeMs } from "../../lib/format.ts";
