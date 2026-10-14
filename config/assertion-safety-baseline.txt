@@ -2621,7 +2621,6 @@ ui/src/components/browser/browser-annotation.ts	1
 ui/src/components/browser/browser-client.ts	1
 ui/src/components/config-form-copy-on-write.ts	1
 ui/src/components/config-form.analyze.ts	1
-ui/src/components/connect-command.ts	2
 ui/src/components/desktop/desktop-client.ts	2
 ui/src/components/desktop/desktop-mobile-keyboard.ts	1
 ui/src/components/dock-panel-layout.ts	3
@@ -2632,7 +2631,6 @@ ui/src/components/markdown-parser.ts	1
 ui/src/components/mcp-app-theme.ts	1
 ui/src/components/mcp-server-form.ts	1
 ui/src/components/model-picker.ts	1
-ui/src/components/sensitive-input.ts	2
 ui/src/components/session-data-controller.ts	1
 ui/src/components/session-organizer-controller.ts	5
 ui/src/components/settings-sidebar.ts	3
