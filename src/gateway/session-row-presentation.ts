@@ -69,6 +69,7 @@ type PublicationRows = WeakMap<
   }
 >;
 type Publication = {
+  factsRevision: number;
   rows: PublicationRows;
   lists: Map<
     string,
@@ -190,13 +191,16 @@ export function prepareSessionRowPublication(
     if (!publication) {
       publication = {
         revision,
+        factsRevision: 0,
         rows: new WeakMap(),
         lists: new Map(),
       };
       publications.set(projection, publication);
-      const { lists } = publication;
+      const published = publication;
+      const { lists } = published;
       projection.onSelectionChange(() => lists.clear());
       projection.onFactsChange((change) => {
+        published.factsRevision++;
         // Retire wire snapshots even when no reader returns after a publication or disposal.
         for (const list of lists.values()) {
           if (change.kind === "reset" || list.rows?.some((row) => row.key === change.key)) {
@@ -232,8 +236,14 @@ export function prepareProjectedSessionPresentation(
   const publicationRows = publicationState?.rows;
   const subagentRuns = rowContext.subagentRuns.atTime(now);
   const preparedRowContext = { ...rowContext, subagentRuns };
-  const runState = (key: string, entry: records.MaterializedRow["entry"]) =>
-    projectGatewaySessionRunState({ key, entry, now, rowContext: preparedRowContext });
+  const runState = (
+    key: string,
+    {
+      entry,
+      parsedKey,
+    }: Pick<records.MaterializedRow["materialized"]["source"], "entry" | "parsedKey">,
+  ) =>
+    projectGatewaySessionRunState({ key, entry, parsedKey, now, rowContext: preparedRowContext });
   const active = (key: string, entry: records.MaterializedRow["entry"], agentId: string) =>
     projectRun?.({
       requestedKey: key,
@@ -314,6 +324,7 @@ export function prepareProjectedSessionPresentation(
     const childOwnerSessionKeys = resolveSessionChildOwners({
       key: record.key,
       entry: record.entry,
+      parsedKey: record.materialized.source.parsedKey,
       now,
       subagentRuns,
     });
@@ -355,7 +366,7 @@ export function prepareProjectedSessionPresentation(
         sessionId: record.entry.sessionId,
         index: rowContext.projectedAgentRuns,
       });
-      const temporal = runState(record.key, record.entry);
+      const temporal = runState(record.key, record.materialized.source);
       const facts = [
         record.profileRevision,
         record.lastMessagePreview,
@@ -388,14 +399,16 @@ export function prepareProjectedSessionPresentation(
           : undefined,
         record.materialized.source.childLinks?.length,
       ];
-      for (const { key, entry } of record.materialized.source.childLinks ?? []) {
-        const childActive = runState(key, entry).fields.hasActiveSubagentRun;
+      for (const child of record.materialized.source.childLinks ?? []) {
+        const { key, entry, parsedKey } = child;
+        const childActive = runState(key, child).fields.hasActiveSubagentRun;
         facts.push(
           key,
           childActive,
           resolveSessionChildOwners({
             key,
             entry,
+            parsedKey,
             now,
             subagentRuns,
             hasActiveRun: childActive,
@@ -541,6 +554,13 @@ export function prepareProjectedSessionPresentation(
     return projectModels(row);
   };
   return {
+    get audienceKey() {
+      return JSON.stringify([
+        sharing.cacheKey,
+        presentFastMode("ultrafast"),
+        publicationState?.factsRevision,
+      ]);
+    },
     rowContext: preparedRowContext,
     active,
     sharing,
