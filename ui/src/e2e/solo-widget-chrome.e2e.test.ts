@@ -94,17 +94,6 @@ async function openDashboard(page: Page, source: BoardSnapshot, readOnly = false
 
 async function showHeaderMenu(page: Page, input: "pointer" | "keyboard" = "pointer") {
   const menu = page.locator(menuSelector);
-  const dropdown = menu.locator("wa-dropdown");
-  // The heading is visible before the menu finishes scaling. Observe this opening,
-  // not a previous one, before Playwright chooses an action's click coordinates.
-  await dropdown.evaluate((element) => {
-    element.removeAttribute("data-e2e-after-show");
-    element.addEventListener(
-      "wa-after-show",
-      () => element.setAttribute("data-e2e-after-show", ""),
-      { once: true },
-    );
-  });
   const trigger = page.locator(".chat-header-session-menu__trigger");
   if (input === "keyboard") {
     await trigger.focus();
@@ -112,7 +101,8 @@ async function showHeaderMenu(page: Page, input: "pointer" | "keyboard" = "point
   } else {
     await trigger.click();
   }
-  await expect.poll(() => dropdown.getAttribute("data-e2e-after-show")).not.toBeNull();
+  await menu.getByRole("menu").first().waitFor({ state: "visible" });
+  await menu.getByRole("menuitem").first().click({ trial: true });
   await menu.locator(".board-widget__page-menu-heading").waitFor();
   return menu;
 }
@@ -145,7 +135,7 @@ suite.define(() => {
         await menu.locator('[value="board-widget:resize:xl"]').waitFor();
         const itemFonts = await menu.evaluate((element) =>
           Array.from(
-            element.querySelectorAll("wa-dropdown-item"),
+            element.querySelectorAll('[role^="menuitem"]'),
             (item) => getComputedStyle(item).font,
           ),
         );
