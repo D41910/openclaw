@@ -76,7 +76,7 @@ async function settle(container: HTMLElement) {
         ...container.querySelectorAll<HTMLElement & { updateComplete?: Promise<unknown> }>(
           "openclaw-chat-pasted-text",
         ),
-      ].map((element) => element.updateComplete),
+      ].map((element) => element.updateComplete ?? Promise.resolve()),
     );
     flush();
   }

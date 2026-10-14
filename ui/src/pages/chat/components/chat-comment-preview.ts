@@ -32,5 +32,3 @@ export function parseCommentAttachment(value: string): CommentPreview | null {
   }
   return { text, comment: rest ? rest.slice(commentPrefix.length) : "" };
 }
-
-export { renderCommentPreviewChip, renderCommentPreviewRow } from "./chat-comment-preview.tsx";

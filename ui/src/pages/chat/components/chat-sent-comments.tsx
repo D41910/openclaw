@@ -80,7 +80,7 @@ function SentComments(props: {
     () => ({ key: key(), revealed: revealed(), current: untrack(sources) }),
     ({ revealed: wasRevealed, current: requestSources }) => {
       if (!wasRevealed) {
-        return;
+        return undefined;
       }
       const controller = new AbortController();
       requestSources.forEach((source, index) => {

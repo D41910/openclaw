@@ -6,7 +6,7 @@ import "../../../styles/chat.ts";
 import "../../../styles/chat/composer.css";
 import type { ChatAttachment } from "../../../lib/chat/chat-types.ts";
 import "./chat-comment-pins.tsx";
-import { renderCommentPreviewChip, renderCommentPreviewRow } from "./chat-comment-preview.ts";
+import { renderCommentPreviewChip, renderCommentPreviewRow } from "./chat-comment-preview.tsx";
 import { removeChatSelectionPopup, showChatAnnotationEditor } from "./chat-selection-popup.ts";
 
 const longSelection = "Selected passage with enough words to exceed a compact preview. ".repeat(8);

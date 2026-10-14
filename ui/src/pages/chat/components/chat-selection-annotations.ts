@@ -3,7 +3,7 @@ import { icons } from "../../../components/icons.ts";
 import { t } from "../../../i18n/index.ts";
 import { registerChatMessageMetadataEnglish } from "../../../i18n/locales/en-chat-message-metadata.ts";
 import type { ChatAttachmentControlsProps } from "./chat-attachment-controls.types.ts";
-import { renderCommentPreviewChip, renderCommentPreviewRow } from "./chat-comment-preview.ts";
+import { renderCommentPreviewChip, renderCommentPreviewRow } from "./chat-comment-preview.tsx";
 import "../../../styles/chat/selection-annotations.css";
 
 registerChatMessageMetadataEnglish();
