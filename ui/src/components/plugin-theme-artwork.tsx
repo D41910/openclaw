@@ -1,5 +1,6 @@
 import type { JSX } from "@solidjs/web";
 import { createMemo, Loading, Show } from "solid-js";
+import { LitContent } from "../lit/solid-content.tsx";
 
 export function PluginThemeArtwork(props: { url: string; class?: string; fallback?: JSX.Element }) {
   const source = createMemo(async () => {
@@ -17,5 +18,19 @@ export function PluginThemeArtwork(props: { url: string; class?: string; fallbac
         {(src) => <img class={props.class} alt="" src={src()} />}
       </Show>
     </Loading>
+  );
+}
+
+export function LegacyPluginThemeArtwork(props: {
+  url: string;
+  class?: string;
+  fallback?: unknown;
+}) {
+  return (
+    <PluginThemeArtwork
+      url={props.url}
+      class={props.class}
+      fallback={<LitContent value={props.fallback} />}
+    />
   );
 }

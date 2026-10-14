@@ -1,3 +1,4 @@
+import type { JSX as SolidJSX } from "@solidjs/web";
 import { Show } from "solid-js";
 import type { ThemeBranding } from "../../../packages/gateway-protocol/src/theme.ts";
 import { currentThemeBranding } from "../app/theme-branding.ts";
@@ -23,6 +24,21 @@ export const ThemeBrandIcon = defineSolidBridge<{ branding?: ThemeBranding }>(
   },
   { properties: { branding: { default: undefined, attribute: false } } },
 );
+
+export function ThemeBrandingIcon(props: {
+  branding?: ThemeBranding;
+  claw?: SolidJSX.Element;
+  neutral?: SolidJSX.Element;
+}) {
+  const branding = () => props.branding ?? currentThemeBranding();
+  return (
+    <Show when={branding().brandIcon !== "claw"} fallback={props.claw ?? <Icon name="lobster" />}>
+      <Show when={branding().brandIcon !== "mark"} fallback={props.neutral ?? <Icon name="mark" />}>
+        <ThemeBrandIcon branding={branding()} />
+      </Show>
+    </Show>
+  );
+}
 
 declare global {
   interface HTMLElementTagNameMap {
