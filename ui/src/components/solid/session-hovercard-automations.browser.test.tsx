@@ -1,4 +1,4 @@
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, onTestFailed, onTestFinished, vi } from "vitest";
 import { userEvent } from "vitest/browser";
 import type { CronJob } from "../../api/types.ts";
 import { registerGitHubEnglish } from "../../i18n/locales/en-github.ts";
@@ -86,6 +86,33 @@ it("tabs into a nested inspection, dismisses only the flyout with Escape, and re
   expect(tooltip.hasAttribute("open")).toBe(true);
   anchor.focus();
   const summary = card.querySelector("summary")!;
+  const keys: object[] = [];
+  const recordKey = (event: KeyboardEvent) => {
+    keys.push({
+      type: event.type,
+      key: event.key,
+      code: event.code,
+      alt: event.altKey,
+      control: event.ctrlKey,
+      meta: event.metaKey,
+      shift: event.shiftKey,
+      prevented: event.defaultPrevented,
+    });
+  };
+  for (const type of ["keydown", "keypress", "keyup"] as const) {
+    card.addEventListener(type, recordKey);
+    onTestFinished(() => card.removeEventListener(type, recordKey));
+  }
+  onTestFailed(() => {
+    const beforeFocus = document.activeElement?.outerHTML;
+    summary.focus();
+    console.info("automation inspection focus", {
+      keys,
+      beforeFocus,
+      directFocus: document.activeElement === summary,
+      surface: tooltip.shadowRoot?.querySelector(".tooltip-surface")?.outerHTML,
+    });
+  });
   await userEvent.tab();
   await expect.element(summary).toHaveFocus();
   await userEvent.keyboard("{Enter}");
