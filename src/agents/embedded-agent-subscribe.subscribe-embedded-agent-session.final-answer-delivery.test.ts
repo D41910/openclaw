@@ -234,7 +234,7 @@ describe("Responses final delivery", () => {
           }
           if (update.type === "text_delta" && queuedText && queuedText.includes(update.delta)) {
             observedQueuedText += update.delta;
-            expect(onPartialReply.mock.calls.at(-1)?.[0].text).toContain("Final text.");
+            expect(onPartialReply).not.toHaveBeenCalled();
           }
         },
         undefined,

@@ -1361,7 +1361,7 @@ describe("runCliAgent spawn path", () => {
     expect(cancel).toHaveBeenCalledWith("manual-cancel");
   });
 
-  it("retains Claude stream-json text until the completed result is returned", async () => {
+  it("streams Claude text deltas before the completed stream-json result", async () => {
     const agentEvents: Array<{ stream: string; text?: string; delta?: string }> = [];
     const stop = onAgentEvent((evt) => {
       agentEvents.push({
@@ -1387,6 +1387,10 @@ describe("runCliAgent spawn path", () => {
           event: { type: "content_block_delta", delta: { type: "text_delta", text: " world" } },
         }) + "\n",
       );
+      expect(agentEvents).toEqual([
+        { stream: "assistant", text: "Hello", delta: "Hello" },
+        { stream: "assistant", text: "Hello world", delta: " world" },
+      ]);
       input.onStdout?.(
         JSON.stringify({
           type: "result",
@@ -1401,9 +1405,6 @@ describe("runCliAgent spawn path", () => {
       const result = await executePreparedCliRun(buildPreparedCliRunContext({}));
 
       expect(result.text).toBe("Hello world");
-      expect(agentEvents.filter((event) => event.text || event.delta)).toEqual([
-        { stream: "assistant", text: "Hello world", delta: "Hello world" },
-      ]);
     } finally {
       stop();
     }
