@@ -18,7 +18,6 @@ import {
   type PersistedClawWorkspaceFile,
 } from "./workspace-state.js";
 
-export { readAllClawWorkspaceFilesInDatabase } from "./workspace-state.js";
 export type { PersistedClawWorkspaceFile } from "./workspace-state.js";
 
 const MAX_CLAW_WORKSPACE_FILE_BYTES = 1024 * 1024;

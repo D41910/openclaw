@@ -10,7 +10,7 @@ import { CLAW_CRON_REF_SCHEMA_VERSION, type PersistedClawCronRef } from "./cron-
 import type { ClawMutationStateOptions } from "./state-mutation-options.js";
 import type { ClawAddPlan, ClawCronJob } from "./types.js";
 
-export { CLAW_CRON_REF_SCHEMA_VERSION, type PersistedClawCronRef } from "./cron-records.js";
+export type { PersistedClawCronRef } from "./cron-records.js";
 
 export type ClawCronGateway = {
   add: (
