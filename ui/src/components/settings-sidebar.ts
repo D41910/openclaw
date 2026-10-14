@@ -305,7 +305,7 @@ function renderSettingsAgentSelector(props: SettingsSidebarProps) {
       .menuLabel=${t("agentScope.label")}
       .disabled=${options.length <= 1}
       .onSelect=${(agentId: string) => props.settingsAgentSelection.set(agentId)}
-      @wa-show=${() => void props.agentIdentity.ensure(agents.map((agent) => agent.id))}
+      @overlay-show=${() => void props.agentIdentity.ensure(agents.map((agent) => agent.id))}
     ></openclaw-agent-select>
   </div>`;
 }
