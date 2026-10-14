@@ -8,7 +8,11 @@ import type {
 } from "../../../src/plugin-sdk/control-ui.js";
 import { createDeferred } from "../../../test/helpers/promise.js";
 import type { ApplicationContext } from "../app/context.ts";
-import { renderLegacyTemplate, solidContent } from "../lit/solid-content.tsx";
+import {
+  renderLegacyTemplate,
+  solidContent,
+  SolidContentPresentation,
+} from "../lit/solid-content.tsx";
 import { createApplicationContextProvider } from "../test-helpers/application-context.ts";
 import { mountSolid } from "../test-helpers/mount-solid.ts";
 import { createSolidApplicationContextProvider } from "../test-helpers/solid-application-context.tsx";
@@ -89,6 +93,8 @@ function mountSurface(
     abort: vi.fn(),
   };
   const [revision, setRevision] = createSignal(0);
+  const [presented, setPresented] = createSignal(true);
+  const [contentPresented, setContentPresented] = createSignal(true);
   const identity = () => {
     revision();
     return { sessionKey: state.sessionKey, agentId: state.agentId };
@@ -108,38 +114,45 @@ function mountSurface(
     </>
   );
   const view = mountSolid(
-    () =>
-      initial?.surface === "composer" ? (
-        <PluginSurface
-          surface="composer"
-          props={{
-            ...identity(),
-            draft: state.draft,
-            canSend: true,
-            sending: false,
-            disabledReason: null,
-            setDraft: state.setDraft,
-            send: state.send,
-            abort: state.abort,
-          }}
-          renderDefault={renderDefault}
-          renderCompanion={() => (
-            <button class="companion-action">Retained attachment controls</button>
-          )}
-        />
-      ) : (
-        <PluginSurface
-          surface="workspace"
-          props={{ ...identity(), routeId: "chat" }}
-          renderDefault={renderDefault}
-        />
-      ),
+    () => (
+      <SolidContentPresentation value={contentPresented}>
+        {initial?.surface === "composer" ? (
+          <PluginSurface
+            surface="composer"
+            presented={presented()}
+            props={{
+              ...identity(),
+              draft: state.draft,
+              canSend: true,
+              sending: false,
+              disabledReason: null,
+              setDraft: state.setDraft,
+              send: state.send,
+              abort: state.abort,
+            }}
+            renderDefault={renderDefault}
+            renderCompanion={() => (
+              <button class="companion-action">Retained attachment controls</button>
+            )}
+          />
+        ) : (
+          <PluginSurface
+            surface="workspace"
+            presented={presented()}
+            props={{ ...identity(), routeId: "chat" }}
+            renderDefault={renderDefault}
+          />
+        )}
+      </SolidContentPresentation>
+    ),
     { wrapper: provider.wrapper },
   );
   return {
     ...runtime,
     host: view.container,
     state,
+    setPresented,
+    setContentPresented,
     unmount: view.unmount,
     update: () => setRevision((value) => value + 1),
   };
@@ -296,22 +309,80 @@ describe("native UI built-in delegation", () => {
 
   it("restores host controls when a replacement stops delegating to the built-in", async () => {
     let stopDefault: (() => void) | undefined;
+    const toolbar = document.createElement("button");
+    toolbar.textContent = "Plugin action";
+    const clicked = vi.fn();
+    toolbar.addEventListener("click", clicked);
+    const status = document.createElement("output");
+    status.textContent = "Plugin status";
     const { host } = mountSurface({
       id: "composer",
       label: "Custom composer",
       surface: "composer",
       mount(container, context) {
+        container.append(toolbar);
         stopDefault = context.mountDefault(container);
+        container.append(status);
         return { dispose: () => stopDefault?.() };
       },
     });
     await vi.waitFor(() => expect(host.querySelector(".builtin-action")).not.toBeNull());
     expect(host.querySelectorAll(".builtin-action")).toHaveLength(1);
     expect(host.querySelector(".companion-action")).toBeNull();
+    expect(toolbar.isConnected).toBe(true);
+    expect(status.isConnected).toBe(true);
     stopDefault?.();
     await vi.waitFor(() => expect(host.querySelector(".companion-action")).not.toBeNull());
     expect(host.querySelector(".builtin-action")).toBeNull();
+    expect(toolbar.isConnected).toBe(true);
+    expect(status.isConnected).toBe(true);
+    toolbar.click();
+    expect(clicked).toHaveBeenCalledOnce();
   });
+
+  it.each(["surface", "content"])(
+    "parks replacement selection with %s presentation and retains the mounted view",
+    async (presentation) => {
+      const view = mountSurface();
+      const setPresented =
+        presentation === "surface" ? view.setPresented : view.setContentPresented;
+      const builtin = view.host.querySelector(".builtin-action");
+      const contexts: ControlUiViewContext<ControlUiSurfaceProps["workspace"]>[] = [];
+      const dispose = vi.fn();
+      const mount = vi.fn(
+        (
+          container: HTMLElement,
+          context: ControlUiViewContext<ControlUiSurfaceProps["workspace"]>,
+        ) => {
+          contexts.push(context);
+          container.textContent = "Retained plugin state";
+          return { update: (next: typeof context) => contexts.push(next), dispose };
+        },
+      );
+
+      setPresented(false);
+      flush();
+      expect(view.listeners.size).toBe(0);
+      view.select({ id: "workspace", label: "Workspace", surface: "workspace", mount });
+      flush();
+      expect(mount).not.toHaveBeenCalled();
+      expect(view.host.querySelector(".builtin-action")).toBe(builtin);
+
+      setPresented(true);
+      await vi.waitFor(() => expect(mount).toHaveBeenCalledOnce());
+      const root = view.host.querySelector("[data-plugin-view-root]");
+      setPresented(false);
+      await vi.waitFor(() => expect(contexts.at(-1)?.presented).toBe(false));
+      expect(view.host.querySelector("[data-plugin-view-root]")).toBe(root);
+      expect(root?.textContent).toBe("Retained plugin state");
+      expect(dispose).not.toHaveBeenCalled();
+
+      setPresented(true);
+      await vi.waitFor(() => expect(contexts.at(-1)?.presented).toBe(true));
+      expect(mount).toHaveBeenCalledOnce();
+      expect(view.host.querySelector("[data-plugin-view-root]")).toBe(root);
+    },
+  );
 
   it.each([
     { label: "another agent", nextAgents: ["writer"] },

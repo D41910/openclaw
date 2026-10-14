@@ -9,6 +9,7 @@ import {
   onSettled,
   runWithOwner,
   Show,
+  useContext,
 } from "solid-js";
 import type {
   ControlUiSurface,
@@ -18,9 +19,10 @@ import type {
 } from "../../../src/plugin-sdk/control-ui.js";
 import { useOptionalApplication } from "../lib/reactive/context.ts";
 import { t } from "../lib/reactive/i18n.ts";
+import { createParkedProjection } from "../lib/reactive/parked-projection.ts";
 import { projectSource } from "../lib/reactive/projection.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../lit/solid-bridge.ts";
-import { renderLegacyTemplate } from "../lit/solid-content.tsx";
+import { renderLegacyTemplate, SolidContentPresentation } from "../lit/solid-content.tsx";
 import type { ControlUiRegistration } from "./control-ui-capability.ts";
 import { scopeControlUiHost } from "./control-ui-scope.ts";
 import type { ViewKind } from "./control-ui-view.ts";
@@ -454,13 +456,27 @@ export function PluginSurface<S extends ControlUiSurface>(props: {
     subscribe: (source, publish) => source?.subscribe(publish) ?? (() => {}),
     equality: "revision",
   });
+  const contentPresented = useContext(SolidContentPresentation);
+  const presented = () => (props.presented ?? true) && contentPresented();
+  const selected = createParkedProjection(
+    () => runtime.read()?.selectedReplacement(props.surface),
+    presented,
+  );
   const mount = (target: HTMLElement, view: () => JSX.Element) =>
     runWithOwner(owner, () =>
       createRoot((dispose) => {
-        insert(target, view());
+        // The plugin owns the target and may keep controls beside this delegated view.
+        const start = document.createComment("plugin-default-start");
+        const end = document.createComment("plugin-default-end");
+        target.append(start, end);
+        insert(target, view(), end);
         return () => {
           dispose();
-          target.replaceChildren();
+          while (start.nextSibling && start.nextSibling !== end) {
+            target.removeChild(start.nextSibling);
+          }
+          start.remove();
+          end.remove();
         };
       }),
     );
@@ -471,11 +487,11 @@ export function PluginSurface<S extends ControlUiSurface>(props: {
   const mountDefault = (target: HTMLElement) => mount(target, DefaultView);
   const mountCompanion = (target: HTMLElement) => mount(target, () => props.renderCompanion?.());
   return (
-    <Show when={runtime.read()?.selectedReplacement(props.surface)} fallback={<DefaultView />}>
+    <Show when={selected()} fallback={<DefaultView />}>
       <PluginView
         surface={props.surface}
         props={props.props}
-        presented={props.presented ?? true}
+        presented={presented()}
         mountDefaultView={mountDefault}
         mountReplacementCompanion={mountCompanion}
       />
