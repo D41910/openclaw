@@ -513,7 +513,8 @@ describe("Systems workspace", () => {
       },
     ];
     const { controller, request } = harness(async () => environments);
-    let { page, sidebar, unmount } = await mount(controller);
+    const initial = await mount(controller);
+    let { page, sidebar } = initial;
     expect(renderSidebar({ controller })).toBe(sidebar);
     const names = (selector = ".systems-machine__name") =>
       [...sidebar.querySelectorAll(selector)].map((entry) => entry.textContent?.trim());
@@ -574,7 +575,7 @@ describe("Systems workspace", () => {
     expect(controller.selectedId).toBe(offline.id);
     expect(request.mock.calls.filter(([method]) => method === "environments.list")).toHaveLength(1);
 
-    unmount();
+    initial.unmount();
     ({ page, sidebar } = await mount(controller));
     await waitForSolid(() => expect(controller.loading).toBe(false));
     await sidebar.updateComplete;

@@ -147,11 +147,11 @@ function SystemMeasurements(props: { row: SystemsInventoryRow; controller: Syste
 export function SystemsPage(props: { controller: SystemsController; presented: boolean }) {
   let host!: HTMLElement;
   const source = createMemo(() => props.controller);
-  const presented = createMemo(() => props.presented);
+  const isPresented = createMemo(() => props.presented);
   const projection = createMemo(() => projectOwner(source(), (value) => value));
   const controller = () => projection().read();
   createEffect(
-    () => ({ controller: source(), presented: presented() }),
+    () => ({ controller: source(), presented: isPresented() }),
     ({ controller: active, presented }) => {
       active.setPresented(presented);
       return () => active.setPresented(false);
