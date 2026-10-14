@@ -22,6 +22,7 @@ import {
 import * as cliOutputLifecycle from "./cli-output-lifecycle.js";
 import {
   decodeCliRecords,
+  isClaudeStopHookFeedbackRecord,
   isClaudeStreamJsonDialect,
   isClaudeSyntheticNoResponse,
   isClaudeSubagentRecord,
@@ -57,8 +58,6 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   let pendingClaudeText = "";
   let currentClaudeMessageId: string | undefined;
   let currentClaudeMessageText = "";
-  let currentClaudeReplyStart = 0;
-  let lastNativeReplyText: string | undefined;
   let pendingMessageSeparator = false;
   let currentMessageStart = 0;
   let segmentStart = 0;
@@ -184,8 +183,7 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     currentMessageHadToolUse = false;
     currentClaudeMessageId = messageId;
     currentClaudeMessageText = "";
-    currentClaudeReplyStart = assistantText.length;
-    lastNativeReplyText = undefined;
+    params.onMessageReset?.();
   };
 
   // Diagnostics need the model's final message alone; `text` stays the
@@ -301,6 +299,17 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     return true;
   };
 
+  // Committed or rejected text cannot join the next reply through a tool split.
+  const resetReplySegment = () => {
+    segmentStart = assistantText.length;
+    currentMessageStart = segmentStart;
+    preserveFrom = segmentStart;
+    pendingMessageSeparator = false;
+    sawToolUseSinceText = false;
+    currentMessageHadToolUse = false;
+    previousMessageHadToolUse = false;
+  };
+
   const handleParsedRecord = (parsed: Record<string, unknown>) => {
     if (parseErrorText) {
       return;
@@ -386,11 +395,18 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       return;
     }
 
-    if (parsed.type === "result") {
+    const stopHookFeedback =
+      claudeStreamJson && !isClaudeSubagentRecord(parsed) && isClaudeStopHookFeedbackRecord(parsed);
+    if (parsed.type === "result" || stopHookFeedback) {
       finishTaggedReasoningMessage();
       if (classifyClaudeCommentary) {
         flushPendingClaudeText("assistant");
       }
+    }
+
+    if (stopHookFeedback) {
+      resetReplySegment();
+      params.onMessageReset?.();
     }
 
     let result = parseClaudeCliJsonlResult({
@@ -484,20 +500,13 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
         parsed.openclaw_interim_result === true &&
         completedText &&
         !output.errorText &&
-        !output.terminalFailure &&
-        completedText !== lastNativeReplyText
+        !output.terminalFailure
       ) {
         params.onCompletedReply?.(completedText, textParts.length - 1);
       }
       // An interim result commits its segment. Rebase boundary state so later
       // text is judged on its own, while delta snapshots stay cumulative.
-      segmentStart = assistantText.length;
-      currentMessageStart = segmentStart;
-      preserveFrom = segmentStart;
-      pendingMessageSeparator = false;
-      sawToolUseSinceText = false;
-      currentMessageHadToolUse = false;
-      previousMessageHadToolUse = false;
+      resetReplySegment();
       return;
     }
 
@@ -530,21 +539,10 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
           flushPendingClaudeText("assistant");
         }
       }
-      if (
-        claudeStreamJson &&
-        evt.type === "message_stop" &&
-        !isClaudeSubagentRecord(parsed) &&
-        lastNativeReplyText === undefined
-      ) {
-        lastNativeReplyText = assistantText.slice(currentClaudeReplyStart).trim();
+      if (claudeStreamJson && evt.type === "message_stop" && !isClaudeSubagentRecord(parsed)) {
         const message = partitionLeadingTaggedReasoning(currentClaudeMessageText, true);
-        // Native messages share their result slot so final payload replay keeps the same identity.
         if (!message.pending) {
-          params.onCompletedReply?.(
-            lastNativeReplyText,
-            output?.textParts?.length ?? (output?.text ? 1 : 0),
-            message.visibleText,
-          );
+          params.onMessageEnd?.(message.visibleText, currentMessageHadToolUse);
         }
       }
     }

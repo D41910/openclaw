@@ -1,5 +1,20 @@
 import { assert, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred } from "../../../test/helpers/promise.js";
+import { createCliJsonlStreamingParser } from "../../agents/cli-output-stream.js";
+import {
+  claudeStreamEvent,
+  claudeTextDelta,
+  joinJsonlFrames,
+} from "../../agents/cli-output.test-helpers.js";
+import {
+  buildCliRunResult,
+  prepareCliAssistantReply,
+} from "../../agents/cli-runner/cli-run-settlement.js";
+import { createCliEventHandlers } from "../../agents/cli-runner/execute-events.js";
+import {
+  buildContext,
+  buildToolTracking,
+} from "../../agents/cli-runner/execute-events.tool-result-args.test-support.js";
 import type { GetReplyOptions } from "../types.js";
 import {
   createMinimalRunAgentTurnParams,
@@ -129,5 +144,121 @@ it.each([false, true])(
       await Promise.allSettled([run]);
     }
     expect(order).toEqual(["Checking.", "commentary delivered", "Done."]);
+  },
+);
+
+it.each([
+  ...[false, true].flatMap((tool) =>
+    ["B", "NO_REPLY"].map((accepted) => ({ tool, accepted, acceptFirst: false })),
+  ),
+  { tool: false, accepted: "NO_REPLY", acceptFirst: true },
+])(
+  "keeps native Stop-hook drafts private (tool=$tool, accepted=$accepted, prior accepted=$acceptFirst)",
+  async ({ tool, accepted, acceptFirst }) => {
+    const { setBlockReplyDelivery } = await import("./block-reply-delivery.js");
+    const { onAgentEventForRun } = await import("../../infra/agent-events.js");
+    const completed: string[] = [];
+    const completionsAtMessageStop: string[][] = [];
+    const onBlockReply = vi.fn<NonNullable<GetReplyOptions["onBlockReply"]>>(async () => {
+      setBlockReplyDelivery(Promise.resolve({ outcome: "delivered" }));
+    });
+    state.runCliAgentMock.mockImplementationOnce(
+      async (params: Parameters<typeof import("../../agents/cli-runner.js").runCliAgent>[0]) => {
+        const context = buildContext(params.runId);
+        context.params = { ...context.params, ...params };
+        const handlers = createCliEventHandlers({
+          context,
+          toolTracking: buildToolTracking(),
+          getRunState: () => ({ failed: false, error: undefined }),
+        });
+        const parser = createCliJsonlStreamingParser({
+          backend: { ...context.backendResolved.config, jsonlDialect: "claude-stream-json" },
+          providerId: "claude-cli",
+          onAssistantDelta: handlers.emitCliAssistantDelta,
+          onMessageReset: handlers.emitCliMessageReset,
+          onMessageEnd: handlers.emitCliMessageEnd,
+          onCompletedReply: handlers.emitCliCompletedReply,
+          onThinkingDelta: handlers.emitCliThinkingDelta,
+          onCommentaryText: handlers.emitCliCommentaryText,
+        });
+        const stop = onAgentEventForRun(params.runId, (event) => {
+          if (event.stream === "assistant" && typeof event.data.completedText === "string") {
+            completed.push(event.data.completedText);
+          }
+        });
+        const push = (...frames: unknown[]) => parser.push(joinJsonlFrames(...frames, ""));
+        const message = (id: string, text: string) => {
+          push(
+            claudeStreamEvent({ type: "message_start", message: { id } }),
+            claudeTextDelta(text),
+            claudeStreamEvent({ type: "message_stop" }),
+          );
+          completionsAtMessageStop.push([...completed]);
+        };
+        const result = (text: string, interim = false) =>
+          push({
+            type: "result",
+            subtype: "success",
+            result: text,
+            ...(interim ? { openclaw_interim_result: true } : {}),
+          });
+        try {
+          message("draft", "A");
+          if (acceptFirst) {
+            result("A", true);
+          } else {
+            push({ type: "system", subtype: "notification", key: "stop-hook-error" });
+          }
+          if (tool) {
+            push(
+              claudeStreamEvent({ type: "message_start", message: { id: "tool" } }),
+              claudeStreamEvent({
+                type: "content_block_start",
+                index: 0,
+                content_block: { type: "tool_use", id: "read-1", name: "Read", input: {} },
+              }),
+              claudeStreamEvent({ type: "content_block_stop", index: 0 }),
+              claudeStreamEvent({ type: "message_stop" }),
+              {
+                type: "user",
+                message: {
+                  content: [{ type: "tool_result", tool_use_id: "read-1", content: "ok" }],
+                },
+              },
+            );
+          }
+          message("accepted", accepted);
+          result(accepted, true);
+          result(accepted);
+          parser.finish();
+          const output = parser.getOutput();
+          assert(output);
+          handlers.emitCliCompletedReply(
+            output.rawFinalText ?? output.textParts?.at(-1) ?? output.text,
+          );
+          return buildCliRunResult({
+            context,
+            output,
+            assistantText: prepareCliAssistantReply(output).text,
+            usedHistoryPrompt: false,
+            userTurnHandled: true,
+            sessionBindingDisabled: true,
+            preparedContextAgentMeta: {},
+          });
+        } finally {
+          stop();
+        }
+      },
+    );
+    const executeAgentTurn = await getExecuteAgentTurnForTest();
+    const execution = await executeAgentTurn(createCliTurn({ onBlockReply }));
+    const expected = acceptFirst ? ["A"] : accepted === "NO_REPLY" ? [] : ["B"];
+    expect(completionsAtMessageStop).toEqual([[], acceptFirst ? ["A"] : []]);
+    expect(completed).toEqual(expected);
+    expect(onBlockReply.mock.calls.map(([payload]) => payload.text)).toEqual(expected);
+    assert(execution.kind === "success");
+    expect(execution.runResult.payloads?.map((payload) => payload.text)).toEqual(
+      acceptFirst ? ["A", "NO_REPLY"] : [accepted],
+    );
   },
 );

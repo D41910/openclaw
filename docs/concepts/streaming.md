@@ -23,6 +23,9 @@ non-text activity do not wait for this text decision. CLI backends without
 individual message boundaries hold text until a completed result segment or
 the turn ends.
 
+Native CLI tool commentary settles when its message completes. Terminal answers
+wait for an accepted result, so drafts rejected by a Stop hook remain unpublished.
+
 ## Control UI startup status
 
 After `chat.send` acknowledges an active run, the Gateway can send a typed,

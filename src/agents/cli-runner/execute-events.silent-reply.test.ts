@@ -147,6 +147,8 @@ describe("native CLI message completion", () => {
         backend: { ...context.backendResolved.config, jsonlDialect: "claude-stream-json" },
         providerId: "claude-cli",
         onAssistantDelta: handlers.emitCliAssistantDelta,
+        onMessageReset: handlers.emitCliMessageReset,
+        onMessageEnd: handlers.emitCliMessageEnd,
         onCompletedReply: handlers.emitCliCompletedReply,
         onThinkingDelta: handlers.emitCliThinkingDelta,
         onCommentaryText: handlers.emitCliCommentaryText,
@@ -212,7 +214,7 @@ describe("native CLI message completion", () => {
               { stream: "assistant", text: "The check is complete." },
             ]
           : firstOutput;
-        expect(delivered()).toEqual(expected);
+        expect(delivered()).toEqual(firstOutput);
         for (const interim of [true, true, false]) {
           parser.push(
             joinJsonlFrames(

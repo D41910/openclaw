@@ -138,8 +138,10 @@ export type CliJsonlStreamingParserOptions = {
   parseJsonlEvent?: CliBackendParseJsonlEvent;
   parseJsonlLifecycleEvent?: CliBackendParseJsonlLifecycleEvent;
   onAssistantDelta: (delta: CliStreamingDelta) => void;
-  /** Native completion includes the whole message when reply text excludes commentary. */
-  onCompletedReply?: (text: string, assistantMessageIndex: number, messageText?: string) => void;
+  onMessageReset?: () => void;
+  onMessageEnd?: (text: string, hasToolUse: boolean) => void;
+  /** Result acceptance, distinct from a native message ending before Stop hooks. */
+  onCompletedReply?: (text: string, assistantMessageIndex: number) => void;
   onThinkingDelta?: (delta: CliThinkingDelta) => void;
   onThinkingProgress?: (progress: CliThinkingProgress) => void;
   onCompaction?: (delta: CliCompactionDelta) => void;

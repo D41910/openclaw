@@ -373,6 +373,7 @@ export function createCliEventHandlers(params: {
     }
   };
   let pendingThinkingText = "";
+  let pendingNativeMessageText: string | undefined;
   let settledThinkingText = "";
   let publishedThinkingText = "";
   const pendingCommentaryText: string[] = [];
@@ -401,11 +402,7 @@ export function createCliEventHandlers(params: {
     // Keep activity live without exposing text a final silent line can retract.
     emitLiveEvent("assistant", () => ({ itemId: cliAssistantItemId(runParams.runId) }));
   };
-  const emitCliCompletedReply = (
-    rawText: string,
-    assistantMessageIndex?: number,
-    messageText?: string,
-  ) => {
+  const settleCliMessage = (rawText: string, messageText?: string) => {
     if (rawText) {
       observedCliActivity = true;
     }
@@ -446,6 +443,10 @@ export function createCliEventHandlers(params: {
       }
     }
     pendingCommentaryText.length = 0;
+    return { silent, completedText };
+  };
+  const emitCliCompletedReply = (rawText: string, assistantMessageIndex?: number) => {
+    const { silent, completedText } = settleCliMessage(rawText, pendingNativeMessageText);
     if (assistantMessageIndex !== undefined) {
       if (!silent) {
         completedReplyText = [completedReplyText, completedText].filter(Boolean).join("\n");
@@ -508,6 +509,18 @@ export function createCliEventHandlers(params: {
       emitLiveEvent("assistant", () => ({}));
     },
     emitCliAssistantDelta,
+    emitCliMessageReset: () => {
+      pendingNativeMessageText = undefined;
+      pendingThinkingText = "";
+      settledThinkingText = "";
+      pendingCommentaryText.length = 0;
+    },
+    emitCliMessageEnd: (text: string, hasToolUse: boolean) => {
+      pendingNativeMessageText = text;
+      if (hasToolUse) {
+        settleCliMessage("", text);
+      }
+    },
     emitCliCompletedReply,
     emitCliThinkingDelta,
     emitCliThinkingProgress,
