@@ -244,13 +244,13 @@ it("keeps descendant-only native overlap leased through closing and releases aft
     }
   };
   for (const menu of branch) {
-    const getAnimations = menu.getAnimations;
-    const hidePopover = menu.hidePopover;
+    const getAnimations = menu.getAnimations.bind(menu);
+    const hidePopover = menu.hidePopover.bind(menu);
     const animationSpy = vi.spyOn(menu, "getAnimations").mockImplementation(function (
       this: HTMLElement,
       ...args: Parameters<HTMLElement["getAnimations"]>
     ) {
-      const animations = getAnimations.apply(this, args);
+      const animations = getAnimations(...args);
       recordClose({
         id: this.id,
         operation: "animations",
@@ -270,7 +270,7 @@ it("keeps descendant-only native overlap leased through closing and releases aft
         phase: this.dataset.phase,
         nativeOpen: this.matches(":popover-open"),
       });
-      const result = hidePopover.apply(this, args);
+      const result = hidePopover(...args);
       recordClose({
         id: this.id,
         operation: "hide-after",
