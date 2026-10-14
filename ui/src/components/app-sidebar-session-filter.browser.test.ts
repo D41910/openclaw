@@ -81,6 +81,8 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
         vi.unstubAllGlobals();
       });
       const { sidebar, page } = await mountFilters(width);
+      // A retained pointer can open the rail tooltip when the layout switches to RTL.
+      await page.elementLocator(document.body).hover({ position: { x: 0, y: 0 } });
       sidebar.dir = direction;
       const occlusion: boolean[] = [];
       onTestFinished(
@@ -144,6 +146,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
       await userEvent.keyboard("{Escape}");
       await expect.element(search).toHaveValue("");
       await expect.poll(() => ownerOptions(sidebar)).toHaveLength(4);
+      // Focus returns before the closing frame releases native occlusion.
       const ownersSurface = search.element().closest(".picker-select__menu")!;
       const ownersHidden = new Promise<void>((resolve) => {
         ownersSurface.addEventListener("overlay-after-hide", () => resolve(), { once: true });
@@ -151,7 +154,7 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar session filter popov
       await userEvent.keyboard("{Escape}");
       await ownersHidden;
       await expect.element(owners).toHaveFocus();
-      await expect.poll(() => occlusion).toEqual([false, true, false]);
+      expect(occlusion).toEqual([false, true, false]);
       await trigger.click();
       await expect.poll(() => occlusion).toEqual([false, true, false, true]);
       await expectFits();
