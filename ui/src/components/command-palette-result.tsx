@@ -11,8 +11,8 @@ import { LitContent } from "../lit/solid-bridge.ts";
 import { PluginArtTile } from "../pages/plugins/consent-dialog.tsx";
 import type { CommandPaletteItem } from "./command-palette-catalog-search.ts";
 import { renderAgentIdentityAvatar } from "./identity-avatar-view.ts";
-import { renderSessionOwnerAvatar } from "./session-owner-chip.ts";
 import { Icon } from "./solid/icon.tsx";
+import { renderSessionOwnerAvatar } from "./solid/session-presentation.tsx";
 import { ThemeBrandingIcon } from "./theme-brand-icon.tsx";
 
 // Preserve source offsets when case folding expands Unicode characters.
@@ -155,9 +155,7 @@ export function CommandPaletteResult(props: {
               />
               <Show when={owner()?.id}>
                 <span class="cmd-palette__owner">
-                  <LitContent
-                    render={() => renderSessionOwnerAvatar({ ...owner()!, id: owner()!.id! })}
-                  />
+                  {renderSessionOwnerAvatar({ ...owner()!, id: owner()!.id! })}
                 </span>
               </Show>
             </span>
