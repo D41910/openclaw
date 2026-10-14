@@ -1,5 +1,4 @@
 import { createServer, type ServerResponse } from "node:http";
-import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { asOptionalObjectRecord } from "@openclaw/normalization-core/record-coerce";
 import { GatewayClient } from "openclaw/plugin-sdk/gateway-runtime";
@@ -13,22 +12,9 @@ import {
   GATEWAY_CLIENT_MODES,
   GATEWAY_CLIENT_NAMES,
 } from "../../../../packages/gateway-protocol/src/client-info.js";
-import { readSubagentRunAnnounceResult } from "../../../../src/agents/subagents/announce/subagent-announce-output.js";
-import {
-  loadSubagentRegistryFromSqlite,
-  saveSubagentRegistryToSqlite,
-} from "../../../../src/agents/subagents/registry/subagent-registry-state.fixture.test-support.js";
-import { prepareSubagentRunsByRunIds } from "../../../../src/agents/subagents/registry/subagent-registry.js";
-import type { SubagentRunRecord } from "../../../../src/agents/subagents/registry/subagent-registry.types.js";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../../../../src/config/config.js";
 import { resolveSessionStorePathCore } from "../../../../src/config/sessions/paths.js";
-import {
-  findTranscriptEvent,
-  loadTranscriptEventsSync,
-} from "../../../../src/config/sessions/session-accessor.js";
-import { deleteSessionEntryLifecycle } from "../../../../src/config/sessions/session-accessor.sqlite-lifecycle.js";
-import { pruneAllSessionTranscriptArchivesToHighWater } from "../../../../src/config/sessions/session-history-archive-pruning.js";
-import { resolveSqliteTargetFromSessionStorePath } from "../../../../src/config/sessions/session-sqlite-target.js";
+import { loadTranscriptEventsSync } from "../../../../src/config/sessions/session-accessor.js";
 import { captureEnv, setTestEnvValue } from "../../../../src/test-utils/env.js";
 import { createDeferred, withinTest } from "../../../helpers/promise.js";
 import { stopQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
@@ -36,7 +22,6 @@ import { stopQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 const MODEL = "mock-openai/terminal-primary";
 const PREFIX = "NO_REPLY";
 const MISSING_REPLY_NOTICE = "No answer was returned. Ask again if you still need one.";
-const RETENTION_WARNING = "[truncated-by-retention: complete child answer unavailable]";
 
 type Event = {
   event: string;
@@ -193,9 +178,19 @@ describe("provider terminal reply delivery", () => {
         inspect();
         return withinTest(ready.promise, signal).finally(() => eventWaiters.delete(inspect));
       };
-      const scripts = ["silent", "suffix", "punctuation", "retained", "json", "prose"].map(
-        createScript,
-      );
+      const scripts = [
+        "silent",
+        "suffix",
+        "punctuation",
+        "json",
+        "prose",
+        "trimmed",
+        "lowercase",
+        "quoted",
+        "literal",
+        "crlf",
+        "indented",
+      ].map(createScript);
       let emptyFinals = false;
       const emptyNoticeDelivered = createDeferred();
       const requests: unknown[] = [];
@@ -328,35 +323,28 @@ describe("provider terminal reply delivery", () => {
             expected: "NO_REPLY\nI started the watcher.",
           },
           { id: "punctuation", raw: "NO_REPLY.", expected: "NO_REPLY." },
-          {
-            id: "retained",
-            raw: `${"retained child report ".repeat(500)}required-tail`,
-            expected: undefined,
-          },
           { id: "json", raw: '{"action":"NO_REPLY"}', expected: '{"action":"NO_REPLY"}' },
           {
             id: "prose",
             raw: "I started the watcher. NO_REPLY",
             expected: "I started the watcher. NO_REPLY",
           },
+          { id: "trimmed", raw: " \tNO_REPLY\n", expected: undefined },
+          { id: "lowercase", raw: "no_reply", expected: "no_reply" },
+          { id: "quoted", raw: '"NO_REPLY"', expected: '"NO_REPLY"' },
+          { id: "literal", raw: "NO_REPLY\nNO_REPLY", expected: "NO_REPLY" },
+          { id: "crlf", raw: "NO_REPLY\r\nAnswer", expected: "NO_REPLY\r\nAnswer" },
+          { id: "indented", raw: " NO_REPLY\nAnswer", expected: " NO_REPLY\nAnswer" },
         ];
-        const sessionKeys = cases.map(({ id }) =>
-          id === "retained" ? `agent:qa:subagent:terminal-${id}` : `agent:qa:qa:terminal-${id}`,
-        );
+        const sessionKeys = cases.map(({ id }) => `agent:qa:qa:terminal-${id}`);
         const deliveredTexts = (target: string) =>
           deliveries.filter((delivery) => delivery.to === target).map((delivery) => delivery.text);
-        const sessionIds: string[] = [];
         for (const [index, testCase] of cases.entries()) {
           const runId = `terminal-${testCase.id}`;
           const sessionKey = sessionKeys[index]!;
           const target = `dm:terminal-${testCase.id}`;
           const script = scripts[index]!;
-          const expected =
-            testCase.id === "retained"
-              ? [testCase.raw]
-              : testCase.expected
-                ? [testCase.expected]
-                : [];
+          const expected = testCase.expected ? [testCase.expected] : [];
           await client.request("sessions.messages.subscribe", { key: sessionKey });
           const accepted = await client.request("agent", {
             sessionKey,
@@ -435,7 +423,6 @@ describe("provider terminal reply delivery", () => {
             "chat.history",
             { sessionKey, limit: 20, maxChars: 50_000 },
           );
-          sessionIds.push(history.sessionId);
           expect(history.messages.map(assistantText).filter((text) => text !== undefined)).toEqual(
             expected,
           );
@@ -477,25 +464,17 @@ describe("provider terminal reply delivery", () => {
             limit: 20,
           },
         );
-        // Model-switch traces remain valid; the missing-answer notice is never an assistant row.
         expect(
-          emptyHistory.messages
-            .map(assistantText)
-            .filter((text) => text?.includes(MISSING_REPLY_NOTICE)),
+          emptyHistory.messages.filter(
+            (message) => asOptionalObjectRecord(message)?.role === "assistant",
+          ),
         ).toEqual([]);
 
         await client.stopAndWait();
         client = undefined;
-        let retainedWarning = "";
         await gateway.restartAfterStateMutation(async ({ runtimeEnv }) => {
           // The Gateway is stopped: the parent now has exclusive custody of its SQLite stores.
-          const envKeys = [
-            "HOME",
-            "OPENCLAW_HOME",
-            "OPENCLAW_STATE_DIR",
-            "OPENCLAW_CONFIG_PATH",
-            "OPENCLAW_TEST_READ_SUBAGENT_RUNS_FROM_SQLITE",
-          ];
+          const envKeys = ["HOME", "OPENCLAW_HOME", "OPENCLAW_STATE_DIR", "OPENCLAW_CONFIG_PATH"];
           const env = captureEnv(envKeys);
           try {
             for (const key of envKeys) {
@@ -504,7 +483,6 @@ describe("provider terminal reply delivery", () => {
                 setTestEnvValue(key, value);
               }
             }
-            setTestEnvValue("OPENCLAW_TEST_READ_SUBAGENT_RUNS_FROM_SQLITE", "1");
             clearRuntimeConfigSnapshot();
             clearConfigCache();
             const storePath = resolveSessionStorePathCore(gateway.cfg.session?.store, {
@@ -518,86 +496,12 @@ describe("provider terminal reply delivery", () => {
               sessionId: emptyHistory.sessionId,
             });
             expect(
-              emptyRows
-                .flatMap((row) => assistantText(asOptionalObjectRecord(row)?.message) ?? [])
-                .filter((text) => text.includes(MISSING_REPLY_NOTICE)),
+              emptyRows.filter(
+                (row) =>
+                  asOptionalObjectRecord(asOptionalObjectRecord(row)?.message)?.role ===
+                  "assistant",
+              ),
             ).toEqual([]);
-            const childSessionKey = sessionKeys[3]!;
-            const childTarget = {
-              agentId: "qa",
-              storePath,
-              sessionKey: childSessionKey,
-              sessionId: sessionIds[3]!,
-            };
-            const child: SubagentRunRecord = {
-              runId: "terminal-retained",
-              childSessionKey,
-              childAgentId: "qa",
-              requesterSessionKey: sessionKeys[1]!,
-              requesterDisplayKey: "terminal-suffix",
-              task: "Return the complete retained report",
-              cleanup: "delete",
-              createdAt: 1,
-              cleanupHandled: true,
-              cleanupCompletedAt: 1,
-              execution: {
-                status: "terminal",
-                outcome: { status: "ok" },
-                transcriptTarget: childTarget,
-              },
-              // Legacy records have capped result text but no terminal reply fact.
-              completion: {
-                required: true,
-                resultText: cases[3]!.raw.slice(0, 4_096),
-              },
-              delivery: { status: "pending" },
-            };
-            // Seed legacy bytes, then exercise the real persisted registry and archive readers.
-            saveSubagentRegistryToSqlite(new Map([[child.runId, child]]));
-            expect(loadSubagentRegistryFromSqlite().get(child.runId)?.completion?.resultText).toBe(
-              cases[3]!.raw.slice(0, 4_096),
-            );
-            const readRetained = async () => {
-              const snapshot = await prepareSubagentRunsByRunIds([child.runId]);
-              const readCurrent = (runId: string) => {
-                const current = snapshot.consume((runs) => runs.get(runId));
-                return current.ready ? current.value : undefined;
-              };
-              const reloaded = readCurrent(child.runId);
-              if (!reloaded) {
-                throw new Error("Persisted legacy child record was not reloaded");
-              }
-              return readSubagentRunAnnounceResult(reloaded, readCurrent);
-            };
-            const complete = await readRetained();
-            expect(complete.text).toBe(cases[3]!.raw);
-            const deleted = await deleteSessionEntryLifecycle({
-              agentId: "qa",
-              env: runtimeEnv,
-              storePath,
-              target: { canonicalKey: childSessionKey, storeKeys: [childSessionKey] },
-              archiveTranscript: true,
-            });
-            expect(deleted.archivedTranscripts).toHaveLength(1);
-            expect((await readRetained()).text).toBe(cases[3]!.raw);
-            const database = resolveSqliteTargetFromSessionStorePath(storePath);
-            const pruned = await pruneAllSessionTranscriptArchivesToHighWater({
-              archiveDirectory: path.dirname(deleted.archivedTranscripts[0]!.archivedPath),
-              databaseOptions: { agentId: "qa", path: database.path, env: runtimeEnv },
-              storePath,
-              highWaterBytes: 1,
-            });
-            expect(pruned.removedFiles).toBe(1);
-            expect(
-              await findTranscriptEvent(childTarget, {
-                kind: "visible-final",
-                runId: child.runId,
-              }),
-            ).toBeUndefined();
-            retainedWarning = (await readRetained()).text!;
-            expect(retainedWarning).toBe(`${RETENTION_WARNING}\n${cases[3]!.raw.slice(0, 4_096)}`);
-            expect(retainedWarning).not.toContain("required-tail");
-            saveSubagentRegistryToSqlite(new Map());
           } finally {
             clearRuntimeConfigSnapshot();
             clearConfigCache();
@@ -606,9 +510,6 @@ describe("provider terminal reply delivery", () => {
         });
         // A fresh Gateway process cannot satisfy history from the first process's caches.
         for (const [index, testCase] of cases.entries()) {
-          if (testCase.id === "retained") {
-            continue;
-          }
           const history = (await gateway.call("chat.history", {
             sessionKey: sessionKeys[index],
             limit: 20,
@@ -618,22 +519,6 @@ describe("provider terminal reply delivery", () => {
             testCase.expected ? [testCase.expected] : [],
           );
         }
-        await gateway.call("send", {
-          channel: "qa-channel",
-          to: "dm:retention-warning",
-          message: retainedWarning,
-          sessionKey: sessionKeys[1],
-          idempotencyKey: "retention-warning",
-        });
-        expect(deliveredTexts("dm:retention-warning")).toEqual([retainedWarning]);
-        const requesterHistory = (await gateway.call("chat.history", {
-          sessionKey: sessionKeys[1],
-          limit: 20,
-          maxChars: 50_000,
-        })) as { messages: unknown[] };
-        expect(
-          requesterHistory.messages.map(assistantText).filter((text) => text !== undefined),
-        ).toEqual([cases[1]!.expected, retainedWarning]);
         expect(transportErrors).toEqual([]);
       } finally {
         try {

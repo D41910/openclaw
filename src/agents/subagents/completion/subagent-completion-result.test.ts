@@ -7,10 +7,10 @@ describe("resolveSubagentCompletionResultText", () => {
       name: "visible",
       terminalReply: {
         disposition: "visible",
-        text: "NO_REPLY",
+        text: "authoritative reply",
         modelRouteChange: "Model route changed: requested/model → actual/model.",
       } as const,
-      expected: "NO_REPLY",
+      expected: "authoritative reply",
     },
     {
       name: "silent",

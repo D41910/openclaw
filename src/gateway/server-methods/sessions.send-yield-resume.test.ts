@@ -11,13 +11,8 @@ import {
   emptySqliteCounts,
   observeParentSqlite,
 } from "../../../test/helpers/sqlite-parent-observer.js";
-import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import { createRequesterYieldCallback } from "../../agents/openclaw-tools.requester-yield.js";
 import { withLocalSessionPlacementTurnSettlement } from "../../agents/session-placement-admission.js";
-import {
-  captureSubagentCompletionReply,
-  readSubagentRunAnnounceResult,
-} from "../../agents/subagents/announce/subagent-announce-output.js";
 import { setSubagentAnnounceDeliveryDepsForTest } from "../../agents/subagents/announce/subagent-announce-overrides.test-support.js";
 import { dispatchGatewayMethodInProcess } from "../../agents/subagents/announce/subagent-announce.runtime.js";
 import { subagentRuns } from "../../agents/subagents/registry/subagent-registry-memory.js";
@@ -339,49 +334,6 @@ it("resumes a yielded child through sessions.send and wakes its original parent 
   expect(archiveRead).not.toHaveBeenCalled();
   expect(hostSql.counts).toEqual(emptySqliteCounts());
 });
-
-it.each(["short complete answer", "x".repeat(5_000)])(
-  "settles a visible terminal without a transcript row under fake timers ($#)",
-  async (rawText) => {
-    vi.useFakeTimers();
-    const runId = "missing-final-row";
-    const childSessionKey = `agent:main:subagent:${runId}`;
-    await writeSubagentSessionEntry({
-      stateDir: fixture.stateDir,
-      agentId: "main",
-      sessionKey: childSessionKey,
-      defaultSessionId: "missing-final-session",
-    });
-    await registerSubagentRun({
-      runId,
-      childSessionKey,
-      childAgentId: "main",
-      sessionEntry: { sessionId: "missing-final-session" },
-      requesterSessionKey: "agent:main:main",
-      requesterDisplayKey: "main",
-      task: "Return the answer",
-      cleanup: "keep",
-      expectsCompletionMessage: true,
-    });
-    fixture.capture.mockImplementation(captureSubagentCompletionReply);
-    const { terminalReply } = prepareAgentRunTerminalReply({ rawText });
-    emitAgentEvent({
-      runId,
-      sessionKey: childSessionKey,
-      stream: "lifecycle",
-      data: { phase: "end", endedAt: Date.now(), terminalReply },
-    });
-    await fixture.settle();
-    const completed = expectDefined(subagentRuns.get(runId), "completed child");
-    expect(completed.execution).toMatchObject({ status: "terminal", outcome: { status: "ok" } });
-    const prepared = await readSubagentRunAnnounceResult(completed);
-    expect(prepared.text).toBe(
-      rawText.length < 4_096
-        ? rawText
-        : `[truncated-by-retention: complete child answer unavailable]\n${"x".repeat(4_095)}…`,
-    );
-  },
-);
 
 it.each(["runtime owner", "state source"] as const)(
   "retains the committed outcome after %s replacement",

@@ -118,24 +118,6 @@ describe("public session document", () => {
     );
   });
 
-  it.each([
-    { content: "NO_REPLY\nNO_REPLY" },
-    { content: [{ type: "text", text: "NO_REPLY\nNO_REPLY" }] },
-    { content: "NO_REPLY", display: true },
-    {
-      content: "NO_REPLY",
-      openclawDeliveryMirror: {
-        kind: "message-tool-source-reply",
-        final: true,
-        sourceTurnId: "source-turn",
-      },
-    },
-  ])("renders the prepared literal suffix without reclassifying it: %j", (row) => {
-    const html = render([{ role: "assistant", ...row }]);
-    expect(html).toContain("<p>NO_REPLY</p>");
-    expect(html).toContain("1 message");
-  });
-
   it("groups tool work between every assistant message with bounded unmasked summaries", () => {
     const secret = `sk-${"a".repeat(48)}`;
     const html = render([

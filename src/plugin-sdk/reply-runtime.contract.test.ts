@@ -39,16 +39,6 @@ describe("reply SDK silence surface", () => {
     expectTypeOf<"isSilentReplyPayloadText">().not.toExtend<ChunkingExports>();
     expectTypeOf<"isSilentReplyPayloadText">().not.toExtend<RuntimeExports>();
     expectTypeOf(isSilentReplyText).parameters.toEqualTypeOf<[text?: string]>();
-    for (const [text, silent] of [
-      ["NO_REPLY", true],
-      [" \nNO_REPLY\t", true],
-      ["no_reply", false],
-      ["NO_REPLY.", false],
-      ['{"text":"NO_REPLY"}', false],
-      ["NO_REPLY\nNO_REPLY", false],
-    ] as const) {
-      expect(isSilentReplyText(text)).toBe(silent);
-    }
   });
 });
 

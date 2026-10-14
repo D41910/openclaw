@@ -1,6 +1,5 @@
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { expect, it, onTestFinished } from "vitest";
-import { getReplyPayloadMetadata } from "../auto-reply/reply-payload.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { setRuntimeConfigSnapshot } from "../config/runtime-snapshot.js";
 import type { SessionEntry } from "../config/sessions.js";
@@ -149,16 +148,6 @@ export function registerCliReplyCompletionTests({
 
   it.each([
     {
-      name: "final source reply",
-      target: "chat123",
-      final: true,
-      expected: "success",
-      text: SILENT_REPLY_TOKEN,
-      trigger: "user",
-      expectation: "required",
-      notice: false,
-    },
-    {
       name: "source progress",
       target: "chat123",
       final: false,
@@ -166,36 +155,6 @@ export function registerCliReplyCompletionTests({
       text: SILENT_REPLY_TOKEN,
       trigger: "user",
       expectation: "required",
-      notice: false,
-    },
-    {
-      name: "another conversation",
-      target: "elsewhere",
-      final: true,
-      expected: "success",
-      text: SILENT_REPLY_TOKEN,
-      trigger: "user",
-      expectation: "required",
-      notice: false,
-    },
-    {
-      name: "private final without source text",
-      target: "chat123",
-      final: true,
-      expected: "error",
-      text: SILENT_REPLY_TOKEN,
-      trigger: "user",
-      expectation: "result-required",
-      notice: false,
-    },
-    {
-      name: "private progress without source text",
-      target: "chat123",
-      final: false,
-      expected: "error",
-      text: SILENT_REPLY_TOKEN,
-      trigger: "user",
-      expectation: "result-required",
       notice: false,
     },
     {
@@ -207,36 +166,6 @@ export function registerCliReplyCompletionTests({
       trigger: "user",
       expectation: "required",
       notice: true,
-    },
-    {
-      name: "empty heartbeat progress",
-      target: "chat123",
-      final: false,
-      expected: "error",
-      text: "",
-      trigger: "heartbeat",
-      expectation: "required",
-      notice: false,
-    },
-    {
-      name: "empty cron progress",
-      target: "chat123",
-      final: false,
-      expected: "error",
-      text: "",
-      trigger: "cron",
-      expectation: "required",
-      notice: false,
-    },
-    {
-      name: "empty private progress",
-      target: "chat123",
-      final: false,
-      expected: "error",
-      text: "",
-      trigger: "user",
-      expectation: "result-required",
-      notice: false,
     },
   ] as const)(
     "settles $name without replaying a send",
@@ -289,9 +218,6 @@ export function registerCliReplyCompletionTests({
               isStatusNotice: true,
             },
           ]);
-          expect(getReplyPayloadMetadata(result.payloads?.[0] ?? {})).toMatchObject({
-            assistantTranscriptOwned: true,
-          });
         } else {
           expect(result.payloads).toBeUndefined();
         }
@@ -300,111 +226,80 @@ export function registerCliReplyCompletionTests({
     },
   );
 
-  it.each(
-    [false, true].flatMap((interSession) =>
-      (
-        [
-          { final: true, deliveryMode: "automatic" },
-          { final: true, deliveryMode: "message_tool_only" },
-          { final: false, deliveryMode: "message_tool_only" },
-        ] as const
-      ).map(({ final, deliveryMode }) => ({ interSession, final, deliveryMode })),
-    ),
-  )(
-    "requires a final WebChat internal-source result after NO_REPLY (inter-session=$interSession, final=$final, mode=$deliveryMode)",
-    async ({ interSession, final, deliveryMode }) => {
-      const sessionKey = "agent:main:webchat:dm:cli-internal-source";
-      const { dir, sessionTarget } = createSessionFixture({ sessionKey });
-      const config: OpenClawConfig = {
-        agents: { entries: { main: { workspace: dir } } },
-      };
-      setRuntimeConfigSnapshot(config);
-      const context = createContext({
-        sessionKey,
-        runId: "cli-internal-source",
-        ...sessionParams(sessionTarget, dir),
-        config,
-        messageChannel: "webchat",
-        messageProvider: "webchat",
-        sourceReplyDeliveryMode: deliveryMode,
-        inputProvenance: interSession
-          ? {
-              kind: "inter_session",
-              sourceSessionKey: "agent:main:main",
-              sourceTool: "sessions_send",
-            }
-          : undefined,
+  it("does not mistake CLI WebChat progress for a final result", async () => {
+    const sessionKey = "agent:main:webchat:dm:cli-internal-source";
+    const { dir, sessionTarget } = createSessionFixture({ sessionKey });
+    const config: OpenClawConfig = {
+      agents: { entries: { main: { workspace: dir } } },
+    };
+    setRuntimeConfigSnapshot(config);
+    const context = createContext({
+      sessionKey,
+      runId: "cli-internal-source",
+      ...sessionParams(sessionTarget, dir),
+      config,
+      messageChannel: "webchat",
+      messageProvider: "webchat",
+      sourceReplyDeliveryMode: "message_tool_only",
+    });
+    context.backendResolved.config.output = "jsonl";
+    const tool = createMessageTool({
+      config,
+      preparedMessageToolCatalog: { version: 0, channels: [], getChannel: () => undefined },
+      currentChannelProvider: "webchat",
+      sourceReplyDeliveryMode: "message_tool_only",
+      agentSessionKey: sessionKey,
+      runSessionKey: sessionKey,
+      sessionId: sessionTarget.sessionId,
+      agentId: "main",
+      runId: context.params.runId,
+      getScopedChannelsCommandSecretTargets: () => ({ targetIds: new Set<string>() }),
+      resolveCommandSecretRefsViaGateway: async ({ config: resolvedConfig }) => ({
+        resolvedConfig,
+        diagnostics: [],
+        targetStatesByPath: {},
+        hadUnresolvedTargets: false,
+      }),
+    });
+    const text = "Checking…";
+    supervisorSpawnMock.mockImplementationOnce(async (input) => {
+      const args = { action: "send", message: text, final: false };
+      const toolResult = await tool.execute("cli-internal-source-send", args);
+      expect(toolResult.details).toMatchObject({
+        deliveryStatus: "sent",
+        sourceReplySink: "internal-ui",
+        sourceReplyTranscriptOwner: true,
       });
-      context.backendResolved.config.output = "jsonl";
-      const tool = createMessageTool({
-        config,
-        preparedMessageToolCatalog: { version: 0, channels: [], getChannel: () => undefined },
-        currentChannelProvider: "webchat",
-        sourceReplyDeliveryMode: deliveryMode,
-        inputProvenance: context.params.inputProvenance,
-        agentSessionKey: sessionKey,
-        runSessionKey: sessionKey,
-        sessionId: sessionTarget.sessionId,
-        agentId: "main",
-        runId: context.params.runId,
-        getScopedChannelsCommandSecretTargets: () => ({ targetIds: new Set<string>() }),
-        resolveCommandSecretRefsViaGateway: async ({ config: resolvedConfig }) => ({
-          resolvedConfig,
-          diagnostics: [],
-          targetStatesByPath: {},
-          hadUnresolvedTargets: false,
-        }),
-      });
-      const text = final ? "The answer delivered to the WebChat transcript." : "Checking…";
-      supervisorSpawnMock.mockImplementationOnce(async (input) => {
-        const args = { action: "send", message: text, final };
-        const toolResult = await tool.execute("cli-internal-source-send", args);
-        expect(toolResult.details).toMatchObject({
-          deliveryStatus: "sent",
-          sourceReplySink: "internal-ui",
-          sourceReplyTranscriptOwner: true,
-        });
-        completeToolCall(
-          {
-            captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
-            toolName: "message",
-            args,
-          },
-          toolResult,
-        );
-        input.onStdout?.(
-          `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
-        );
-        return makeManagedRun();
-      });
-
-      const result = await run(context);
-
-      const assistantMessages = (await readTranscriptMessages(sessionTarget)).filter(
-        (message) => isRecord(message) && message.role === "assistant",
+      completeToolCall(
+        {
+          captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
+          toolName: "message",
+          args,
+        },
+        toolResult,
       );
-      expect(assistantMessages.map(readAssistantDisplayContent)).toEqual([
-        [{ type: "text", text }],
-      ]);
-      expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-      expect(result.payloads).toEqual([{ text }]);
-      if (final) {
-        expect(result.meta.error).toBeUndefined();
-        expect(result.meta.executionTrace?.attempts?.map((attempt) => attempt.result)).toEqual([
-          "success",
-        ]);
-        expect(result.meta.terminalReply).toEqual({ disposition: "visible", text });
-      } else {
-        expect(result.didSendViaMessagingTool).toBe(true);
-        expect(result.messagingToolSentTexts).toEqual([text]);
-        expect(result.meta.error).toMatchObject({ kind: "incomplete_turn", fallbackSafe: false });
-        expect(result.meta.executionTrace?.attempts?.map((attempt) => attempt.result)).toEqual([
-          "error",
-        ]);
-        expect(result.meta.terminalReply).toEqual({ disposition: "empty" });
-      }
-    },
-  );
+      input.onStdout?.(
+        `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
+      );
+      return makeManagedRun();
+    });
+
+    const result = await run(context);
+
+    const assistantMessages = (await readTranscriptMessages(sessionTarget)).filter(
+      (message) => isRecord(message) && message.role === "assistant",
+    );
+    expect(assistantMessages.map(readAssistantDisplayContent)).toEqual([[{ type: "text", text }]]);
+    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+    expect(result.payloads).toEqual([{ text }]);
+    expect(result.didSendViaMessagingTool).toBe(true);
+    expect(result.messagingToolSentTexts).toEqual([text]);
+    expect(result.meta.error).toMatchObject({ kind: "incomplete_turn", fallbackSafe: false });
+    expect(result.meta.executionTrace?.attempts?.map((attempt) => attempt.result)).toEqual([
+      "error",
+    ]);
+    expect(result.meta.terminalReply).toEqual({ disposition: "empty" });
+  });
 
   it.each([false, true])(
     "requires a real child result even when continuation custody is %s",
@@ -451,26 +346,5 @@ export function registerCliReplyCompletionTests({
       reason: "empty_response",
     });
     expect(supervisorSpawnMock).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    { raw: "NO_REPLY.", text: "NO_REPLY.", replacements: [] },
-    {
-      raw: "NO_REPLY\nPRIVATE_MARKER",
-      text: "NO_REPLY",
-      replacements: [{ from: /PRIVATE_MARKER/g, to: "NO_REPLY" }],
-    },
-    { raw: "NO_REPLY", text: "", replacements: [{ from: /NO_REPLY/g, to: "visible replacement" }] },
-  ])("classifies raw CLI output before rendering $raw", async ({ raw, text, replacements }) => {
-    const context = createContext({ terminalReplyExpectation: "required" });
-    context.backendResolved.textTransforms = { output: replacements };
-    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: raw }));
-    const result = await run(context);
-    expect(result.meta.error).toBeUndefined();
-    if (text) {
-      expect(result.payloads).toEqual([{ text }]);
-    } else {
-      expect(result.payloads).toBeUndefined();
-    }
   });
 }

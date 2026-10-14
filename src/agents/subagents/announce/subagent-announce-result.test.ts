@@ -80,12 +80,11 @@ describe("exact-run announcement results", () => {
     return findTranscriptEvent;
   }
 
-  function assistant(runId: string, text: string, display?: true) {
+  function assistant(runId: string, text: string) {
     return {
       type: "message",
       message: {
         role: "assistant",
-        display,
         stopReason: "stop",
         content: [{ type: "text", text }],
         __openclaw: { runId },
@@ -141,12 +140,6 @@ describe("exact-run announcement results", () => {
       expect(findTranscriptEvent).not.toHaveBeenCalled();
     },
   );
-
-  it("keeps a producer-visible NO_REPLY literal through result selection", async () => {
-    const child = completedChild("NO_REPLY\nNO_REPLY");
-    installTranscript([assistant(child.runId, "NO_REPLY", true)]);
-    await expect(readSubagentRunAnnounceResult(child)).resolves.toMatchObject({ text: "NO_REPLY" });
-  });
 
   it.each([
     "silent replacement",

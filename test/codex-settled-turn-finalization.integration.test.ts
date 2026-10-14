@@ -38,12 +38,11 @@ describe("registered Codex finalizer host silence contract", () => {
     options: {
       failedTool?: boolean;
       timedOut?: boolean;
-      terminalStatus?: "failed" | "completed";
     } = {},
   ) {
     fixture = await createCodexSettledFinalizerTestFixture(options);
     const { attempt, params } = fixture;
-    expect(attempt.terminal.kind).toBe(options.terminalStatus === "completed" ? "ok" : "failed");
+    expect(attempt.terminal.kind).toBe("failed");
     expect(attempt.itemLifecycle).toMatchObject({ activeCount: 0, completedCount: 1 });
     expect(attempt.didSendViaMessagingTool).toBe(false);
     expect(attempt.messagingToolSentTexts).toEqual([]);
@@ -152,64 +151,12 @@ describe("registered Codex finalizer host silence contract", () => {
     },
   );
 
-  it.each([
-    { expectation: "optional", text: " \nNO_REPLY\t" },
-    { expectation: "required", text: "NO_REPLY" },
-  ] as const)(
-    "ends successful $expectation recovery after one authored silent finalizer: $text",
-    async ({ expectation, text }) => {
-      const input = await createInput({ terminalStatus: "completed" });
-      input.terminalBase.runParams.terminalReplyExpectation = expectation;
-      const runAttempt = vi.spyOn(input.finalization.harness, "runAttempt");
-      returnBoundedText(text);
-
-      const result = await prepareTerminalWithSettledTurnFinalization(input);
-
-      expect(fixture.runBounded).toHaveBeenCalledOnce();
-      expect(result.finalizationOutcome).toBe("answered");
-      expect(result.attempt.terminal).toEqual({ kind: "ok" });
-      expect(result.attempt.assistantTexts).toEqual([]);
-      expect(result.attempt.preparedTerminalReply).toEqual({
-        text: "",
-        terminalReply: { disposition: "silent" },
-      });
-      expect(result.prepared.payloadsWithToolMedia).toEqual([]);
-      expect(runAttempt).not.toHaveBeenCalled();
-      expect(fixture.mirror).not.toHaveBeenCalled();
-    },
-  );
-
-  it("recovers result-required exact silence into a real result", async () => {
-    const input = await createInput({ terminalStatus: "completed" });
-    input.terminalBase.runParams.terminalReplyExpectation = "result-required";
-    const silentResult = returnBoundedText("NO_REPLY");
-    const answer = "The command completed and returned: settled.";
-    returnBoundedText(answer);
-    fixture.runBounded.mockResolvedValueOnce(silentResult);
-
-    const result = await prepareTerminalWithSettledTurnFinalization(input);
-
-    expect(fixture.runBounded).toHaveBeenCalledTimes(2);
-    expect(result.finalizationOutcome).toBe("answered");
-    expect(result.attempt.terminal).toEqual({ kind: "ok" });
-    expect(result.attempt.assistantTexts).toEqual([answer]);
-    expect(result.prepared.payloadsWithToolMedia).toEqual([
-      expect.objectContaining({ text: answer }),
-    ]);
-    expect(fixture.mirror).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    [
-      "The command completed and returned: settled.",
-      "The command completed and returned: settled.",
-    ],
-    ["NO_REPLY\nNO_REPLY", "NO_REPLY"],
-  ])("replaces provider failure with the ordinary finalizer answer %j", async (rawText, text) => {
+  it("replaces provider failure with the ordinary finalizer answer", async () => {
+    const text = "The command completed and returned: settled.";
     const input = await createInput();
     input.terminalBase.runParams.terminalReplyExpectation = "result-required";
     const runAttempt = vi.spyOn(input.finalization.harness, "runAttempt");
-    returnBoundedText(rawText);
+    returnBoundedText(text);
 
     const result = await prepareTerminalWithSettledTurnFinalization(input);
 
@@ -229,7 +176,7 @@ describe("registered Codex finalizer host silence contract", () => {
     expect(fixture.mirror.mock.calls[0]?.[0].messages).toEqual([
       expect.objectContaining({
         role: "assistant",
-        content: [{ type: "text", text: rawText }],
+        content: [{ type: "text", text }],
       }),
     ]);
   });

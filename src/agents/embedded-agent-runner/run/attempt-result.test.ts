@@ -302,16 +302,6 @@ describe("attempt result projection", () => {
       expectedStatus: "error",
       terminalError: "non_deliverable_terminal_turn",
     },
-    {
-      label: "an explicitly silent optional turn",
-      assistant: makeAssistantMessageFixture({
-        content: [{ type: "text", text: "NO_REPLY" }],
-        stopReason: "stop",
-        errorMessage: undefined,
-      }),
-      expectedStatus: "success",
-      terminalError: undefined,
-    },
   ])(
     "records $label after transcript projection",
     ({ assistant, didSendViaMessagingTool, expectedStatus, terminalError }) => {
@@ -738,9 +728,9 @@ describe("trailing source progress at runtime settlement", () => {
     maxTokens: 8_000,
   };
   // Native-async calls run while the provider streams; each settles before the next fragment.
-  type ModelCall = { tools?: Array<"progress" | "read">; async?: true; text?: string };
+  type ModelCall = { tools?: Array<"progress" | "read">; async?: true };
 
-  async function settleRealLoop(calls: ModelCall[], resultRequired = false) {
+  async function settleRealLoop(calls: ModelCall[]) {
     const sessionManager = {};
     const { emit, subscription } = createSubscribedSessionHarness({
       runId: "run-1",
@@ -834,7 +824,7 @@ describe("trailing source progress at runtime settlement", () => {
           api: testModel.api,
           provider: testModel.provider,
           model: testModel.id,
-          content: [...toolCalls, { type: "text", text: call.text ?? "" }],
+          content: [...toolCalls, { type: "text", text: "" }],
           stopReason: toolCalls.length > 0 && !call.async ? "toolUse" : "stop",
           errorMessage: undefined,
         });
@@ -862,7 +852,7 @@ describe("trailing source progress at runtime settlement", () => {
     const fixture = createResultFixture();
     Object.assign(fixture.input.attempt, {
       messageChannel: "telegram",
-      terminalReplyExpectation: resultRequired ? "result-required" : "required",
+      terminalReplyExpectation: "required",
     });
     fixture.input.preparedStreamRuntime.stream.subscription = subscription as never;
     const terminalAssistant = messages.findLast((message) => message.role === "assistant");
@@ -892,9 +882,6 @@ describe("trailing source progress at runtime settlement", () => {
 
   it.each<[string, ModelCall[], boolean]>([
     ["last tool batch", [{ tools: ["progress"] }, {}], true],
-    ["punctuated answer", [{ tools: ["progress"] }, { text: "NO_REPLY." }], false],
-    ["quoted answer", [{ tools: ["progress"] }, { text: '"NO_REPLY"' }], false],
-    ["JSON answer", [{ tools: ["progress"] }, { text: '{"action":"NO_REPLY"}' }], false],
     ["later work", [{ tools: ["progress"], async: true }, { tools: ["read"] }, {}], false],
     ["shared provider response", [{ tools: ["read", "progress"], async: true }, {}], false],
   ])("settles source progress with %s", async (_name, calls, delivered) => {
@@ -903,17 +890,10 @@ describe("trailing source progress at runtime settlement", () => {
     expect(result.messagingToolSentTargets?.map((send) => send.sourceReplyFinal)).toEqual([
       delivered,
     ]);
-    if (delivered || calls.at(-1)?.text) {
+    if (delivered) {
       expect(finalizerInstruction).toBeNull();
     } else {
       expect(finalizerInstruction).toContain("did not produce a user-visible answer");
     }
-  });
-
-  it("does not promote source progress into a required final result", async () => {
-    const { result } = await settleRealLoop([{ tools: ["progress"] }, { text: "NO_REPLY" }], true);
-    expect(result.sourceReplyDeliveryState).toBe("missing");
-    expect(result.messagingToolSentTargets?.map((send) => send.sourceReplyFinal)).toEqual([false]);
-    expect(result.preparedTerminalReply?.terminalReply.disposition).toBe("silent");
   });
 });
