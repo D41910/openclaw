@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChannelsStatusSnapshot, WhatsAppStatus } from "../../api/types.ts";
 import { channelSnapshotEntryIsActive } from "../../lib/channels/index.ts";
 import type { PluginCatalogItem } from "../../lib/plugins/index.ts";
+import { flush } from "../../test-helpers/solid-settle.ts";
 import { renderChannelDetail } from "./view.detail.tsx";
 import { createNostrProfileFormState } from "./view.nostr-profile-form.tsx";
 import { resolveChannelDisplayState } from "./view.shared.tsx";
@@ -124,6 +125,7 @@ describe("channels plugin presentation metadata", () => {
     for (const selector of [".channels-item", ".channels-detail__header", ".channels-wizard"]) {
       const icon = container.querySelector(`${selector} img`)!;
       icon.dispatchEvent(new Event("error"));
+      flush();
       expect(container.querySelector(`${selector} img`)).toBeNull();
       expect(
         container.querySelector(
