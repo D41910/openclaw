@@ -1,4 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { Selectable } from "kysely";
 import type {
   AcpSessionReadCommand,
@@ -70,6 +69,7 @@ import type {
   ConversationRef,
   SessionBindingRecord,
 } from "../infra/outbound/session-binding.types.js";
+import type { EngineConnection } from "../infra/sql-connection.js";
 import type { SqliteWorkerCommand } from "../infra/sqlite-worker-contract.js";
 import type { SqliteWorkerStateContext } from "../infra/sqlite-worker-state-context.js";
 import type {
@@ -547,6 +547,6 @@ export type RetainedReadScope = {
 };
 
 export type OpenClawStateReadOnlyDatabase = {
-  db: DatabaseSync;
+  db: EngineConnection;
   path: string;
 };

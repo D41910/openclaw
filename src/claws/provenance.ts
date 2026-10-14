@@ -1,9 +1,10 @@
 // Persists the root ownership record for one Claw-created agent and workspace.
 
-import type { DatabaseSync } from "node:sqlite";
 import { stableStringify } from "@openclaw/normalization-core";
 import { assertAgentDeletionAllowsMutation } from "../agents/agent-lifecycle-registry.js";
 import { executeSqliteQuerySync, getNodeSqliteKysely } from "../infra/kysely-sync.js";
+import type { EngineConnection } from "../infra/sql-connection.js";
+import { isPostgresSqlConnection } from "../infra/sql-connection.js";
 import { coerceRequiredSqliteNumber as sqliteNumber } from "../infra/sqlite-number.js";
 import type { DB } from "../state/openclaw-state-db.generated.js";
 import {
@@ -138,7 +139,7 @@ function clawInstallRecordMatchesPlan(record: PersistedClawInstall, plan: ClawAd
   );
 }
 
-function selectClawInstallRow(db: DatabaseSync, agentId: string): ClawInstallRow | undefined {
+function selectClawInstallRow(db: EngineConnection, agentId: string): ClawInstallRow | undefined {
   const bootstrapColumns = selectClawBootstrapProvenanceColumns(db);
   return db /* sqlite-allow-raw: this Claw prototype state-table read is scoped to one owned row. */
     .prepare(
@@ -336,6 +337,9 @@ export function persistClawPackageRef(
     updatedAtMs: nowMs,
   };
   runOpenClawStateWriteTransaction(({ db }) => {
+    if (isPostgresSqlConnection(db)) {
+      throw new Error("Claw package provenance requires SQLite named-parameter support.");
+    }
     const existing = db /* sqlite-allow-raw: exact owned package-ref replay lookup. */
       .prepare(
         `SELECT schema_version, agent_id, claw_name, package_kind, package_source,

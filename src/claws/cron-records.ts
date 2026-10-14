@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { EngineConnection } from "../infra/sql-connection.js";
 import type { Selectable } from "kysely";
 import { getNodeSqliteKysely } from "../infra/kysely-sync.js";
 import { coerceRequiredSqliteNumber as sqliteNumber } from "../infra/sqlite-number.js";
@@ -55,7 +55,7 @@ export function clawCronRefToRow(ref: PersistedClawCronRef): CronRefRow {
   };
 }
 
-export function readAllClawCronRefsInDatabase(db: DatabaseSync): PersistedClawCronRef[] {
+export function readAllClawCronRefsInDatabase(db: EngineConnection): PersistedClawCronRef[] {
   if (
     !db /* sqlite-allow-raw: read-only Claw cron table-existence probe. */
       .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'claw_cron_refs'")
