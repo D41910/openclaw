@@ -8,7 +8,7 @@ import {
   type SolidBridgeElement,
 } from "../../../lit/solid-bridge.ts";
 import { projectSubagentStatus } from "../chat-subagent-wait.ts";
-import { renderChatAuthorAvatar } from "./chat-author-avatar.ts";
+import { ChatAuthorAvatar } from "./chat-author-avatar.ts";
 import type { ChatDetailsProps } from "./chat-details-types.ts";
 import { renderChatPullRequests } from "./chat-pull-requests.ts";
 import "./chat-subagent-activity-live.ts";
@@ -122,15 +122,13 @@ export const ChatDetailsSession = defineSolidBridge<Props>(
                     <For each={people()}>
                       {(person) => (
                         <div class="chat-details__person">
-                          <LitContent
-                            render={() =>
-                              renderChatAuthorAvatar({
-                                id: person.identity.id,
-                                name: person.label || person.identity.id,
-                                identity: person.identity,
-                                profileAvatarUrl: person.avatarUrl,
-                              })
-                            }
+                          <ChatAuthorAvatar
+                            sender={{
+                              id: person.identity.id,
+                              name: person.label || person.identity.id,
+                              identity: person.identity,
+                              profileAvatarUrl: person.avatarUrl,
+                            }}
                           />
                           <span title={person.label || person.identity.id}>
                             {person.label || person.identity.id}

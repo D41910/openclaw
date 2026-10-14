@@ -407,7 +407,7 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       this.conversationTabDependencies = conversationTabDependencies;
       this.conversationTab = {
         label: chatProps.assistantName,
-        icon: renderAgentIdentityAvatar(avatar),
+        icon: html`${renderAgentIdentityAvatar(avatar)}`,
       };
     }
     const content = renderSidebarRegion({
@@ -425,13 +425,13 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       narrow: this.paneWidth < SIDEBAR_NARROW_BREAKPOINT_PX,
       header,
       primary: html`<div class="chat-pane-primary-column">${chat}</div>`,
-      background: renderSessionBackground(
+      background: html`${renderSessionBackground(
         this.context,
         "session",
         this.presented &&
           this.visuallyPresented &&
           isSidebarSlotVisible(sidebarLayout, "conversation"),
-      ),
+      )}`,
       requestUpdate: state.requestUpdate!,
     });
     const overlays = presentedContent(

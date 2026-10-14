@@ -2,7 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup, Show, untrack } from
 import type { SolidRouteProps } from "../../app-route-types.ts";
 import { ImageLightbox } from "../../components/image-lightbox.tsx";
 import { renderLazyViewError } from "../../components/lazy-view-error.ts";
-import { renderSessionBackground } from "../../components/session-background-view.ts";
+import { SessionBackgroundView } from "../../components/session-background-view.ts";
 import "../../components/web-awesome-popover.ts";
 import { registerNewSessionSetupEnglish } from "../../i18n/locales/en-new-session-setup.ts";
 import { useOptionalApplication } from "../../lib/reactive/context.ts";
@@ -248,7 +248,7 @@ function PageContent(_props: { data: NewSessionRouteData | undefined }, host: Pa
       <div
         class={`new-session-page ${page().submission.pendingMessage ? "chat" : ""} ${page().submission.visibility === "incognito" ? "new-session-page--incognito" : ""}`}
       >
-        <LitContent value={renderSessionBackground(page().context, "new-session")} />
+        <SessionBackgroundView context={page().context} surface="new-session" />
         <Show when={!catalog.isTarget(page().data)}>
           <NewSessionIncognitoControl
             submission={visibilityControl}

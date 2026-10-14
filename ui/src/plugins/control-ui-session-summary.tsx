@@ -30,7 +30,7 @@ import { readSessionChangedEvent } from "../lib/sessions/reconcile.ts";
 import { uiSessionEventMatches, parseAgentSessionKey } from "../lib/sessions/session-key.ts";
 import { defineSolidBridge, LitContent, type SolidBridgeElement } from "../lit/solid-bridge.ts";
 import type { ChatHistoryResult } from "../pages/chat/chat-history-snapshot.ts";
-import { renderChatAuthorAvatar } from "../pages/chat/components/chat-author-avatar.ts";
+import { ChatAuthorAvatar } from "../pages/chat/components/chat-author-avatar.ts";
 import "../styles/chat/progress-card.css";
 import "../styles/sidebar-markdown.css";
 import "../styles/plugin-session-summary.css";
@@ -248,7 +248,7 @@ function SessionHistory(props: PluginSessionSummaryProps & { scope: SummaryScope
                 <header class="plugin-session-summary__message-header">
                   <span class="plugin-session-summary__avatar">
                     {message().sender ? (
-                      <LitContent render={() => renderChatAuthorAvatar(message().sender)} />
+                      <ChatAuthorAvatar sender={message().sender} />
                     ) : message().agentId ? (
                       <AgentAvatar
                         option={{

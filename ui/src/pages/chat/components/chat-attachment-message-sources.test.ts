@@ -3,7 +3,7 @@
 import { html, nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as markdown from "../../../components/markdown.ts";
-import * as chatAvatar from "../chat-avatar.ts";
+import * as chatAvatar from "../chat-avatar-view.tsx";
 import { renderMessageGroup } from "./chat-message-group.test-support.ts";
 import {
   createAssistantMessage,
@@ -22,9 +22,11 @@ beforeEach(() => {
     "",
     `<div class="streaming-markdown">${value}</div>`,
   ]);
-  vi.spyOn(chatAvatar, "renderChatAvatar").mockImplementation(
-    (role) => html`<div class="chat-avatar ${role}"></div>`,
-  );
+  vi.spyOn(chatAvatar, "ChatAvatar").mockImplementation((props) => {
+    const avatar = document.createElement("div");
+    avatar.className = `chat-avatar ${props.role}`;
+    return avatar;
+  });
 });
 
 afterEach(() => {

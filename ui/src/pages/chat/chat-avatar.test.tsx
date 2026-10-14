@@ -1,11 +1,17 @@
 /* @vitest-environment jsdom */
 
 import { html, nothing, render } from "lit";
+import { flush } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resolveThemeBranding } from "../../../../packages/gateway-protocol/src/theme.ts";
 import { createDeferred } from "../../../../test/helpers/promise.js";
+import { currentThemeBranding, setCurrentThemeBranding } from "../../app/theme-branding.ts";
+import { resolveAvatarHat } from "../../components/agent-avatar-hat.ts";
 import { createAgentIdentityCapability } from "../../lib/agents/identity.ts";
 import { setAvatarGatewayOrigin } from "../../lib/identity-avatar-context.ts";
 import { resolveAvatarImageUrl } from "../../lib/identity-avatar-loader.ts";
+import { mountSolid } from "../../test-helpers/mount-solid.ts";
+import { ChatAvatar } from "./chat-avatar-view.tsx";
 import {
   invalidateChatAvatarCache,
   refreshChatAvatar,
@@ -16,7 +22,7 @@ import {
 import { makeChatHost } from "./chat-host.test-support.ts";
 import type { ChatPageHost } from "./chat-state-host.ts";
 import { resolveChatAvatarUrl } from "./chat-state-route.ts";
-import { renderChatAuthorAvatar } from "./components/chat-author-avatar.ts";
+import { ChatAuthorAvatar, renderChatAuthorAvatar } from "./components/chat-author-avatar.ts";
 import { renderWelcomeState } from "./components/chat-welcome.ts";
 
 function imageResponse() {
@@ -35,10 +41,96 @@ function identityCapability(host: ReturnType<typeof makeChatHost>) {
 }
 
 function renderAvatar(params: Parameters<typeof renderChatAvatar>) {
-  const container = document.createElement("div");
-  render(renderChatAvatar(...params), container);
-  return container.querySelector<HTMLElement>(".chat-avatar");
+  const [role, assistant, user, sender, channelAvatar] = params;
+  const view = mountSolid(() => (
+    <ChatAvatar
+      role={role}
+      assistant={assistant}
+      user={user}
+      sender={sender}
+      channelAvatar={channelAvatar}
+    />
+  ));
+  return view.container.querySelector<HTMLElement>(".chat-avatar");
 }
+
+it("refreshes a mounted channel portrait when Gateway credentials change", async () => {
+  setAvatarGatewayOrigin(window.location.origin, ["old-avatar-token"]);
+  const fetchAvatar = mockAvatarFetch();
+  vi.spyOn(URL, "createObjectURL")
+    .mockReturnValueOnce("blob:old-portrait")
+    .mockReturnValueOnce("blob:new-portrait");
+  const view = mountSolid(() => (
+    <ChatAuthorAvatar
+      sender={{
+        name: "Riley Adams",
+        identity: {
+          type: "observation",
+          pluginId: "telegram",
+          accountId: "sample-bot",
+          id: "1000000001",
+          senderKind: "human",
+        },
+      }}
+      channelAvatar={{
+        key: "agent:main:main",
+        channelAvatarUrl: "/__openclaw__/channel-avatar/agent%3Amain%3Amain?v=credential-change",
+        origin: {
+          provider: "telegram",
+          accountId: "sample-bot",
+          chatType: "direct",
+          from: "telegram:1000000001",
+        },
+      }}
+    />
+  ));
+  await vi.waitFor(() =>
+    expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:old-portrait"),
+  );
+  setAvatarGatewayOrigin(window.location.origin, ["new-avatar-token"]);
+  await vi.waitFor(() =>
+    expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:new-portrait"),
+  );
+  expect(fetchAvatar).toHaveBeenLastCalledWith(
+    expect.any(String),
+    expect.objectContaining({ headers: { Authorization: "Bearer new-avatar-token" } }),
+  );
+});
+
+it.each(["assistant", "local", "profile"] as const)(
+  "refreshes a mounted %s chat image when Gateway credentials change",
+  async (kind) => {
+    setAvatarGatewayOrigin("https://gateway.example.test", ["old-avatar-token"]);
+    const fetchAvatar = mockAvatarFetch();
+    vi.spyOn(URL, "createObjectURL")
+      .mockReturnValueOnce("blob:old-chat-image")
+      .mockReturnValueOnce("blob:new-chat-image");
+    const url = kind === "profile" ? "/api/users/ada/avatar" : "/avatar/ada";
+    const view = mountSolid(() => (
+      <ChatAvatar
+        role={kind === "assistant" ? "assistant" : "user"}
+        assistant={
+          kind === "assistant" ? { agentId: "ada", avatar: url, textAvatar: "A" } : undefined
+        }
+        user={kind === "local" ? { name: "Ada", avatar: url } : undefined}
+        sender={kind === "profile" ? { id: "ada", name: "Ada", profileAvatarUrl: url } : undefined}
+      />
+    ));
+    await vi.waitFor(() =>
+      expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:old-chat-image"),
+    );
+    const image = view.container.querySelector("img");
+    setAvatarGatewayOrigin("https://gateway.example.test", ["new-avatar-token"]);
+    await vi.waitFor(() =>
+      expect(view.container.querySelector("img")?.getAttribute("src")).toBe("blob:new-chat-image"),
+    );
+    expect(view.container.querySelector("img")).toBe(image);
+    expect(fetchAvatar).toHaveBeenLastCalledWith(
+      `https://gateway.example.test${url}`,
+      expect.objectContaining({ headers: { Authorization: "Bearer new-avatar-token" } }),
+    );
+  },
+);
 
 it.each([
   ["", "sample-bot", "1000000001", true],
@@ -188,6 +280,28 @@ describe("resolveChatAvatarUrl", () => {
 });
 
 describe("renderChatAvatar", () => {
+  it("updates an image avatar's hat when the theme changes", () => {
+    const previous = currentThemeBranding();
+    const adorned = { ...previous, avatarHat: "party" as const };
+    const agentId = Array.from({ length: 100 }, (_, index) => `hat-agent-${index}`).find((id) =>
+      resolveAvatarHat(id, adorned),
+    )!;
+    setCurrentThemeBranding(resolveThemeBranding(undefined));
+    const view = mountSolid(() => (
+      <ChatAvatar role="assistant" assistant={{ agentId, avatar: "blob:portrait" }} />
+    ));
+    try {
+      expect(view.container.querySelector(".chat-avatar-slot > .identity-avatar__hat")).toBeNull();
+      setCurrentThemeBranding(adorned);
+      flush();
+      expect(
+        view.container.querySelector(".chat-avatar-slot > .identity-avatar__hat--party"),
+      ).not.toBeNull();
+    } finally {
+      setCurrentThemeBranding(previous);
+      view.unmount();
+    }
+  });
   it("shares one agent face across welcome, transcript, forwarded messages, and typed author markers", async () => {
     const container = document.createElement("div");
     const sender = {

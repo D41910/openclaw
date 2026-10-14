@@ -15,10 +15,10 @@ import {
   type DecisionModelEntry,
 } from "../../components/decision-model-picker.ts";
 import "../../components/multi-select-registration.ts";
-import { renderAgentIdentityAvatar } from "../../components/identity-avatar-view.ts";
 import { renderModelPicker } from "../../components/model-picker.ts";
-import "../../components/tooltip.ts";
 import type { PanelRefreshStatus } from "../../components/panel-refresh-status-state.ts";
+import "../../components/tooltip.ts";
+import { AgentIdentityAvatar } from "../../components/solid/identity-avatar.tsx";
 import { PanelRefreshStatus as PanelRefreshNotice } from "../../components/solid/panel-refresh-status.tsx";
 import { SettingsRow, SettingsSection } from "../../components/solid/settings-ui.tsx";
 import {
@@ -228,20 +228,15 @@ export function AgentOverview(
         <div class="settings-row settings-row--stacked">
           <div class="agent-identity-editor">
             <span class="agent-identity-editor__avatar" aria-hidden="true">
-              <LitContent
-                render={() =>
-                  renderAgentIdentityAvatar(
-                    {
-                      id: params.agent.id,
-                      avatar: identityAvatarUrl(),
-                      textAvatar:
-                        identityDraft().emoji ??
-                        resolveAgentTextAvatar(params.agent, params.agentIdentity),
-                    },
-                    "",
-                    identityImageError(),
-                  )
-                }
+              <AgentIdentityAvatar
+                agent={{
+                  id: params.agent.id,
+                  avatar: identityAvatarUrl(),
+                  textAvatar:
+                    identityDraft().emoji ??
+                    resolveAgentTextAvatar(params.agent, params.agentIdentity),
+                }}
+                onImageError={identityImageError()}
               />
             </span>
             <div class="agent-identity-editor__content">

@@ -1594,13 +1594,21 @@ button.chat-reply-attribution__target:disabled {
   display: contents;
 }
 
-.chat-message-avatar-anchor > :is(.chat-avatar, .chat-avatar-slot) {
+/* Remove the one-wrapper alternatives when the Lit typing indicator is ported. */
+.chat-message-avatar-anchor > :is(.chat-avatar, .chat-avatar-slot),
+.chat-message-avatar-anchor
+  > :where(span:not(.chat-avatar, .chat-avatar-slot))
+  > :is(.chat-avatar, .chat-avatar-slot) {
   position: absolute;
   inset-block-start: 0;
   inset-inline-start: calc(100% + var(--chat-avatar-gap));
 }
 
-.chat-group--peer .chat-message-avatar-anchor > :is(.chat-avatar, .chat-avatar-slot) {
+.chat-group--peer .chat-message-avatar-anchor > :is(.chat-avatar, .chat-avatar-slot),
+.chat-group--peer
+  .chat-message-avatar-anchor
+  > :where(span:not(.chat-avatar, .chat-avatar-slot))
+  > :is(.chat-avatar, .chat-avatar-slot) {
   inset-inline-start: auto;
   inset-inline-end: calc(100% + var(--chat-avatar-gap));
 }
