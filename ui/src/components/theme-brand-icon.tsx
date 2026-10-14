@@ -1,7 +1,8 @@
 import type { JSX as SolidJSX } from "@solidjs/web";
 import { Show } from "solid-js";
 import type { ThemeBranding } from "../../../packages/gateway-protocol/src/theme.ts";
-import { currentThemeBranding } from "../app/theme-branding.ts";
+import { currentThemeBranding, subscribeThemeBranding } from "../app/theme-branding.ts";
+import { projectSource } from "../lib/reactive/projection.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../lit/solid-bridge.ts";
 import { PluginThemeArtwork } from "./plugin-theme-artwork.tsx";
 import { Icon } from "./solid/icon.tsx";
@@ -30,7 +31,12 @@ export function ThemeBrandingIcon(props: {
   claw?: SolidJSX.Element;
   neutral?: SolidJSX.Element;
 }) {
-  const branding = () => props.branding ?? currentThemeBranding();
+  const publishedBranding = projectSource(null, {
+    read: currentThemeBranding,
+    subscribe: (_source, notify) => subscribeThemeBranding(notify),
+    equality: Object.is,
+  });
+  const branding = () => props.branding ?? publishedBranding.read();
   return (
     <Show when={branding().brandIcon !== "claw"} fallback={props.claw ?? <Icon name="lobster" />}>
       <Show when={branding().brandIcon !== "mark"} fallback={props.neutral ?? <Icon name="mark" />}>
