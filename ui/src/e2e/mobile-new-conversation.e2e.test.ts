@@ -184,7 +184,7 @@ suite.define(() => {
         await page
           .locator(".topbar-nav-toggle:visible, .chat-pane__nav-toggle:visible")
           .first()
-          .click();
+          .tap();
         await waitForMobileSidebarDrawerOpen(page);
         expect(await page.locator(".header-new-session:visible").count()).toBe(0);
         expect(await action.count()).toBe(1);
