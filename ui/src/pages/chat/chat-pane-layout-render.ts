@@ -34,6 +34,7 @@ import { hasTerminalRunStatus } from "./components/chat-composer-state.ts";
 import { renderChatDetailSlot } from "./components/chat-detail-slot.ts";
 import { renderChatImageLightbox } from "./components/chat-image-lightbox.ts";
 import { renderSessionWorkspaceRail } from "./components/chat-session-workspace.ts";
+import type { SidebarPanelDefinition } from "./components/chat-sidebar-region-types.ts";
 import { resolveAssistantDisplayAvatar } from "./components/chat-welcome.ts";
 import { resolveChatLinkFaviconFetcher } from "./link-favicon-loader.ts";
 import {
@@ -63,9 +64,7 @@ type ChatPaneLayoutRenderParams = {
 
 export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRender {
   private conversationTabDependencies: readonly unknown[] = [];
-  private conversationTab:
-    | { label: string; icon: ReturnType<typeof renderAgentIdentityAvatar> }
-    | undefined;
+  private conversationTab: Pick<SidebarPanelDefinition, "label" | "icon"> | undefined;
   private readonly toolIcons = new ChatToolIconController(
     this,
     () => this.context,

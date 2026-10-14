@@ -10,7 +10,7 @@ import { resolveAvatarHat } from "../../components/agent-avatar-hat.ts";
 import { createAgentIdentityCapability } from "../../lib/agents/identity.ts";
 import { setAvatarGatewayOrigin } from "../../lib/identity-avatar-context.ts";
 import { resolveAvatarImageUrl } from "../../lib/identity-avatar-loader.ts";
-import { mountSolid } from "../../test-helpers/mount-solid.ts";
+import { cleanupSolid, mountSolid } from "../../test-helpers/mount-solid.ts";
 import { ChatAvatar } from "./chat-avatar-view.tsx";
 import {
   invalidateChatAvatarCache,
@@ -24,6 +24,14 @@ import type { ChatPageHost } from "./chat-state-host.ts";
 import { resolveChatAvatarUrl } from "./chat-state-route.ts";
 import { ChatAuthorAvatar, renderChatAuthorAvatar } from "./components/chat-author-avatar.ts";
 import { renderWelcomeState } from "./components/chat-welcome.ts";
+
+const legacyContainers: HTMLElement[] = [];
+
+function createLegacyContainer() {
+  const container = document.createElement("div");
+  legacyContainers.push(container);
+  return container;
+}
 
 function imageResponse() {
   return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
@@ -184,7 +192,7 @@ it.each([
       },
     };
     const identity = { ...sender.identity };
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     render(
       renderChatAuthorAvatar(sender, "chat-author-avatar", undefined, {
         key: "agent:main:main",
@@ -202,7 +210,6 @@ it.each([
     expect(Boolean(container.querySelector("openclaw-channel-avatar"))).toBe(matches);
     expect(container.querySelector("[role=img]")?.getAttribute("aria-label")).toBe("Riley Adams");
     expect(sender.identity).toEqual(identity);
-    render(nothing, container);
   },
 );
 
@@ -290,6 +297,11 @@ function pendingUntilAbort<T>(signal: AbortSignal | null | undefined): Promise<T
 }
 
 afterEach(() => {
+  for (const container of legacyContainers) {
+    render(nothing, container);
+  }
+  legacyContainers.length = 0;
+  cleanupSolid();
   setAvatarGatewayOrigin(null);
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -333,7 +345,7 @@ describe("renderChatAvatar", () => {
     }
   });
   it("shares one agent face across welcome, transcript, forwarded messages, and typed author markers", async () => {
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     const sender = {
       id: "display-id",
       name: "Scout",
@@ -401,7 +413,7 @@ describe("renderChatAvatar", () => {
     const response = createDeferred<Response>();
     const fetchAvatar = vi.spyOn(globalThis, "fetch").mockReturnValue(response.promise);
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:shared-agent");
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     const avatar = "/avatar/main?v=1";
     const welcome = (assistantAvatar: string | null, assistantAvatarUrl?: string) =>
       renderWelcomeState({
@@ -432,7 +444,6 @@ describe("renderChatAvatar", () => {
     part.setConnected(true);
     expect(sources()).toEqual(Array(3).fill("blob:shared-agent"));
     expect(fetchAvatar).toHaveBeenCalledOnce();
-    render(nothing, container);
   });
 
   it("renders local user image and text avatars", () => {
@@ -445,17 +456,16 @@ describe("renderChatAvatar", () => {
     expect(textAvatar?.textContent?.trim()).toBe("AB");
 
     for (const avatar of ["data:image/png;base64,YQ==", "/custom.svg"]) {
-      const container = document.createElement("div");
+      const container = createLegacyContainer();
       const part = render(renderChatAvatar("user", undefined, { name: "Buns", avatar }), container);
       part.setConnected(false);
       part.setConnected(true);
       expect(container.querySelector("img")?.getAttribute("src")).toBe(avatar);
-      render(nothing, container);
     }
   });
 
   it("swaps a failing local user image to initials instead of a broken image", () => {
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     const renderUser = () =>
       render(
         renderChatAvatar("user", undefined, { name: "Buns", avatar: "/avatar/user" }),
@@ -683,7 +693,7 @@ describe("refreshSenderAgentAvatars", () => {
     host.chatMessages = forwardedMessages("research");
     const pending = refreshSenderAgentAvatars(host);
     await vi.waitFor(() => expect(fetchAvatar).toHaveBeenCalledOnce());
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     const renderSender = () =>
       render(
         renderForwardedAvatar("research", {
@@ -710,7 +720,6 @@ describe("refreshSenderAgentAvatars", () => {
     await vi.waitFor(() =>
       expect(container.querySelector(".identity-avatar__agent-face")?.outerHTML).toBe(face),
     );
-    render(nothing, container);
     invalidateChatAvatarCache(host);
   });
 
@@ -895,7 +904,7 @@ describe("attributed sender avatars", () => {
     vi.spyOn(URL, "createObjectURL")
       .mockReturnValueOnce("blob:first-sender")
       .mockReturnValueOnce("blob:second-sender");
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     const firstSender = {
       id: "c3e32452-0467-47e5-aafa-233cd5dae29f",
       name: "Ada Lovelace",
@@ -956,7 +965,7 @@ describe("attributed sender avatars", () => {
     const fetchAvatar = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(null, { status: 404 }));
-    const container = document.createElement("div");
+    const container = createLegacyContainer();
     const sender = {
       id: "dd7c98e2-f51d-4590-b588-fa0682e165b7",
       identity: { type: "profile" as const, id: "dd7c98e2-f51d-4590-b588-fa0682e165b7" },

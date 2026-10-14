@@ -16,13 +16,13 @@ import type { IdentityAvatarInput } from "../../lib/identity-avatar.ts";
 import { projectSource } from "../../lib/reactive/projection.ts";
 import { resolveAvatarHat } from "../agent-avatar-hat.ts";
 import { PluginThemeArtwork } from "../plugin-theme-artwork.tsx";
-import { ThemeBrandingIcon } from "../theme-brand-icon.tsx";
+import { ThemeBrandIcon } from "../theme-brand-icon.tsx";
 import { AVATAR_HAT_ARTWORK } from "../theme-flair-artwork.tsx";
 import { IdentityAvatarImage, identityAvatarState } from "./identity-avatar-image.tsx";
 import { useAvatarGatewayContext, useIdentityAvatarView } from "./identity-avatar-view.ts";
 import "../../styles/identity-avatar.css";
 
-const AgentAvatarFace = lazy(() => import("../agent-avatar-face.tsx"), {
+const AgentAvatarFace = lazy(() => import("../agent-avatar-face.ts"), {
   export: "AgentAvatarFace",
 });
 
@@ -134,7 +134,7 @@ function SystemAgentAvatar(props: { name?: string; class?: string; branding: The
         aria-label={props.name}
         aria-hidden={props.name ? undefined : "true"}
       >
-        <ThemeBrandingIcon branding={props.branding} />
+        <ThemeBrandIcon branding={props.branding} />
       </span>
     </Show>
   );

@@ -8,7 +8,7 @@ import { setAvatarGatewayOrigin } from "../lib/identity-avatar-context.ts";
 import { resolveAvatarImageUrl } from "../lib/identity-avatar-loader.ts";
 import { resolveIdentityAvatarView, type AgentIdentity } from "../lib/identity-avatar-view.ts";
 import type { IdentityAvatarInput } from "../lib/identity-avatar.ts";
-import { mountSolid } from "../test-helpers/mount-solid.ts";
+import { cleanupSolid, mountSolid } from "../test-helpers/mount-solid.ts";
 import { IdentityAvatarImage, identityAvatarState } from "./solid/identity-avatar-image.tsx";
 import { useIdentityAvatarView } from "./solid/identity-avatar-view.ts";
 import { AgentIdentityAvatar } from "./solid/identity-avatar.tsx";
@@ -78,6 +78,7 @@ function mountAgent(initial: AgentIdentity) {
 }
 
 afterEach(() => {
+  cleanupSolid();
   setAvatarGatewayOrigin(null);
   vi.restoreAllMocks();
 });
@@ -87,7 +88,9 @@ describe("shared identity avatar view", () => {
     "refreshes a mounted %s image when Gateway credentials change",
     async (kind) => {
       setAvatarGatewayOrigin("https://gateway.example.test", ["old-token"]);
-      const fetchAvatar = vi.spyOn(globalThis, "fetch").mockResolvedValue(imageResponse());
+      const fetchAvatar = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => imageResponse());
       vi.spyOn(URL, "createObjectURL")
         .mockReturnValueOnce("blob:old-identity")
         .mockReturnValueOnce("blob:new-identity");

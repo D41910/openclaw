@@ -1,20 +1,28 @@
 /* @vitest-environment jsdom */
-import { render } from "lit";
+import { createSignal, flush } from "solid-js";
 import { describe, expect, it } from "vitest";
-import { renderAgentAvatarFace } from "./agent-avatar-face.ts";
+import { mountSolid } from "../test-helpers/mount-solid.ts";
+import { AgentAvatarFace } from "./agent-avatar-face.tsx";
 
 function face(id: string) {
-  const container = document.createElement("div");
-  render(renderAgentAvatarFace(id), container);
-  return container.querySelector("svg")!;
+  const view = mountSolid(() => <AgentAvatarFace agentId={id} />);
+  return view.container.querySelector("svg")!;
 }
 
 describe("default agent face", () => {
-  it("keeps an agent's artwork deterministic across render order", () => {
+  it("keeps an agent's artwork deterministic across render order and identity changes", () => {
     const first = face("forge").outerHTML;
-    face("scout");
+    const second = face("scout").outerHTML;
     expect(face("forge").outerHTML).toBe(first);
-    expect(face("scout").outerHTML).not.toBe(first);
+    expect(second).not.toBe(first);
+
+    const [agentId, setAgentId] = createSignal("forge");
+    const view = mountSolid(() => <AgentAvatarFace agentId={agentId()} />);
+    const avatar = view.container.querySelector("svg")!;
+    setAgentId("scout");
+    flush();
+    expect(view.container.querySelector("svg")).toBe(avatar);
+    expect(avatar.outerHTML).toBe(second);
   });
 
   it("fills the circular avatar with self-contained vector artwork", () => {
