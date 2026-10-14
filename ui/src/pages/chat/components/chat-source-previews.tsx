@@ -145,12 +145,16 @@ function ChatSourcePreviews(
   );
 }
 
-defineSolidBridge<SourcePreviewsProps>("openclaw-chat-sources", ChatSourcePreviews, {
-  properties: {
-    sources: { default: [], attribute: false },
-    fetchFavicon: { default: undefined, attribute: false },
+export const ChatSources = defineSolidBridge<SourcePreviewsProps>(
+  "openclaw-chat-sources",
+  ChatSourcePreviews,
+  {
+    properties: {
+      sources: { default: [], attribute: false },
+      fetchFavicon: { default: undefined, attribute: false },
+    },
   },
-});
+);
 
 declare global {
   interface HTMLElementTagNameMap {

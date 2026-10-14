@@ -10,7 +10,8 @@ import { renderMessageGroup } from "./chat-message-group.test-support.ts";
 import { prepareChatMessageRender } from "./chat-message-markdown.ts";
 import { createMessageGroup } from "./chat-message.test-support.ts";
 import type { SidebarContent } from "./chat-sidebar-content-types.ts";
-import { renderToolFixture, renderToolCard } from "./chat-tool-render.test-support.ts";
+import { renderToolCard } from "./chat-tool-cards.test-support.tsx";
+import { renderToolFixture } from "./chat-tool-render.test-support.ts";
 
 // Keep these as literal source text: parsing expected values would repeat the
 // rounding and duplicate-key loss that the display must not introduce.

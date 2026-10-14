@@ -85,7 +85,7 @@ type SidebarPanelDefinitionParams = {
   ) => void;
   dashboard: TemplateResult | typeof nothing;
   workspace: TemplateResult | typeof nothing;
-  renderDetail: (content: SidebarContent) => TemplateResult;
+  renderDetail: (content: SidebarContent) => unknown;
   digest: SessionObserverDigest | null;
   activeRunId: string | null;
   pullRequests: ControlUiSessionPullRequest[];

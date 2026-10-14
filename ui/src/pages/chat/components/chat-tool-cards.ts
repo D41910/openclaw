@@ -1,4 +1,3 @@
-import { html } from "lit";
 import {
   browserRouteKey,
   browserTabKey,
@@ -8,9 +7,7 @@ import { browserTabCardRevision } from "../../../lib/chat/browser-tab-preview.ts
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
 import { extractToolCardsCached, resolveToolCardOutcome } from "../../../lib/chat/tool-cards.ts";
 import type { WorkGroupRenderItem } from "../chat-thread-grouping.ts";
-import type { PluginToolIcons } from "../chat-tool-icon-controller.ts";
 import { renderToolPreview } from "./widget-card.ts";
-export { resolveCollapsedToolDetail } from "./chat-tool-cards.solid.tsx";
 
 export function renderBrowserTabPreviews(
   groups: readonly MessageGroup[],
@@ -85,15 +82,4 @@ export function renderWorkGroupBrowserTabPreviews(
     });
   }
   return byAnchor;
-}
-
-export function renderToolIcon(
-  name: string,
-  tool?: { toolName: string; pluginToolIcons?: PluginToolIcons },
-) {
-  return html`<openclaw-chat-tool-icon
-    style="display: contents"
-    .name=${name}
-    .tool=${tool}
-  ></openclaw-chat-tool-icon>`;
 }

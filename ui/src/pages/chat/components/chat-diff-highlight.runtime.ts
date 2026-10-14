@@ -1,5 +1,4 @@
 import { classHighlighter, highlightCode } from "@lezer/highlight";
-import { html } from "lit";
 import { loadCodeLanguage } from "../../../components/code-language.ts";
 import type { DiffLine } from "../../../lib/chat/tool-call-diff.ts";
 
@@ -70,19 +69,4 @@ export async function highlightDiffTokens(
     }),
   );
   return highlighted;
-}
-
-export async function highlightDiffLines(lines: readonly DiffLine[], path: string, oldPath = path) {
-  const tokens = await highlightDiffTokens(lines, path, oldPath);
-  return new Map(
-    [...tokens].map(
-      ([line, parts]) =>
-        [
-          line,
-          parts.map(({ text, classes }) =>
-            classes ? html`<span class=${classes}>${text}</span>` : text,
-          ),
-        ] as const,
-    ),
-  );
 }

@@ -1,8 +1,10 @@
 /* @vitest-environment jsdom */
 
-import { render, type LitElement } from "lit";
+import { createSignal } from "solid-js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderAssistantAttachments } from "./chat-message-attachments.ts";
+import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { flush } from "../../../test-helpers/solid-settle.ts";
+import { AssistantAttachments } from "./chat-message-attachments-solid.tsx";
 import {
   releaseChatMediaResourceSubscriber,
   type AttachmentItem,
@@ -10,7 +12,7 @@ import {
 } from "./chat-message-media.ts";
 
 const observations: Array<{ element: Element; show: () => void }> = [];
-const views: Array<{ container: HTMLElement; update: () => void }> = [];
+const views: Array<{ container: HTMLElement; update: () => void; unmount: () => void }> = [];
 const commentText =
   "Selected text:\nhello\n\nSource session: agent:main:main\nDOM text UTF-16 range: [0, 5)";
 
@@ -40,8 +42,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const { container, update } of views) {
-    render(null, container);
+  for (const { container, update, unmount } of views) {
+    unmount();
     container.remove();
     releaseChatMediaResourceSubscriber(update);
   }
@@ -69,12 +71,13 @@ function attachment(kind: "comment" | "paste", managed = false): AttachmentItem 
 
 async function settle(container: HTMLElement) {
   for (let index = 0; index < 16; index++) {
+    flush();
     await Promise.all(
       [
-        ...container.querySelectorAll<LitElement>(
+        ...container.querySelectorAll<HTMLElement & { updateComplete?: Promise<unknown> }>(
           "openclaw-chat-sent-comments, openclaw-chat-pasted-text",
         ),
-      ].map((element) => element.updateComplete),
+      ].map((element) => Promise.resolve(element.updateComplete)),
     );
   }
 }
@@ -83,22 +86,34 @@ function mount(item: AttachmentItem | AttachmentItem[], options: ImageRenderOpti
   const container = document.body.appendChild(document.createElement("div"));
   let current = Array.isArray(item) ? item : [item];
   const open = vi.fn();
-  const update = () =>
-    render(
-      renderAssistantAttachments(
-        current,
-        { ...options, onRequestUpdate: update },
-        open,
-        undefined,
-        false,
-      ),
-      container,
-    );
-  views.push({ container, update });
-  update();
+  let update!: () => void;
+  const root = mountSolid(
+    () => {
+      const [revision, setRevision] = createSignal(0);
+      update = () => setRevision((value) => value + 1);
+      return (
+        <AssistantAttachments
+          attachments={(() => {
+            revision();
+            return [...current];
+          })()}
+          options={(() => {
+            revision();
+            return { ...options, onRequestUpdate: update };
+          })()}
+          onOpenSidebar={open}
+          inlinePlayback={false}
+        />
+      );
+    },
+    { container },
+  );
+  views.push({ container, update, unmount: root.unmount });
+  flush();
   return {
     container,
     open,
+    unmount: root.unmount,
     replace(next: AttachmentItem) {
       current = [next];
       update();
@@ -200,7 +215,7 @@ describe("history text chip source admission", () => {
       stale?.show();
       expect(fetchMock).not.toHaveBeenCalled();
       const current = observations.at(-1);
-      render(null, view.container);
+      view.unmount();
       await settle(view.container);
       current?.show();
       await settle(view.container);

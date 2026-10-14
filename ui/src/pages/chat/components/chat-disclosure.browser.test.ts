@@ -6,8 +6,9 @@ import "../../../styles/chat.ts";
 import { solidContent } from "../../../lit/solid-content.tsx";
 import { renderActivityGroup, renderMessageGroup } from "./chat-message-group.test-support.ts";
 import { renderWorkGroupSummary } from "./chat-message-stream.test-support.ts";
+import { renderToolCard } from "./chat-tool-cards.test-support.tsx";
 import { ChatToolRawOutput } from "./chat-tool-content.solid.tsx";
-import { settleToolBridges, renderToolCard } from "./chat-tool-render.test-support.ts";
+import { settleToolBridges } from "./chat-tool-render.test-support.ts";
 
 const browserMode = "__vitest_browser__" in globalThis;
 let userEvent: (typeof import("vitest/browser"))["userEvent"];

@@ -15,7 +15,6 @@ import "../../styles/new-session.css";
 import "../../styles/new-session-attachment-panel.css";
 import { chatStartupStatusLabel } from "../chat/chat-run-startup.ts";
 import { ChatPermissionPicker } from "../chat/components/chat-permission-picker.tsx";
-import type { SidebarContent } from "../chat/components/chat-sidebar-content-types.ts";
 import { renderWelcomeState } from "../chat/components/chat-welcome.ts";
 import { CatalogBar } from "./catalog-target-view.tsx";
 import * as catalog from "./catalog-target.ts";
@@ -368,6 +367,24 @@ defineSolidBridge<
   },
 });
 
+type DetailPanelProperties = Pick<
+  HTMLElementTagNameMap["openclaw-chat-detail-panel"],
+  | "content"
+  | "fileNavigation"
+  | "execNode"
+  | "attachmentRuntime"
+  | "basePath"
+  | "canvasPluginSurfaceUrl"
+  | "embedSandboxMode"
+  | "allowExternalEmbedUrls"
+  | "githubContext"
+  | "embedded"
+  | "onOpenWorkspaceFile"
+  | "onOpenSessionLink"
+  | "onRevealInWorkspace"
+  | "onOpenImage"
+>;
+
 // These hosts remain custom elements so the detail panel keeps its lazy registration.
 declare module "@solidjs/web" {
   namespace JSX {
@@ -378,7 +395,7 @@ declare module "@solidjs/web" {
       "openclaw-chat-detail-panel": HTMLAttributes<
         HTMLElementTagNameMap["openclaw-chat-detail-panel"]
       > & {
-        "prop:content"?: SidebarContent | null;
+        [Key in keyof DetailPanelProperties as `prop:${Key}`]?: DetailPanelProperties[Key];
       };
     }
   }
