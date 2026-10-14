@@ -16,7 +16,7 @@ import { mountSolid, cleanupSolid } from "../../test-helpers/mount-solid.ts";
 import { SkillLibraryController } from "./library-controller.ts";
 import { SkillLibrary } from "./library-view.tsx";
 
-const gateways = new Set<GatewayPageBinding>();
+const bindings = new Set<GatewayPageBinding>();
 
 function harness() {
   const request = vi.fn<(method: string, params?: unknown) => Promise<unknown>>(async () => {
@@ -33,12 +33,12 @@ function harness() {
     lastError: null,
     lastErrorCode: null,
   });
-  const host = { requestUpdate: vi.fn() };
-  const gateway = new GatewayPageBinding(host.requestUpdate, {
+  const host = { requestUpdate() {} };
+  const gateway = new GatewayPageBinding(() => host.requestUpdate(), {
     getGateway: () => connection.gateway,
   });
   gateway.connect();
-  gateways.add(gateway);
+  bindings.add(gateway);
   const base = createApplicationConfigCapability({ resourceBasePath: "" });
   const config = { ...base, current: { ...base.current, uploadsEnabled: true } };
   const library = new SkillLibraryController(host, gateway, () => config);
@@ -93,11 +93,11 @@ function savedReceipt(read: SkillsLibraryReadResult): SkillsLibraryReceipt {
   };
 }
 afterEach(() => {
-  for (const gateway of gateways) {
-    gateway.dispose();
-  }
-  gateways.clear();
   cleanupSolid();
+  for (const binding of bindings) {
+    binding.dispose();
+  }
+  bindings.clear();
   document.body.replaceChildren();
 });
 

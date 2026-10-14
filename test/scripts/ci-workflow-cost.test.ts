@@ -14,6 +14,33 @@ const context = {
 const action = readWorkflow(".github/actions/detect-scheduled-changes/action.yml");
 const script = action.runs.steps[0].with.script;
 
+describe("plugin scaffold event scope", () => {
+  it.each([
+    [["src/plugin-sdk/AGENTS.md"], false],
+    [["src/plugin-sdk/index.ts"], true],
+    [["src/plugin-sdk/AGENTS.md", "src/plugin-sdk/index.ts"], true],
+    [["src/plugin-sdk/runtime-fixture.md"], true],
+    [[".github/workflows/plugin-init-scaffold-validation.yml"], true],
+  ] as const)("routes %j", (files, expected) => {
+    const workflow = readWorkflow(".github/workflows/plugin-init-scaffold-validation.yml");
+    expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths);
+    for (const event of ["push", "pull_request"]) {
+      const accepts = files.some((file) =>
+        workflow.on[event].paths.reduce(
+          (selected: boolean, pattern: string) =>
+            pattern.startsWith("!")
+              ? selected && !matchesGlob(file, pattern.slice(1))
+              : selected || matchesGlob(file, pattern),
+          false,
+        ),
+      );
+      expect(accepts).toBe(expected);
+    }
+    expect(workflow.on.workflow_dispatch).toBeDefined();
+    expect(workflow.on.schedule).toBeDefined();
+  });
+});
+
 async function scheduledScope(
   options: {
     files?: Array<{ filename: string; previous_filename?: string }>;
@@ -125,7 +152,9 @@ describe("bounded scheduled proof reuse", () => {
       const scope = workflow.jobs.scope.steps.find((step: { id?: string }) => step.id === "scope");
       const patterns = scope.with.paths.trim().split("\n");
       expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths);
-      for (const path of workflow.on.push.paths) {
+      for (const path of workflow.on.push.paths.filter(
+        (pattern: string) => !pattern.startsWith("!"),
+      )) {
         expect(
           patterns.some((pattern: string) => matchesGlob(path, pattern)),
           path,
@@ -166,6 +195,35 @@ describe("bounded scheduled proof reuse", () => {
       }
     },
   );
+});
+
+describe("node runtime event scope", () => {
+  it.each([
+    [["crates/openclaw-node-host/SIDECAR_PROTOCOL.md"], false],
+    [
+      ["crates/openclaw-node-host/SIDECAR_PROTOCOL.md", "crates/openclaw-node-host/src/main.rs"],
+      true,
+    ],
+    [["crates/openclaw-node-host/Cargo.toml"], true],
+    [["crates/openclaw-node-host/tests/fixtures/README.md"], true],
+    [[".github/workflows/node-runtime-conformance.yml"], true],
+  ] as const)("routes %j", (files, expected) => {
+    const workflow = readWorkflow(".github/workflows/node-runtime-conformance.yml");
+    for (const event of ["push", "pull_request"]) {
+      const accepts = files.some((file) =>
+        workflow.on[event].paths.reduce(
+          (selected: boolean, pattern: string) =>
+            pattern.startsWith("!")
+              ? selected && !matchesGlob(file, pattern.slice(1))
+              : selected || matchesGlob(file, pattern),
+          false,
+        ),
+      );
+      expect(accepts).toBe(expected);
+    }
+    expect(workflow.on.workflow_dispatch).toBeDefined();
+    expect(workflow.on.schedule).toBeDefined();
+  });
 });
 
 describe("workflow cost admission", () => {
