@@ -137,11 +137,15 @@ export async function takeControlUiScreenshotFrame(
           await preparation.evaluate((state) => state.prepare());
           await waitForControlUiFrameLayout(targets);
           const images = await preparation.evaluate((state) => state.images());
-          const presentation = await inspectControlUiFrameTargets(targets);
+          const presentation = await inspectControlUiFrameTargets(targets, preparation);
           const scroll = options.scrollTo
             ? await inspectControlUiProofScroll(options.scrollTo, false)
             : undefined;
-          const current = JSON.stringify({ images, presentation, scroll });
+          const current = JSON.stringify({
+            images,
+            presentation: presentation.map(({ bounds, visible }) => ({ bounds, visible })),
+            scroll,
+          });
           const stable = current === previous;
           previous = current;
           // A recenter can expose another lazy image; repeat readiness, never captures.
@@ -156,7 +160,7 @@ export async function takeControlUiScreenshotFrame(
         { message: "Proof frame did not reach visible, settled targets" },
       )
       .toBe(true);
-    const settled = await inspectControlUiFrameTargets(targets);
+    const settled = await inspectControlUiFrameTargets(targets, preparation);
     expect(
       settled.every((target) => target.visible),
       "Proof content must remain visible",
@@ -173,10 +177,11 @@ export async function takeControlUiScreenshotFrame(
       );
     }
     const frame = await captureControlUiFrame(page, options.elements ?? [], options);
+    const captured = await inspectControlUiFrameTargets(targets, preparation);
     expect(
-      await inspectControlUiFrameTargets(targets),
-      "Proof content moved or disappeared during frame capture",
-    ).toEqual(settled);
+      captured.map(({ bounds, visible }) => ({ bounds, visible })),
+      `Proof content moved or disappeared during frame capture: ${JSON.stringify({ settled, captured })}`,
+    ).toEqual(settled.map(({ bounds, visible }) => ({ bounds, visible })));
     if (options.scrollTo) {
       expect(await inspectControlUiProofScroll(options.scrollTo, false)).toBe(requestedScroll);
     }
@@ -192,33 +197,28 @@ export async function takeControlUiScreenshotFrame(
   }
 }
 
-async function inspectControlUiFrameTargets(targets: readonly Locator[]) {
+async function inspectControlUiFrameTargets(
+  targets: readonly Locator[],
+  preparation: Awaited<ReturnType<typeof createControlUiFramePreparation>>,
+) {
   return Promise.all(
     targets.map(async (target) => {
-      const intersects = await target.evaluate(
-        (element) =>
-          new Promise<boolean>((resolve) => {
-            const observer = new IntersectionObserver(([entry]) => {
-              observer.disconnect();
-              resolve(
-                Boolean(
-                  entry && entry.intersectionRect.width > 0 && entry.intersectionRect.height > 0,
-                ),
-              );
-            });
-            observer.observe(element);
-          }),
+      const observed = await target.evaluate(
+        (element, state) => state.inspect(element),
+        preparation,
       );
       const bounds = await target.boundingBox();
       const visible =
-        intersects &&
+        observed.intersectionRect !== null &&
+        observed.intersectionRect.width > 0 &&
+        observed.intersectionRect.height > 0 &&
         bounds !== null &&
         bounds.width > 0 &&
         bounds.height > 0 &&
         (await target.evaluate((element) =>
           element.checkVisibility({ checkOpacity: true, visibilityProperty: true }),
         ));
-      return { bounds, visible };
+      return { bounds, visible, observed };
     }),
   );
 }
@@ -241,6 +241,8 @@ async function createControlUiFramePreparation(page: Page, disableAnimations: bo
     const listeners = new Map<Document | ShadowRoot, () => void>();
     const carets = new Map<HTMLElement, { value: string; priority: string }>();
     const decoded = new Map<HTMLImageElement, string>();
+    const elementIds = new WeakMap<Element, number>();
+    let nextElementId = 0;
     const visibleImages = () =>
       roots()
         .flatMap((root) => Array.from(root.querySelectorAll("img")))
@@ -257,6 +259,47 @@ async function createControlUiFramePreparation(page: Page, disableAnimations: bo
           );
         });
     return {
+      inspect(element: Element) {
+        let elementId = elementIds.get(element);
+        if (elementId === undefined) {
+          elementId = ++nextElementId;
+          elementIds.set(element, elementId);
+        }
+        const id = elementId;
+        return new Promise<{
+          elementId: number;
+          connected: boolean;
+          isIntersecting: boolean;
+          intersectionRect: { x: number; y: number; width: number; height: number } | null;
+          bounds: { x: number; y: number; width: number; height: number };
+          checkVisibility: boolean;
+        }>((resolve) => {
+          const observer = new IntersectionObserver(([entry]) => {
+            observer.disconnect();
+            const { x, y, width, height } = element.getBoundingClientRect();
+            const intersection = entry?.intersectionRect;
+            resolve({
+              elementId: id,
+              connected: element.isConnected,
+              isIntersecting: entry?.isIntersecting ?? false,
+              intersectionRect: intersection
+                ? {
+                    x: intersection.x,
+                    y: intersection.y,
+                    width: intersection.width,
+                    height: intersection.height,
+                  }
+                : null,
+              bounds: { x, y, width, height },
+              checkVisibility: element.checkVisibility({
+                checkOpacity: true,
+                visibilityProperty: true,
+              }),
+            });
+          });
+          observer.observe(element);
+        });
+      },
       prepare() {
         if (!staticFrame) {
           return;
