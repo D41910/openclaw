@@ -6,7 +6,7 @@ import {
   SESSION_ICON_GLYPH_IDS,
   SESSION_ICON_SVG_DATA_URL_PREFIX,
 } from "../../../packages/gateway-protocol/src/session-agent-status.js";
-import { t } from "../i18n/index.ts";
+import { t } from "../lib/reactive/i18n.ts";
 import { nativeListener } from "../lib/solid-native-listener.ts";
 import {
   SESSION_ICON_EMOJI_CHOICES as EMOJI_CHOICES,

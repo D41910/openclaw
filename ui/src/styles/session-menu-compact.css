@@ -11,11 +11,6 @@ html[dir="rtl"] .session-menu__back .session-menu__icon {
   transform: scaleX(-1);
 }
 
-wa-dropdown.session-menu--compact::part(menu) {
-  max-height: calc(100dvh - 16px);
-  overflow-y: auto;
-}
-
 .session-menu--compact > .oc-menu {
   --oc-overlay-max-height: calc(100dvh - 16px);
 }

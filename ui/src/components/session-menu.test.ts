@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred as deferred } from "../../../test/helpers/promise.js";
 import { createShellOwner } from "../app/app-host-solid.test-support.ts";
+import { i18n } from "../i18n/index.ts";
 import { profileDirectory } from "../lib/profile-directory.ts";
 import type { ApplicationContextProvider } from "../test-helpers/application-context.ts";
 import {
@@ -38,6 +39,20 @@ function focusButton() {
 }
 
 describe("session menu", () => {
+  it("updates a mounted menu when the locale changes", async () => {
+    await i18n.setLocale("en");
+    onTestFinished(() => i18n.setLocale("en"));
+    const menu = await mountMenu();
+    const rename = menu.querySelector<HTMLButtonElement>('[data-value="rename"]')!;
+    const englishLabel = rename.getAttribute("aria-label");
+
+    await i18n.setLocale("de");
+    const translatedLabel = i18n.t("sessionsView.renameSessionMenu");
+    expect(translatedLabel).not.toBe(englishLabel);
+    await waitForSolid(() => expect(rename.getAttribute("aria-label")).toBe(translatedLabel));
+    expect(menu.querySelector('[data-value="rename"]')).toBe(rename);
+  });
+
   it("keeps self, agents, and the current owner while the directory loads, then retries a visible failure", async () => {
     const pending = deferred<ReturnType<typeof sessionOwnerProfiles>>();
     const { context, request } = createSessionOwnerMenuHarness(() => sessionOwnerProfiles("Ada"));
@@ -1014,6 +1029,9 @@ describe("sidebar snooze menu", () => {
       vi.setSystemTime(new Date(2026, 8, 29, 11));
       menu.anchor = { ...menu.anchor };
       await settleSessionMenu(menu);
+      if (compact) {
+        await selectMenuValue(menu, "compact:open-snooze");
+      }
       const reopened = compact ? menu : await openSubmenu(menu, "Snooze");
       expect(menuItemLabels(reopened)).toContain("In 1 hour · 12:00 PM");
     },

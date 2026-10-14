@@ -6,18 +6,19 @@ import type {
   SessionVisibility,
 } from "../../../api/types.ts";
 import {
+  PersonAvatarLink,
+  PersonName,
+  StandalonePersonLink,
+} from "../../../components/person-activity-link-solid.tsx";
+import {
   personActivityLink,
-  renderPersonAvatarLink,
-  renderPersonName,
-  renderStandalonePersonLink,
   type PersonActivityRouting,
 } from "../../../components/person-activity-link.ts";
-import { renderSessionOwnerChip } from "../../../components/session-owner-chip.ts";
 import { Icon } from "../../../components/solid/icon.tsx";
 import { Menu, type MenuEntry } from "../../../components/solid/menu.tsx";
+import { renderSessionOwnerChip } from "../../../components/solid/session-presentation.tsx";
 import { registerSessionPeopleEnglish } from "../../../i18n/locales/en-session-people.ts";
 import { registerEnglishCatalog, t } from "../../../lib/reactive/i18n.ts";
-import { LitContent } from "../../../lit/solid-content.tsx";
 
 registerEnglishCatalog(registerSessionPeopleEnglish);
 
@@ -292,20 +293,15 @@ export function useChatSessionSharingMenu(props: ChatSessionSharingProps): {
                 <div class="chat-pane__sharing-owner">
                   <span class="chat-pane__sharing-member-icon" aria-hidden="true">
                     <Show when={person().type === "human"} fallback={<Icon name="bot" />}>
-                      <LitContent
-                        value={renderPersonAvatarLink(
-                          renderSessionOwnerChip(person(), "header", "owned", props.ownerViewing),
-                          ownerActivity(),
-                        )}
-                      />
+                      <PersonAvatarLink link={ownerActivity()}>
+                        {renderSessionOwnerChip(person(), "header", "owned", props.ownerViewing)}
+                      </PersonAvatarLink>
                     </Show>
                   </span>
-                  <LitContent
-                    value={renderPersonName(
-                      person().label ?? person().id ?? t("chat.sessionSharing.owner"),
-                      ownerActivity(),
-                      "session-menu__text",
-                    )}
+                  <PersonName
+                    label={person().label ?? person().id ?? t("chat.sessionSharing.owner")}
+                    link={ownerActivity()}
+                    class="session-menu__text"
                   />
                 </div>
               </>
@@ -377,7 +373,7 @@ export function useChatSessionSharingMenu(props: ChatSessionSharingProps): {
         icon: (
           <span class="chat-pane__sharing-member-icon" aria-hidden="true">
             <Show when={identity.type === "human"} fallback={<Icon name="bot" />}>
-              <LitContent value={renderSessionOwnerChip(identity, "header")} />
+              {renderSessionOwnerChip(identity, "header")}
             </Show>
           </span>
         ),
@@ -451,16 +447,15 @@ export function ChatSessionSharing(props: ChatSessionSharingProps) {
           <Show when={visibility() === "draft"}>
             <Show when={props.showOwner && owner()}>
               {(person) => (
-                <LitContent
-                  value={renderStandalonePersonLink(
-                    renderSessionOwnerChip(person(), "header", "owned", props.ownerViewing),
-                    personActivityLink(
-                      person().identity?.type === "profile" ? person().identity?.id : undefined,
-                      props.personActivity,
-                      person().label,
-                    ),
+                <StandalonePersonLink
+                  link={personActivityLink(
+                    person().identity?.type === "profile" ? person().identity?.id : undefined,
+                    props.personActivity,
+                    person().label,
                   )}
-                />
+                >
+                  {renderSessionOwnerChip(person(), "header", "owned", props.ownerViewing)}
+                </StandalonePersonLink>
               )}
             </Show>
             <span class="chat-pane__draft-indicator" title={t("chat.sessionSharing.draft")}>

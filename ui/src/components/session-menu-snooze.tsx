@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, Show } from "solid-js";
-import { t } from "../i18n/index.ts";
+import { t } from "../lib/reactive/i18n.ts";
 import { formatTimeMs } from "../lib/format.ts";
 import {
   formatCustomSnooze,

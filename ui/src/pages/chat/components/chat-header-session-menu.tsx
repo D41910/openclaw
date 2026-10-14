@@ -17,7 +17,6 @@ import {
 } from "../../../components/session-menu-compact.ts";
 import { useSessionMenuControllers } from "../../../components/session-menu-controllers.ts";
 import { useSessionMenuEntries } from "../../../components/session-menu-view.tsx";
-import type { SessionCreatedActor } from "../../../components/session-owner-chip.ts";
 import { Icon, type IconName } from "../../../components/solid/icon.tsx";
 import {
   Menu,
@@ -27,6 +26,7 @@ import {
 } from "../../../components/solid/menu.tsx";
 import { useOptionalApplication } from "../../../lib/reactive/context.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
+import type { SessionCreatedActor } from "../../../lib/session-owner.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../../../lit/solid-bridge.ts";
 import { isChatBubbleMode, setChatBubbleMode } from "../chat-bubble-mode.ts";
 import { chatQuickActionEntry, type HeaderMenuSessionAction } from "./chat-quick-action.tsx";

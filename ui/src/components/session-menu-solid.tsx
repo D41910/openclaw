@@ -1,6 +1,7 @@
 import { createMemo, createSignal, merge, onCleanup, onSettled, Show } from "solid-js";
-import { t } from "../i18n/index.ts";
 import { useOptionalApplication } from "../lib/reactive/context.ts";
+import { t } from "../lib/reactive/i18n.ts";
+import type { SessionCreatedActor } from "../lib/session-owner.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../lit/solid-bridge.ts";
 import { activateMenuShortcut } from "./menu-shortcuts.ts";
 import {
@@ -15,7 +16,6 @@ import {
 } from "./session-menu-compact.ts";
 import { useSessionMenuControllers } from "./session-menu-controllers.ts";
 import { SessionMenuShortcut, useSessionMenuEntries } from "./session-menu-view.tsx";
-import type { SessionCreatedActor } from "./session-owner-chip.ts";
 import { Icon } from "./solid/icon.tsx";
 import { Menu, type MenuEntry, type MenuItem, type MenuHandle } from "./solid/menu.tsx";
 
@@ -61,7 +61,11 @@ type SessionMenuProps = {
 };
 
 let nextSessionMenuId = 0;
-function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<SessionMenuProps>) {
+function SessionMenuContent(
+  props: SessionMenuProps,
+  host: SolidBridgeElement<SessionMenuProps>,
+  anchor: SessionMenuProps["anchor"],
+) {
   const menuId = `session-menu-${++nextSessionMenuId}`;
   const [revision, setRevision] = createSignal(0, { ownedWrite: true });
   const [compactView, setCompactView] = createSignal<CompactSessionMenuView>("root");
@@ -238,94 +242,88 @@ function SessionMenuContent(props: SessionMenuProps, host: SolidBridgeElement<Se
       runAction({ kind: "open-pr", url: props.work.pullRequestUrl });
     }
   };
+  const closed = () => {
+    if (props.anchor === anchor && menu?.overlay.surface.isConnected) {
+      notifyClosed();
+    }
+  };
+  const afterHide = (event: Event) => {
+    if (event.target === menu?.overlay.surface) {
+      closed();
+    }
+  };
+  onCleanup(() => menu?.overlay.surface.removeEventListener("overlay-after-hide", afterHide));
   return (
-    <Show when={props.anchor} keyed>
-      {(anchor) => {
-        let mounted: MenuHandle | undefined;
-        const closed = () => {
-          if (props.anchor === anchor && mounted?.overlay.surface.isConnected) {
-            notifyClosed();
-          }
-        };
-        const afterHide = (event: Event) => {
-          if (event.target === mounted?.overlay.surface) {
-            closed();
-          }
-        };
-        onCleanup(() =>
-          mounted?.overlay.surface.removeEventListener("overlay-after-hide", afterHide),
-        );
-        return (
-          <Menu
-            id={menuId}
-            class={["session-menu", { "session-menu--compact": props.compact }]}
-            panelClass="session-menu__panel"
-            placement="bottom-start"
-            label={label()}
-            items={items()}
-            onSelect={select}
-            triggerAttributes={{
-              tabindex: -1,
-              "aria-hidden": "true",
-              style: {
-                position: "fixed",
-                left: `${Math.max(8, Math.min(anchor.x, window.innerWidth - 248))}px`,
-                top: `${Math.max(8, Math.min(anchor.y, window.innerHeight - 468))}px`,
-                width: "1px",
-                height: "1px",
-                opacity: 0,
-                "pointer-events": "none",
-              },
-            }}
-            ref={(handle) => {
-              mounted = handle;
-              menu = handle;
-              if (props.trigger) {
-                handle.overlay.setReturnTarget(props.trigger);
-              }
-              handle.overlay.surface.addEventListener("keydown", shortcut, true);
-              handle.overlay.surface.addEventListener("overlay-after-hide", afterHide);
-              if (!handle.open()) {
-                closed();
-              }
-            }}
-            onBeforeShow={() => {
-              actions.loadOwners();
-              setRevision((value) => value + 1);
-            }}
-            onEscape={(event) => {
-              if (actions.handleKeydown(event, view.appearance)) {
-                return true;
-              }
-              // Shared Menu owns child dismissal and clearing a nonempty search.
-              if (
-                [...(menu?.overlay.children ?? [])].some((child) => child.open) ||
-                (event.target instanceof HTMLInputElement &&
-                  event.target.hasAttribute("data-search") &&
-                  event.target.value)
-              ) {
-                return false;
-              }
-              close();
-              return true;
-            }}
-            onOpenChange={(open) => {
-              if (open) {
-                closeNotified = false;
-              } else {
-                actions.advanced.close();
-              }
-            }}
-          />
-        );
+    <Menu
+      id={menuId}
+      class={["session-menu", { "session-menu--compact": props.compact }]}
+      panelClass="session-menu__panel"
+      placement="bottom-start"
+      label={label()}
+      items={items()}
+      onSelect={select}
+      triggerAttributes={{
+        tabindex: -1,
+        "aria-hidden": "true",
+        style: {
+          position: "fixed",
+          left: `${Math.max(8, Math.min(anchor.x, window.innerWidth - 248))}px`,
+          top: `${Math.max(8, Math.min(anchor.y, window.innerHeight - 468))}px`,
+          width: "1px",
+          height: "1px",
+          opacity: 0,
+          "pointer-events": "none",
+        },
       }}
-    </Show>
+      ref={(handle) => {
+        menu = handle;
+        if (props.trigger) {
+          handle.overlay.setReturnTarget(props.trigger);
+        }
+        handle.overlay.surface.addEventListener("keydown", shortcut, true);
+        handle.overlay.surface.addEventListener("overlay-after-hide", afterHide);
+        if (!handle.open()) {
+          closed();
+        }
+      }}
+      onBeforeShow={() => {
+        actions.loadOwners();
+        setRevision((value) => value + 1);
+      }}
+      onEscape={(event) => {
+        if (actions.handleKeydown(event, view.appearance)) {
+          return true;
+        }
+        // Shared Menu owns child dismissal and clearing a nonempty search.
+        if (
+          [...(menu?.overlay.children ?? [])].some((child) => child.open) ||
+          (event.target instanceof HTMLInputElement &&
+            event.target.hasAttribute("data-search") &&
+            event.target.value)
+        ) {
+          return false;
+        }
+        close();
+        return true;
+      }}
+      onOpenChange={(open) => {
+        if (open) {
+          closeNotified = false;
+        } else {
+          actions.advanced.close();
+        }
+      }}
+    />
   );
 }
 
 export const SessionMenu = defineSolidBridge<SessionMenuProps>(
   "openclaw-session-menu",
-  SessionMenuContent,
+  (props, host) => (
+    <Show when={props.anchor} keyed>
+      {(anchor) => SessionMenuContent(props, host, anchor)}
+    </Show>
+  ),
   {
     properties: {
       session: { default: EMPTY_SESSION_MENU_DATA, attribute: false },

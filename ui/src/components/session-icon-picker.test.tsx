@@ -45,33 +45,3 @@ it("keeps custom icon entry focused and ignores Enter while an IME composition i
   mounted.unmount();
   host.remove();
 });
-
-it("moves the icon grid tab stop and sends appearance actions through the menu owner", () => {
-  const host = document.createElement("div");
-  document.body.append(host);
-  const runAction = vi.fn();
-  const mounted = mountSolid(
-    () =>
-      useSessionMenuAppearance(
-        host,
-        () => ({ session: { icon: "🦞", color: null }, actionDisabledReasons: {} }),
-        () => false,
-        runAction,
-      ).render(true),
-    { container: host },
-  );
-  const choices = mounted.container.querySelectorAll<HTMLButtonElement>(
-    ".session-menu__icon-choice",
-  );
-  choices[0]!.focus();
-  choices[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-  expect(document.activeElement).toBe(choices[1]);
-  expect(choices[0]!.tabIndex).toBe(-1);
-  expect(choices[1]!.tabIndex).toBe(0);
-  choices[1]!.click();
-  expect(runAction).toHaveBeenLastCalledWith({ kind: "set-icon", icon: "🚀" });
-  mounted.container.querySelector<HTMLButtonElement>(".session-menu__icon-remove")!.click();
-  expect(runAction).toHaveBeenLastCalledWith({ kind: "reset-appearance" });
-  mounted.unmount();
-  host.remove();
-});

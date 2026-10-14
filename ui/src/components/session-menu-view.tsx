@@ -1,7 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import { createMemo, getOwner, runWithOwner } from "solid-js";
-import { t } from "../i18n/index.ts";
 import { EDITOR_IDS, EDITOR_LABELS } from "../lib/editor-links.ts";
+import { t } from "../lib/reactive/i18n.ts";
 import { formatSessionSnoozeWakeTime, isSessionSnoozed } from "../lib/sessions/session-snooze.ts";
 import { useSessionMenuAppearance } from "./session-icon-picker-solid.tsx";
 import type {
@@ -440,6 +440,21 @@ export function useSessionMenuEntries(
             label: t("sessionsView.copyLink"),
             icon: "link",
             shortcut: "c",
+          }),
+        ]
+      : []),
+    ...(!batch() && state.session.placementAction
+      ? [
+          item({
+            kind: "move-session",
+            label: t(
+              state.session.placementAction === "dispatch"
+                ? "sessionsView.moveToCloud"
+                : state.session.placementAction === "retry"
+                  ? "sessionsView.retrySessionMove"
+                  : "sessionsView.moveSession",
+            ),
+            icon: "cloud",
           }),
         ]
       : []),

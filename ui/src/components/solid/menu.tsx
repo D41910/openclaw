@@ -13,7 +13,7 @@ import {
 import { acquireNativeOverlaySurface } from "../../lib/native-overlay-occlusion.ts";
 import { createOverlayAnchor, type OverlayPlacement } from "../overlay-anchor.ts";
 import { createOverlay, findOverlayParent, type Overlay } from "../overlay-lifecycle.ts";
-import { containsComposed } from "../overlay-registry.ts";
+import { containsComposed, registryFor } from "../overlay-registry.ts";
 import { useMenuMachine, type MenuBinding } from "./menu-machine.ts";
 import { retainShadowStyles } from "./shadow-styles.ts";
 import overlayStyles from "./overlay.css?inline";
@@ -68,6 +68,23 @@ export type MenuEntry =
   | { kind: "group"; id: string; class?: string; items: readonly MenuEntry[] };
 
 export type MenuHandle = { overlay: Overlay; open(): boolean; close(): boolean };
+
+/** Close through the owner even when a menu surface has moved into the top layer. */
+export function closeMenusWithin(
+  root: Pick<ParentNode, "querySelectorAll"> & { ownerDocument: Document },
+): void {
+  const elements = new Set(root.querySelectorAll('[role="menu"], [aria-haspopup="menu"]'));
+  for (const overlay of registryFor(root.ownerDocument).members.keys()) {
+    if (
+      overlay.open &&
+      overlay.surface.getAttribute("role") === "menu" &&
+      (elements.has(overlay.surface) || (overlay.trigger && elements.has(overlay.trigger)))
+    ) {
+      overlay.request(false);
+    }
+  }
+}
+
 export type MenuProps = {
   /** Stable for this mount; remount the menu to change its identity. */
   id: string;
@@ -505,9 +522,11 @@ export function Menu(props: BranchProps): JSX.Element {
                       disabled={item().disabled}
                       triggerClass={item().class}
                       triggerAttributes={{
-                        ...item().attributes,
                         "data-value": item().id,
                         value: item().id,
+                        "data-shortcut": item().attributes?.["data-shortcut"],
+                        "aria-keyshortcuts": item().attributes?.["aria-keyshortcuts"],
+                        title: item().attributes?.title,
                       }}
                       onSelect={props.onSelect}
                       onBeforeShow={item().onBeforeShow}
