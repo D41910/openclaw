@@ -2611,16 +2611,16 @@ require("node:fs").writeFileSync("scheduler-restart", process.env.OPENCLAW_UPGRA
       repository: "openclaw/openclaw",
       runAttempt: 1,
     } as const;
-    for (const [jobName, hostedTimeout] of [
-      ["android", 35],
-      ["build-artifacts", 35],
-      ["checks-ui", 35],
-      ["checks-ui-e2e-real-gateway", 40],
+    for (const [jobName, hostedTimeout, blacksmithTimeout] of [
+      ["android", 35, 20],
+      ["build-artifacts", 35, 20],
+      ["checks-ui", 35, 20],
+      ["checks-ui-e2e-real-gateway", 40, 30],
     ] as const) {
       const timeout = workflow.jobs[jobName]["timeout-minutes"];
       for (const [overrides, expected] of [
         [{ runnerBackend: "github" }, hostedTimeout],
-        [{ runnerBackend: "blacksmith" }, 20],
+        [{ runnerBackend: "blacksmith" }, blacksmithTimeout],
         [{ runnerBackend: "hybrid", runAttempt: 2 }, hostedTimeout],
       ] as const) {
         expect(
@@ -2673,7 +2673,7 @@ require("node:fs").writeFileSync("scheduler-restart", process.env.OPENCLAW_UPGRA
         for (const [jobName, timeout] of [
           ["build-artifacts", 20],
           ["android", 20],
-          ["checks-ui-e2e-real-gateway", 20],
+          ["checks-ui-e2e-real-gateway", 30],
           ["checks-ui", 20],
         ] as const) {
           expect(
