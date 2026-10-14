@@ -20,10 +20,10 @@ async function settle(panel: Locator) {
   });
 }
 
-async function openCompact(page: Page) {
-  await page.getByRole("button", { name: /^Open overlay/u }).click();
+async function openCompact(page: Page, activation: "click" | "tap" = "click") {
+  await page.getByRole("button", { name: /^Open overlay/u })[activation]();
   const panel = page.getByRole("complementary", { name: "System busyness" });
-  await panel.getByRole("button", { name: "Minimize system busyness" }).click();
+  await panel.getByRole("button", { name: "Minimize system busyness" })[activation]();
   await panel.locator(".debug-overlay__widget").waitFor();
   await settle(panel);
   return panel;
@@ -134,7 +134,7 @@ suite.define(() => {
       async ({ page, context }) => {
         await installMockGateway(page, { methodResponses });
         await page.goto(suite.server.baseUrl + "debug");
-        const panel = await openCompact(page);
+        const panel = await openCompact(page, "tap");
         const box = (await panel.locator("header").boundingBox())!;
         const before = (await panel.boundingBox())!;
         const cdp = await context.newCDPSession(page);
