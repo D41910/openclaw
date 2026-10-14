@@ -1,12 +1,11 @@
 /* @vitest-environment jsdom */
 
 import { expectDefined } from "@openclaw/normalization-core";
-import { nothing, render } from "lit";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { flush } from "../../test-helpers/solid-settle.ts";
 import { createRefreshChatPane } from "./chat-pane-history.test-support.ts";
 import { stubAnimationFrames } from "./chat-view.test-helpers.ts";
-import { renderChatThread } from "./components/chat-thread.test-support.ts";
+import { createChatThreadHarness } from "./components/chat-message-native.test-support.tsx";
 import {
   installTranscriptDomMocks,
   resetTranscriptTestDom,
@@ -32,8 +31,9 @@ async function mountSession(paneId: string, sessionKey: string) {
   pane.render();
   const props = expectDefined(pane.chatProps, "pane transcript props");
   const container = document.body.appendChild(document.createElement("div"));
+  const view = createChatThreadHarness(container, props.transcript);
   props.transcript.hostConnected();
-  render(renderChatThread(props, props.transcript), container);
+  view.render(props);
   const thread = expectDefined(container.querySelector<HTMLDivElement>(".chat-thread"), "thread");
   Object.defineProperties(thread, {
     clientHeight: { configurable: true, value: 600 },
@@ -48,7 +48,7 @@ async function mountSession(paneId: string, sessionKey: string) {
     thread,
     dispose: () => {
       props.transcript.hostDisconnected();
-      render(nothing, container);
+      view.unmount();
       container.remove();
     },
   };

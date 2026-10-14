@@ -1,10 +1,9 @@
-import { nothing, render } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MessageReactionSummary } from "../../../../../packages/gateway-protocol/src/index.js";
 /* @vitest-environment jsdom */
 import type { SolidBridgeElement } from "../../../lit/solid-bridge.ts";
 import { flush } from "../../../test-helpers/solid-settle.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
 import { createMessageGroup } from "./chat-message.test-support.ts";
 
 const reactions: MessageReactionSummary[] = [
@@ -29,9 +28,10 @@ const reactions: MessageReactionSummary[] = [
   },
 ];
 let host: HTMLDivElement;
+let view: ReturnType<typeof createMessageGroupHarness>;
 afterEach(() => {
   if (host) {
-    render(nothing, host);
+    view.unmount();
     host.remove();
   }
 });
@@ -40,6 +40,7 @@ function show(
   options: { role?: string; persisted?: boolean; streaming?: boolean; writable?: boolean } = {},
 ) {
   host = document.body.appendChild(document.createElement("div"));
+  view = createMessageGroupHarness(host);
   const role = options.role ?? "user";
   const onReact = vi.fn();
   const message = {
@@ -48,18 +49,12 @@ function show(
     timestamp: 1,
     ...(options.persisted === false ? {} : { __openclaw: { id: "message-1" } }),
   };
-  render(
-    renderMessageGroup(
-      createMessageGroup(message, role, { isStreaming: options.streaming ?? false }),
-      {
-        showReasoning: false,
-        userId: "self",
-        messageReactions: new Map([["message-1", reactions]]),
-        onReact: options.writable === false ? undefined : onReact,
-      },
-    ),
-    host,
-  );
+  view.render(createMessageGroup(message, role, { isStreaming: options.streaming ?? false }), {
+    showReasoning: false,
+    userId: "self",
+    messageReactions: new Map([["message-1", reactions]]),
+    onReact: options.writable === false ? undefined : onReact,
+  });
   return {
     onReact,
     pickers: [

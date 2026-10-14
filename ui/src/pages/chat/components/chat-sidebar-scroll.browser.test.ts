@@ -1,9 +1,8 @@
-import { html, render } from "lit";
 import { describe, expect, it } from "vitest";
 import "../../../styles.css";
 import "../../../styles/chat.ts";
 import "../../../styles/chat/side-panel.css";
-import type { SidebarContent } from "./chat-sidebar-content-types.ts";
+import type { ChatDetailPanelContent } from "./chat-sidebar-content-types.ts";
 import { createChatSidebarContainer } from "./chat-sidebar.test-support.ts";
 import "./chat-files-panel.tsx";
 import "./chat-detail-panel.tsx";
@@ -11,13 +10,13 @@ import "./chat-detail-panel.tsx";
 const browserMode = "__vitest_browser__" in globalThis;
 
 type DetailPanel = HTMLElement & {
-  content: SidebarContent;
+  content: ChatDetailPanelContent;
   updateComplete: Promise<unknown>;
 };
 
 async function mountDetailPanel(
   host: "Review" | "Files",
-  content: SidebarContent,
+  content: ChatDetailPanelContent,
 ): Promise<{
   panel: DetailPanel;
   hideAndReselect: () => Promise<void>;
@@ -26,22 +25,21 @@ async function mountDetailPanel(
   const container = createChatSidebarContainer();
   container.className = "side-panel__panel";
   container.style.cssText = "width:480px;height:320px;";
-  const renderDetail = (detail: SidebarContent) => html`<openclaw-chat-detail-panel
-    class="chat-sidebar"
-    .content=${detail}
-    .embedded=${true}
-  ></openclaw-chat-detail-panel>`;
+  const detailPanel = document.createElement("openclaw-chat-detail-panel");
+  detailPanel.className = "chat-sidebar";
+  detailPanel.embedded = true;
+  detailPanel.content = content;
   const files = host === "Files" ? document.createElement("openclaw-chat-files-panel") : null;
   if (files) {
     files.previews = [{ id: "preview", label: "Long preview", content }];
     files.activeId = "preview";
-    files.renderDetail = renderDetail;
+    files.renderDetail = () => detailPanel;
     files.onSelect = (id) => {
       files.activeId = id;
     };
     container.append(files);
   } else {
-    render(renderDetail(content), container);
+    container.append(detailPanel);
   }
   document.body.append(container);
   await files?.updateComplete;

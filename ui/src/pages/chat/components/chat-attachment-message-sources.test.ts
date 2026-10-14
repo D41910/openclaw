@@ -1,10 +1,8 @@
 /* @vitest-environment jsdom */
 
-import { html, nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as markdown from "../../../components/markdown.ts";
-import * as chatAvatar from "../chat-avatar.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
 import {
   createAssistantMessage,
   createAttachmentBlock,
@@ -13,7 +11,7 @@ import {
 } from "./chat-message.test-support.ts";
 
 let view: HTMLDivElement;
-const renderedContainers = new Set<HTMLElement>();
+const renderedContainers = new Map<HTMLElement, ReturnType<typeof createMessageGroupHarness>>();
 
 beforeEach(() => {
   view = document.createElement("div");
@@ -22,14 +20,11 @@ beforeEach(() => {
     "",
     `<div class="streaming-markdown">${value}</div>`,
   ]);
-  vi.spyOn(chatAvatar, "renderChatAvatar").mockImplementation(
-    (role) => html`<div class="chat-avatar ${role}"></div>`,
-  );
 });
 
 afterEach(() => {
-  for (const container of renderedContainers) {
-    render(nothing, container);
+  for (const [container, root] of renderedContainers) {
+    root.unmount();
     container.remove();
   }
   renderedContainers.clear();
@@ -37,7 +32,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-type RenderOptions = Parameters<typeof renderMessageGroup>[1];
+type RenderOptions = Parameters<ReturnType<typeof createMessageGroupHarness>["render"]>[1];
 
 function renderGroupedMessage(
   message: unknown,
@@ -45,21 +40,22 @@ function renderGroupedMessage(
   opts: Partial<RenderOptions> = {},
   container: HTMLElement = view,
 ) {
-  renderedContainers.add(container);
+  let root = renderedContainers.get(container);
+  if (!root) {
+    root = createMessageGroupHarness(container);
+    renderedContainers.set(container, root);
+  }
   const group = createMessageGroup(message, role, {
     key: `${role}-group`,
     messages: [{ key: `${role}-message`, message }],
   });
-  render(
-    renderMessageGroup(group, {
-      showReasoning: true,
-      showToolCalls: true,
-      assistantName: "OpenClaw",
-      assistantAvatar: null,
-      ...opts,
-    }),
-    container,
-  );
+  root.render(group, {
+    showReasoning: true,
+    showToolCalls: true,
+    assistantName: "OpenClaw",
+    assistantAvatar: null,
+    ...opts,
+  });
 }
 
 function renderAssistantMessage(

@@ -1,10 +1,9 @@
 /* @vitest-environment jsdom */
 
 import { expectDefined } from "@openclaw/normalization-core";
-import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImageLightboxItem } from "../../../components/image-lightbox.types.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
 import {
   createAssistantMessage,
   createAttachmentBlock,
@@ -12,32 +11,30 @@ import {
 } from "./chat-message.test-support.ts";
 
 let container: HTMLDivElement;
+let root: ReturnType<typeof createMessageGroupHarness>;
 
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
+  root = createMessageGroupHarness(container);
 });
 
 afterEach(() => {
-  render(nothing, container);
+  root.unmount();
   container.remove();
 });
 
 function renderAssistantMessage(
-  target: HTMLElement,
   message: unknown,
-  options: Partial<Parameters<typeof renderMessageGroup>[1]>,
+  options: Partial<Parameters<typeof root.render>[1]>,
 ) {
-  render(
-    renderMessageGroup(createMessageGroup(message, "assistant"), {
-      showReasoning: false,
-      showToolCalls: false,
-      assistantName: "OpenClaw",
-      assistantAvatar: null,
-      ...options,
-    }),
-    target,
-  );
+  root.render(createMessageGroup(message, "assistant"), {
+    showReasoning: false,
+    showToolCalls: false,
+    assistantName: "OpenClaw",
+    assistantAvatar: null,
+    ...options,
+  });
 }
 
 describe("message attachment image gallery projection", () => {
@@ -67,7 +64,6 @@ describe("message attachment image gallery projection", () => {
     async ({ content }) => {
       const onOpenImage = vi.fn<(item: ImageLightboxItem) => void>();
       renderAssistantMessage(
-        container,
         createAssistantMessage(content, {
           timestamp: 1000,
         }),
@@ -138,7 +134,7 @@ describe("message attachment image gallery projection", () => {
     },
   ])("projects $name into the gallery", ({ message, index }) => {
     const onOpenImage = vi.fn<(item: ImageLightboxItem) => void>();
-    renderAssistantMessage(container, message, { onOpenImage });
+    renderAssistantMessage(message, { onOpenImage });
     const tiles = container.querySelectorAll<HTMLButtonElement>(".chat-message-image-button");
     expect(tiles).toHaveLength(2);
     tiles[index]?.click();

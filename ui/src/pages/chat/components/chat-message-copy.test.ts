@@ -1,8 +1,7 @@
 /* @vitest-environment jsdom */
 
-import { render } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
+import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
 import { createMessageGroup } from "./chat-message.test-support.ts";
 
 afterEach(() => {
@@ -23,12 +22,12 @@ describe("message copy actions", () => {
         key: `copy-message-${index}`,
         message: { role, content, timestamp: index + 1 },
       }));
-      render(
-        renderMessageGroup(createMessageGroup(messages[0]!.message, role, { messages }), {
+      createMessageGroupHarness(container).render(
+        createMessageGroup(messages[0]!.message, role, { messages }),
+        {
           showReasoning: true,
           showToolCalls: true,
-        }),
-        container,
+        },
       );
 
       const buttons = container.querySelectorAll<HTMLButtonElement>(

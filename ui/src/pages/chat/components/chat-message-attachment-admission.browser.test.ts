@@ -1,10 +1,16 @@
-import { render } from "lit";
+import { createComponent, createSignal, getOwner } from "solid-js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../../test/helpers/promise.js";
 import "../../../styles.css";
 import "../../../styles/chat.ts";
-import { renderAssistantAttachments } from "./chat-message-attachments.ts";
-import { releaseChatMediaResourceSubscriber, type AttachmentItem } from "./chat-message-media.ts";
+import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { flush } from "../../../test-helpers/solid-settle.ts";
+import { AssistantAttachments } from "./chat-message-attachments-solid.tsx";
+import {
+  releaseChatMediaResourceSubscriber,
+  type AttachmentItem,
+  type ImageRenderOptions,
+} from "./chat-message-media.ts";
 import type { SidebarContent } from "./chat-sidebar-content-types.ts";
 
 const browserMode = "__vitest_browser__" in globalThis;
@@ -39,19 +45,33 @@ describe.runIf(browserMode)("deferred attachment keyboard access", () => {
           url: `/tmp/openclaw/${crypto.randomUUID()}/keyboard.pdf`,
         },
       };
-      const update = () =>
-        render(
-          renderAssistantAttachments(
-            [item],
-            { onRequestUpdate: update },
-            withSidebar ? onOpenSidebar : undefined,
-            undefined,
-            false,
-          ),
-          target,
-        );
+      let root: ReturnType<typeof mountSolid> | undefined;
+      let updateOptions: (options: ImageRenderOptions) => void;
+      const update = () => {
+        updateOptions({ onRequestUpdate: update });
+        if (!getOwner()) {
+          flush();
+        }
+      };
       try {
-        update();
+        root = mountSolid(
+          () => {
+            const [options, setOptions] = createSignal<ImageRenderOptions>(
+              { onRequestUpdate: update },
+              { ownedWrite: true },
+            );
+            updateOptions = setOptions;
+            return createComponent(AssistantAttachments, {
+              attachments: [item],
+              get options() {
+                return options();
+              },
+              onOpenSidebar: withSidebar ? onOpenSidebar : undefined,
+              inlinePlayback: false,
+            });
+          },
+          { container: target },
+        );
         expect(target.getBoundingClientRect().top).toBeGreaterThan(
           scroller.getBoundingClientRect().bottom + 240,
         );
@@ -95,7 +115,7 @@ describe.runIf(browserMode)("deferred attachment keyboard access", () => {
         }
       } finally {
         metadata.resolve(Response.json({ available: false }));
-        render(null, target);
+        root?.unmount();
         scroller.remove();
         releaseChatMediaResourceSubscriber(update);
         vi.unstubAllGlobals();

@@ -1,26 +1,69 @@
 /* @vitest-environment jsdom */
 
-import { nothing, render } from "lit";
+import { createComponent, createSignal, getOwner } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../../test/helpers/promise.js";
 import { ImageLightboxGalleryController } from "../../../components/image-lightbox-gallery.ts";
 import type { ImageLightboxItem } from "../../../components/image-lightbox.types.ts";
-import { renderMessageGroup } from "./chat-message-group.test-support.ts";
-import { renderMessageImages } from "./chat-message-images.ts";
+import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { flush } from "../../../test-helpers/solid-settle.ts";
+import { MessageImages, type MessageImagesProps } from "./chat-message-images-solid.tsx";
 import { releaseChatMediaResourceSubscriber } from "./chat-message-media.ts";
+import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
 import { createMessageGroup, createUserMessage } from "./chat-message.test-support.ts";
 
+function createMessageImagesHarness(container: HTMLElement) {
+  let root: ReturnType<typeof mountSolid> | undefined;
+  let update: (props: MessageImagesProps) => void;
+  return {
+    render(images: MessageImagesProps["images"], options?: MessageImagesProps["options"]) {
+      const next = { images, options };
+      if (root) {
+        update(next);
+      } else {
+        root = mountSolid(
+          () => {
+            const [props, setProps] = createSignal<MessageImagesProps>(next, { ownedWrite: true });
+            update = setProps;
+            return createComponent(MessageImages, {
+              get images() {
+                return props().images;
+              },
+              get options() {
+                return props().options;
+              },
+            });
+          },
+          { container },
+        );
+      }
+      if (!getOwner()) {
+        flush();
+      }
+    },
+    unmount() {
+      root?.unmount();
+      root = undefined;
+    },
+  };
+}
+
 let container: HTMLDivElement;
+let groupView: ReturnType<typeof createMessageGroupHarness>;
+let imagesView: ReturnType<typeof createMessageImagesHarness>;
 let onRequestUpdate: () => void;
 
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
+  groupView = createMessageGroupHarness(container);
+  imagesView = createMessageImagesHarness(container);
   onRequestUpdate = vi.fn();
 });
 
 afterEach(() => {
-  render(nothing, container);
+  groupView.unmount();
+  imagesView.unmount();
   releaseChatMediaResourceSubscriber(onRequestUpdate);
   container.remove();
   vi.useRealTimers();
@@ -94,19 +137,16 @@ describe("message image gallery loading", () => {
     });
     const group = createMessageGroup(message, "user");
     const draw = () =>
-      render(
-        renderMessageGroup(group, {
-          showReasoning: true,
-          showToolCalls: false,
-          assistantName: "OpenClaw",
-          assistantAvatar: null,
-          resourceBasePath: "/openclaw",
-          assistantAttachmentAuthToken: "test-auth-token",
-          onRequestUpdate,
-          onOpenImage,
-        }),
-        container,
-      );
+      groupView.render(group, {
+        showReasoning: true,
+        showToolCalls: false,
+        assistantName: "OpenClaw",
+        assistantAvatar: null,
+        resourceBasePath: "/openclaw",
+        assistantAttachmentAuthToken: "test-auth-token",
+        onRequestUpdate,
+        onOpenImage,
+      });
     const observer = new MutationObserver(() => {
       if (container.querySelector(".chat-message-image")) {
         available.resolve();
@@ -152,13 +192,10 @@ describe("message image gallery loading", () => {
     vi.stubGlobal("fetch", fetch);
     const { controller, onOpenImage, dispose } = createGallery();
     try {
-      render(
-        renderMessageImages([{ url: source, alt: "Detailed screenshot" }], {
-          onOpenImage,
-          onRequestUpdate,
-        }),
-        container,
-      );
+      imagesView.render([{ url: source, alt: "Detailed screenshot" }], {
+        onOpenImage,
+        onRequestUpdate,
+      });
       await vi.waitFor(() => expect(container.querySelector(".chat-message-image")).not.toBeNull());
       const tile = container.querySelector<HTMLButtonElement>(".chat-message-image-button")!;
       tile.click();
@@ -195,13 +232,10 @@ describe("message image gallery loading", () => {
     vi.stubGlobal("fetch", fetch);
     const { controller, onOpenImage, dispose } = createGallery();
     try {
-      render(
-        renderMessageImages([{ url: source, alt: "Original in unsupported format" }], {
-          onOpenImage,
-          onRequestUpdate,
-        }),
-        container,
-      );
+      imagesView.render([{ url: source, alt: "Original in unsupported format" }], {
+        onOpenImage,
+        onRequestUpdate,
+      });
       await vi.waitFor(() => expect(container.querySelector(".chat-message-image")).not.toBeNull());
       const tile = container.querySelector<HTMLButtonElement>(".chat-message-image-button")!;
       tile.click();
@@ -235,15 +269,12 @@ describe("message image gallery loading", () => {
       const onOpenImage = vi.fn((item: ImageLightboxItem) => controller.reset(item.gallery, item));
       try {
         const draw = () =>
-          render(
-            renderMessageImages(
-              [
-                { url: "data:image/png;base64,cG5n", alt: "First image" },
-                { url: source, alt: "Managed neighbor", fileName: "neighbor.png" },
-              ],
-              { onOpenImage, onRequestUpdate },
-            ),
-            container,
+          imagesView.render(
+            [
+              { url: "data:image/png;base64,cG5n", alt: "First image" },
+              { url: source, alt: "Managed neighbor", fileName: "neighbor.png" },
+            ],
+            { onOpenImage, onRequestUpdate },
           );
         draw();
         const firstTile = container.querySelector<HTMLButtonElement>(".chat-message-image-button")!;
@@ -301,15 +332,12 @@ describe("message image gallery loading", () => {
       vi.stubGlobal("fetch", fetchMetadata);
       const localSource = `/home/node/.openclaw/media/outbound/${crypto.randomUUID()}.png`;
       const onOpenImage = vi.fn<(item: ImageLightboxItem) => void>();
-      render(
-        renderMessageImages(
-          [
-            { url: "data:image/png;base64,cG5n", alt: "First image" },
-            { url: localSource, fileName: "Local neighbor.png" },
-          ],
-          { onOpenImage, onRequestUpdate, sessionKey: "main", resourceBasePath: "/openclaw" },
-        ),
-        container,
+      imagesView.render(
+        [
+          { url: "data:image/png;base64,cG5n", alt: "First image" },
+          { url: localSource, fileName: "Local neighbor.png" },
+        ],
+        { onOpenImage, onRequestUpdate, sessionKey: "main", resourceBasePath: "/openclaw" },
       );
       container.querySelector<HTMLButtonElement>(".chat-message-image-button")!.click();
       const opened = onOpenImage.mock.calls[0]?.[0];
@@ -331,7 +359,7 @@ describe("message image gallery loading", () => {
       expect(fetchMetadata).toHaveBeenCalledOnce();
 
       if (removeOwner) {
-        render(nothing, container);
+        imagesView.unmount();
         releaseChatMediaResourceSubscriber(onRequestUpdate);
       }
       metadata.resolve(

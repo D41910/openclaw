@@ -1,7 +1,6 @@
 /* @vitest-environment jsdom */
 
 import { expectDefined } from "@openclaw/normalization-core";
-import { nothing, render } from "lit";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred } from "../../../../test/helpers/promise.js";
 import { i18n, t } from "../../i18n/index.ts";
@@ -15,6 +14,7 @@ import { resetChatViewState } from "./chat-view-state.ts";
 import {
   createReactiveDraftHarness,
   createSlashRerenderHarness,
+  disposeChatView,
   getComposerTextarea,
   inputDraft,
   inputDraftAtEnd,
@@ -315,7 +315,7 @@ describe("chat composer suggestion accessibility", () => {
         textarea.dispatchEvent(new Event("select", { bubbles: true }));
         expect(container.querySelector("textarea")).toBeNull();
       } finally {
-        render(nothing, container);
+        disposeChatView(container);
         resetChatViewState();
       }
     };
