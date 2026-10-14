@@ -2,6 +2,8 @@ import { createSignal, flush } from "solid-js";
 import { describe, expect, it, vi } from "vitest";
 import "../components/sidebar-attention.tsx";
 import "../components/sidebar-update-card.tsx";
+import type { SidebarUpdateCardProps } from "../components/sidebar-update-card.tsx";
+import type { SolidBridgeElement } from "../lit/solid-bridge.ts";
 import { mountSolid } from "../test-helpers/mount-solid.ts";
 import { FloatingUpdateCard } from "./navigation-surface-view.tsx";
 import { navigationSurfaceIsHidden } from "./navigation-surface.ts";
@@ -31,7 +33,9 @@ describe("OpenClaw shell update affordance", () => {
     setRefreshRequired(true);
     flush();
     expect(view.container.querySelector("openclaw-sidebar-attention")).toBe(attention);
-    const card = view.container.querySelector("openclaw-sidebar-update-card");
+    const card = view.container.querySelector<SolidBridgeElement<SidebarUpdateCardProps>>(
+      "openclaw-sidebar-update-card",
+    );
     expect(card?.refreshRequired).toBe(true);
     void card?.onRefresh();
     expect(onRefresh).toHaveBeenCalledOnce();
@@ -55,9 +59,11 @@ describe("OpenClaw shell update affordance", () => {
       />
     ));
     expect(view.container.querySelector("openclaw-sidebar-attention")).toBeNull();
-    expect(view.container.querySelector("openclaw-sidebar-update-card")?.refreshRequired).toBe(
-      true,
-    );
+    expect(
+      view.container.querySelector<SolidBridgeElement<SidebarUpdateCardProps>>(
+        "openclaw-sidebar-update-card",
+      )?.refreshRequired,
+    ).toBe(true);
     setRefreshRequired(false);
     flush();
     expect(view.container.querySelector("openclaw-sidebar-update-card")).toBeNull();

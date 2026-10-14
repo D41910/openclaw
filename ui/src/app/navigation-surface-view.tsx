@@ -14,6 +14,22 @@ type FloatingUpdateCardProps = {
   onNavigate?: ApplicationContext["navigate"];
 };
 
+declare module "@solidjs/web" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "openclaw-sidebar-attention": HTMLAttributes<HTMLElement> & {
+        "prop:onNavigate"?: FloatingUpdateCardProps["onNavigate"];
+      };
+      "openclaw-sidebar-update-card": HTMLAttributes<HTMLElement> & {
+        "prop:updateRun": FloatingUpdateCardProps["updateRun"];
+        "prop:statusBanner": FloatingUpdateCardProps["statusBanner"];
+        "prop:refreshRequired": FloatingUpdateCardProps["refreshRequired"];
+        "prop:onRefresh": FloatingUpdateCardProps["onRefresh"];
+      };
+    }
+  }
+}
+
 export function FloatingUpdateCard(props: FloatingUpdateCardProps) {
   return (
     <>

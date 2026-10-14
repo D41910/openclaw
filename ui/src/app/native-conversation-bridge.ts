@@ -11,7 +11,6 @@
  */
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import type { RouteLocation } from "@openclaw/uirouter";
-import type { ChatPage } from "../pages/chat/chat-page.ts";
 import { z } from "zod";
 import { registerListener } from "../../../src/shared/listeners.js";
 import { routeIdFromPath } from "../app-route-paths.ts";
@@ -32,6 +31,7 @@ import {
   CHAT_RUN_ACTIVITY_CHANGED_EVENT,
   CHAT_PANE_LIFECYCLE_CHANGED_EVENT,
 } from "../pages/chat/chat-history-events.ts";
+import type { ChatPage } from "../pages/chat/chat-page.ts";
 import type { ChatPaneElement } from "../pages/chat/chat-pane.tsx";
 import type { ChatRouteData } from "../pages/chat/session-route-data.ts";
 import type { ApplicationContext } from "./context.ts";

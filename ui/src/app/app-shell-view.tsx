@@ -1,10 +1,10 @@
 import "../lib/toast-host.ts";
 import type { JSX as SolidJSX } from "@solidjs/web";
 import { createEffect, createMemo, Show } from "solid-js";
+import { renderContextNewSessionAction } from "../components/new-session-link.ts";
 import { renderGatewayStatus } from "../components/solid/gateway-status.tsx";
 import { Icon } from "../components/solid/icon.tsx";
 import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
-import { renderContextNewSessionAction } from "../components/new-session-link.ts";
 import { renderNewSessionLink } from "../components/solid/new-session-link.tsx";
 import type { ThemeModeChangeDetail } from "../components/theme-mode-toggle.ts";
 import {

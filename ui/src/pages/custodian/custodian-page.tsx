@@ -251,13 +251,6 @@ declare global {
   }
 }
 
-declare module "@solidjs/web" {
-  namespace JSX {
-    interface IntrinsicElements {
-    }
-  }
-}
-
 export function CustodianRoute(props: { data?: CustodianRouteData }) {
   return (
     <Show when={props.data}>

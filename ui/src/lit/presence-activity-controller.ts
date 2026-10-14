@@ -1,6 +1,6 @@
-import type { SolidControllerHost } from "./solid-controller-host.ts";
 import { createPresenceActivityLifecycle } from "../lib/presence-activity-lifecycle.ts";
 import type { PresenceViewer } from "../lib/presence-users.ts";
+import type { SolidControllerHost } from "./solid-controller-host.ts";
 
 /** Refreshes presentation at interaction expiry, without network polling. */
 export function createPresenceActivityController(

@@ -14,8 +14,6 @@ import type { ControlUiSurfaceProps } from "../../../src/plugin-sdk/control-ui.j
 import type { ClawHubRecommendation } from "../../../src/shared/clawhub-recommendations.js";
 import type { LobsterPetProps } from "../components/lobster-pet-contract.ts";
 import type { MascotMood } from "../components/mascot-pose.ts";
-import type { SidebarAttentionProps } from "../components/sidebar-attention.tsx";
-import type { SidebarUpdateCardProps } from "../components/sidebar-update-card.tsx";
 import type { MessageActionDetails } from "../pages/chat/components/chat-message-markdown.types.ts";
 export type { JSX } from "@solidjs/web";
 
@@ -42,10 +40,6 @@ declare module "@solidjs/web" {
       messageActions: MessageActionDetails | null | undefined;
     }
     interface IntrinsicElements {
-      "openclaw-sidebar-attention": HTMLAttributes<HTMLElement> &
-        ElementProperties<SidebarAttentionProps>;
-      "openclaw-sidebar-update-card": HTMLAttributes<HTMLElement> &
-        ElementProperties<SidebarUpdateCardProps>;
       "openclaw-github-identity": HTMLAttributes<HTMLElement>;
       "openclaw-plugins-page": HTMLAttributes<HTMLElement>;
       "openclaw-dashboards-page": HTMLAttributes<HTMLElement>;

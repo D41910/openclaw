@@ -1,5 +1,5 @@
-import type { SolidController, SolidControllerHost } from "./solid-controller-host.ts";
 import { GatewayPageBinding, type GatewayPageBindingOptions } from "../lib/gateway-page-binding.ts";
+import type { SolidController, SolidControllerHost } from "./solid-controller-host.ts";
 
 /** Lit lifecycle adapter; the binding owns connection and request identity. */
 export class GatewayPageController extends GatewayPageBinding implements SolidController {
