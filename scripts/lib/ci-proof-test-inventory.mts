@@ -3571,7 +3571,6 @@ export const PR_PROTECTED_RUNTIME_TEST_FILES: readonly string[] = [
   "src/snapshot/local-repository.windows.test.ts",
   "src/snapshot/session-cold-storage-backup.test.ts",
   "src/state/agent-deletion-cleanup.test.ts",
-  "src/state/claw-package-adoption.test.ts",
   "src/state/creator-namespace-migration.test.ts",
   "src/state/local-onboarding-state.test.ts",
   "src/state/openclaw-agent-admission-order.diagnostic.test.ts",

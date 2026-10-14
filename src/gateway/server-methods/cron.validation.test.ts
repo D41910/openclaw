@@ -1580,6 +1580,7 @@ describe("cron method validation", () => {
     expect(remove.respond).toHaveBeenCalledWith(true, { ok: true, removed: true }, undefined);
     expect(context.cron.remove).toHaveBeenCalledWith(accountJob.id, {
       commitGuard: expect.any(Function),
+      expectedConfigRevision: expect.any(String),
     });
 
     cronRunRecordsOverride.mockImplementationOnce(async () => {
