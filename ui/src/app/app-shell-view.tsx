@@ -1,13 +1,11 @@
 import "../lib/toast-host.ts";
 import type { JSX as SolidJSX } from "@solidjs/web";
 import { createEffect, createMemo, Show } from "solid-js";
-import { renderGatewayStatus } from "../components/gateway-status.ts";
-import { icons } from "../components/icons.ts";
-import { renderConnectingSplash } from "../components/loading-skeleton.ts";
-import {
-  renderContextNewSessionAction,
-  renderNewSessionLink,
-} from "../components/new-session-link.ts";
+import { renderGatewayStatus } from "../components/solid/gateway-status.tsx";
+import { Icon } from "../components/solid/icon.tsx";
+import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
+import { renderContextNewSessionAction } from "../components/new-session-link.ts";
+import { renderNewSessionLink } from "../components/solid/new-session-link.tsx";
 import type { ThemeModeChangeDetail } from "../components/theme-mode-toggle.ts";
 import {
   formatKeyboardShortcutCombo,
@@ -15,7 +13,6 @@ import {
 } from "../lib/keyboard-shortcut-contract.ts";
 import { t } from "../lib/reactive/i18n.ts";
 import { resolveUiSelectedSessionAgentId } from "../lib/sessions/session-key.ts";
-import { createLitContentRef } from "../lit/solid-bridge.ts";
 import { DevicePairSetup } from "./app-shell-device-pair-setup.tsx";
 import { ShellDocks } from "./app-shell-docks.tsx";
 import { ShellLazyOverlays, type ShellElementAttributes } from "./app-shell-lazy-view.tsx";
@@ -27,10 +24,11 @@ import {
 } from "./lazy-custom-element.ts";
 import { LitRouteHost } from "./lit-route-host.tsx";
 import { beginNativeWindowDrag, beginNativeWindowDragFromTopInset } from "./native-window-drag.ts";
-import { floatingSidebarAttentionVisible, renderFloatingUpdateCard } from "./navigation-surface.ts";
+import { FloatingUpdateCard } from "./navigation-surface-view.tsx";
+import { floatingSidebarAttentionVisible } from "./navigation-surface.ts";
 import { RouterOutlet } from "./router-outlet.tsx";
 import { NAV_WIDTH_MAX, NAV_WIDTH_MIN } from "./settings.ts";
-import { renderCollapsedHomeToggle } from "./shell-assistant-toggles.ts";
+import { CollapsedHomeToggle } from "./shell-assistant-toggles.tsx";
 import { ShellLayoutProvider } from "./shell-layout-traits-solid.tsx";
 
 export type { ShellViewHost } from "./app-shell-view-state.ts";
@@ -176,24 +174,21 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
                       : undefined
                   }
                   onClick={() => props.host.viewCallbacks.toggleSidebar()}
-                  ref={createLitContentRef(() => icons.panelLeftOpen)}
-                />
+                >
+                  <Icon name="panelLeftOpen" />
+                </button>
               </openclaw-tooltip>
             </Show>
             <Show when={!view().railAvailable}>
-              <LitRouteHost
-                renderValue={() =>
-                  renderNewSessionLink({
-                    basePath: view().context.basePath,
-                    agentId: view().selectedAgentId,
-                    className: "shell-chrome-controls__button shell-chrome-controls__new-thread",
-                    label: t("chat.runControls.newSession"),
-                    showShortcut: true,
-                    disabledReason: view().newSessionDisabledReason,
-                    onOpen: props.host.viewCallbacks.requestOpenNewSession,
-                  })
-                }
-              />
+              {renderNewSessionLink({
+                basePath: view().context.basePath,
+                agentId: view().selectedAgentId,
+                className: "shell-chrome-controls__button shell-chrome-controls__new-thread",
+                label: t("chat.runControls.newSession"),
+                showShortcut: true,
+                disabledReason: view().newSessionDisabledReason,
+                onOpen: props.host.viewCallbacks.requestOpenNewSession,
+              })}
             </Show>
             <Show when={!view().railAvailable || legacyMacChrome()}>
               <openclaw-tooltip
@@ -204,17 +199,13 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
                   class="shell-chrome-controls__button shell-chrome-controls__search"
                   aria-label={t("chat.openCommandPalette")}
                   onClick={() => props.host.openPalette()}
-                  ref={createLitContentRef(() => icons.search)}
-                />
+                >
+                  <Icon name="search" />
+                </button>
               </openclaw-tooltip>
             </Show>
             <Show when={view().homePanelAvailable && !view().railAvailable}>
-              <LitRouteHost
-                renderValue={() => {
-                  props.host.shellRevision();
-                  return renderCollapsedHomeToggle();
-                }}
-              />
+              <CollapsedHomeToggle />
             </Show>
           </div>
         </Show>
@@ -300,11 +291,9 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
         >
           <Show when={view().pageActionsBlocked}>
             <div class="connection-action-block" role="status" aria-live="polite">
-              <span
-                class="connection-action-block__icon"
-                aria-hidden="true"
-                ref={createLitContentRef(() => icons.globeOff)}
-              />
+              <span class="connection-action-block__icon" aria-hidden="true">
+                <Icon name="globeOff" />
+              </span>
               <span class="connection-action-block__text">
                 {t(
                   view().settingsTakeover
@@ -320,7 +309,7 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
               (!view().floatingUpdateCard.compact && view().floatingUpdateCard.refreshRequired)
             }
           >
-            <LitRouteHost renderValue={() => renderFloatingUpdateCard(view().floatingUpdateCard)} />
+            <FloatingUpdateCard {...view().floatingUpdateCard} />
           </Show>
           <Show when={view().embedNavigation}>
             <LitRouteHost renderValue={() => view().navigationContent} />
@@ -351,15 +340,11 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
         </main>
         <Show when={view().shellConnectionStatus}>
           <div class="shell-connection-status">
-            <LitRouteHost
-              renderValue={() =>
-                renderGatewayStatus({
-                  kind: view().shellConnectionStatus!,
-                  lastError: view().gatewaySnapshot.lastError,
-                  onRetry: props.host.viewCallbacks.retryGateway,
-                })
-              }
-            />
+            {renderGatewayStatus({
+              kind: view().shellConnectionStatus!,
+              lastError: view().gatewaySnapshot.lastError,
+              onRetry: props.host.viewCallbacks.retryGateway,
+            })}
           </div>
         </Show>
         <openclaw-terminal-panel
@@ -455,17 +440,7 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
   // A plugin may move the default workspace into its mountDefault target. Solid
   // keeps owning that tree while the temporary Lit plugin host owns only its slot.
   return (
-    <Show
-      when={routeReady()}
-      fallback={
-        <LitRouteHost
-          renderValue={() => {
-            props.host.shellRevision();
-            return renderConnectingSplash();
-          }}
-        />
-      }
-    >
+    <Show when={routeReady()} fallback={<ConnectingSplash />}>
       <Show when={view().workspaceReplacement} fallback={workspace}>
         <openclaw-plugin-view
           prop:surface="workspace"

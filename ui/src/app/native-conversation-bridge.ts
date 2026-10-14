@@ -11,7 +11,7 @@
  */
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import type { RouteLocation } from "@openclaw/uirouter";
-import type { LitElement } from "lit";
+import type { ChatPage } from "../pages/chat/chat-page.ts";
 import { z } from "zod";
 import { registerListener } from "../../../src/shared/listeners.js";
 import { routeIdFromPath } from "../app-route-paths.ts";
@@ -417,7 +417,7 @@ export function createNativeConversationBridge(
           return "navigate-rejected";
         }
         if (openActions) {
-          const page = document.querySelector<LitElement>("openclaw-chat-page");
+          const page = document.querySelector<ChatPage>("openclaw-chat-page");
           await page?.updateComplete;
           const pane = page?.querySelector<ChatPaneElement>(".chat-pane-cache__pane--active");
           await pane?.updateComplete;

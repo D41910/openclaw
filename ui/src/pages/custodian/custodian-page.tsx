@@ -254,7 +254,6 @@ declare global {
 declare module "@solidjs/web" {
   namespace JSX {
     interface IntrinsicElements {
-      "openclaw-sidebar-attention": HTMLAttributes<HTMLElement>;
     }
   }
 }

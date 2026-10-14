@@ -1,16 +1,16 @@
-import type { TemplateResult } from "lit";
+import type { LegacyTemplateResult } from "../lit/solid-content.tsx";
 
 export type ToastDismissReason = "action" | "dismiss" | "disconnected" | "replaced" | "timeout";
 
 export type ToastOptions = {
   /** Rich content lets a message name a destination the operator can actually open,
    * instead of spelling out a settings path the toast then makes them find. */
-  message: string | TemplateResult | Node;
+  message: string | LegacyTemplateResult | Node;
   /** Positions a compact toast at the top center of the owning surface. */
   anchor?: Element;
   /** Bottom placement suits settings feedback without covering the page heading. */
   placement?: "top" | "bottom";
-  icon?: TemplateResult;
+  icon?: LegacyTemplateResult;
   actionLabel?: string;
   onAction?: () => void;
   onDismiss?: (reason: ToastDismissReason) => void;

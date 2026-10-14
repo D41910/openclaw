@@ -1,4 +1,4 @@
-import type { ReactiveControllerHost } from "lit";
+import type { SolidControllerHost } from "../lit/solid-controller-host.ts";
 import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
 import { nativeGatewaysCapability } from "./native-gateways.runtime.ts";
 
@@ -22,6 +22,6 @@ export function localEditorFilePath(content: EditorFile, execNode?: string | nul
     : null;
 }
 
-export function observeNativeGateway(host: ReactiveControllerHost, onChange?: () => void): void {
+export function observeNativeGateway(host: SolidControllerHost, onChange?: () => void): void {
   void new SubscriptionsController(host).watchStore(nativeGatewaysCapability, onChange);
 }

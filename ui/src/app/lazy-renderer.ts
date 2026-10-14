@@ -1,12 +1,10 @@
-import type { ReactiveControllerHost } from "lit";
-
 export class LazyRenderer<Renderer> {
   renderer: Renderer | null = null;
   failed = false;
   private pending: Promise<void> | null = null;
 
   constructor(
-    private readonly host: Pick<ReactiveControllerHost, "requestUpdate">,
+    private readonly host: { requestUpdate(): void },
     private readonly importRenderer: () => Promise<Renderer>,
   ) {}
 
