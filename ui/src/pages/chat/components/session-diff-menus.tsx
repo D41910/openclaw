@@ -93,7 +93,7 @@ function CopyRow(props: {
   value: string;
   label: string;
   command?: boolean;
-  menuControl?: "initial" | "next";
+  initialFocus?: boolean;
 }) {
   return (
     <div class={["session-diff-menu__copy-row", { "is-command": props.command }]}>
@@ -104,7 +104,7 @@ function CopyRow(props: {
         idleLabel={props.label}
         buttonAttributes={{
           "data-form-control": "",
-          "data-initial-focus": props.menuControl === "initial" ? "" : undefined,
+          "data-initial-focus": props.initialFocus ? "" : undefined,
         }}
       />
     </div>
@@ -147,11 +147,7 @@ function SessionDiffMenuContent(props: SessionDiffMenuProps) {
           kind: "content",
           id: "path",
           content: (
-            <CopyRow
-              value={menu.path}
-              label={t("chat.sessionDiff.copyPath")}
-              menuControl="initial"
-            />
+            <CopyRow value={menu.path} label={t("chat.sessionDiff.copyPath")} initialFocus />
           ),
         },
         {
@@ -251,18 +247,10 @@ function SessionDiffMenuContent(props: SessionDiffMenuProps) {
                 value={menu.command}
                 label={t("chat.sessionDiff.copyCommand")}
                 command
-                menuControl="initial"
+                initialFocus
               />
-              <CopyRow
-                value={menu.root}
-                label={t("chat.sessionDiff.checkoutPath")}
-                menuControl="next"
-              />
-              <CopyRow
-                value={menu.branch}
-                label={t("chat.sessionDiff.branchName")}
-                menuControl="next"
-              />
+              <CopyRow value={menu.root} label={t("chat.sessionDiff.checkoutPath")} />
+              <CopyRow value={menu.branch} label={t("chat.sessionDiff.branchName")} />
               <p class="session-diff-menu__note">{t("chat.sessionDiff.uncommittedStay")}</p>
             </div>
           ),

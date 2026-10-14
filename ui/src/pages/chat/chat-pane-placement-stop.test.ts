@@ -218,7 +218,11 @@ describe("chat pane worker stop", () => {
       ["sessions.move", "sessions.reclaim"],
       ["operator.read", "operator.write"],
     );
-    const offline = { ...offlineDeviceSession(), hasActiveRun: false };
+    const offline = {
+      ...offlineDeviceSession(),
+      sessionId: "offline-device-session",
+      hasActiveRun: false,
+    };
     const available = {
       ...offline,
       placement: {

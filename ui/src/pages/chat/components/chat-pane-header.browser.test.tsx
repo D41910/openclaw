@@ -115,6 +115,12 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
             shortcut: KEYBOARD_SHORTCUT_COMBOS.terminalPanel,
             onActivate: vi.fn(),
           },
+          ...Array.from({ length: 7 }, (_, index) => ({
+            id: `panel-${index + 1}`,
+            label: `Panel ${index + 1}`,
+            icon: html``,
+            onActivate: vi.fn(),
+          })),
         ],
         onOpenSplitView: vi.fn(),
       });
@@ -130,7 +136,18 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         [...menu.querySelectorAll("[role^=menuitem]")].map((item) =>
           item.getAttribute("data-value"),
         ),
-      ).toEqual(["details", "terminal", "open-split-view"]);
+      ).toEqual([
+        "details",
+        "terminal",
+        "panel-1",
+        "panel-2",
+        "panel-3",
+        "panel-4",
+        "panel-5",
+        "panel-6",
+        "panel-7",
+        "open-split-view",
+      ]);
       const surface = menu.querySelector<HTMLElement>(":scope > .oc-menu")!;
       for (const direction of ["ltr", "rtl"]) {
         document.documentElement.dir = direction;
@@ -138,7 +155,9 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         expect(bounds.left).toBeCloseTo(8, 0);
         expect(window.innerWidth - bounds.right).toBeCloseTo(8, 0);
         expect(window.innerHeight - bounds.bottom).toBeCloseTo(8, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
       }
+      expect(surface.scrollHeight).toBeGreaterThan(surface.clientHeight);
       const terminalDetails = surface.querySelector<HTMLElement>(
         '[data-value="terminal"] > .oc-menu-item__details',
       )!;
