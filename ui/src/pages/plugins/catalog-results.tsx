@@ -18,7 +18,7 @@ import { PluginInstallAction } from "./install-action.tsx";
 import type { PluginInstallProgress } from "./install-progress.ts";
 import {
   renderPluginAuthor,
-  renderPluginCardSummary,
+  PluginCardSummary,
   renderPluginOfficialBadge,
   renderPluginStateStatus,
 } from "./plugin-card.tsx";
@@ -297,7 +297,9 @@ function CatalogCard(props: {
           )}
         </div>
       </div>
-      {renderPluginCardSummary(props.plugin.catalog.summary || t("pluginsPage.optionalCapability"))}
+      <PluginCardSummary
+        summary={props.plugin.catalog.summary || t("pluginsPage.optionalCapability")}
+      />
       {renderPluginRowMessage(props.state.messages?.[`install:${props.plugin.id}`], {
         busy: busy(),
         onContinue:
