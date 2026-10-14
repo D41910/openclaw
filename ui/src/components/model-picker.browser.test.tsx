@@ -1,3 +1,4 @@
+import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanupSolid, mountSolid } from "../test-helpers/mount-solid.ts";
 import { updatePickers, choosePickerValue } from "../test-helpers/select-picker.ts";
@@ -11,6 +12,52 @@ afterEach(() => {
 });
 
 describe("ModelPicker", () => {
+  it("keeps disabled provider groups settled and usable after re-enabling", async () => {
+    const [disabled, setDisabled] = createSignal(false);
+    const onChange = vi.fn();
+    const { container } = mountSolid(() => (
+      <ModelPicker
+        label="Model"
+        value="fixture/alpha"
+        options={[
+          { value: "fixture/alpha", label: "Alpha", provider: "fixture" },
+          { value: "fixture/beta", label: "Beta", provider: "fixture" },
+        ]}
+        disabled={disabled()}
+        groupByProvider
+        onChange={onChange}
+      />
+    ));
+    await updatePickers(container);
+    const picker = container.querySelector<SelectPicker>("openclaw-select-picker")!;
+    const trigger = picker.querySelector<HTMLButtonElement>(".picker-select__trigger")!;
+    trigger.click();
+    await picker.updateComplete;
+    const group = picker.querySelector<HTMLButtonElement>(".picker-select__group-toggle")!;
+    group.click();
+    flush();
+    expect(group.getAttribute("aria-expanded")).toBe("false");
+
+    setDisabled(true);
+    flush();
+    await Promise.resolve();
+    flush();
+    const icon = group.querySelector(".provider-brand-icon");
+    expect(icon).not.toBeNull();
+    expect(trigger.disabled).toBe(true);
+    container.append(document.createElement("span"));
+    // Deliver the registry's document-mutation observation, then settle its consumers.
+    await Promise.resolve();
+    flush();
+    expect(group.querySelector(".provider-brand-icon")).toBe(icon);
+
+    setDisabled(false);
+    flush();
+    await choosePickerValue(picker, "fixture/beta");
+    expect(group.getAttribute("aria-expanded")).toBe("true");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("fixture/beta");
+  });
+
   it("shows a late selected model first without dropping the rest of a large catalog", async () => {
     const { container } = mountSolid(() => (
       <ModelPicker

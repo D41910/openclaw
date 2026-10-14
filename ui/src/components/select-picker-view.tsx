@@ -341,7 +341,8 @@ export function PickerContent<Option extends PickerOption>(props: {
       } else {
         setQuery("");
         setSearching(false);
-        setCollapsed(new Set<string>());
+        // Disabled overlays can retire repeatedly as unrelated DOM content changes.
+        setCollapsed((current) => (current.size ? new Set<string>() : current));
         hoverOpened = false;
         if (sheetScroll) {
           sheetScroll.root.scrollTop = sheetScroll.top;
