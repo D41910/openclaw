@@ -4,7 +4,7 @@ import type { ToolsEffectiveEntry, ToolsEffectiveResult } from "../../../api/typ
 import { pathForRoute } from "../../../app-route-paths.ts";
 import type { ApplicationNavigationOptions } from "../../../app/context.ts";
 import { icons } from "../../../components/icons.ts";
-import { Icon } from "../../../components/solid/icon.tsx";
+import { Icon, type IconName } from "../../../components/solid/icon.tsx";
 import { registerMcpEnglish } from "../../../i18n/locales/en-mcp.ts";
 import "@awesome.me/webawesome/dist/components/switch/switch.js";
 import type { McpServerSummary } from "../../../lib/config/mcp-servers.ts";
@@ -61,7 +61,7 @@ export type ChatComposerMenuSkill = {
 type ChatComposerRootToggle = {
   value: string;
   label: string;
-  icon?: unknown;
+  icon?: IconName;
   checked: boolean;
   disabled: boolean;
   title?: string;
@@ -222,7 +222,7 @@ function RootView(props: { menu: ChatComposerPlusMenuContentProps }) {
           checked={webSearchEnabled()}
           disabled={webSearchDisabled()}
           title={webSearchTitle()}
-          icon={icons.globe}
+          icon="globe"
           checkbox={true}
         />
         {menuDivider()}

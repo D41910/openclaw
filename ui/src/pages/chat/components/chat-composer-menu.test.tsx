@@ -140,6 +140,7 @@ it("creates attachment choices on first open and retains them while closed", () 
           {
             value: "test-toggle",
             label: "Test toggle",
+            icon: "pencil",
             checked: false,
             disabled: false,
             onChange: vi.fn(),
@@ -157,6 +158,9 @@ it("creates attachment choices on first open and retains them while closed", () 
   flush();
   const choice = dropdown.querySelector("wa-dropdown-item");
   expect(choice).not.toBeNull();
+  expect(
+    dropdown.querySelector('wa-dropdown-item[value="test-toggle"] [slot="icon"] svg'),
+  ).not.toBeNull();
   dropdown.dispatchEvent(new Event("wa-hide"));
   flush();
   dropdown.dispatchEvent(new Event("wa-show"));

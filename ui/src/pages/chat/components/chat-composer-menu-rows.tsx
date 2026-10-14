@@ -1,5 +1,6 @@
 import type { JSX } from "@solidjs/web";
 import { icons } from "../../../components/icons.ts";
+import { Icon, type IconName } from "../../../components/solid/icon.tsx";
 import { t } from "../../../lib/reactive/i18n.ts";
 import { LitContent } from "./chat-composer-interop.tsx";
 
@@ -35,7 +36,7 @@ export function renderCapabilityToggleRow(options: {
   checked: boolean;
   disabled: boolean;
   title?: string | null;
-  icon?: unknown;
+  icon?: IconName;
   note?: JSX.Element | null;
   checkbox?: boolean;
 }) {
@@ -50,7 +51,7 @@ export function renderCapabilityToggleRow(options: {
     >
       {options.icon ? (
         <span slot="icon" aria-hidden="true">
-          <LitContent value={options.icon} />
+          <Icon name={options.icon} />
         </span>
       ) : null}
       <span class="agent-chat__capability-menu-label">
