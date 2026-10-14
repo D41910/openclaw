@@ -6,11 +6,8 @@ import {
   markReplyPayloadForSourceSuppressionDelivery,
   setReplyPayloadMetadata,
 } from "../auto-reply/reply-payload.js";
-import {
-  isSilentReplyPayloadText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-} from "../auto-reply/tokens.js";
+import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
+import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import {
   emitAgentEventWithAssistantSourceIfCurrent,
   readAgentAssistantSource,
@@ -542,7 +539,7 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
   };
   const releaseDeferredReplies = () => {
     if (state.assistantMessageStartIndex > settledMessageIndex) {
-      const silent = isSilentReplyPayloadText(state.deltaBuffer, SILENT_REPLY_TOKEN);
+      const silent = parseReplyDirectives(state.deltaBuffer).hasSilentIntent;
       if (silent) {
         replaceCurrentAssistantText(SILENT_REPLY_TOKEN);
       }

@@ -1,6 +1,7 @@
-import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
+import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import { freezeDiagnosticTraceContext } from "../../../infra/diagnostic-trace-context.js";
 import { isTransientNetworkError } from "../../../infra/retryable-network-errors.js";
+import { hasReplyPayloadContent } from "../../../interactive/payload.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
 import { isCloudCodeAssistFormatError } from "../../embedded-agent-helpers.js";
 import type { CompletedAssistantAnswer } from "../../embedded-agent-subscribe.handlers.types.js";
@@ -256,7 +257,7 @@ export function completeEmbeddedAttemptResult(
     subscription.endsWithSourceProgress() &&
     state.terminal.kind === "ok" &&
     terminalAssistant?.stopReason === "stop" &&
-    (!closingText || isSilentReplyPayloadText(closingText, SILENT_REPLY_TOKEN));
+    !hasReplyPayloadContent(parseReplyDirectives(closingText));
   const completeLastProgress = <T extends { sourceReplyFinal?: boolean }>(sends: T[]): T[] => {
     const index = sends.findLastIndex((send) => send.sourceReplyFinal === false);
     return progressIsReply && index >= 0

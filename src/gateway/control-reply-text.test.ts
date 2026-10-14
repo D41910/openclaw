@@ -185,6 +185,17 @@ describe("control reply display projection", () => {
     ).toEqual([]);
   });
 
+  it.each(["[[audio_as_voice]]", "[[reply_to_current]]"])(
+    "hides silent-message reasoning before a trailing %s directive",
+    (directive) => {
+      const message = assistant([
+        { type: "thinking", thinking: "Native reasoning must stay private." },
+        textBlock(`The discussion is complete.\nNO_REPLY\n${directive}`),
+      ]);
+      expect(projectChatDisplayMessages([message])).toEqual([]);
+    },
+  );
+
   it("keeps completed progress separate from a later silent message", () => {
     const progress = assistant([textBlock("Completed the tool step.")]);
     const silent = assistant([textBlock("The group needs no more detail."), textBlock("NO_REPLY")]);

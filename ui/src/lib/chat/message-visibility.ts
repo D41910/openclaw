@@ -46,7 +46,7 @@ function isAssistantSilentReply(message: unknown): boolean {
   if (!entry || normalizeLowercaseStringOrEmpty(entry.role) !== "assistant") {
     return false;
   }
-  // entry.text takes precedence — matches gateway extractAssistantTextForSilentCheck
+  // entry.text takes precedence, matching Gateway assistant directive extraction.
   if (typeof entry.text === "string") {
     return isSilentReplyStream(entry.text);
   }

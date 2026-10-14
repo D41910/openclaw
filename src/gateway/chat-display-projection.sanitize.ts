@@ -19,7 +19,7 @@ import {
 import { projectAssistantCommentaryFallbacks } from "./chat-display-projection.commentary.js";
 import {
   DEFAULT_CHAT_HISTORY_TEXT_MAX_CHARS,
-  extractAssistantTextForSilentCheck,
+  extractAssistantReplyDirectives,
   hasAssistantDisplayableNonTextContent,
   hasTranscriptMediaFacts,
   isAssistantTextContentType,
@@ -641,8 +641,8 @@ export function shouldDropAssistantHistoryMessage(message: unknown): boolean {
   if (resolveAssistantMessagePhase(message) === "commentary") {
     return !hasAssistantMixedToolVisibleText(message);
   }
-  const text = extractAssistantTextForSilentCheck(message);
-  if (text === undefined || !isSuppressedControlReplyText(text)) {
+  const parsed = extractAssistantReplyDirectives(message);
+  if (!parsed || (!parsed.hasSilentIntent && !isSuppressedControlReplyText(parsed.text))) {
     return false;
   }
   return !hasAssistantDisplayableNonTextContent(message) && !hasTranscriptMediaFacts(entry);

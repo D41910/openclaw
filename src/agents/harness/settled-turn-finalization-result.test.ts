@@ -6,6 +6,7 @@ import { EmptySettledTurnFinalizationError } from "./settled-turn-finalization-o
 import {
   assertSettledTurnFinalizationResult,
   projectSettledTurnFinalizationAttemptResult,
+  resolveSettledTurnFinalizationText,
 } from "./settled-turn-finalization-result.js";
 import type { AgentHarnessSettledTurnFinalizationResult } from "./types.js";
 
@@ -56,9 +57,14 @@ function successfulAttempt(
 }
 
 describe("assertSettledTurnFinalizationResult", () => {
-  it("accepts one capability-free final answer", () => {
-    const result = safeResult();
+  it.each([
+    "done",
+    "The attachment is ready.\nNO_REPLY\nMEDIA:https://example.com/result.png",
+    "The attachment is ready.\nNO_REPLY\nMEDIA:https://user:synthetic-password@example.com/result.png",
+  ])("accepts sendable final content and preserves authored text: %j", (text) => {
+    const result = { assistant: assistantMessage([{ type: "text", text }]) };
     expect(assertSettledTurnFinalizationResult(result)).toBe(result);
+    expect(resolveSettledTurnFinalizationText(result)).toBe(text);
   });
 
   it("rejects a tool call", () => {
@@ -72,22 +78,26 @@ describe("assertSettledTurnFinalizationResult", () => {
     ).toThrow("returned a tool call");
   });
 
-  it.each(["  ", "NO_REPLY", "No further response is needed.\nNO_REPLY."])(
-    "classifies a normally completed empty or silent answer: %j",
-    (text) => {
-      const result = {
-        assistant: assistantMessage([{ type: "text", text }]),
-      };
+  it.each([
+    "  ",
+    "NO_REPLY",
+    "No further response is needed.\nNO_REPLY.",
+    "No further response is needed.\nNO_REPLY\n[[reply_to_current]]",
+    "No further response is needed.\nNO_REPLY\n[[audio_as_voice]]",
+    "[[audio_as_voice]]",
+  ])("classifies a normally completed empty or silent answer: %j", (text) => {
+    const result = {
+      assistant: assistantMessage([{ type: "text", text }]),
+    };
 
-      try {
-        assertSettledTurnFinalizationResult(result);
-        throw new Error("expected completed-empty classification");
-      } catch (error) {
-        expect(error).toBeInstanceOf(EmptySettledTurnFinalizationError);
-        expect((error as EmptySettledTurnFinalizationError).result).toBe(result);
-      }
-    },
-  );
+    try {
+      assertSettledTurnFinalizationResult(result);
+      throw new Error("expected completed-empty classification");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EmptySettledTurnFinalizationError);
+      expect((error as EmptySettledTurnFinalizationError).result).toBe(result);
+    }
+  });
 
   it("rejects an assistant stopped at the length limit", () => {
     expect(() =>

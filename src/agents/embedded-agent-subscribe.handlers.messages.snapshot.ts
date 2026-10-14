@@ -106,11 +106,17 @@ export function extractAssistantStreamSnapshot(
     )
     .map(({ text, separator }, index) => `${index > 0 ? separator : ""}${text}`)
     .join("");
+  let audioDirectiveCount = 0;
   const blockReply = parseReplyDirectives(
     options?.final === false
       ? splitTrailingDirective(visibleBlockSource, { preserveTrailingWhitespace: true }).text
       : visibleBlockSource,
-    { preserveTrailingWhitespace: true },
+    {
+      preserveTrailingWhitespace: true,
+      onAudioDirective: () => {
+        audioDirectiveCount += 1;
+      },
+    },
   );
   let text: string | undefined;
   return {
@@ -120,7 +126,9 @@ export function extractAssistantStreamSnapshot(
     rawText,
     state,
     parts,
-    blockText: blockReply.text,
+    // Silent attachment failures are rendered once by the final delivery owner.
+    blockText: blockReply.hasSilentIntent ? "" : blockReply.text,
+    audioDirectiveCount,
     message: observedMessage,
   };
 }

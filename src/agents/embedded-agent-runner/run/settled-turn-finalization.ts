@@ -4,6 +4,7 @@ import {
   setReplyPayloadMetadata,
   type ReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
+import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import {
   SessionTranscriptWriterClaimReboundError,
@@ -491,7 +492,7 @@ function buildSettledTurnFinalizationAttemptResult(input: {
   const authoredText = resolveFinalAssistantVisibleText(result.assistant) ?? "";
   const text =
     input.outcome === "empty"
-      ? isSilentReplyPayloadText(authoredText)
+      ? parseReplyDirectives(authoredText).hasSilentIntent
         ? authoredText
         : ""
       : resolveSettledTurnFinalizationText(result);

@@ -30,7 +30,7 @@ import {
 } from "../shared/transcript-only-openclaw-assistant.js";
 import {
   DEFAULT_CHAT_HISTORY_TEXT_MAX_CHARS,
-  extractAssistantTextForSilentCheck,
+  extractAssistantReplyDirectives,
   hasAssistantDisplayableNonTextContent,
   hasAssistantNonTextContent,
   hasTranscriptMediaFacts,
@@ -258,7 +258,7 @@ function isPureStreamErrorFallbackAssistantMessage(message: Record<string, unkno
   if (message.role !== "assistant" || message.stopReason !== "error") {
     return false;
   }
-  const text = extractAssistantTextForSilentCheck(message);
+  const text = extractAssistantReplyDirectives(message)?.text;
   return (
     text !== undefined &&
     text.trim() === STREAM_ERROR_FALLBACK_TEXT &&
@@ -321,8 +321,8 @@ function isDiagnosticOnlyAssistantError(value: unknown): boolean {
         (!hasVisibleAssistantDisplayContent(message) ||
           // Older projections stored the host error copy as assistant text. It
           // is diagnostic-only, but partial answers and media must stay visible.
-          extractAssistantTextForSilentCheck(message)
-            ?.trim()
+          extractAssistantReplyDirectives(message)
+            ?.text.trim()
             .replace(/^⚠️\s*/u, "") === CONTEXT_OVERFLOW_ERROR_MESSAGE)))
   );
 }

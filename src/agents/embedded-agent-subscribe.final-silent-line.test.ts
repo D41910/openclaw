@@ -92,7 +92,7 @@ describe("assistant message final-line silence", () => {
     h.end(text);
     await h.subscription.waitForPendingEvents();
     expect(h.onPartialReply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ text }));
-    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text).join("")).toBe(text);
+    expect(h.onBlockReply.mock.calls.map(([payload]) => payload.text).join(" ")).toBe(text);
     expect(h.assistantEvents()).toHaveLength(1);
   });
 
@@ -217,8 +217,74 @@ describe("assistant message final-line silence", () => {
       expect(h.publishedText()).toEqual([]);
       h.emit({ type: "agent_end", messages: [], willRetry: false });
       await h.subscription.waitForPendingEvents();
-      const delivered = h.onBlockReply.mock.calls.map(([payload]) => payload.text ?? "").join("");
+      const delivered = h.onBlockReply.mock.calls.map(([payload]) => payload.text ?? "").join(" ");
       expect(delivered).toBe(silent ? "" : text);
+    },
+  );
+
+  it.each([
+    { completion: "interrupted", media: "https://example.invalid/result.png" },
+    { completion: "interrupted", media: "media://inbound/" },
+    { completion: "commentary", media: "https://example.invalid/result.png" },
+    { completion: "commentary", media: "media://inbound/" },
+  ] as const)(
+    "keeps native reasoning private when $completion silence precedes MEDIA:$media",
+    async ({ completion, media }) => {
+      const h = setup({ reasoning: "stream" });
+      const thinkingEvents: unknown[] = [];
+      onTestFinished(
+        onAgentEventForRun("final-line-silence", (event) => {
+          if (event.stream === "thinking") {
+            thinkingEvents.push(event.data);
+          }
+        }),
+      );
+      const thinking = { type: "thinking" as const, thinking: "Private model analysis." };
+      h.start();
+      const thought = makeAgentAssistantMessage({ api: "ollama", content: [thinking] });
+      h.emit({
+        type: "message_update",
+        message: thought,
+        assistantMessageEvent: {
+          type: "thinking_delta",
+          contentIndex: 0,
+          delta: thinking.thinking,
+          partial: thought,
+        },
+      });
+      const text = `This group turn does not require an answer.\nNO_REPLY\nMEDIA:${media}`;
+      if (completion === "interrupted") {
+        h.delta(text);
+        h.emit({ type: "agent_end", messages: [], willRetry: false });
+      } else {
+        const message = makeAgentAssistantMessage({
+          api: "ollama",
+          content: [
+            thinking,
+            {
+              type: "text",
+              text,
+              textSignature: JSON.stringify({ v: 1, id: "progress", phase: "commentary" }),
+            },
+          ],
+        });
+        h.emit({
+          type: "message_update",
+          message,
+          assistantMessageEvent: {
+            type: "text_delta",
+            contentIndex: 1,
+            delta: text,
+            partial: message,
+          },
+        });
+        h.emit({ type: "message_end", message });
+      }
+      await h.subscription.waitForPendingEvents();
+      expect(h.onReasoningStream).not.toHaveBeenCalled();
+      expect(thinkingEvents).toEqual([]);
+      expect(h.publishedText().filter(Boolean)).toEqual([]);
+      expect(h.onAgentEvent.mock.calls.filter(([event]) => event.stream === "item")).toEqual([]);
     },
   );
 

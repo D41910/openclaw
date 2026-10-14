@@ -4,7 +4,7 @@ import {
   asOptionalRecord as readRecord,
 } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
-import { isSilentReplyPayloadText } from "../auto-reply/tokens.js";
+import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { isMeaningfulMediaFact, readPersistedMediaFacts } from "../media/media-facts.js";
 import { isRelativeAssistantMediaReference, splitMediaOutput } from "../media/parse-output.js";
 import { normalizeInputProvenance } from "../sessions/input-provenance.js";
@@ -118,14 +118,14 @@ export function truncateChatHistoryText(
   };
 }
 
-export function extractAssistantTextForSilentCheck(message: unknown): string | undefined {
+export function extractAssistantReplyDirectives(message: unknown) {
   const entry = readObjectRecord(message);
   if (entry?.role !== "assistant") {
     return undefined;
   }
   const content = typeof entry.text === "string" ? entry.text : entry.content;
   if (typeof content === "string") {
-    return splitMediaOutput(content, { extractAudioDirectives: false }).text;
+    return parseReplyDirectives(content);
   }
   if (!Array.isArray(content) || content.length === 0) {
     return undefined;
@@ -145,9 +145,7 @@ export function extractAssistantTextForSilentCheck(message: unknown): string | u
     }
     texts.push(typed.text);
   }
-  return texts.length > 0
-    ? splitMediaOutput(texts.join("\n"), { extractAudioDirectives: false }).text
-    : undefined;
+  return texts.length > 0 ? parseReplyDirectives(texts.join("\n")) : undefined;
 }
 
 /** Applies one message's silent completion before display splits or caps its text. */
@@ -156,8 +154,8 @@ export function suppressSilentAssistantMessageText(message: unknown): unknown {
   if (!entry || isProjectedForwardedMessage(entry)) {
     return message;
   }
-  const text = extractAssistantTextForSilentCheck(message);
-  if (text === undefined || !isSilentReplyPayloadText(text)) {
+  const parsed = extractAssistantReplyDirectives(message);
+  if (!parsed?.hasSilentIntent) {
     return message;
   }
   const projected = { ...entry };

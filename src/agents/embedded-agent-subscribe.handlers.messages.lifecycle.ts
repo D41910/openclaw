@@ -1,11 +1,7 @@
 import { isPromiseLike } from "@openclaw/normalization-core/promise-like";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
-import {
-  isSilentReplyPayloadText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-} from "../auto-reply/tokens.js";
+import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { applyAssistantDeliveryDirectives } from "../config/sessions/transcript-assistant-delivery.js";
 import { resolveAssistantMessagePhase } from "../shared/chat-message-content.js";
 import {
@@ -129,7 +125,7 @@ export function handleMessageEnd(
       : "";
     emitPersistentReasoning(ctx, suppressedTrimmedReasoning);
     ctx.settleAssistantMessageDelivery({
-      silent: isSilentReplyPayloadText(extractEmbeddedAssistantText(assistantMessage)),
+      silent: parseReplyDirectives(extractEmbeddedAssistantText(assistantMessage)).hasSilentIntent,
     });
     return;
   }
@@ -165,10 +161,10 @@ export function handleMessageEnd(
       ? extractAssistantThinking(assistantMessage) || extractThinkingFromTaggedText(getRawText())
       : "";
   const trimmedText = text.trim();
+  const pendingAudioAsVoice = ctx.state.pendingAssistantReplyDirectives?.audioAsVoice === true;
+  const previousAudioDirectiveCount = ctx.state.lastAssistantAudioDirectiveCount;
   ctx.resetPartialReplyDirectives();
   const parsedText = parseReplyDirectives(text);
-  // Final media is emitted after the buffered text drains, never on its first chunk.
-  recordPendingAssistantReplyDirectives(ctx.state, parsedText);
   const cleanedText = parsedText.text;
   const { mediaUrls } = resolveSendableOutboundReplyParts(parsedText, { text: "" });
   const managedMediaUrls = resolveManagedStreamMediaUrls(ctx.state, mediaUrls);
@@ -214,11 +210,24 @@ export function handleMessageEnd(
     observedText: ctx.state.streamBlockText,
     final: ctx.state.streamBlockFinal,
   });
+  const hadPreparedBlockReply = ctx.state.lastBlockReplyText != null;
   reconcileBlockReplySnapshot(
     ctx,
     previousBlock,
     text === rawVisibleText ? sourceSnapshot : { ...snapshot, blockText: cleanedText },
   );
+  const addedAudioDirectives =
+    sourceSnapshot.audioDirectiveCount - previousBlock.audioDirectiveCount;
+  const hasCurrentAudioDirective = previousAudioDirectiveCount + addedAudioDirectives > 0;
+  const rebuiltPreparedReply = hadPreparedBlockReply && ctx.state.lastBlockReplyText == null;
+  // Final media remains aggregate; consumed voice tags must not retag a pending text tail.
+  recordPendingAssistantReplyDirectives(ctx.state, {
+    ...parsedText,
+    audioAsVoice:
+      parsedText.audioAsVoice &&
+      (addedAudioDirectives > 0 ||
+        (hasCurrentAudioDirective && (pendingAudioAsVoice || rebuiltPreparedReply))),
+  });
   const lastSourceIndex = sourceSnapshot.parts.at(-1)?.index;
   if (lastIndex >= 0 && lastSourceIndex !== undefined && lastSourceIndex > lastIndex) {
     ctx.state.lastAssistantStreamContentIndex = lastSourceIndex;

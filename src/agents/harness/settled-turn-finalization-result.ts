@@ -1,4 +1,5 @@
-import { isSilentReplyPayloadText } from "../../auto-reply/tokens.js";
+import { parseReplyDirectives } from "../../auto-reply/reply/reply-directives.js";
+import { hasReplyPayloadContent } from "../../interactive/payload.js";
 import { normalizeAgentRunAttemptTerminal } from "../agent-run-terminal-outcome.js";
 import { resolveFinalAssistantVisibleText } from "../embedded-agent-runner/run/helpers.js";
 import { EmptySettledTurnFinalizationError } from "./settled-turn-finalization-outcome.js";
@@ -62,7 +63,7 @@ export function resolveSettledTurnFinalizationText(
   result: AgentHarnessSettledTurnFinalizationResult,
 ): string {
   const text = resolveFinalAssistantVisibleText(result.assistant);
-  if (!text || isSilentReplyPayloadText(text)) {
+  if (!text || !hasReplyPayloadContent(parseReplyDirectives(text))) {
     throw new EmptySettledTurnFinalizationError(result);
   }
   return text;

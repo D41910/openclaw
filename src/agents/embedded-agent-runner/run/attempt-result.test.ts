@@ -12,7 +12,6 @@ import { selectHeartbeatToolResponse } from "../../../auto-reply/heartbeat-tool-
 import { getReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
 import { HEARTBEAT_TOKEN } from "../../../auto-reply/tokens.js";
 import { runAgentLoop } from "../../../plugin-sdk/agent-core.js";
-import { createHookRunner } from "../../../plugins/hooks.js";
 import type { Deferred } from "../../../shared/deferred.js";
 import { createSubscribedSessionHarness } from "../../embedded-agent-subscribe.e2e-harness.js";
 import type { AgentMessage } from "../../runtime/index.js";
@@ -20,158 +19,14 @@ import { makeAssistantMessageFixture } from "../../test-helpers/assistant-messag
 import { getCoreTtsAttemptResultMediaUrls } from "../../tools/tts-tool-result-provenance.js";
 import { recordEmbeddedToolReceipt } from "../tool-send-receipts.js";
 import { completeEmbeddedAttemptResult, createAttemptCarryover } from "./attempt-result.js";
+import {
+  createResultFixture,
+  TEST_OPERATIONAL_RUN_INSTANCE,
+} from "./attempt-result.test-helpers.js";
 import { resolveSettledToolTerminalContinuationInstruction } from "./incomplete-turn-recovery.js";
 import { buildPayloads } from "./payloads.test-helpers.js";
 import { normalizeEmbeddedRunAttemptResult } from "./run-attempt-result.js";
 import type { EmbeddedRunAttemptResult, EmbeddedRunAttemptTrajectoryRecorder } from "./types.js";
-
-const TEST_OPERATIONAL_RUN_INSTANCE = { runId: "run-1" };
-
-function createResultFixture(params?: {
-  terminal?: EmbeddedRunAttemptResult["terminal"];
-  currentAttemptCompletedAssistant?: EmbeddedRunAttemptResult["currentAttemptCompletedAssistant"];
-  hasSuccessfulModelResponse?: boolean;
-  heartbeatToolResponse?: EmbeddedRunAttemptResult["heartbeatToolResponse"];
-  replyOptional?: boolean;
-  trajectoryRecorder?: EmbeddedRunAttemptTrajectoryRecorder;
-  messagesSnapshot?: EmbeddedRunAttemptResult["messagesSnapshot"];
-  successfulNestedToolNames?: string[];
-  latestMcpAppChannelView?: { viewId: string };
-  clientToolCallSlots?: Array<{
-    toolCallId: string;
-    name: string;
-    params?: Record<string, unknown>;
-    completed: boolean;
-  }>;
-  pendingToolMediaReply?: { mediaUrls?: string[]; audioAsVoice?: boolean };
-  toolAutoDeliveryMediaUrls?: string[];
-  messagingToolSentMediaUrls?: string[];
-  didSendViaMessagingTool?: boolean;
-  yieldDetected?: boolean;
-  yieldAcknowledgment?: string;
-  yieldMessageWaitRegistered?: boolean;
-  assistantTexts?: readonly string[];
-  toolMetas?: Array<{
-    toolName: string;
-    toolCallId?: string;
-    meta?: string;
-    replaySafe?: boolean;
-    isError?: boolean;
-    terminate?: boolean;
-    asyncStarted?: boolean;
-    asyncTaskRunId?: string;
-    asyncTaskId?: string;
-  }>;
-}) {
-  const state: Parameters<typeof completeEmbeddedAttemptResult>[0]["state"] = {
-    beforeAgentRunBlockedBy: undefined,
-    terminal: params?.terminal ?? { kind: "ok" },
-    trajectoryEndRecorded: false,
-  };
-  const settled: Parameters<typeof completeEmbeddedAttemptResult>[1] = {
-    promptError: null,
-    promptErrorSource: null,
-    timedOutDuringCompaction: false,
-    compactionOccurredThisAttempt: false,
-    sessionIdUsed: "session-1",
-    messagesSnapshot: params?.messagesSnapshot ?? [],
-    lastAssistant: undefined,
-    currentAttemptAssistant: undefined,
-    currentAttemptCompletedAssistant: params?.currentAttemptCompletedAssistant,
-    successfulNestedToolNames: params?.successfulNestedToolNames ?? [],
-    attemptUsage: undefined,
-    lastCallUsage: undefined,
-    promptCache: undefined,
-  };
-  const prompt: Parameters<typeof completeEmbeddedAttemptResult>[2] = {
-    preflightRecovery: undefined,
-    contextBudgetStatus: undefined,
-    yieldAborted: false,
-    sessionIdUsed: settled.sessionIdUsed,
-    sessionFileUsed: undefined,
-    messagesSnapshot: settled.messagesSnapshot,
-  };
-  const subscription = {
-    assistantTexts: [...(params?.assistantTexts ?? [])],
-    didSendDeterministicApprovalPrompt: () => false,
-    didSendViaMessagingTool: () => params?.didSendViaMessagingTool ?? false,
-    getAcceptedSessionSpawns: () => [],
-    getAssistantTurnCount: () => 0,
-    getCompactionCount: () => 0,
-    getHeartbeatToolResponse: () => params?.heartbeatToolResponse,
-    getItemLifecycle: (): EmbeddedRunAttemptResult["itemLifecycle"] => ({
-      startedCount: 0,
-      completedCount: 0,
-      activeCount: 0,
-    }),
-    getLastAssistantTextMessageIndex: () => undefined,
-    getKeptAnswer: () => undefined,
-    getLastCompactionTokensAfter: () => undefined,
-    getLastToolError: () => undefined,
-    getLatestMcpAppChannelView: () => params?.latestMcpAppChannelView,
-    getLatestMcpConnectAction: () => undefined,
-    getMessagingToolSentMediaUrls: () => params?.messagingToolSentMediaUrls ?? [],
-    getMessagingToolSentTargets: () => [],
-    getMessagingToolSentTexts: () => [],
-    getMessagingToolSourceReplyPayloads: () => [],
-    getSourceReplyDelivered: () => undefined,
-    getSourceReplyDeliveryState: () => undefined,
-    endsWithSourceProgress: () => false,
-    getPendingToolMediaReply: () => params?.pendingToolMediaReply,
-    getToolAutoDeliveryMediaUrls: () => params?.toolAutoDeliveryMediaUrls ?? [],
-    getReplayState: () => ({ replayInvalid: false, hadPotentialSideEffects: false }),
-    getSuccessfulCronAdds: () => 0,
-    getVisibleBlockReplyCount: () => 0,
-    hasToolMediaBlockReply: () => false,
-    hasSuccessfulModelResponse: () => params?.hasSuccessfulModelResponse ?? false,
-    setTerminalLifecycleMeta: () => {},
-    toolMetas: params?.toolMetas ?? [],
-  };
-  const hookRunner = createHookRunner({ hooks: [], typedHooks: [], plugins: [] });
-  const input = {
-    attempt: {
-      runId: "run-1",
-      admittedRunContext: { operationalRunInstance: TEST_OPERATIONAL_RUN_INSTANCE },
-      sessionId: "session-1",
-      provider: "test",
-      modelId: "model",
-      model: { api: "openai-responses" },
-      trigger: "user",
-      allowEmptyAssistantReplyAsSilent: params?.replyOptional,
-      terminalReplyExpectation: params?.replyOptional ? "optional" : undefined,
-    },
-    state,
-    diagnostics: { diagnosticTrace: { traceId: "trace-1", spanId: "span-1" } },
-    setup: { sessionAgentId: "main" },
-    lifecycle: {
-      readYieldState: () => ({
-        yieldDetected: params?.yieldDetected ?? false,
-        yieldAcknowledgment: params?.yieldAcknowledgment,
-        yieldMessageWaitRegistered: params?.yieldMessageWaitRegistered,
-      }),
-    },
-    prepared: {
-      bootstrap: { bootstrapPromptWarning: {} },
-      systemPrompt: { systemPromptReport: undefined },
-      sessionRuntime: {
-        agentSession: {
-          clientToolCallSlots: params?.clientToolCallSlots ?? [],
-          hasDeliveredSourceReply: () => false,
-          hookRunner,
-        },
-        state: { promptCache: undefined },
-        cacheTrace: null,
-        trajectoryRecorder: params?.trajectoryRecorder,
-        transport: { streamStrategy: "default" },
-      },
-    },
-    preparedStreamRuntime: {
-      stream: { subscription },
-      cache: {},
-    },
-  };
-  return { input, state, settled, prompt, hookRunner };
-}
 
 function completeResult(params?: Parameters<typeof createResultFixture>[0]) {
   const { input, settled, prompt } = createResultFixture(params);
@@ -728,7 +583,7 @@ describe("trailing source progress at runtime settlement", () => {
     maxTokens: 8_000,
   };
   // Native-async calls run while the provider streams; each settles before the next fragment.
-  type ModelCall = { tools?: Array<"progress" | "read">; async?: true };
+  type ModelCall = { tools?: Array<"progress" | "read">; async?: true; text?: string };
 
   async function settleRealLoop(calls: ModelCall[]) {
     const sessionManager = {};
@@ -824,7 +679,7 @@ describe("trailing source progress at runtime settlement", () => {
           api: testModel.api,
           provider: testModel.provider,
           model: testModel.id,
-          content: [...toolCalls, { type: "text", text: "" }],
+          content: [...toolCalls, { type: "text", text: call.text ?? "" }],
           stopReason: toolCalls.length > 0 && !call.async ? "toolUse" : "stop",
           errorMessage: undefined,
         });
@@ -877,6 +732,22 @@ describe("trailing source progress at runtime settlement", () => {
 
   it.each<[string, ModelCall[], boolean]>([
     ["last tool batch", [{ tools: ["progress"] }, {}], true],
+    [
+      "silent reply directive",
+      [
+        { tools: ["progress"] },
+        { text: "The update already reached the user.\nNO_REPLY\n[[reply_to_current]]" },
+      ],
+      true,
+    ],
+    [
+      "silent audio directive without speech",
+      [
+        { tools: ["progress"] },
+        { text: "The update already reached the user.\nNO_REPLY\n[[audio_as_voice]]" },
+      ],
+      true,
+    ],
     ["later work", [{ tools: ["progress"], async: true }, { tools: ["read"] }, {}], false],
     ["shared provider response", [{ tools: ["read", "progress"], async: true }, {}], false],
   ])("settles source progress with %s", async (_name, calls, delivered) => {

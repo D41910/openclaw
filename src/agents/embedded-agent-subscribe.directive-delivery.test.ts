@@ -519,6 +519,7 @@ it.each([
   {
     name: "literal reclassification and restored authoritative text",
     expectedReplies: ["First reply."],
+    terminal: [],
     updates: [
       { type: "text_delta", text: first, item: 0 },
       { type: "text_end", text: "```text\n" + corrected + "```\n\n", item: 0 },
@@ -528,6 +529,7 @@ it.each([
   {
     name: "a new item owns its own genuine voice intent",
     expectedReplies: ["First reply.", "Second reply."],
+    terminal: [],
     updates: [
       { type: "text_delta", text: first, item: 0 },
       {
@@ -537,7 +539,25 @@ it.each([
       },
     ],
   },
-] as const)("preserves $name", async ({ updates, expectedReplies }) => {
+  {
+    name: "genuine voice intent first seen in the final message",
+    expectedReplies: ["Final reply."],
+    updates: [],
+    terminal: [[0, "[[audio_as_voice]]Final reply."]],
+  },
+  {
+    name: "genuine voice intent in an unseen final item",
+    expectedReplies: ["First reply.", "Second reply."],
+    updates: [{ type: "text_end", text: "[[audio_as_voice]]First reply.", item: 0 }],
+    terminal: [[1, "[[audio_as_voice]]Second reply."]],
+  },
+  {
+    name: "voice intent when final source correction replaces a prepared reply",
+    expectedReplies: ["Corrected reply."],
+    updates: [{ type: "text_delta", text: first, item: 0 }],
+    terminal: [[0, "[[audio_as_voice]]Corrected reply."]],
+  },
+] as const)("preserves $name", async ({ updates, expectedReplies, terminal }) => {
   const { delivered, blocks, handler, emit, flush, subscription } = createDeliveryHarness();
   await handler({ mediaUrls: [audioUrl] });
   const terminalParts = new Map<number, string>();
@@ -548,6 +568,9 @@ it.each([
     await subscription.waitForPendingEvents();
     expect(blocks).toEqual([]);
   }
+  for (const [item, text] of terminal) {
+    terminalParts.set(item, text);
+  }
   emit({
     type: "message_end",
     message: {
@@ -556,7 +579,11 @@ it.each([
     },
   });
   await flush();
-  expect(blocks.filter((payload) => payload.audioAsVoice)).toHaveLength(expectedReplies.length);
+  expect(
+    delivered
+      .filter((payload) => payload.audioAsVoice && payload.text?.trim())
+      .map((payload) => payload.text),
+  ).toEqual(expectedReplies);
   for (const text of expectedReplies) {
     expect(delivered.filter((payload) => payload.text === text)).toHaveLength(1);
   }

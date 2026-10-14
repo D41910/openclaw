@@ -493,12 +493,16 @@ export function createStreamRendering({
       hasSilentIntent: false,
     };
     if (options?.finalReply) {
-      let pendingText = splitResult.text;
-      if (trimTextPreservingCode(pendingText) === options.finalReply.text) {
-        pendingText = options.finalReply.text;
-        chunk = pendingText;
+      if (trimTextPreservingCode(chunk) === options.finalReply.text) {
+        chunk = options.finalReply.text;
       }
-      splitResult = { ...splitResult, ...options.finalReply, text: pendingText };
+      splitResult = {
+        ...options.finalReply,
+        audioAsVoice: chunk
+          ? hasPendingAudioDirective || undefined
+          : options.finalReply.audioAsVoice,
+        text: chunk,
+      };
     }
     const {
       text: cleanedText,
