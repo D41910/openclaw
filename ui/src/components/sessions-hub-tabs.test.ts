@@ -28,7 +28,7 @@ async function mount(
     updates.set(container, setCurrent);
     mountSolid(
       () =>
-        createComponent(HubTabs, {
+        createComponent(HubTabs<"sessions" | "worktrees">, {
           get active() {
             return current().active;
           },
