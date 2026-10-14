@@ -31,9 +31,9 @@ it("mounts one pane for the legacy chat route and retains it through revalidatio
   stubMatchMedia(false);
   const { context } = createChatPageNavigationContext();
   const sessionKey = "agent:main:main";
-  const router = createRouter<RouteId, ApplicationContext, typeof chatRoute, unknown>({
+  const router = createRouter<RouteId, ApplicationContext, typeof chatRoute>({
     routes: [
-      definePage({
+      definePage<RouteId, ApplicationContext, typeof chatRoute>({
         id: "chat",
         path: "/chat",
         loader: () => ({

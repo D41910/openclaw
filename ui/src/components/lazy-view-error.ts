@@ -3,11 +3,7 @@ import { t } from "../i18n/index.ts";
 import { solidContent } from "../lit/solid-content.tsx";
 import { icon } from "./icons.ts";
 import { renderLoadingState } from "./loading-state.ts";
-import { AgentStartupState, LazyViewError } from "./solid/lazy-view-error.tsx";
-
-export function renderAgentStartupState() {
-  return html`${solidContent(AgentStartupState, {})}`;
-}
+import { LazyViewError } from "./solid/lazy-view-error.tsx";
 
 type LazyElementState =
   | { status: "loading"; element: { label: string } }

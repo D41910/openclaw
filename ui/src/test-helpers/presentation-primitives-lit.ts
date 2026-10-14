@@ -5,7 +5,7 @@ import { brandIconData } from "../components/icon-data-brand.ts";
 import { renderIconRegistry } from "../components/icons-tools.ts";
 import { icons } from "../components/icons.ts";
 import { renderKbd } from "../components/kbd.ts";
-import { renderAgentStartupState, renderLazyViewError } from "../components/lazy-view-error.ts";
+import { renderLazyViewError } from "../components/lazy-view-error.ts";
 import { renderLoadingState } from "../components/loading-state.ts";
 import {
   renderPanelLoadingSkeleton,
@@ -19,6 +19,7 @@ import {
 import * as settings from "../components/settings-ui.ts";
 import { Icon } from "../components/solid/icon.tsx";
 import { KeyboardShortcut } from "../components/solid/kbd.tsx";
+import { AgentStartupState } from "../components/solid/lazy-view-error.tsx";
 import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
 import { PanelIconButton } from "../components/solid/panel-icon-button.tsx";
 import { PanelRefreshStatus } from "../components/solid/panel-refresh-status.tsx";
@@ -354,7 +355,7 @@ function draw() {
                     solidContent(ConnectingSplash, { status: "Connecting to Gateway" }),
                     "loading",
                   ),
-                  card("Starting agent", renderAgentStartupState()),
+                  card("Starting agent", solidContent(AgentStartupState, {})),
                 ]
               : skeletons();
   render(
