@@ -401,7 +401,11 @@ export function createCliEventHandlers(params: {
     // Keep activity live without exposing text a final silent line can retract.
     emitLiveEvent("assistant", () => ({ itemId: cliAssistantItemId(runParams.runId) }));
   };
-  const emitCliCompletedReply = (rawText: string, assistantMessageIndex?: number) => {
+  const emitCliCompletedReply = (
+    rawText: string,
+    assistantMessageIndex?: number,
+    messageText?: string,
+  ) => {
     if (rawText) {
       observedCliActivity = true;
     }
@@ -409,14 +413,25 @@ export function createCliEventHandlers(params: {
       rawText,
       context.backendResolved.textTransforms?.output,
     );
+    const authoredText = messageText ?? rawText;
     const silent =
-      parseReplyDirectives(rawText).hasSilentIntent ||
-      parseReplyDirectives(completedText).hasSilentIntent;
+      parseReplyDirectives(authoredText).hasSilentIntent ||
+      parseReplyDirectives(
+        messageText === undefined
+          ? completedText
+          : applyPluginTextReplacements(
+              authoredText,
+              context.backendResolved.textTransforms?.output,
+            ),
+      ).hasSilentIntent;
     // Custom CLI thinking is cumulative; native snapshots can restart per message.
     const thinkingText = pendingThinkingText.startsWith(settledThinkingText)
       ? pendingThinkingText.slice(settledThinkingText.length)
       : pendingThinkingText;
-    settledThinkingText = pendingThinkingText;
+    settledThinkingText = messageText === undefined ? pendingThinkingText : "";
+    if (messageText !== undefined) {
+      pendingThinkingText = "";
+    }
     if (!silent) {
       if (thinkingText) {
         publishedThinkingText += thinkingText;

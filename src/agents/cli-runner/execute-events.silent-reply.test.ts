@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { getReplyPayloadMetadata } from "../../auto-reply/reply-payload.js";
 import { onAgentEventForRun, type AgentEventRuntimePayload } from "../../infra/agent-events.js";
+import { createCliJsonlStreamingParser } from "../cli-output-stream.js";
+import { claudeStreamEvent, claudeTextDelta, joinJsonlFrames } from "../cli-output.test-helpers.js";
+import { buildCliRunResult } from "./cli-run-settlement.js";
 import { createCliEventHandlers } from "./execute-events.js";
 import { buildContext, buildToolTracking } from "./execute-events.tool-result-args.test-support.js";
 
@@ -122,4 +126,131 @@ describe("CLI completed reply publication", () => {
       unsubscribe();
     }
   });
+});
+
+describe("native CLI message completion", () => {
+  it.each([
+    { thinking: "native", silentFirst: false },
+    { thinking: "tagged", silentFirst: false },
+    { thinking: "native", silentFirst: true },
+    { thinking: "tagged", silentFirst: true },
+  ])(
+    "settles $thinking reasoning at message_stop (silent first=$silentFirst)",
+    ({ thinking, silentFirst }) => {
+      const context = buildContext(`native-cli-${thinking}-${silentFirst}`);
+      const handlers = createCliEventHandlers({
+        context,
+        toolTracking: buildToolTracking(),
+        getRunState: () => ({ failed: false, error: undefined }),
+      });
+      const parser = createCliJsonlStreamingParser({
+        backend: { ...context.backendResolved.config, jsonlDialect: "claude-stream-json" },
+        providerId: "claude-cli",
+        onAssistantDelta: handlers.emitCliAssistantDelta,
+        onCompletedReply: handlers.emitCliCompletedReply,
+        onThinkingDelta: handlers.emitCliThinkingDelta,
+        onCommentaryText: handlers.emitCliCommentaryText,
+      });
+      const events: AgentEventRuntimePayload[] = [];
+      const unsubscribe = onAgentEventForRun(context.params.runId, (event) => events.push(event));
+      const delivered = () =>
+        textEvents(events).map(({ stream, data }) => ({
+          stream,
+          text: data.text ?? data.progressText ?? data.completedText,
+        }));
+      const pushMessage = (id: string, text: string, thought: string, tool: boolean) => {
+        const sourceText = thinking === "tagged" ? `<think>${thought}</think>${text}` : text;
+        const content = [
+          ...(thinking === "native" ? [{ type: "thinking", thinking: thought }] : []),
+          { type: "text", text: sourceText },
+          ...(tool ? [{ type: "tool_use", id: "read-1", name: "Read", input: {} }] : []),
+        ];
+        parser.push(
+          joinJsonlFrames(
+            claudeStreamEvent({ type: "message_start", message: { id } }),
+            ...(thinking === "native"
+              ? [
+                  claudeStreamEvent({
+                    type: "content_block_delta",
+                    index: 0,
+                    delta: { type: "thinking_delta", thinking: thought },
+                  }),
+                ]
+              : []),
+            claudeTextDelta(sourceText, 1),
+            ...(tool
+              ? [
+                  claudeStreamEvent({
+                    type: "content_block_start",
+                    index: 2,
+                    content_block: { type: "tool_use", id: "read-1", name: "Read", input: {} },
+                  }),
+                ]
+              : []),
+            { type: "assistant", message: { id, stop_reason: null, content } },
+            claudeStreamEvent({ type: "message_stop" }),
+            claudeStreamEvent({ type: "message_stop" }),
+            "",
+          ),
+        );
+      };
+      try {
+        const firstText = silentFirst ? "No update needed.\nNO_REPLY" : "Checking the workspace.";
+        pushMessage("first", firstText, "First thought.", true);
+        const firstOutput = silentFirst
+          ? []
+          : [
+              { stream: "thinking", text: "First thought." },
+              { stream: "item", text: "Checking the workspace." },
+            ];
+        expect(delivered()).toEqual(firstOutput);
+        const finalText = silentFirst ? "The check is complete." : "No answer needed.\nNO_REPLY";
+        pushMessage("final", finalText, "First thought. Next thought.", false);
+        const expected = silentFirst
+          ? [
+              { stream: "thinking", text: "First thought. Next thought." },
+              { stream: "assistant", text: "The check is complete." },
+            ]
+          : firstOutput;
+        expect(delivered()).toEqual(expected);
+        for (const interim of [true, true, false]) {
+          parser.push(
+            joinJsonlFrames(
+              {
+                type: "result",
+                subtype: "success",
+                result: finalText,
+                ...(interim ? { openclaw_interim_result: true } : {}),
+              },
+              "",
+            ),
+          );
+        }
+        parser.finish();
+        expect(delivered()).toEqual(expected);
+        const output = parser.getOutput();
+        if (!output) {
+          throw new Error("Expected the completed native CLI output");
+        }
+        expect(output).toMatchObject({ text: finalText, textParts: [finalText] });
+        if (silentFirst) {
+          const result = buildCliRunResult({
+            context,
+            output,
+            assistantText: finalText,
+            usedHistoryPrompt: false,
+            userTurnHandled: true,
+            sessionBindingDisabled: true,
+            preparedContextAgentMeta: {},
+          });
+          expect(textEvents(events).at(-1)?.data.assistantMessageIndex).toBe(0);
+          expect(getReplyPayloadMetadata(result.payloads?.[0] ?? {})?.assistantMessageIndex).toBe(
+            0,
+          );
+        }
+      } finally {
+        unsubscribe();
+      }
+    },
+  );
 });

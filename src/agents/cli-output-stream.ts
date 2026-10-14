@@ -5,11 +5,7 @@ import type {
   CliBackendParseJsonlEvent,
   CliBackendParsedJsonlEvent,
 } from "../plugins/cli-backend.types.js";
-import type {
-  CliJsonlStreamingParserOptions,
-  CliOutput,
-  CliUsage,
-} from "./cli-output-contracts.js";
+import type { CliJsonlStreamingParserOptions, CliOutput } from "./cli-output-contracts.js";
 import { normalizeClaudeCliStreamJsonRecord } from "./cli-output-echoed-binary.js";
 import type { CliEventProjectionState } from "./cli-output-events.js";
 import {
@@ -61,6 +57,8 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   let pendingClaudeText = "";
   let currentClaudeMessageId: string | undefined;
   let currentClaudeMessageText = "";
+  let currentClaudeReplyStart = 0;
+  let lastNativeReplyText: string | undefined;
   let pendingMessageSeparator = false;
   let currentMessageStart = 0;
   let segmentStart = 0;
@@ -75,8 +73,8 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   let previousMessageHadToolUse = false;
   let sessionId: string | undefined;
   let resumeCheckpointId: string | undefined;
-  let usage: CliUsage | undefined;
-  let diagnosticUsage: CliUsage | undefined;
+  let usage: CliOutput["usage"];
+  let diagnosticUsage: CliOutput["usage"];
   let output: CliOutput | null = null;
   let parseErrorText = "";
   let rawChars = 0;
@@ -186,6 +184,8 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     currentMessageHadToolUse = false;
     currentClaudeMessageId = messageId;
     currentClaudeMessageText = "";
+    currentClaudeReplyStart = assistantText.length;
+    lastNativeReplyText = undefined;
   };
 
   // Diagnostics need the model's final message alone; `text` stays the
@@ -260,10 +260,7 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     if (lifecycle) {
       if ("errorText" in lifecycle) {
         parseErrorText = lifecycle.errorText;
-      } else {
-        if (claudeStreamJson && !accountClaudeJsonlLine(rawLine.length)) {
-          return true;
-        }
+      } else if (!claudeStreamJson || accountClaudeJsonlLine(rawLine.length)) {
         for (const parsed of decodeCliRecords(line)) {
           observeSessionId(parsed);
         }
@@ -487,7 +484,8 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
         parsed.openclaw_interim_result === true &&
         completedText &&
         !output.errorText &&
-        !output.terminalFailure
+        !output.terminalFailure &&
+        completedText !== lastNativeReplyText
       ) {
         params.onCompletedReply?.(completedText, textParts.length - 1);
       }
@@ -530,6 +528,23 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
           flushPendingClaudeText("commentary");
         } else if (evt.type === "content_block_start" || evt.type === "message_stop") {
           flushPendingClaudeText("assistant");
+        }
+      }
+      if (
+        claudeStreamJson &&
+        evt.type === "message_stop" &&
+        !isClaudeSubagentRecord(parsed) &&
+        lastNativeReplyText === undefined
+      ) {
+        lastNativeReplyText = assistantText.slice(currentClaudeReplyStart).trim();
+        const message = partitionLeadingTaggedReasoning(currentClaudeMessageText, true);
+        // Native messages share their result slot so final payload replay keeps the same identity.
+        if (!message.pending) {
+          params.onCompletedReply?.(
+            lastNativeReplyText,
+            output?.textParts?.length ?? (output?.text ? 1 : 0),
+            message.visibleText,
+          );
         }
       }
     }
@@ -727,22 +742,22 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
           errorText: parseErrorText,
         };
       }
-      if (output) {
-        return output;
-      }
-      return resolveCliStreamOutput({
-        params,
-        texts,
-        assistantText,
-        sessionId,
-        usage,
-        resumeCheckpointId,
-        rawLines,
-        sawCustomJsonlEvent,
-        sawGeminiStructuredOutput,
-        claudeStreamJson,
-        finalStreamedMessageText,
-      });
+      return (
+        output ??
+        resolveCliStreamOutput({
+          params,
+          texts,
+          assistantText,
+          sessionId,
+          usage,
+          resumeCheckpointId,
+          rawLines,
+          sawCustomJsonlEvent,
+          sawGeminiStructuredOutput,
+          claudeStreamJson,
+          finalStreamedMessageText,
+        })
+      );
     },
   };
 }
