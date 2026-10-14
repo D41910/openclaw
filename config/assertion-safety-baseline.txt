@@ -1599,7 +1599,7 @@ src/channels/turn/execution.ts	2
 src/channels/turn/history-window.ts	1
 src/channels/turn/lifecycle.ts	2
 src/channels/turn/run-channel-turn.ts	4
-src/claws/cron.ts	10
+src/claws/cron.ts	9
 src/claws/mcp.ts	1
 src/claws/openclaw-profile.ts	1
 src/claws/project-build.ts	4
