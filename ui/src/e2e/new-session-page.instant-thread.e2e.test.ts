@@ -409,6 +409,10 @@ suite.define(() => {
           await (element as HTMLElement & { updateComplete: Promise<unknown> }).updateComplete;
         });
         const composer = page.locator(".new-session-page__message");
+        if (readiness) {
+          // Accepted input retires even while preview readiness is pending.
+          await expect.poll(() => composer.inputValue()).toBe("");
+        }
         await composer.fill(message);
         await expect.poll(() => composer.inputValue()).toBe(message);
         const newerUrl = page.url();
