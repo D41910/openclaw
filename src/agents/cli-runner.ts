@@ -35,8 +35,6 @@ import {
   buildCliRunResult,
   formatCliTerminalInterruption,
   isClaudeCliBackend,
-  prepareCliRunTerminalReply,
-  resolveCliSourceReplyMirror,
   settleCliPreparationError,
   settlePreparedCliRun,
 } from "./cli-runner/cli-run-settlement.js";
@@ -64,14 +62,11 @@ import {
   loadCliSessionContextEngineMessages,
   loadCliSessionHistoryMessages,
 } from "./cli-runner/session-history.js";
+import { prepareCliRunTerminalReply } from "./cli-runner/terminal-reply.js";
 import type { PreparedCliRunContext, RunCliAgentParams } from "./cli-runner/types.js";
 import { claudeCliSessionTranscriptHasContent } from "./command/attempt-execution.helpers.js";
 import type { EmbeddedAgentRunResult } from "./embedded-agent-runner.js";
-import {
-  hasCompletedSourceReplyDeliveryEvidence,
-  resolveExplicitFinalSourceReplyDeliveryEvidence,
-  resolveSourceReplyDelivery,
-} from "./embedded-agent-runner/delivery-evidence.js";
+import { resolveSourceReplyDelivery } from "./embedded-agent-runner/delivery-evidence.js";
 import { coerceToFailoverError, recordModelFallbackStop } from "./failover-error.js";
 import { runBeforeAgentRunGate } from "./harness/before-agent-run.js";
 import { bootstrapHarnessContextEngine } from "./harness/context-engine-lifecycle.js";
@@ -199,8 +194,16 @@ async function runCliAgentInternal(
       throw error;
     }
     // Preparation resolves the execution owner and effective capture config;
-    // publish both before commentary can arrive from the prepared run.
+    // publish both before commentary can arrive from the prepared run. The
+    // captured prompt is published by execution, which composes what the CLI
+    // actually receives (history reseed, input transforms, context, images).
     diagnosticLifecycle?.setExecutionContext(context.params);
+    diagnosticLifecycle?.publishCapturedContent({
+      userPrompt: context.params.prompt,
+    });
+    // Settlement owns post-commit tolerance: an authority loss after the final
+    // reply commits records a warning and stays successful (#170757); authority
+    // checks live at the protected effect boundaries in the run params instead.
     return await runPreparedCliAgent(context, diagnosticLifecycle);
   } finally {
     generation?.release();
@@ -358,21 +361,19 @@ async function runPreparedCliAgentOwned(
     const output = await executePreparedCliRun(
       attemptContext,
       cliSessionIdToUse,
-      diagnosticLifecycle ? { onPhase: diagnosticLifecycle.setPhase } : undefined,
+      diagnosticLifecycle
+        ? {
+            onPhase: diagnosticLifecycle.setPhase,
+            onPromptPrepared: (prompt) =>
+              diagnosticLifecycle.publishCapturedContent({ userPrompt: prompt }),
+          }
+        : undefined,
     );
     params.assertCurrent?.();
     // Test facades and non-instrumented executors may not signal the boundary.
     diagnosticLifecycle?.setPhase("resolve");
-    const sourceReplyMirror = resolveCliSourceReplyMirror({
-      evidence: output,
-      runParams: params,
-      modelId: context.modelId,
-    });
-    const completedFinalSource =
-      sourceReplyMirror.payloads.length > 0 &&
-      resolveExplicitFinalSourceReplyDeliveryEvidence(output) === true &&
-      hasCompletedSourceReplyDeliveryEvidence(output);
     const preparedReply = prepareCliRunTerminalReply(context, output);
+    const { sourceReplyMirror, completedFinalSource } = preparedReply;
     const assistantText = preparedReply.text;
     if (
       !output.terminalInterruption &&
@@ -550,7 +551,7 @@ async function runPreparedCliAgentOwned(
           runParams: params,
           // Dispatch owns source-reply transcript mirrors and their idempotency keys.
           // Persisting them here would duplicate the same visible assistant reply.
-          text: sourceReplyWasDelivered ? "" : (output.rawText ?? output.text),
+          text: sourceReplyWasDelivered ? "" : preparedReply.text,
           modelId: context.modelId,
           usage: output.usage,
           stopReason: resolveCliAssistantStopReason(output),
@@ -645,7 +646,10 @@ async function runPreparedCliAgentOwned(
   };
 
   try {
-    return await executeRun();
+    const result = await executeRun();
+    // Publish captured content before backend and session cleanup can throw.
+    diagnosticLifecycle?.publishResultContent(result);
+    return result;
   } catch (error) {
     throw coerceToFailoverError(error, cliFailoverContext) ?? error;
   }

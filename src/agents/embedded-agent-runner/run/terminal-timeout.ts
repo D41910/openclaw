@@ -1,5 +1,4 @@
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
-import { sanitizeAgentRunTerminalReplyText } from "../../agent-run-terminal-reply.js";
 import { hasMessagingToolDeliveryEvidence } from "../delivery-evidence.js";
 import type { EmbeddedAgentRunResult } from "../types.js";
 import { copyAttemptDeliveryState } from "./attempt-delivery-state.js";
@@ -77,12 +76,12 @@ export function resolveEmbeddedRunTerminalTimeout(input: {
       aborted: terminalAborted,
       systemPromptReport: input.attempt.systemPromptReport,
       finalPromptText: input.attempt.finalPromptText,
-      finalAssistantVisibleText: timeoutText,
-      terminalReply: {
-        disposition: "visible",
-        text: sanitizeAgentRunTerminalReplyText(timeoutText),
-      },
+      finalAssistantVisibleText: input.terminalPrepared.finalAssistantVisibleText,
+      terminalReply: input.terminalPrepared.preparedTerminalReply.terminalReply,
       finalAssistantRawText: input.terminalPrepared.finalAssistantRawText,
+      ...(input.terminalPrepared.finalAssistantMessageRawText !== undefined
+        ? { finalAssistantMessageRawText: input.terminalPrepared.finalAssistantMessageRawText }
+        : {}),
       replayInvalid,
       livenessState,
       ...timeoutAttribution,

@@ -504,14 +504,11 @@ async function runEmbeddedAgentForSession(
                   payloads: buildHandledBeforeAgentReplyPayloads(hookResult.reply),
                   meta: {
                     durationMs: Date.now() - started,
-                    agentMeta: {
-                      sessionId: params.sessionId,
-                      provider,
-                      model: modelId,
-                    },
+                    agentMeta: { sessionId: params.sessionId, provider, model: modelId },
                     terminalReply: text
                       ? { disposition: "visible", text }
                       : { disposition: hookResult.reply ? "empty" : "silent" },
+                    providerStarted: false,
                   },
                 } satisfies EmbeddedAgentRunResult;
               }

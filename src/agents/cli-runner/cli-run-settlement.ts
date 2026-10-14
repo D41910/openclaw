@@ -1,11 +1,7 @@
-import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
+import { setReplyPayloadMetadata } from "../../auto-reply/reply-payload.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import {
-  prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReplyText,
-  type PreparedAgentRunTerminalReply,
-} from "../agent-run-terminal-reply.js";
+import { sanitizeAgentRunTerminalReplyText } from "../agent-run-terminal-reply.js";
 import {
   externalCliDiscoveryForProviderAuth,
   loadAuthProfileStoreForRuntimeAsync,
@@ -28,15 +24,9 @@ import {
   resolveExplicitFinalSourceReplyDeliveryEvidence,
 } from "../embedded-agent-runner/delivery-evidence.js";
 import { resolveAuthProfileFailureReason } from "../embedded-agent-runner/run/auth-profile-failure-policy.js";
-import { buildEmbeddedRunPayloads } from "../embedded-agent-runner/run/payloads.js";
 import { mergeAttemptToolMediaPayloads } from "../embedded-agent-runner/run/tool-media-payloads.js";
 import { isFailoverError } from "../failover-error.js";
-import { applyPluginTextReplacements } from "../plugin-text-transforms.js";
-import {
-  createMissingReplyNotice,
-  resolveReplyExpectation,
-  shouldDeliverMissingReplyNotice,
-} from "../reply-completion.js";
+import { createMissingReplyNotice, shouldDeliverMissingReplyNotice } from "../reply-completion.js";
 import { recordAgentCleanupFailure } from "../run-cleanup-timeout.js";
 import { CliAuthProfilePreparationError } from "./auth-profile-preparation-error.js";
 import { runCliCleanup } from "./cleanup.js";
@@ -44,6 +34,11 @@ import { resolveCliSessionId } from "./cli-run-recovery.js";
 import { projectCliMessagingDeliveryEvidence } from "./delivery-evidence.js";
 import { hashCliReseedPrompt } from "./reseed-envelope.js";
 import type { ClaudeCliRunDiagnosticLifecycle } from "./run-diagnostics.js";
+import {
+  prepareCliRunTerminalReply,
+  resolveCliSourceReplyMirror,
+  type PreparedCliRunTerminalReply,
+} from "./terminal-reply.js";
 import type { PreparedCliRunContext, RunCliAgentParams } from "./types.js";
 
 const log = createSubsystemLogger("agents/cli-runner");
@@ -306,44 +301,6 @@ export async function settlePreparedCliRun(params: {
   return outcome.result;
 }
 
-export function resolveCliSourceReplyMirror(params: {
-  evidence: Pick<
-    CliOutput,
-    | "didSendViaMessagingTool"
-    | "didDeliverSourceReplyViaMessageTool"
-    | "messagingToolSentTargets"
-    | "messagingToolSourceReplyPayloads"
-  >;
-  runParams: RunCliAgentParams;
-  modelId: string;
-}): { payloads: ReplyPayload[]; delivered: boolean; visibleText?: string } {
-  const { evidence, modelId, runParams } = params;
-  const payloads = buildEmbeddedRunPayloads({
-    assistantTexts: [],
-    lastAssistant: undefined,
-    sessionKey: runParams.sessionKey ?? "",
-    provider: runParams.provider,
-    model: modelId,
-    didSendViaMessagingTool: evidence.didSendViaMessagingTool,
-    didDeliverSourceReplyViaMessageTool: evidence.didDeliverSourceReplyViaMessageTool,
-    messagingToolSentTargets: evidence.messagingToolSentTargets,
-    messagingToolSourceReplyPayloads: evidence.messagingToolSourceReplyPayloads,
-    sourceReplyDeliveryMode: runParams.sourceReplyDeliveryMode,
-    agentId: runParams.agentId,
-    runId: runParams.runId,
-  });
-  const delivered =
-    payloads.length > 0 ||
-    (runParams.sourceReplyDeliveryMode === "message_tool_only" &&
-      evidence.didDeliverSourceReplyViaMessageTool === true);
-  const visibleText =
-    payloads
-      .map((payload) => payload.text?.trim() ?? "")
-      .filter(Boolean)
-      .join("\n\n") || undefined;
-  return { payloads, delivered, visibleText };
-}
-
 function buildCliExecutionMetadata(
   context: PreparedCliRunContext,
   attempt: Pick<
@@ -440,18 +397,20 @@ export function buildCliDeliveredFailure(params: {
           shouldDeliverMissingReplyNotice(runParams)
         ? [createMissingReplyNotice()]
         : undefined;
+  const terminalText =
+    resolveExplicitFinalSourceReplyDeliveryEvidence(evidence) === true &&
+    hasCompletedSourceReplyDeliveryEvidence(evidence)
+      ? sanitizeAgentRunTerminalReplyText(
+          payloads.map((payload) => payload.text ?? "").join("\n\n"),
+        )
+      : "";
   return {
     ...(visiblePayloads ? { payloads: visiblePayloads } : {}),
     meta: {
       durationMs: Date.now() - context.started,
       systemPromptReport: context.systemPromptReport,
-      terminalReply: visiblePayloads?.length
-        ? {
-            disposition: "visible",
-            text: sanitizeAgentRunTerminalReplyText(
-              visiblePayloads.map((payload) => payload.text ?? "").join("\n\n"),
-            ),
-          }
+      terminalReply: terminalText
+        ? { disposition: "visible", text: terminalText }
         : { disposition: "empty" },
       stopReason: "error",
       error: { kind: "incomplete_turn", message, fallbackSafe: false },
@@ -481,57 +440,10 @@ export function buildCliDeliveredFailure(params: {
   };
 }
 
-export function prepareCliRunTerminalReply(
-  context: PreparedCliRunContext,
-  output: CliOutput,
-): PreparedAgentRunTerminalReply {
-  const sourceReplyMirror = resolveCliSourceReplyMirror({
-    evidence: output,
-    runParams: context.params,
-    modelId: context.modelId,
-  });
-  const completedFinalSource =
-    sourceReplyMirror.payloads.length > 0 &&
-    resolveExplicitFinalSourceReplyDeliveryEvidence(output) === true &&
-    hasCompletedSourceReplyDeliveryEvidence(output);
-  // A delivery receipt without a mirrored body must not replace authored silence with empty output.
-  if (
-    sourceReplyMirror.visibleText !== undefined &&
-    (resolveReplyExpectation(context.params) !== "result-required" || completedFinalSource)
-  ) {
-    const text = sourceReplyMirror.visibleText;
-    const snapshotText = sanitizeAgentRunTerminalReplyText(text);
-    return {
-      text,
-      terminalReply: snapshotText
-        ? { disposition: "visible", text: snapshotText }
-        : { disposition: "empty" },
-    };
-  }
-  const rawText = output.rawText ?? output.text;
-  const prepared = prepareAgentRunTerminalReply({ rawText });
-  const text =
-    prepared.terminalReply.disposition === "silent"
-      ? ""
-      : prepared.text === rawText
-        ? (output.text ?? "")
-        : applyPluginTextReplacements(
-            prepared.text,
-            context.backendResolved.textTransforms?.output,
-          );
-  return {
-    text,
-    terminalReply:
-      prepared.terminalReply.disposition === "visible"
-        ? { disposition: "visible", text: sanitizeAgentRunTerminalReplyText(text) }
-        : prepared.terminalReply,
-  };
-}
-
 export function buildCliRunResult(params: {
   context: PreparedCliRunContext;
   output: CliOutput;
-  preparedReply?: PreparedAgentRunTerminalReply;
+  preparedReply?: PreparedCliRunTerminalReply;
   effectiveCliSessionId?: string;
   bindingFlushOk?: boolean;
   assistantTranscriptOwned?: boolean;
@@ -555,12 +467,9 @@ export function buildCliRunResult(params: {
   } = params;
   const runParams = context.params;
   const rawText = output.rawText ?? output.text;
-  const sourceReplyMirror = resolveCliSourceReplyMirror({
-    evidence: output,
-    runParams,
-    modelId: context.modelId,
-  });
+  const rawFinalText = output.rawFinalText;
   const preparedReply = params.preparedReply ?? prepareCliRunTerminalReply(context, output);
+  const { sourceReplyMirror } = preparedReply;
   const text = preparedReply.text;
   const finalAssistantVisibleText = text;
   const payloads =
@@ -678,6 +587,11 @@ export function buildCliRunResult(params: {
       ...(finalAssistantVisibleText ? { finalAssistantVisibleText } : {}),
       ...(rawText ? { finalAssistantRawText: rawText } : {}),
       terminalReply: preparedReply.terminalReply,
+      // An empty final message is recorded as "" so capture never falls back to
+      // the cumulative raw text.
+      ...(rawFinalText !== undefined && rawFinalText !== rawText
+        ? { finalAssistantMessageRawText: rawFinalText }
+        : {}),
       systemPromptReport: context.systemPromptReport,
       ...(terminalInterruption
         ? {

@@ -1,4 +1,5 @@
 import { hasCompletionMessageSessionSpawn } from "../../agents/accepted-session-spawn.js";
+import { resolveDiagnosticModelResponse } from "../../agents/diagnostic-model-response.js";
 import {
   hasCommittedSourceReplyDeliveryEvidence,
   hasCompletedSourceReplyDeliveryEvidence,
@@ -192,12 +193,11 @@ export async function prepareReplyAgentPayloads(state: {
     : undefined;
   // Heartbeat acknowledgments are a host-owned non-outcome, not missing answers.
   // Require authored text: stripHeartbeatToken also skips genuinely empty input.
-  const heartbeatAcknowledgment = Boolean(
+  const heartbeatAcknowledgment =
     successfulTerminal &&
     !pendingContinuation &&
-    heartbeatText?.trim() &&
-    stripHeartbeatToken(heartbeatText, { mode: "heartbeat" }).shouldSkip,
-  );
+    Boolean(heartbeatText?.trim()) &&
+    stripHeartbeatToken(heartbeatText, { mode: "heartbeat" }).shouldSkip;
 
   const successfulSourceReplyDelivery = hasSuccessfulSourceReplyDelivery({
     blockReplyPipeline,
@@ -421,17 +421,16 @@ export async function prepareReplyAgentPayloads(state: {
     }
   }
   const recordMissingReply = () => {
-    if (completion.outcome !== "missing" || replyOperation.result) {
-      return;
+    if (completion.outcome === "missing" && !replyOperation.result) {
+      replyOperation.retainFailureUntilComplete();
+      replyOperation.fail("run_failed", new Error(MISSING_REPLY_NOTICE_TEXT));
+      recordReplyOperationAgentTurn(followupRun.replyOperationRunStates, replyOperation, {
+        kind: "settled",
+        status: "failed",
+        result: runResult,
+      });
+      opts?.onAgentRunTerminalOutcome?.("failed");
     }
-    replyOperation.retainFailureUntilComplete();
-    replyOperation.fail("run_failed", new Error(MISSING_REPLY_NOTICE_TEXT));
-    recordReplyOperationAgentTurn(followupRun.replyOperationRunStates, replyOperation, {
-      kind: "settled",
-      status: "failed",
-      result: runResult,
-    });
-    opts?.onAgentRunTerminalOutcome?.("failed");
   };
   const finishEmptyReply = async () => {
     recordMissingReply();
@@ -570,10 +569,16 @@ export async function prepareReplyAgentPayloads(state: {
     });
   }
 
-  const sourcePayloads =
-    authoredSilence || heartbeatAcknowledgment
-      ? retainSilentFinalPayloads(payloadArray)
-      : payloadArray;
+  // Dispatch installs onRawLlmResponse only when output capture is enabled.
+  if (opts?.onRawLlmResponse) {
+    const finalDiagnosticResponse = resolveDiagnosticModelResponse(runResult);
+    if (finalDiagnosticResponse !== undefined) {
+      opts.onRawLlmResponse(finalDiagnosticResponse);
+    }
+  }
+
+  const quietFinal = authoredSilence || heartbeatAcknowledgment;
+  const sourcePayloads = quietFinal ? retainSilentFinalPayloads(payloadArray) : payloadArray;
   if (
     ((explicitSilence || heartbeatAcknowledgment) && sourcePayloads.length === 0) ||
     (completion.outcome !== "delivered" &&
@@ -587,11 +592,9 @@ export async function prepareReplyAgentPayloads(state: {
   }
 
   const payloadCandidates = (
-    authoredSilence || heartbeatAcknowledgment
-      ? sourcePayloads
-      : fallbackNoticePayloads.length > 0
-        ? [...fallbackNoticePayloads, ...payloadArray]
-        : payloadArray
+    !quietFinal && fallbackNoticePayloads.length > 0
+      ? [...fallbackNoticePayloads, ...sourcePayloads]
+      : sourcePayloads
   ).filter(isPayloadLaneEnabled);
   let replyPayloads = await buildFinalPayloads(payloadCandidates);
   if (sourceReplyDelivery !== "delivered" && completion.outcome === "delivered") {

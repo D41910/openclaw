@@ -252,6 +252,7 @@ export async function prepareTerminalWithSettledTurnFinalization(input: {
     );
     return preserveInitial("failed");
   }
+
   // Only an actual recovery replaces a failed or timed-out turn's terminal ownership.
   const completion =
     finalizationOutcome !== "answered" && preserveOriginalTerminal
@@ -303,7 +304,11 @@ export async function prepareTerminalWithSettledTurnFinalization(input: {
     // A failed recovery has no authored answer for stranded-reply recovery.
     ...(finalizationOutcome !== "answered" &&
     runParams.sourceReplyDeliveryMode === "message_tool_only"
-      ? { finalAssistantVisibleText: "", finalAssistantRawText: "" }
+      ? {
+          finalAssistantVisibleText: "",
+          finalAssistantRawText: "",
+          finalAssistantMessageRawText: "",
+        }
       : {}),
     attemptToolSummary: prepared.attemptToolSummary,
     failureSignal: prepared.failureSignal,

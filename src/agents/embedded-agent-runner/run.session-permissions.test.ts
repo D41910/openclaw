@@ -272,7 +272,11 @@ describe("embedded run permissions and timeout delivery", () => {
       timeoutPhase: "provider",
       providerStarted: true,
       modelFallbackStopReason: "agent_run_terminal_timeout",
+      terminalReply: { disposition: "empty" },
+      finalAssistantVisibleText: "",
     });
+    expect(result.meta.finalAssistantRawText).toBeUndefined();
+    expect(result.meta.finalAssistantMessageRawText).toBe("");
     expect(
       classifyEmbeddedAgentRunResultForModelFallback({
         provider: "openai",
@@ -330,6 +334,7 @@ it("does not replace a successfully recovered final assistant after a prompt-tim
       },
       finalAssistantVisibleText: answer,
       finalAssistantRawText: undefined,
+      finalAssistantMessageRawText: undefined,
       recoveredFinalAssistantPayloadsAfterPromptTimeout: undefined,
       payloads,
       payloadsWithToolMedia: payloads,
