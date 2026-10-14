@@ -1,7 +1,8 @@
 import { html } from "lit";
-import { renderConnectCommand } from "../../../components/connect-command.ts";
+import { ConnectCommand } from "../../../components/connect-command.tsx";
 import "../../../components/modal-dialog.ts";
 import { t } from "../../../i18n/index.ts";
+import { solidContent } from "../../../lit/solid-content.tsx";
 
 export function renderContinueInTerminalDialog(params: { command: string; onClose: () => void }) {
   const title = t("chat.sessionHeader.continueInTerminal.title");
@@ -18,7 +19,7 @@ export function renderContinueInTerminalDialog(params: { command: string; onClos
           <h2>${title}</h2>
           <p>${description}</p>
         </header>
-        ${renderConnectCommand(params.command)}
+        ${solidContent(ConnectCommand, { command: params.command })}
         <p class="continue-in-terminal-dialog__note">
           ${t("chat.sessionHeader.continueInTerminal.authNote")}
         </p>
