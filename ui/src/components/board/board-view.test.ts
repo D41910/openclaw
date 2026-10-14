@@ -92,7 +92,9 @@ describe("openclaw-board-view", () => {
 
   it("paces a stalled proxy retry without spending the authorization refresh budget", async () => {
     vi.useFakeTimers();
-    const fetchMock = vi.fn(async () => new Response("<!doctype html><p>Ready document</p>"));
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response("<!doctype html><p>Ready document</p>"),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const frameLoadFailed = vi.fn(async () => undefined);
     const view = await mount({
@@ -128,7 +130,14 @@ describe("openclaw-board-view", () => {
     );
     await vi.advanceTimersByTimeAsync(0);
     await settleCells(view);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock,
+      `Board fetch requests: ${JSON.stringify(
+        fetchMock.mock.calls.map(([input]) =>
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        ),
+      )}`,
+    ).toHaveBeenCalledTimes(2);
     expect(view.querySelector('.board-widget__notice[role="status"]')).toBeNull();
     expect(view.querySelector('[data-test-id="board-widget-error"]')).toBeNull();
   });
