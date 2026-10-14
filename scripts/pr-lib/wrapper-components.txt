@@ -919,6 +919,7 @@ src/infra/fs-safe-copy.worker.ts
 src/infra/fs-safe-env.ts
 src/infra/fs-safe-remove.ts
 src/infra/fs-safe.ts
+src/infra/gc-observer.ts
 src/infra/gateway-lock-process.ts
 src/infra/gateway-owner-lease.read.ts
 src/infra/gateway-owner-lease.worker.ts
@@ -1226,6 +1227,7 @@ src/infra/worker-cpu.ts
 src/infra/worker-diagnostic-script.ts
 src/infra/worker-idle-gc.ts
 src/infra/worker-memory.ts
+src/infra/worker-message-metrics.ts
 src/infra/worker-native-error.ts
 src/infra/worker-native-handle.ts
 src/infra/worker-native-lifecycle.ts
