@@ -55,6 +55,7 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
     props.host.shellRevision();
     return readShellView(props.host);
   });
+  const shellConnectionStatus = createMemo(() => view().shellConnectionStatus);
   const routeReady = () => {
     props.host.shellRevision();
     return props.host.routeState.routeId !== undefined || props.host.routeState.routeFailed;
@@ -338,11 +339,13 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
             />
           </ShellLayoutProvider>
         </main>
-        <Show when={view().shellConnectionStatus}>
+        <Show when={shellConnectionStatus()}>
           <div class="shell-connection-status">
             {renderGatewayStatus({
-              kind: view().shellConnectionStatus!,
-              lastError: view().gatewaySnapshot.lastError,
+              kind: shellConnectionStatus()!,
+              get lastError() {
+                return view().gatewaySnapshot.lastError;
+              },
               onRetry: props.host.viewCallbacks.retryGateway,
             })}
           </div>

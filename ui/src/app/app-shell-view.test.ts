@@ -71,6 +71,48 @@ it("keeps one sidebar and outlet while navigation moves between desktop and draw
   expect(view.container.querySelector("openclaw-router-outlet")).toBe(outlet);
 });
 
+it("keeps the focused gateway retry button across shell and error updates", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: true })),
+  );
+  const { owner, runtime, view } = await mountShell();
+  const disconnected = {
+    ...runtime.context.gateway.snapshot,
+    phase: "offline" as const,
+    offlineStable: true,
+    lastError: "Gateway unavailable",
+  };
+  const snapshot = vi.spyOn(runtime.context.gateway, "snapshot", "get");
+  snapshot.mockReturnValue(disconnected);
+  owner.invalidate();
+  flush();
+
+  const retry = view.getByRole("button", { name: "Disconnected — Retry now" });
+  retry.focus();
+  expect(document.activeElement).toBe(retry);
+
+  snapshot.mockReturnValue({ ...disconnected, lastError: "Connection refused" });
+  owner.navResizing = true;
+  owner.invalidate();
+  flush();
+
+  expect(view.getByRole("button", { name: "Disconnected — Retry now" })).toBe(retry);
+  expect(document.activeElement).toBe(retry);
+  const tooltip = view.container.querySelector<HTMLElementTagNameMap["openclaw-tooltip"]>(
+    ".shell-connection-status openclaw-tooltip",
+  );
+  expect(tooltip?.content).toBe("Connection refused");
+
+  snapshot.mockReturnValue({ ...disconnected, phase: "connecting" });
+  owner.invalidate();
+  flush();
+  expect(view.container.querySelector(".shell-connection-status")?.textContent).toContain(
+    "Connecting…",
+  );
+  expect(view.queryByRole("button", { name: "Disconnected — Retry now" })).toBeNull();
+});
+
 it("restores the delegated shell after a pending update and can select another workspace", async () => {
   const { runtime, owner, view } = await mountShell();
   const shell = view.container.querySelector(".shell");
