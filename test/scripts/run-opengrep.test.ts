@@ -115,7 +115,7 @@ function runChangedPathsWorkflow(repo: string, base: string, env: NodeJS.Process
   const ensureIndex = steps.findIndex((step) => step.name === "Ensure PR base commit");
   expect(steps[1]).toEqual({
     name: "Setup supported Node runtime",
-    uses: "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+    uses: "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
     with: { "node-version": "24.21.0", "package-manager-cache": false },
   });
   expect(ensureIndex).toBeGreaterThan(1);
