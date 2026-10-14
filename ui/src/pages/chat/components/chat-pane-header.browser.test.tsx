@@ -152,8 +152,11 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
       for (const direction of ["ltr", "rtl"]) {
         document.documentElement.dir = direction;
         const bounds = surface.getBoundingClientRect();
-        expect(bounds.left).toBeCloseTo(8, 0);
-        expect(window.innerWidth - bounds.right).toBeCloseTo(8, 0);
+        expect(bounds.width).toBeCloseTo(264, 0);
+        expect(direction === "ltr" ? bounds.left : window.innerWidth - bounds.right).toBeCloseTo(
+          8,
+          0,
+        );
         expect(window.innerHeight - bounds.bottom).toBeCloseTo(8, 0);
         expect(bounds.height).toBeCloseTo(360, 0);
       }

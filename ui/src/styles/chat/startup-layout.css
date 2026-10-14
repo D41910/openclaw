@@ -451,7 +451,7 @@
   position-try-fallbacks: none;
   inset: auto 8px calc(8px + env(safe-area-inset-bottom));
   margin: 0;
-  width: calc(100vw - 16px);
+  width: min(264px, calc(100dvw - 24px));
   max-height: min(
     var(--oc-overlay-max-height, 420px),
     calc(100dvh - 80px - env(safe-area-inset-bottom))
