@@ -497,6 +497,17 @@ function widgetActionsPlacementRef(
       const target = element;
       let thread: HTMLElement | null = null;
       let frame: number | undefined;
+      const placeActions = () => {
+        if (!thread) {
+          return;
+        }
+        const clipRight =
+          thread.getBoundingClientRect().left + thread.clientLeft + thread.clientWidth;
+        target.toggleAttribute(
+          "data-widget-actions-above",
+          clipRight - target.getBoundingClientRect().right < 40,
+        );
+      };
       // Keep layout writes out of resize delivery, including transcript rerenders.
       const observer = new ResizeObserver(() => {
         if (frame !== undefined) {
@@ -504,15 +515,7 @@ function widgetActionsPlacementRef(
         }
         frame = requestAnimationFrame(() => {
           frame = undefined;
-          if (!thread) {
-            return;
-          }
-          const clipRight =
-            thread.getBoundingClientRect().left + thread.clientLeft + thread.clientWidth;
-          target.toggleAttribute(
-            "data-widget-actions-above",
-            clipRight - target.getBoundingClientRect().right < 40,
-          );
+          placeActions();
         });
       });
       // Content updates can arrive during resize delivery. Reattach after insertion
@@ -525,6 +528,8 @@ function widgetActionsPlacementRef(
         }
         observer.observe(target);
         observer.observe(thread);
+        // First placement must not wait for the observer's initial delivery.
+        placeActions();
       });
       return () => {
         if (frame !== undefined) {
