@@ -8,6 +8,7 @@ import { channelSenderAvatarMemoKey } from "../../../lib/chat/channel-sender-ava
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
 import { extractTextCached } from "../../../lib/chat/message-extract.ts";
 import { localParticipantIdentityKey } from "../../../lib/chat/sender-label.ts";
+import { solidContent } from "../../../lit/solid-content.tsx";
 import { messageRecoveryKey, resolveSourceMessageId } from "../chat-message-recovery.ts";
 import { resolveTurnRecap } from "../chat-progress.ts";
 import { projectChatReasoning } from "../chat-reasoning.ts";
@@ -34,6 +35,7 @@ import {
   getTranscriptState,
   type ChatThreadProps,
 } from "./chat-thread-interactions.ts";
+import { BrowserTabPreviews } from "./chat-tool-cards.solid.tsx";
 import { projectTranscriptActivity } from "./chat-transcript-activity.ts";
 import { latestTranscriptAnnouncement } from "./chat-transcript-announcement.ts";
 import {
@@ -519,7 +521,7 @@ export function projectChatTranscript(props: ChatThreadProps, transcript: ChatTr
       appendContent(
         `work-previews:${row.key}`,
         html`<div class="chat-group tool chat-group--turn-block">
-          <div class="chat-group-messages">${previews}</div>
+          <div class="chat-group-messages">${solidContent(BrowserTabPreviews, { previews })}</div>
         </div>`,
       );
     }

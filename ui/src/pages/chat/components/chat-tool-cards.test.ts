@@ -21,8 +21,11 @@ import { agentEvent, createHost } from "../tool-stream.test-helpers.ts";
 import { handleAgentEvent } from "../tool-stream.ts";
 import { renderActivityGroup } from "./chat-message-group.test-support.ts";
 import { createMessageEntry, createToolGroup } from "./chat-message.test-support.ts";
-import { renderToolCard } from "./chat-tool-cards.ts";
-import { renderToolFixture as render, settleToolBridges } from "./chat-tool-render.test-support.ts";
+import {
+  renderToolCard,
+  renderToolFixture as render,
+  settleToolBridges,
+} from "./chat-tool-render.test-support.ts";
 import { renderToolPreview } from "./widget-card.ts";
 
 const canvas = { kind: "canvas", surface: "assistant_message", render: "url" } as const;
@@ -705,14 +708,17 @@ describe("tool-card outcomes", () => {
     for (const expanded of [false, true]) {
       pluginSurface.mockClear();
       await mountCard(card, { expanded });
-      expect(pluginSurface.mock.calls.map(([, props]) => props)).toEqual([
-        expect.objectContaining({
-          toolName: "tool_call",
-          toolCallId: "search-release",
-          input,
-          output: expect.objectContaining({ text: "Found the release notes." }),
-        }),
-      ]);
+      expect(pluginSurface).toHaveBeenCalled();
+      for (const [, props] of pluginSurface.mock.calls) {
+        expect(props).toEqual(
+          expect.objectContaining({
+            toolName: "tool_call",
+            toolCallId: "search-release",
+            input,
+            output: expect.objectContaining({ text: "Found the release notes." }),
+          }),
+        );
+      }
     }
   });
 

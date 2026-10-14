@@ -1,8 +1,10 @@
 /* @vitest-environment jsdom */
 
-import { render, type LitElement } from "lit";
+import { createSignal } from "solid-js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderAssistantAttachments } from "./chat-message-attachments.ts";
+import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { flush } from "../../../test-helpers/solid-settle.ts";
+import { AssistantAttachments } from "./chat-message-attachments-solid.tsx";
 import {
   releaseChatMediaResourceSubscriber,
   type AttachmentItem,
@@ -10,7 +12,7 @@ import {
 } from "./chat-message-media.ts";
 
 const observations: Array<{ element: Element; show: () => void }> = [];
-const views: Array<{ container: HTMLElement; update: () => void }> = [];
+const views: Array<{ unmount: () => void; update: () => void }> = [];
 const commentText =
   "Selected text:\nhello\n\nSource session: agent:main:main\nDOM text UTF-16 range: [0, 5)";
 
@@ -40,9 +42,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const { container, update } of views) {
-    render(null, container);
-    container.remove();
+  for (const { unmount, update } of views) {
+    unmount();
     releaseChatMediaResourceSubscriber(update);
   }
   views.length = 0;
@@ -68,40 +69,38 @@ function attachment(kind: "comment" | "paste", managed = false): AttachmentItem 
 }
 
 async function settle(container: HTMLElement) {
+  flush();
   for (let index = 0; index < 16; index++) {
     await Promise.all(
       [
-        ...container.querySelectorAll<LitElement>(
-          "openclaw-chat-sent-comments, openclaw-chat-pasted-text",
+        ...container.querySelectorAll<HTMLElement & { updateComplete?: Promise<unknown> }>(
+          "openclaw-chat-pasted-text",
         ),
       ].map((element) => element.updateComplete),
     );
+    flush();
   }
 }
 
 function mount(item: AttachmentItem | AttachmentItem[], options: ImageRenderOptions = {}) {
-  const container = document.body.appendChild(document.createElement("div"));
-  let current = Array.isArray(item) ? item : [item];
+  const [current, setCurrent] = createSignal(Array.isArray(item) ? item : [item]);
+  const [revision, setRevision] = createSignal(0);
   const open = vi.fn();
-  const update = () =>
-    render(
-      renderAssistantAttachments(
-        current,
-        { ...options, onRequestUpdate: update },
-        open,
-        undefined,
-        false,
-      ),
-      container,
-    );
-  views.push({ container, update });
-  update();
+  const update = () => setRevision((value) => value + 1);
+  const view = mountSolid(() => (
+    <AssistantAttachments
+      attachments={current()}
+      options={{ ...options, onRequestUpdate: update, ...(revision(), {}) }}
+      onOpenSidebar={open}
+      inlinePlayback={false}
+    />
+  ));
+  views.push({ unmount: view.unmount, update });
   return {
-    container,
+    ...view,
     open,
     replace(next: AttachmentItem) {
-      current = [next];
-      update();
+      setCurrent([next]);
     },
   };
 }
@@ -200,7 +199,7 @@ describe("history text chip source admission", () => {
       stale?.show();
       expect(fetchMock).not.toHaveBeenCalled();
       const current = observations.at(-1);
-      render(null, view.container);
+      view.unmount();
       await settle(view.container);
       current?.show();
       await settle(view.container);

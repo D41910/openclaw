@@ -1,7 +1,7 @@
 import type { JSX as SolidJSX } from "@solidjs/web";
 import { For, Match, Show, Switch, createMemo } from "solid-js";
 import { t } from "../../../lib/reactive/i18n.ts";
-import { LitContent, solidContent } from "../../../lit/solid-content.tsx";
+import { LitContent } from "../../../lit/solid-content.tsx";
 import { renderCompactAttachmentCard } from "./chat-attachment-card.ts";
 import "./chat-audio-player.tsx";
 import "./chat-svg-attachment.tsx";
@@ -31,7 +31,8 @@ import {
 } from "./chat-message-media.ts";
 import { MessageVideoPreview } from "./chat-message-video-preview-solid.tsx";
 import { isSentPastedTextAttachment } from "./chat-pasted-text.ts";
-import { isSentCommentAttachment, renderSentCommentAttachments } from "./chat-sent-comments.ts";
+import { isSentCommentAttachment } from "./chat-sent-comments.ts";
+import { SentCommentAttachments } from "./chat-sent-comments.tsx";
 import type { AttachmentSidebarState, SidebarContent } from "./chat-sidebar-content-types.ts";
 import { videoLightboxItem } from "./chat-video-lightbox-source.ts";
 
@@ -88,13 +89,15 @@ export function AssistantAttachments(
             sizeBytes: resolved.source.sizeBytes,
           }
         : { pending: resolved.status === "checking" }),
-      fallback: solidContent(MessageAttachment, {
-        item,
-        options: props.options,
-        onOpenSidebar: props.onOpenSidebar,
-        onAssistantAttachmentLoaded: props.onAssistantAttachmentLoaded,
-        presentation: "card",
-      }),
+      fallback: () => (
+        <MessageAttachment
+          item={item}
+          options={props.options}
+          onOpenSidebar={props.onOpenSidebar}
+          onAssistantAttachmentLoaded={props.onAssistantAttachmentLoaded}
+          presentation="card"
+        />
+      ),
     };
   };
   return (
@@ -109,8 +112,10 @@ export function AssistantAttachments(
           },
         ]}
       >
-        <LitContent
-          value={renderSentCommentAttachments(comments(), props.options, resolveComment)}
+        <SentCommentAttachments
+          comments={comments()}
+          options={props.options}
+          resolve={resolveComment}
         />
         <For each={files()} keyed={false}>
           {(item) => {
