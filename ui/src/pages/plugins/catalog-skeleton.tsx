@@ -75,7 +75,12 @@ export function PluginCatalogSkeleton(props: { label?: string }): JSX.Element {
     };
   });
   return (
-    <openclaw-plugin-catalog-skeleton ref={host} style={{ display: "contents" }}>
+    <openclaw-plugin-catalog-skeleton
+      ref={(element) => {
+        host = element;
+      }}
+      style={{ display: "contents" }}
+    >
       {renderCatalogGridSkeleton({ label: props.label ?? "", cards: cards() })}
     </openclaw-plugin-catalog-skeleton>
   );
