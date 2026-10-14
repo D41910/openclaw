@@ -238,6 +238,11 @@ Exec allowlist usage writes retain receipt and supersession tracking without
 publishing a pending denial: recording last-used metadata cannot revoke another
 command's authorization. Policy edits and durable allow-always grants still
 publish pending denials; unknown outcomes still invalidate the policy view.
+GitHub publication lifecycle bindings are immutable. Request inserts and status
+updates do not revoke an existing binding while their bookkeeping is pending.
+Deletion still denies use before dispatch; unknown outcomes and replaced bindings
+remain fenced until owner recovery.
+
 Personal credential and GitHub publication owners are concrete examples:
 [`user-model-account-authority.ts`](https://github.com/openclaw/openclaw/blob/main/src/state/user-model-account-authority.ts)
 and [`github-publication-receipts.ts`](https://github.com/openclaw/openclaw/blob/main/src/state/github-publication-receipts.ts).
@@ -641,8 +646,11 @@ from the index-facts postimage. The publication worker owns vector extension loa
 and retirement, while the retrieval worker owns read-only capability probing.
 These paths add no schema, retention, or update contract.
 
-Scheduled cron runs reuse the job and receipt loaded by their queue transaction
-when claiming and activating work. The scheduler claims and activates due runs
+Scheduled cron runs reuse the job loaded by their queue transaction when claiming
+and activating work. One conflict-safe receipt insert claims both the request ID
+and the active job slot through their unique indexes; only rejected requests read
+an existing receipt to report duplicates and repair consumed scheduled slots.
+The scheduler claims and activates due runs
 in one worker command using its loaded job postimages. Fresh claims persist the
 running state directly; capacity-limited runs retain their queued state and FIFO
 order. Activation commits ownership and start time together. Job mutations return
@@ -1885,8 +1893,14 @@ Lifetime closure joins accepted commands and phase flushes before
 releasing transport custody. Durable residency eviction drops settled snapshots,
 not stored sessions. Rehydration starts a new actor epoch and restores durable
 custody evidence without reviving a prior process's run or placement authority.
-Residency has a session-count bound and a soft byte budget; one oversized working
-set remains resident until another session displaces it.
+Worker residency retains at most 128 sessions, with an 8 MiB serialized byte
+budget for ordinary actors and one additional oversized working set. Small
+competitors do not evict that oversized actor; another oversized actor replaces
+it, and the shared least-recently-used count limit still applies. This avoids
+repeated full hydration during interleaved appends and metadata patches. The
+oversized allowance lasts until eviction or invalidation, so commits do not
+serialize that already exempt working set again merely to count its bytes. Cold
+first access and invalidated actors still hydrate under the writer reservation.
 Incognito keeps its memory-only storage and original nonrenewing 24-hour expiry.
 It has no database worker; session close, owner close, or process exit discards
 its state. Durable snapshot eviction does not evict incognito session state.
