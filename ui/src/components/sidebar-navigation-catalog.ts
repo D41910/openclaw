@@ -1,5 +1,8 @@
 import type { ApplicationContext } from "../app/context.ts";
-import type { SessionListSnapshot } from "../lib/sessions/session-capability.ts";
+import type {
+  SessionListOptions,
+  SessionListSnapshot,
+} from "../lib/sessions/session-capability.ts";
 import { dashboardSessionListQuery } from "../lib/sessions/session-requests.ts";
 import type { SolidController, SolidControllerHost } from "../lit/solid-controller-host.ts";
 
@@ -46,7 +49,7 @@ export class SidebarNavigationCatalog implements SolidController {
       this.agentId = agentId;
     }
     if (source && this.host.navigationView === "pages" && !this.pages) {
-      const query = dashboardSessionListQuery(agentId);
+      const query = this.query();
       this.pages = source.observeList(query, (snapshot) => {
         this.dashboards = snapshot;
         this.host.requestUpdate();
@@ -55,13 +58,20 @@ export class SidebarNavigationCatalog implements SolidController {
     }
   }
 
+  private query(): SessionListOptions {
+    return {
+      ...dashboardSessionListQuery(this.agentId),
+      archivedFilter: "active",
+    };
+  }
+
   loadMoreDashboards(): void {
     if (!this.source || !this.dashboards?.result?.hasMore || this.dashboards.loading) {
       return;
     }
     void this.source
       .refreshList({
-        ...dashboardSessionListQuery(this.agentId),
+        ...this.query(),
         append: true,
         offset: this.dashboards.result.nextOffset ?? this.dashboards.result.sessions.length,
       })
