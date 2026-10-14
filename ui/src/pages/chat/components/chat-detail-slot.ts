@@ -30,7 +30,7 @@ export function renderChatDetailSlot(params: {
   }
   const panelLoad = ensureLazySidebarElement("detail-panel", params.requestUpdate);
   if (panelLoad !== undefined) {
-    return panelLoad ?? renderPanelLoadingSkeleton("review", t("common.loading"));
+    return html`${panelLoad ?? renderPanelLoadingSkeleton("review", t("common.loading"))}`;
   }
   return html`<openclaw-chat-detail-panel
     class="chat-sidebar"

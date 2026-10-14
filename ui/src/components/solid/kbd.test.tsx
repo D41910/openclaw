@@ -1,12 +1,30 @@
 import { cleanup, render } from "@solidjs/testing-library";
+import { nothing, render as renderLit } from "lit";
 import { createSignal, flush } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import { KEYBOARD_SHORTCUT_COMBOS } from "../../lib/keyboard-shortcut-contract.ts";
-import { Kbd, KeyboardShortcut, ShortcutText } from "./kbd.tsx";
+import { renderKbd } from "../kbd.ts";
+import { Kbd, KeyboardShortcut, ShortcutHint, ShortcutText } from "./kbd.tsx";
 
 afterEach(cleanup);
 
 describe("Solid keyboard hints", () => {
+  it("updates a legacy keycap through the Solid adapter", () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    try {
+      renderLit(renderKbd(["⌘", "K"]), host);
+      const key = host.querySelector("kbd");
+      expect(key?.textContent).toBe("⌘K");
+      renderLit(renderKbd("/", { inline: true }), host);
+      expect(host.querySelector("kbd")).toBe(key);
+      expect(key?.textContent).toBe("/");
+      expect(key?.style.font).toBe("inherit");
+    } finally {
+      renderLit(nothing, host);
+      host.remove();
+    }
+  });
+
   it.each([
     [KEYBOARD_SHORTCUT_COMBOS.browserPanel, true, false, ["⌘⌥⇧U"], 3],
     [KEYBOARD_SHORTCUT_COMBOS.browserPanel, false, false, ["Ctrl+Alt+Shift+U"], 0],
@@ -53,5 +71,13 @@ describe("Solid keyboard hints", () => {
     ));
     expect(view.container.textContent).toBe("/ first; / again");
     expect(view.container.querySelectorAll("kbd")).toHaveLength(2);
+  });
+
+  it("keeps a literal shortcut inline with its tooltip label", () => {
+    const view = render(() => (
+      <ShortcutHint label="Commands" combo={{ key: "/", modifiers: [] }} />
+    ));
+    expect(view.container.textContent).toBe("Commands (/)");
+    expect(view.container.querySelector("kbd")?.style.font).toBe("inherit");
   });
 });

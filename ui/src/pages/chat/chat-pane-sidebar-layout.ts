@@ -111,11 +111,11 @@ export function ensureLazySidebarElement(
   }
   runtime.pending = ensureCustomElementDefined(tagName, loadModule)
     .catch((error: unknown) => {
-      runtime.error = renderLazyViewError({
+      runtime.error = html`${renderLazyViewError({
         error,
         stale: isStaleChunkImportError(error),
         onRetry: () => void retryStaleChunkReloadWhenReachable(),
-      });
+      })}`;
     })
     .finally(() => {
       delete runtime.pending;
