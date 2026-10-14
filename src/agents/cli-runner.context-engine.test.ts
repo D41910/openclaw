@@ -262,6 +262,24 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
       visible: "A real answer.",
       expectation: "required" as const,
     },
+    {
+      parts: ["The attachment is ready.\nNO_REPLY\nMEDIA:https://example.com/result.png"],
+      visible: "",
+      expectation: "required" as const,
+    },
+    {
+      parts: ["MEDIA:https://example.com/result.png"],
+      visible: "",
+      expectation: "required" as const,
+    },
+    {
+      parts: [
+        "The attachment is ready.\nNO_REPLY\nMEDIA:https://user:synthetic-password@example.com/result.png",
+      ],
+      visible:
+        "⚠️ Media not attached: Use a public HTTPS URL without credentials or attach a local file by a safe path.",
+      expectation: "required" as const,
+    },
   ])(
     "prepares only visible CLI text for the synthetic turn and result: $parts",
     async ({ parts, visible, expectation }) => {
@@ -278,6 +296,7 @@ describe("runPreparedCliAgent context engine lifecycle", () => {
 
       expect(result.meta.finalAssistantVisibleText).toBe(visible);
       expect(result.meta.finalAssistantRawText).toBe(parts.join("\n"));
+      expect(result.payloads?.map(({ text }) => text)).toEqual(parts);
       expect(afterTurn.mock.calls[0]?.[0].messages.slice(2)).toMatchObject([
         { role: "user", content: "transcript visible ask" },
         ...(visible ? [{ role: "assistant", content: [{ type: "text", text: visible }] }] : []),

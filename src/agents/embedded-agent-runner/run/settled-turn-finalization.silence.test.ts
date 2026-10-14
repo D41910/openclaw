@@ -92,7 +92,8 @@ describe("prepareTerminalWithSettledTurnFinalization canonical silence", () => {
   ] as const)("settles $name followed by NO_REPLY without replaying tools", async (testCase) => {
     const { expectation, delivery, phased } = testCase;
     const history = "history" in testCase ? testCase.history : undefined;
-    const silentText = "silentText" in testCase ? testCase.silentText : SILENT_REPLY_TOKEN;
+    const silentText =
+      ("silentText" in testCase ? testCase.silentText : undefined) ?? SILENT_REPLY_TOKEN;
     const earlierText = "## Result\n\n- **Saved** the note.";
     const attempt: EmbeddedRunAttemptWithReceiptEvidence = makeEmbeddedRunnerAttempt({
       sessionIdUsed: "session-settled",

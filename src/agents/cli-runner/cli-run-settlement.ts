@@ -1,4 +1,5 @@
 import { setReplyPayloadMetadata, type ReplyPayload } from "../../auto-reply/reply-payload.js";
+import { prepareCliReplyPayload } from "../../auto-reply/reply/cli-reply-payload.js";
 import { normalizeReplyPayload } from "../../auto-reply/reply/normalize-reply.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { formatErrorMessage } from "../../infra/errors.js";
@@ -462,13 +463,20 @@ export function buildCliDeliveredFailure(params: {
   };
 }
 
-export function resolveCliAssistantVisibleText(
-  output: Pick<CliOutput, "text" | "textParts">,
-): string {
-  return (output.textParts ?? [output.text])
-    .map((text) => normalizeReplyPayload({ text })?.text?.trim())
-    .filter(Boolean)
-    .join("\n");
+export function prepareCliAssistantReply(output: Pick<CliOutput, "text" | "textParts">): {
+  text: string;
+  hasContent: boolean;
+} {
+  const payloads = (output.textParts ?? [output.text]).map((text) =>
+    normalizeReplyPayload(prepareCliReplyPayload(text)),
+  );
+  return {
+    text: payloads
+      .map((payload) => payload?.text?.trim())
+      .filter(Boolean)
+      .join("\n"),
+    hasContent: payloads.some((payload) => payload !== null),
+  };
 }
 
 export function buildCliRunResult(params: {

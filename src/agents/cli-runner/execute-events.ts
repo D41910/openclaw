@@ -1,4 +1,4 @@
-import { isSilentReplyPayloadText } from "../../auto-reply/tokens.js";
+import { parseReplyDirectives } from "../../auto-reply/reply/reply-directives.js";
 import { projectAgentToolActivity } from "../../infra/agent-activity-events.js";
 import { emitAgentEvent, type AgentEventStream } from "../../infra/agent-events.js";
 import { emitTrustedDiagnosticEvent } from "../../infra/diagnostic-events.js";
@@ -409,7 +409,9 @@ export function createCliEventHandlers(params: {
       rawText,
       context.backendResolved.textTransforms?.output,
     );
-    const silent = isSilentReplyPayloadText(rawText) || isSilentReplyPayloadText(completedText);
+    const silent =
+      parseReplyDirectives(rawText).hasSilentIntent ||
+      parseReplyDirectives(completedText).hasSilentIntent;
     // Custom CLI thinking is cumulative; native snapshots can restart per message.
     const thinkingText = pendingThinkingText.startsWith(settledThinkingText)
       ? pendingThinkingText.slice(settledThinkingText.length)

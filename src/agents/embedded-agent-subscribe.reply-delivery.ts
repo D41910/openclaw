@@ -93,7 +93,7 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       return false;
     }
     // Undo newest reservations first so restored tool media retain their order.
-    for (const [key, { onDiscard }] of stale.reverse()) {
+    for (const [key, { onDiscard }] of stale.toReversed()) {
       messageDeliveries.delete(key);
       onDiscard?.();
     }
@@ -374,9 +374,12 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     if (!state.deferBlockReplyDelivery) {
       const latest = new Map<string, AssistantStreamScope>();
       for (const deferred of deferredAssistantScopes.splice(0)) {
-        const delivery = deferred.delivery;
-        if (delivery) {
-          latest.set(`${delivery.messageStartIndex}:${delivery.eventData?.itemId ?? ""}`, deferred);
+        const deferredDelivery = deferred.delivery;
+        if (deferredDelivery) {
+          latest.set(
+            `${deferredDelivery.messageStartIndex}:${deferredDelivery.eventData?.itemId ?? ""}`,
+            deferred,
+          );
         }
       }
       for (const deferred of latest.values()) {

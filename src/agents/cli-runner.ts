@@ -35,7 +35,7 @@ import {
   buildCliRunResult,
   formatCliTerminalInterruption,
   isClaudeCliBackend,
-  resolveCliAssistantVisibleText,
+  prepareCliAssistantReply,
   resolveCliSourceReplyMirror,
   settleCliPreparationError,
   settlePreparedCliRun,
@@ -378,11 +378,12 @@ async function runPreparedCliAgentOwned(
       runParams: params,
       modelId: context.modelId,
     });
-    const assistantText = sourceReplyMirror.delivered
-      ? (sourceReplyMirror.visibleText ?? "")
-      : resolveCliAssistantVisibleText(output);
+    const assistantReply = sourceReplyMirror.delivered
+      ? { text: sourceReplyMirror.visibleText ?? "", hasContent: true }
+      : prepareCliAssistantReply(output);
+    const assistantText = assistantReply.text;
     if (
-      !assistantText &&
+      !assistantReply.hasContent &&
       resolveSourceReplyDelivery(output) === "missing" &&
       !output.toolMediaUrls?.length &&
       !output.yielded &&

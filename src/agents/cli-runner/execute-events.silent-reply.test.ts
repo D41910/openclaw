@@ -16,6 +16,8 @@ describe("CLI completed reply publication", () => {
     "The discussion is already complete.\nNO_REPLY",
     "Nobody asked me for an answer.\n(NO_REPLY)\n\n",
     "Die Frage ist schon beantwortet.\nNO_REPLY.",
+    "The attachment is ready.\nNO_REPLY\nMEDIA:https://example.com/result.png",
+    "The attachment is ready.\nNO_REPLY\nMEDIA:https://user:synthetic-password@example.com/result.png",
   ])("holds text-bearing events and discards a silent completed segment: %j", (text) => {
     const context = buildContext("silent-cli-segment");
     context.params.onExecutionPhase = vi.fn();
@@ -91,14 +93,20 @@ describe("CLI completed reply publication", () => {
         text: "Checking.Hidden reasoning.",
         delta: "Hidden reasoning.",
       });
-      handlers.emitCliCompletedReply("The discussion is complete.\nNO_REPLY", 4);
+      handlers.emitCliCompletedReply(
+        "The discussion is complete.\nNO_REPLY\nMEDIA:https://example.com/result.png",
+        4,
+      );
       expect(textEvents(events)).toHaveLength(publishedCount);
 
       context.backendResolved.textTransforms = {
         output: [{ from: /SILENT_MARKER/g, to: "NO_REPLY" }],
       };
       handlers.emitCliCommentaryText("Hidden commentary.");
-      handlers.emitCliCompletedReply("SILENT_MARKER", 5);
+      handlers.emitCliCompletedReply(
+        "The attachment is ready.\nSILENT_MARKER\nMEDIA:https://example.com/result.png",
+        5,
+      );
       expect(textEvents(events)).toHaveLength(publishedCount);
 
       context.backendResolved.textTransforms = undefined;
@@ -107,11 +115,9 @@ describe("CLI completed reply publication", () => {
         delta: "Final thought.",
       });
       handlers.emitCliCompletedReply("A final visible reply.");
-      expect(
-        textEvents(events)
-          .filter(({ stream }) => stream === "thinking")
-          .at(-1)?.data.text,
-      ).toBe("Checking.Final thought.");
+      expect(textEvents(events).findLast(({ stream }) => stream === "thinking")?.data.text).toBe(
+        "Checking.Final thought.",
+      );
     } finally {
       unsubscribe();
     }

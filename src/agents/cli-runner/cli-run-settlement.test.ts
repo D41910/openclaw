@@ -23,7 +23,7 @@ import {
   buildBlockedCliRunResult,
   buildCliDeliveredFailure,
   buildCliRunResult,
-  resolveCliAssistantVisibleText,
+  prepareCliAssistantReply,
   settleCliPreparationError,
   settlePreparedCliRun,
 } from "./cli-run-settlement.js";
@@ -352,7 +352,7 @@ it.each([
     const result = buildCliRunResult({
       context,
       output,
-      assistantText: resolveCliAssistantVisibleText(output),
+      assistantText: prepareCliAssistantReply(output).text,
       usedHistoryPrompt: false,
       userTurnHandled: true,
       sessionBindingDisabled: true,

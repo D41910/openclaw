@@ -6,10 +6,13 @@ const replacements = [
   { from: /NO_REPLY/g, to: "" },
 ];
 
-it("preserves a raw silent completion before applying output replacements", () => {
-  const text = "PRIVATE_MARKER: the conversation is complete.\nNO_REPLY";
-  expect(transformCliResultText({ text }, replacements)).toEqual({ text, rawText: text });
-});
+it.each(["", "\nMEDIA:https://example.com/result.png"])(
+  "preserves a raw silent completion before applying output replacements: %j",
+  (media) => {
+    const text = `PRIVATE_MARKER: the conversation is complete.\nNO_REPLY${media}`;
+    expect(transformCliResultText({ text }, replacements)).toEqual({ text, rawText: text });
+  },
+);
 
 it.each([
   {
