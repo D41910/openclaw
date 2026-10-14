@@ -2,12 +2,7 @@ import type { JSX } from "@solidjs/web";
 import { createMemo, getOwner, runWithOwner } from "solid-js";
 import { t } from "../i18n/index.ts";
 import { EDITOR_IDS, EDITOR_LABELS } from "../lib/editor-links.ts";
-import { formatTimeMs } from "../lib/format.ts";
-import {
-  formatSessionSnoozeWakeTime,
-  isSessionSnoozed,
-  resolveSessionSnoozePresets,
-} from "../lib/sessions/session-snooze.ts";
+import { formatSessionSnoozeWakeTime, isSessionSnoozed } from "../lib/sessions/session-snooze.ts";
 import { useSessionMenuAppearance } from "./session-icon-picker-solid.tsx";
 import type {
   SessionMenuActions,
@@ -17,6 +12,7 @@ import type {
 import type { CompactSessionMenuView } from "./session-menu-compact.ts";
 import { useSessionMenuDetails } from "./session-menu-details-solid.tsx";
 import { sessionArchiveShortcut } from "./session-menu-options.ts";
+import { useSessionSnoozeEntries } from "./session-menu-snooze.tsx";
 import { Icon, type IconName } from "./solid/icon.tsx";
 import { Kbd, KeyboardShortcut } from "./solid/kbd.tsx";
 import type { MenuEntry, MenuItem } from "./solid/menu.tsx";
@@ -82,6 +78,7 @@ export function useSessionMenuEntries(
     return actions.involvementAvailable;
   });
   let appearanceContent: JSX.Element;
+  let snoozeEntries: ReturnType<typeof useSessionSnoozeEntries> | undefined;
   const icon = (name: IconName) => (
     <span class="session-menu__icon" aria-hidden="true">
       <Icon name={name} />
@@ -265,23 +262,6 @@ export function useSessionMenuEntries(
       };
     });
   }
-  function snoozeOptions(): MenuEntry[] {
-    const now = new Date();
-    const labels = {
-      hour: "sessionsView.snoozeHour",
-      "three-hours": "sessionsView.snoozeThreeHours",
-      evening: "sessionsView.snoozeEvening",
-      tomorrow: "sessionsView.snoozeTomorrow",
-      "next-week": "sessionsView.snoozeNextWeek",
-    } as const;
-    return resolveSessionSnoozePresets(now).map((preset) => ({
-      id: `snooze:${preset.snoozedUntil}`,
-      class: "session-menu__item",
-      label: `${t(labels[preset.id])} · ${preset.id === "next-week" ? formatSessionSnoozeWakeTime(preset.snoozedUntil, now) : formatTimeMs(preset.snoozedUntil)}`,
-      disabled: actions.actionDisabled("snooze"),
-      attributes: { title: state.actionDisabledReasons.snooze },
-    }));
-  }
   function copyOptions(): MenuEntry[] {
     return [
       ...(state.navigationAllowed
@@ -397,7 +377,8 @@ export function useSessionMenuEntries(
           }),
         ];
       case "snooze":
-        return snoozeOptions();
+        snoozeEntries ??= runWithOwner(owner, () => useSessionSnoozeEntries(actions, readState));
+        return snoozeEntries();
       case "copy":
         return copyOptions();
       case "open-in":

@@ -997,6 +997,7 @@ describe("sidebar snooze menu", () => {
       }
       const choices = compact ? menu : await openSubmenu(menu, "Snooze");
       const labels = menuItemLabels(choices);
+      expect(labels.at(-1)).toBe("Choose another time");
       expect(labels.filter((label) => label.includes(" · "))).toEqual([
         "In 1 hour · 10:00 AM",
         "In 3 hours · 12:00 PM",
