@@ -1,9 +1,6 @@
 import { mountSolid } from "../../../test-helpers/solid-render.tsx";
 import { ChatTypingIndicator } from "./chat-typing-indicator.tsx";
-import {
-  ChatWorkingIndicator,
-  type ChatWorkingIndicatorOptions,
-} from "./chat-working-indicator.tsx";
+import { ChatWorkingIndicator } from "./chat-working-indicator.tsx";
 
 type WorkingProps = Parameters<typeof ChatWorkingIndicator>[0];
 type TypingProps = Parameters<typeof ChatTypingIndicator>[0];
@@ -12,7 +9,7 @@ const typingViews = new WeakMap<HTMLElement, { update: (props: TypingProps) => v
 
 export function renderWorkingIndicator(
   part: WorkingProps["part"],
-  options: ChatWorkingIndicatorOptions | undefined,
+  options: WorkingProps["options"],
   container: HTMLElement,
 ) {
   const props = { part, options };

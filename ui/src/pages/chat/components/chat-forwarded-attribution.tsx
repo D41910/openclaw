@@ -6,7 +6,7 @@ import { registerChatMessageMetadataEnglish } from "../../../i18n/locales/en-cha
 import type { MessageGroup } from "../../../lib/chat/chat-types.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
 import { isSubagentSessionKey, parseAgentSessionKey } from "../../../lib/sessions/session-key.ts";
-import { LitContent } from "../../../lit/solid-content.tsx";
+import { emptyLegacyContent, LitContent } from "../../../lit/solid-content.tsx";
 import { renderForwardedAvatar } from "../chat-avatar.ts";
 import { readAutomationRun } from "../chat-turn-boundary.ts";
 
@@ -127,6 +127,10 @@ export function ForwardedAttribution(props: {
     props.options.showAvatar !== false
       ? source().sourceParsed?.agentId
       : undefined;
+  const avatar = createMemo(() => {
+    const agentId = avatarAgentId();
+    return agentId ? renderForwardedAvatar(agentId, props.options) : emptyLegacyContent;
+  });
   const from = () =>
     props.options.updateCount === undefined
       ? t("chat.messages.forwardedFrom")
@@ -193,12 +197,10 @@ export function ForwardedAttribution(props: {
           fallback={<ForwardedLink source={source()} basePath={props.options.basePath} />}
         >
           <span class="chat-reply-attribution__agent">
-            <Show when={avatarAgentId()}>
-              {(agentId) => (
-                <span class="chat-reply-attribution__agent-avatar" aria-hidden="true">
-                  <LitContent value={renderForwardedAvatar(agentId(), props.options)} />
-                </span>
-              )}
+            <Show when={avatar() !== emptyLegacyContent}>
+              <span class="chat-reply-attribution__agent-avatar" aria-hidden="true">
+                <LitContent value={avatar()} />
+              </span>
             </Show>
             <Show
               when={source().sourceAgentPrefix}

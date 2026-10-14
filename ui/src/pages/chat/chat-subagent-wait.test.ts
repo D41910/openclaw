@@ -8,7 +8,8 @@ import { projectSubagentStatus } from "./chat-subagent-wait.ts";
 import { UnplacedSubagentWait } from "./components/chat-message-stream-view.tsx";
 import { renderWorkingIndicator } from "./components/chat-status.test-support.ts";
 import { renderSubagentActivity } from "./components/chat-subagent-activity.ts";
-import type { ChatWorkingIndicatorOptions } from "./components/chat-working-indicator.tsx";
+
+type ChatWorkingIndicatorOptions = NonNullable<Parameters<typeof renderWorkingIndicator>[1]>;
 
 function resolveChatSubagentWait(input: Parameters<typeof projectSubagentStatus>[0]) {
   return projectSubagentStatus(input, false).wait;

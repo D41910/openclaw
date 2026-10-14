@@ -20,7 +20,7 @@ import type { TurnRecap } from "../chat-progress.ts";
 import type { ChatSubagentWait } from "../chat-subagent-wait.ts";
 import { selectWorkingClawSurprise } from "./chat-working-indicator-surprise.ts";
 
-export type ChatWorkingIndicatorOptions = {
+type ChatWorkingIndicatorOptions = {
   bubbleMode?: boolean;
   mascot?: ThemeMascot;
   workingIndicator?: ThemeWorkingIndicator;

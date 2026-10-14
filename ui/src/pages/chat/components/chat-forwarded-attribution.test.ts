@@ -81,6 +81,20 @@ it.each([
   expect(attributionText).toBe(`From ${prefix ? `${prefix} ` : ""}${chipText}`);
 });
 
+it("omits avatar space when the source agent is not in the roster", () => {
+  container = document.body.appendChild(document.createElement("div"));
+  mountStatefulSolid(
+    ForwardedAttribution,
+    {
+      group: { senderSession: { sessionKey: "agent:research:main", label: "Research" } },
+      options: { agentId: "main", mainKey: "main", agents: [{ id: "main" }] },
+    },
+    container,
+  );
+  expect(container.querySelector(".session-label")?.textContent).toBe("Research");
+  expect(container.querySelector(".chat-reply-attribution__agent-avatar")).toBeNull();
+});
+
 it("routes forwarded cron runs with primary and keyboard activation, preserving native modified clicks", async ({
   onTestFinished,
 }) => {
