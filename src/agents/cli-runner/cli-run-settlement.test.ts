@@ -26,6 +26,7 @@ import {
   settleCliPreparationError,
   settlePreparedCliRun,
 } from "./cli-run-settlement.js";
+import { prepareCliRunTerminalReply } from "./terminal-reply.js";
 
 vi.mock("../../plugins/hook-runner-global.js", () => ({
   getGlobalHookRunner: () => ({
@@ -139,6 +140,7 @@ describe("CLI native continuity projection", () => {
           : buildCliRunResult({
               context,
               output: { text: "done" },
+              preparedReply: prepareCliRunTerminalReply(context, { text: "done" }),
               effectiveCliSessionId: kind === "native" ? "next-native-session" : undefined,
               bindingFlushOk: kind !== "no-native-id",
               usedHistoryPrompt: false,
@@ -212,6 +214,7 @@ describe.each(["anthropic", undefined])(
                 : buildCliRunResult({
                     context,
                     output: { text: "done" },
+                    preparedReply: prepareCliRunTerminalReply(context, { text: "done" }),
                     effectiveCliSessionId: "next-native-session",
                     bindingFlushOk: true,
                     usedHistoryPrompt: false,
@@ -286,13 +289,15 @@ it.each(["progress", "ambiguous", "final"] as const)(
 
 it("captures only the last CLI result as the model's final message", async () => {
   const context = buildPreparedCliRunContext({ provider: "claude-cli" });
+  const output = transformCliResultText({
+    text: "Checking now\nDone",
+    textParts: ["Checking now", "Done"],
+    rawFinalText: "Done",
+  });
   const result = buildCliRunResult({
     context,
-    output: transformCliResultText({
-      text: "Checking now\nDone",
-      textParts: ["Checking now", "Done"],
-      rawFinalText: "Done",
-    }),
+    output,
+    preparedReply: prepareCliRunTerminalReply(context, output),
     usedHistoryPrompt: false,
     userTurnHandled: true,
     sessionBindingDisabled: true,
@@ -304,9 +309,11 @@ it("captures only the last CLI result as the model's final message", async () =>
 
 it("captures nothing when the CLI's final message was empty after narration", async () => {
   const context = buildPreparedCliRunContext({ provider: "claude-cli" });
+  const output = transformCliResultText({ text: "Checking now", rawFinalText: "" });
   const result = buildCliRunResult({
     context,
-    output: transformCliResultText({ text: "Checking now", rawFinalText: "" }),
+    output,
+    preparedReply: prepareCliRunTerminalReply(context, output),
     usedHistoryPrompt: false,
     userTurnHandled: true,
     sessionBindingDisabled: true,
@@ -322,6 +329,7 @@ it("never captures host-synthesized optional silence as model output", async () 
   const result = buildCliRunResult({
     context,
     output: { text: "" },
+    preparedReply: prepareCliRunTerminalReply(context, { text: "" }),
     usedHistoryPrompt: false,
     userTurnHandled: true,
     sessionBindingDisabled: true,
@@ -334,9 +342,14 @@ it("never captures host-synthesized optional silence as model output", async () 
 
 it("preserves completed result boundaries for independent final delivery", async () => {
   const context = buildPreparedCliRunContext({ provider: "claude-cli" });
+  const output = {
+    text: "First answer.\nLast answer.",
+    textParts: ["First answer.", "Last answer."],
+  };
   const result = buildCliRunResult({
     context,
-    output: { text: "First answer.\nLast answer.", textParts: ["First answer.", "Last answer."] },
+    output,
+    preparedReply: prepareCliRunTerminalReply(context, output),
     usedHistoryPrompt: false,
     userTurnHandled: true,
     sessionBindingDisabled: true,
@@ -365,15 +378,17 @@ it.each([
     const context = buildPreparedCliRunContext({ provider: "claude-cli" });
     context.params.terminalReplyExpectation = "result-required";
     context.params.sourceReplyDeliveryMode = "message_tool_only";
+    const output = {
+      text: "NO_REPLY",
+      rawText: "NO_REPLY",
+      didSendViaMessagingTool: true,
+      didDeliverSourceReplyViaMessageTool: final,
+      messagingToolSourceReplyPayloads: [{ text, sourceReplyFinal: final }],
+    };
     const result = buildCliRunResult({
       context,
-      output: {
-        text: "NO_REPLY",
-        rawText: "NO_REPLY",
-        didSendViaMessagingTool: true,
-        didDeliverSourceReplyViaMessageTool: final,
-        messagingToolSourceReplyPayloads: [{ text, sourceReplyFinal: final }],
-      },
+      output,
+      preparedReply: prepareCliRunTerminalReply(context, output),
       usedHistoryPrompt: false,
       userTurnHandled: true,
       sessionBindingDisabled: true,
@@ -424,9 +439,11 @@ it.each([
 ])("prepares CLI terminal output once for $raw", ({ raw, text, disposition, replacements }) => {
   const context = buildPreparedCliRunContext({ provider: "claude-cli" });
   context.backendResolved.textTransforms = { output: replacements };
+  const output = { text: raw, rawText: raw, toolMediaUrls: ["https://example.com/result.png"] };
   const result = buildCliRunResult({
     context,
-    output: { text: raw, rawText: raw, toolMediaUrls: ["https://example.com/result.png"] },
+    output,
+    preparedReply: prepareCliRunTerminalReply(context, output),
     usedHistoryPrompt: false,
     userTurnHandled: true,
     sessionBindingDisabled: true,

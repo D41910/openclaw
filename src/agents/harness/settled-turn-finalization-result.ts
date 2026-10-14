@@ -6,7 +6,10 @@ import {
   sanitizeAgentRunTerminalReply,
 } from "../agent-run-terminal-reply.js";
 import { extractAssistantVisibleText } from "../embedded-agent-utils.js";
-import { EmptySettledTurnFinalizationError } from "./settled-turn-finalization-outcome.js";
+import {
+  EmptySettledTurnFinalizationError,
+  type PreparedSettledTurnFinalizationResult,
+} from "./settled-turn-finalization-outcome.js";
 import type {
   AgentHarnessAttemptResult,
   AgentHarnessSettledTurnFinalizationResult,
@@ -36,7 +39,7 @@ function assistantContainsToolCall(
  */
 export function assertSettledTurnFinalizationResult(
   result: AgentHarnessSettledTurnFinalizationResult,
-): AgentHarnessSettledTurnFinalizationResult {
+): PreparedSettledTurnFinalizationResult {
   const unknownKey = Object.keys(result).find(
     (key) => !ALLOWED_SETTLED_FINALIZATION_RESULT_KEYS.has(key),
   );
@@ -76,29 +79,10 @@ export function assertSettledTurnFinalizationResult(
     preparedTerminalReply.terminalReply = sanitizeAgentRunTerminalReply(preparedTerminalReply.text);
   }
   const preparedResult = { ...result, preparedTerminalReply };
-  resolveSettledTurnFinalizationText(preparedResult);
+  if (preparedTerminalReply.terminalReply.disposition !== "visible") {
+    throw new EmptySettledTurnFinalizationError(preparedResult);
+  }
   return preparedResult;
-}
-
-export function resolveSettledTurnFinalizationText(
-  result: AgentHarnessSettledTurnFinalizationResult,
-): string {
-  const prepared =
-    result.preparedTerminalReply ??
-    prepareAgentRunTerminalReply({
-      rawText: resolveRawAssistantAnswerText(result.assistant),
-    });
-  if (!result.preparedTerminalReply && prepared.terminalReply.disposition !== "silent") {
-    const rawText = prepared.text;
-    prepared.text = parseReplyDirectives(
-      extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
-    ).text;
-    prepared.terminalReply = sanitizeAgentRunTerminalReply(prepared.text);
-  }
-  if (prepared.terminalReply.disposition !== "visible") {
-    throw new EmptySettledTurnFinalizationError({ ...result, preparedTerminalReply: prepared });
-  }
-  return prepared.text;
 }
 
 /**

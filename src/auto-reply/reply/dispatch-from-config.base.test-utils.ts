@@ -9,6 +9,7 @@ import {
   setActiveEmbeddedRun,
 } from "../../agents/embedded-agent-runner/runs.js";
 import {
+  createMissingReplyNotice,
   MISSING_REPLY_NOTICE_TEXT,
   resolveReplyCompletion,
 } from "../../agents/reply-completion.js";
@@ -31,7 +32,6 @@ import { runGroupThread } from "../group-thread.js";
 import { setReplyPayloadMetadata } from "../reply-payload.js";
 import type { MsgContext } from "../templating.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
-import { buildMissingReplyPayload } from "./agent-runner-failure-reply.js";
 import { markCommandSessionMetadataChanged } from "./command-session-metadata.js";
 import { registerOriginRoutingCases } from "./dispatch-from-config.origin-routing.cases.js";
 import {
@@ -681,14 +681,7 @@ describe("dispatchReplyFromConfig", () => {
           { assistantTranscriptOwned: true },
         ),
     ],
-    [
-      "missing-answer notice",
-      () =>
-        expectDefined(
-          buildMissingReplyPayload({ completion: resolveReplyCompletion("required", "empty") }),
-          "missing-answer notice",
-        ),
-    ],
+    ["missing-answer notice", createMissingReplyNotice],
   ])("does not mirror %s finals with a runtime transcript owner", async (_name, payload) => {
     setNoAbort();
     const dispatcher = createDispatcher();

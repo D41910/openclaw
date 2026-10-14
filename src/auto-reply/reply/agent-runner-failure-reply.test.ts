@@ -5,64 +5,16 @@ import {
   HEARTBEAT_EXTERNAL_RUN_FAILURE_TEXT,
 } from "../../agents/failover/user-copy.js";
 import { AgentHarnessPreflightError } from "../../agents/harness/errors.js";
-import { resolveReplyCompletion } from "../../agents/reply-completion.js";
 import { WorkerTaskError } from "../../infra/worker-task-pool.js";
 import { SkillResourceDeliveryLimitError } from "../../skills/runtime/resource-delivery-error.js";
 import { SkillLibraryError } from "../../skills/skill-library-error.js";
 import { getReplyPayloadMetadata } from "../reply-payload.js";
 import type { TemplateContext } from "../templating.js";
-import { SILENT_REPLY_TOKEN } from "../tokens.js";
 import {
-  buildMissingReplyPayload,
   buildExternalRunFailureReply,
   buildKnownAgentRunFailureReplyPayload,
   markAgentRunFailureReplyPayload,
 } from "./agent-runner-failure-reply.js";
-import { resolveSourceReplyExpectation } from "./source-reply-delivery-mode.js";
-
-describe("buildMissingReplyPayload", () => {
-  it("surfaces missing output for a mentioned group request even when silence is allowed", () => {
-    const expectation = resolveSourceReplyExpectation({
-      ctx: {
-        Provider: "discord",
-        Surface: "discord",
-        ChatType: "group",
-        InboundEventKind: "user_request",
-        WasMentioned: true,
-      },
-      cfg: { agents: { defaults: { silentReply: { group: "allow" } } } },
-    });
-    const payload = buildMissingReplyPayload({
-      completion: resolveReplyCompletion(expectation, "empty"),
-    });
-
-    expect(payload?.isError).toBe(true);
-    expect(payload?.text).not.toBe(SILENT_REPLY_TOKEN);
-    expect(getReplyPayloadMetadata(payload ?? {})?.deliverDespiteSourceReplySuppression).toBe(true);
-  });
-
-  it.each(["required", "optional", "result-required"] as const)(
-    "reports an empty %s result as a system notice",
-    (expectation) => {
-      expect(
-        buildMissingReplyPayload({ completion: resolveReplyCompletion(expectation, "empty") }),
-      ).toMatchObject({
-        text: "No answer was returned. Ask again if you still need one.",
-        isError: true,
-        isStatusNotice: true,
-      });
-    },
-  );
-
-  it.each([
-    resolveReplyCompletion("optional", "silent"),
-    ...(["ready", "delivered", "pending", "blocked"] as const).map((evidence) =>
-      resolveReplyCompletion("required", evidence),
-    ),
-  ])("does not add an error for $expectation/$outcome", (completion) => {
-    expect(buildMissingReplyPayload({ completion })).toBeUndefined();
-  });
-});
 
 describe("markAgentRunFailureReplyPayload", () => {
   it.each(["NO_REPLY", "NO_REPLY.", '"NO_REPLY"', '{"action":"NO_REPLY"}'])(

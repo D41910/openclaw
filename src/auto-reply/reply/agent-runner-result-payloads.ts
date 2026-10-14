@@ -9,6 +9,7 @@ import {
 } from "../../agents/embedded-agent-runner/delivery-evidence.js";
 import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
 import {
+  createMissingReplyNotice,
   MISSING_REPLY_NOTICE_TEXT,
   isSyntheticSourceReplyTurn,
   resolveReplyCompletion,
@@ -49,7 +50,6 @@ import {
   resolveSourceReplyPolicy,
   resolveTerminalReplyDelivery,
 } from "./agent-runner-core.js";
-import { buildMissingReplyPayload } from "./agent-runner-failure-reply.js";
 import { signalTypingIfNeeded } from "./agent-runner-helpers.js";
 import { buildReplyPayloads } from "./agent-runner-payloads.js";
 import {
@@ -281,9 +281,9 @@ export async function prepareReplyAgentPayloads(state: {
             runResult.didSendDeterministicApprovalPrompt === true,
         });
   const missingReplyPayload =
-    terminalFailurePayload || !missingReplyNoticeAllowed
+    terminalFailurePayload || !missingReplyNoticeAllowed || completion.outcome !== "missing"
       ? undefined
-      : buildMissingReplyPayload({ completion });
+      : createMissingReplyNotice();
   const buildStrandedRetryMissingDeliveryDiagnostic = (): ReplyPayload | undefined => {
     if (
       !missingReplyNoticeAllowed ||

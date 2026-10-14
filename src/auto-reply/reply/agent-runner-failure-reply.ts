@@ -49,7 +49,6 @@ import {
   MISSING_REPLY_NOTICE_TEXT,
   resolveReplyExpectation,
   shouldDeliverMissingReplyNotice,
-  type ReplyCompletion,
   type ReplyExpectation,
 } from "../../agents/reply-completion.js";
 import {
@@ -489,15 +488,6 @@ export async function resolveTerminalAgentRunFailurePayload(params: {
     visibleReplyDelivered:
       replyExpectation === "optional" ? await params.visibleReplyDelivered() : false,
   });
-}
-
-export function buildMissingReplyPayload(params: {
-  completion: ReplyCompletion;
-}): ReplyPayload | undefined {
-  if (params.completion.outcome !== "missing") {
-    return undefined;
-  }
-  return createMissingReplyNotice();
 }
 
 export function buildKnownAgentRunFailureReplyPayload(params: {

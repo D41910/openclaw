@@ -53,6 +53,7 @@ import {
   supervisorSpawnMock,
   wrapPreparedCliRunWithTestAdmission,
 } from "./execute.test-support.js";
+import { prepareCliRunTerminalReply } from "./terminal-reply.js";
 import { captureCliRunStartTime, type PreparedCliRunContext } from "./types.js";
 const executePreparedCliRun = wrapPreparedCliRunWithTestAdmission(executePreparedCliRunImpl);
 vi.mock("../../process/supervisor/adapters/child.js", () => ({ createChildAdapter: vi.fn() })); // Gateway unit coverage owns quiet-admission timing. These integration cases only
@@ -1525,6 +1526,7 @@ describe("executePreparedCliRun supervisor output capture", () => {
         result = buildCliRunResult({
           context,
           output,
+          preparedReply: prepareCliRunTerminalReply(context, output),
           usedHistoryPrompt: false,
           userTurnHandled: true,
           sessionBindingDisabled: true,

@@ -66,7 +66,6 @@ vi.mock("../../media/outbound-attachment.js", () => ({
 
 vi.mock("./agent-runner-failure-reply.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./agent-runner-failure-reply.js")>()),
-  buildMissingReplyPayload: vi.fn(() => undefined),
   buildKnownAgentRunFailureReplyPayload: vi.fn(() => undefined),
   markPostCompactionModelFailurePayload: (_failure: true | undefined, payload: unknown) => payload,
 }));

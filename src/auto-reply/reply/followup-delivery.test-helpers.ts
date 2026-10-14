@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { prepareAgentRunTerminalReply } from "../../agents/agent-run-terminal-reply.js";
 import type { ReplyPayload } from "../types.js";
 import type { SettledAgentTurn } from "./agent-runner-execution.types.js";
+import type { resolveFollowupDeliveryDecision } from "./followup-delivery.js";
 import type { AdmittedFollowupTurn } from "./followup-turn-admission.js";
 import { createMockReplyOperation } from "./test-helpers.js";
 
@@ -70,10 +71,14 @@ export function createSettledExecution(finalText = ""): {
   };
 }
 
+type FollowupAccounting = NonNullable<
+  Parameters<typeof resolveFollowupDeliveryDecision>[0]["accounting"]
+>;
+
 export function createAccounting(
   payloadArray: ReplyPayload[] = [],
-  overrides: Record<string, unknown> = {},
-) {
+  overrides: Partial<FollowupAccounting> = {},
+): FollowupAccounting {
   return {
     payloadArray,
     providerUsed: "anthropic",
@@ -83,7 +88,7 @@ export function createAccounting(
     usage: undefined,
     terminalFailurePayload: undefined,
     ...overrides,
-  } as never;
+  };
 }
 
 export const createDefaults = (onBlockReply: (payload: ReplyPayload) => Promise<void>) => ({

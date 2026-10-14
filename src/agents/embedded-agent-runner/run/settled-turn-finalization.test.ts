@@ -6,6 +6,7 @@ import {
   prepareSystemAgentRunAdmission,
   type AdmittedRunContext,
 } from "../../admitted-run-context.js";
+import { prepareAgentRunTerminalReply } from "../../agent-run-terminal-reply.js";
 import {
   buildEmbeddedRunnerAssistant,
   makeEmbeddedRunnerAttempt,
@@ -173,6 +174,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
     backendMocks.runSettledFinalization.mockResolvedValue({
       outcome: "empty",
       result: {
+        preparedTerminalReply: prepareAgentRunTerminalReply({}),
         assistant: buildEmbeddedRunnerAssistant({
           content: [],
         }),
@@ -208,7 +210,10 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
     attempt.lastToolError = { toolName: "exec", error: "Command exited with code 127" };
     backendMocks.runSettledFinalization.mockResolvedValue({
       outcome: "empty",
-      result: { assistant: buildEmbeddedRunnerAssistant({ content: [] }) },
+      result: {
+        assistant: buildEmbeddedRunnerAssistant({ content: [] }),
+        preparedTerminalReply: prepareAgentRunTerminalReply({}),
+      },
     });
 
     const result = await prepareTerminalWithSettledTurnFinalization(finalizationInput(attempt));
@@ -247,6 +252,9 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       outcome: "answered",
       result: {
         assistant: finalAssistant,
+        preparedTerminalReply: prepareAgentRunTerminalReply({
+          rawText: "The exec tool failed: post-processing error.",
+        }),
         usage: finalAssistant.usage,
         diagnosticTrace: { traceId: "trace-final", spanId: "span-final" },
       },
@@ -300,7 +308,13 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
         expect(params.onAttemptTimeout).not.toBe(retiredControls.onAttemptTimeout);
         expect(params.onAttemptDeadlineChanged).not.toBe(retiredControls.onAttemptDeadlineChanged);
         params.onAttemptTimeout?.(new Error("first finalizer timed out while settling"));
-        return { outcome: "empty", result: { assistant: emptyAssistant } };
+        return {
+          outcome: "empty",
+          result: {
+            assistant: emptyAssistant,
+            preparedTerminalReply: prepareAgentRunTerminalReply({}),
+          },
+        };
       })
       .mockImplementationOnce(async (params: EmbeddedRunAttemptParams) => {
         expect(params.onAttemptAbort).not.toBe(firstAttempt.onAttemptAbort);
@@ -311,7 +325,15 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
         firstAttempt.onAttemptDeadlineChanged?.({ kind: "bounded", deadlineAtMs: Date.now() });
         await vi.advanceTimersByTimeAsync(EMBEDDED_RUN_LANE_TIMEOUT_GRACE_MS + 1);
         expect(params.abortSignal?.aborted).toBe(false);
-        return { outcome: "answered", result: { assistant: finalAssistant } };
+        return {
+          outcome: "answered",
+          result: {
+            assistant: finalAssistant,
+            preparedTerminalReply: prepareAgentRunTerminalReply({
+              rawText: "The command completed successfully.",
+            }),
+          },
+        };
       });
 
     const result = await prepareTerminalWithSettledTurnFinalization(input);
@@ -343,6 +365,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       outcome: "answered",
       result: {
         assistant: buildEmbeddedRunnerAssistant({ content: [{ type: "text", text: "Done." }] }),
+        preparedTerminalReply: prepareAgentRunTerminalReply({ rawText: "Done." }),
       },
     });
 
@@ -398,7 +421,10 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       });
       backendMocks.runSettledFinalization.mockResolvedValue({
         outcome: "empty",
-        result: { assistant: buildEmbeddedRunnerAssistant({ content: [{ type: "text", text }] }) },
+        result: {
+          assistant: buildEmbeddedRunnerAssistant({ content: [{ type: "text", text }] }),
+          preparedTerminalReply: prepareAgentRunTerminalReply({ rawText: text }),
+        },
       });
       const result = await prepareTerminalWithSettledTurnFinalization(input);
       expect(backendMocks.runSettledFinalization).toHaveBeenCalledTimes(silent ? 1 : 2);
@@ -440,6 +466,7 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
     backendMocks.runSettledFinalization.mockResolvedValue({
       outcome: "empty",
       result: {
+        preparedTerminalReply: prepareAgentRunTerminalReply({ rawText: SILENT_REPLY_TOKEN }),
         assistant: buildEmbeddedRunnerAssistant({
           content: [{ type: "text", text: SILENT_REPLY_TOKEN }],
         }),
@@ -470,7 +497,11 @@ describe("prepareTerminalWithSettledTurnFinalization", () => {
       });
       backendMocks.runSettledFinalization.mockResolvedValue({
         outcome: "empty",
-        result: { assistant: emptyAssistant, usage: emptyAssistant.usage },
+        result: {
+          assistant: emptyAssistant,
+          usage: emptyAssistant.usage,
+          preparedTerminalReply: prepareAgentRunTerminalReply({}),
+        },
       });
       const input = finalizationInput(attempt);
       input.terminalBase.runParams.trigger = trigger;

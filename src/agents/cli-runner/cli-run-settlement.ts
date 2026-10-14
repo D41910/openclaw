@@ -34,11 +34,7 @@ import { resolveCliSessionId } from "./cli-run-recovery.js";
 import { projectCliMessagingDeliveryEvidence } from "./delivery-evidence.js";
 import { hashCliReseedPrompt } from "./reseed-envelope.js";
 import type { ClaudeCliRunDiagnosticLifecycle } from "./run-diagnostics.js";
-import {
-  prepareCliRunTerminalReply,
-  resolveCliSourceReplyMirror,
-  type PreparedCliRunTerminalReply,
-} from "./terminal-reply.js";
+import { resolveCliSourceReplyMirror, type PreparedCliRunTerminalReply } from "./terminal-reply.js";
 import type { PreparedCliRunContext, RunCliAgentParams } from "./types.js";
 
 const log = createSubsystemLogger("agents/cli-runner");
@@ -440,7 +436,7 @@ export function buildCliDeliveredFailure(params: {
 export function buildCliRunResult(params: {
   context: PreparedCliRunContext;
   output: CliOutput;
-  preparedReply?: PreparedCliRunTerminalReply;
+  preparedReply: PreparedCliRunTerminalReply;
   effectiveCliSessionId?: string;
   bindingFlushOk?: boolean;
   assistantTranscriptOwned?: boolean;
@@ -458,6 +454,7 @@ export function buildCliRunResult(params: {
     effectiveCliSessionId,
     output,
     preparedContextAgentMeta,
+    preparedReply,
     sessionBindingDisabled,
     usedHistoryPrompt,
     userTurnHandled,
@@ -465,7 +462,6 @@ export function buildCliRunResult(params: {
   const runParams = context.params;
   const rawText = output.rawText ?? output.text;
   const rawFinalText = output.rawFinalText;
-  const preparedReply = params.preparedReply ?? prepareCliRunTerminalReply(context, output);
   const { sourceReplyMirror } = preparedReply;
   const text = preparedReply.text;
   const finalAssistantVisibleText = text;

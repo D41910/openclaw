@@ -9,6 +9,7 @@ import {
 } from "../../agents/embedded-agent-runner/delivery-evidence.js";
 import { hasPendingGeneratedMediaTaskForSessionKey } from "../../agents/media-generation-activity.js";
 import {
+  createMissingReplyNotice,
   MISSING_REPLY_NOTICE_TEXT,
   isRequiredReplyExpectation,
   isSyntheticSourceReplyTurn,
@@ -33,7 +34,6 @@ import {
 } from "./agent-runner-core.js";
 import type { AgentTurnExecutionResult } from "./agent-runner-execution.types.js";
 import {
-  buildMissingReplyPayload,
   markPostCompactionModelFailurePayload,
   renderPostCompactionModelFailurePayload,
 } from "./agent-runner-failure-reply.js";
@@ -96,7 +96,16 @@ function resolveFollowupPayloadContext(turn: AdmittedFollowupTurn) {
 export async function resolveFollowupDeliveryDecision(params: {
   turn: AdmittedFollowupTurn;
   execution: AgentTurnExecutionResult;
-  accounting?: AccountedAgentTurn & {
+  accounting?: Pick<
+    AccountedAgentTurn,
+    | "providerUsed"
+    | "modelUsed"
+    | "terminalFailurePayload"
+    | "payloadArray"
+    | "usage"
+    | "preserveUserFacingSessionState"
+    | "replyUsageState"
+  > & {
     compactionNotice?: ReplyPayload;
     diagnosticsPayload?: ReplyPayload;
   };
@@ -369,7 +378,9 @@ export async function resolveFollowupDeliveryDecision(params: {
         : accounting.terminalFailurePayload
       : undefined
     : (waitingStatusPayload ??
-      (missingReplyNoticeAllowed ? buildMissingReplyPayload({ completion }) : undefined));
+      (missingReplyNoticeAllowed && completion.outcome === "missing"
+        ? createMissingReplyNotice()
+        : undefined));
   if (!hasTerminalPayload && fallbackPayload) {
     payloads.push(...preparePayloads([fallbackPayload]));
   }

@@ -48,6 +48,7 @@ import { testing as cliBackendsTesting } from "../cli-backends.test-support.js";
 import { buildPreparedCliRunContext } from "../cli-runner.test-helpers.js";
 import { buildCliRunResult } from "../cli-runner/cli-run-settlement.js";
 import { buildCliMcpGrantContext } from "../cli-runner/mcp-grant-context.js";
+import { prepareCliRunTerminalReply } from "../cli-runner/terminal-reply.js";
 import type { RunCliAgentParams } from "../cli-runner/types.js";
 import { createCronCreatorAuthorityCapability } from "../cron-creator-authority-context.js";
 import { classifyEmbeddedAgentRunResultForModelFallback } from "../embedded-agent-runner/result-fallback-classifier.js";
@@ -944,6 +945,7 @@ describe("CLI attempt execution", () => {
     const cliResult = buildCliRunResult({
       context,
       output,
+      preparedReply: prepareCliRunTerminalReply(context, output),
       effectiveCliSessionId: output.sessionId,
       bindingFlushOk: false,
       usedHistoryPrompt: false,
@@ -1089,6 +1091,7 @@ describe("CLI attempt execution", () => {
         return buildCliRunResult({
           context,
           output: { text: "partial reply", terminalInterruption: { reason } },
+          preparedReply: prepareCliRunTerminalReply(context, { text: "partial reply" }),
           effectiveCliSessionId: replacement ? successorCliSessionId : cliSessionId,
           bindingFlushOk: true,
           usedHistoryPrompt: false,

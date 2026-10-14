@@ -4,23 +4,13 @@ import {
   setReplyPayloadMetadata,
   type ReplyPayloadMetadata,
 } from "../../../auto-reply/reply-payload.js";
-import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import type { SessionTranscriptWriterFence } from "../../../config/sessions/transcript-write-context.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
-import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
 import { resolveAdmittedRunActiveAssertion } from "../../admitted-run-context.js";
 import { classifyAgentRunTerminalOutcome } from "../../agent-run-terminal-outcome.js";
-import {
-  prepareAgentRunTerminalReply,
-  sanitizeAgentRunTerminalReply,
-} from "../../agent-run-terminal-reply.js";
-import { extractAssistantVisibleText } from "../../embedded-agent-utils.js";
 import { runAgentHarnessSettledTurnFinalization } from "../../harness/selection.js";
-import { resolveSettledTurnFinalizationText } from "../../harness/settled-turn-finalization-result.js";
-import type {
-  AgentHarness,
-  AgentHarnessSettledTurnFinalizationResult,
-} from "../../harness/types.js";
+import type { PreparedSettledTurnFinalizationResult } from "../../harness/settled-turn-finalization-outcome.js";
+import type { AgentHarness } from "../../harness/types.js";
 import { observeReplyDelivery, resolveReplyExpectation } from "../../reply-completion.js";
 import { resolveAgentTimeoutMs } from "../../timeout.js";
 import {
@@ -399,7 +389,6 @@ async function runPreparedSettledTurnFinalization(input: {
     return {
       outcome: finalization.outcome,
       attempt: buildSettledTurnFinalizationAttemptResult({
-        outcome: finalization.outcome,
         result: finalization.result,
         settledAttempt: input.settledAttempt,
         prompt: input.prompt,
@@ -413,31 +402,15 @@ async function runPreparedSettledTurnFinalization(input: {
 }
 
 function buildSettledTurnFinalizationAttemptResult(input: {
-  outcome: "answered" | "empty";
-  result: AgentHarnessSettledTurnFinalizationResult;
+  result: PreparedSettledTurnFinalizationResult;
   settledAttempt: EmbeddedRunAttemptWithReceiptEvidence;
   prompt: string;
   agentHarnessId?: string;
   runtimePlan?: EmbeddedRunAttemptParams["runtimePlan"];
 }): EmbeddedRunAttemptWithReceiptEvidence {
   const { result, settledAttempt } = input;
-  const preparedTerminalReply =
-    result.preparedTerminalReply ??
-    prepareAgentRunTerminalReply({ rawText: resolveRawAssistantAnswerText(result.assistant) });
-  if (
-    !result.preparedTerminalReply &&
-    preparedTerminalReply.terminalReply.disposition !== "silent"
-  ) {
-    const rawText = preparedTerminalReply.text;
-    preparedTerminalReply.text = parseReplyDirectives(
-      extractAssistantVisibleText(result.assistant, (_text, final) => (final ? rawText : "")),
-    ).text;
-    preparedTerminalReply.terminalReply = sanitizeAgentRunTerminalReply(preparedTerminalReply.text);
-  }
-  const text =
-    input.outcome === "empty"
-      ? preparedTerminalReply.text
-      : resolveSettledTurnFinalizationText({ ...result, preparedTerminalReply });
+  const { preparedTerminalReply } = result;
+  const text = preparedTerminalReply.text;
   // Finalization replaces terminal ownership, not host-private facts from settled tools.
   // Its response model does not replace the original runtime-owned selection.
   // Replay, abort, and lifecycle state remain finalizer-local.

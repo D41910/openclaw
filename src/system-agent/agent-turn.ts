@@ -407,7 +407,7 @@ async function runSystemAgentTurnWithDeps(
     }
     failureGuidance = "retry";
     const text = extractAgentRunText(result);
-    if (!text || result.meta?.terminalReply?.disposition === "silent") {
+    if (!text) {
       throw new SystemAgentInferenceUnavailableError("agent-turn");
     }
     return {
