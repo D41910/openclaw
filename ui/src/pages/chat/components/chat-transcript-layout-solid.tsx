@@ -10,11 +10,8 @@ import {
   Switch,
   untrack,
 } from "solid-js";
+import { PRESENTATION_CHANGED_EVENT, type PresentationBinding } from "../../../lib/presentation.ts";
 import { ApplicationProvider } from "../../../lib/reactive/context.ts";
-import {
-  PRESENTATION_CHANGED_EVENT,
-  type PresentationBinding,
-} from "../../../lit/presentation-binding.ts";
 import { LitContent, SolidContentPresentation } from "../../../lit/solid-content.tsx";
 import type { AfterCommitEffect } from "../render-lifecycle.ts";
 import {

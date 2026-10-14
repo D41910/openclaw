@@ -8,11 +8,11 @@ import {
   KEYBOARD_SHORTCUT_COMBOS,
   matchesShortcutCombo,
 } from "../../lib/keyboard-shortcut-contract.ts";
+import { PRESENTATION_CHANGED_EVENT } from "../../lib/presentation.ts";
 import { ApplicationProvider, useOptionalApplication } from "../../lib/reactive/context.ts";
 import { t } from "../../lib/reactive/i18n.ts";
 import { projectSource } from "../../lib/reactive/projection.ts";
 import { scopedSessionArtifactKey } from "../../lib/sessions/session-key.ts";
-import { PRESENTATION_CHANGED_EVENT } from "../../lit/presentation-binding.ts";
 import { LitContent, solidContent, emptyLegacyContent } from "../../lit/solid-content.tsx";
 import { getChatHistoryLoadState } from "./chat-history-state.ts";
 import { loadChatPendingInputs } from "./chat-pending-inputs.ts";

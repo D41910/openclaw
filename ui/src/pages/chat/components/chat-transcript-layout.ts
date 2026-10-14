@@ -1,6 +1,6 @@
 import type { Virtualizer } from "@tanstack/virtual-core";
 import type { ApplicationContext } from "../../../app/context.ts";
-import type { PresentationValue } from "../../../lit/presentation-binding.ts";
+import type { PresentationValue } from "../../../lib/presentation.ts";
 import type { TranscriptLayoutOwner } from "./chat-transcript-layout-owner.ts";
 
 export type TranscriptRow<T = unknown> =

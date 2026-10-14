@@ -4,7 +4,7 @@ import type { Virtualizer } from "@tanstack/virtual-core";
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 import type { ApplicationContext } from "../../../app/context.ts";
 import { cancelLayout, scheduleLayout } from "../../../lib/layout-frame.ts";
-import type { PresentationValue } from "../../../lit/presentation-binding.ts";
+import type { PresentationValue } from "../../../lib/presentation.ts";
 import type { AssistantMessageExpansionState } from "../chat-message-recovery.ts";
 import type { ChatSessionScrollPosition } from "../scroll.ts";
 import type { ChatMessageEntryAnimations } from "./chat-message-entry.ts";

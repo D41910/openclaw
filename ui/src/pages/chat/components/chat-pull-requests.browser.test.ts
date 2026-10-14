@@ -1,7 +1,7 @@
 import { html, nothing, render } from "lit";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
-import { PRESENTATION_CHANGED_EVENT } from "../../../lit/presentation-binding.ts";
+import { PRESENTATION_CHANGED_EVENT } from "../../../lib/presentation.ts";
 import { renderChatPullRequests } from "./chat-pull-requests.ts";
 import baseStyles from "../../../styles/base.css?inline";
 import layoutStyles from "../../../styles/chat/layout.css?inline";

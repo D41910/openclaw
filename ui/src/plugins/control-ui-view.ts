@@ -6,7 +6,8 @@ import type {
   ControlUiSurfaceProps,
 } from "../../../src/plugin-sdk/control-ui.js";
 import { applicationContext } from "../app/context.ts";
-import { livePresentation, type PresentationValue } from "../lit/presentation-binding.ts";
+import type { PresentationValue } from "../lib/presentation.ts";
+import { livePresentation } from "../lit/presentation-binding.ts";
 import type { ControlUiPluginCapability } from "./control-ui-capability.ts";
 
 export type ViewKind = "pages" | "panels" | "accessories" | "widgets" | "replacements";

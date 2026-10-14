@@ -33,8 +33,8 @@ import type {
   ChatStreamSegment,
 } from "../../../lib/chat/chat-types.ts";
 import type { EmbedSandboxMode } from "../../../lib/chat/tool-display.ts";
+import type { PresentationValue } from "../../../lib/presentation.ts";
 import type { UiSessionDefaultsHost } from "../../../lib/sessions/session-key.ts";
-import type { PresentationValue } from "../../../lit/presentation-binding.ts";
 import type { TurnRecapWatch } from "../chat-progress.ts";
 import type { SubagentRoster } from "../chat-spawned-subagent.ts";
 import { resetChatThreadState } from "../chat-thread.ts";

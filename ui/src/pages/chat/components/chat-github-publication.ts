@@ -3,12 +3,12 @@ import { icons } from "../../../components/icons.ts";
 import "../../../components/tooltip.ts";
 import { t } from "../../../i18n/index.ts";
 import { registerGitHubEnglish } from "../../../i18n/locales/en-github.ts";
+import type { PresentationValue } from "../../../lib/presentation.ts";
 import {
   personalGitHubPublicationSelection,
   selectedGitHubPublisher,
   type GitHubPublicationView,
 } from "../../../lib/sessions/github-publication-controller.ts";
-import type { PresentationValue } from "../../../lit/presentation-binding.ts";
 import { solidContent } from "../../../lit/solid-content.tsx";
 import { GitHubPublicationMenu } from "./chat-github-publication-menu.tsx";
 

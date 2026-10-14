@@ -9,10 +9,7 @@ import type {
 } from "../../../src/plugin-sdk/control-ui.js";
 import { createDeferred } from "../../../test/helpers/promise.js";
 import type { ApplicationContext } from "../app/context.ts";
-import {
-  PRESENTATION_CHANGED_EVENT,
-  type PresentationBinding,
-} from "../lit/presentation-binding.ts";
+import { PRESENTATION_CHANGED_EVENT, type PresentationBinding } from "../lib/presentation.ts";
 import { renderLegacyTemplate, solidContent } from "../lit/solid-content.tsx";
 import { createApplicationContextProvider } from "../test-helpers/application-context.ts";
 import { mountSolid } from "../test-helpers/mount-solid.ts";

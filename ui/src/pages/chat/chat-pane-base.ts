@@ -32,6 +32,7 @@ import type {
   BoardProviderLease,
 } from "../../lib/board/provider.ts";
 import type { BoardFace } from "../../lib/board/settings.ts";
+import { PRESENTATION_CHANGED_EVENT } from "../../lib/presentation.ts";
 import type { GitHubPublicationBinding } from "../../lib/sessions/session-capability.ts";
 import {
   areUiSessionKeysEquivalent,
@@ -42,7 +43,6 @@ import {
 import type { SwarmRosterHydrator } from "../../lib/sessions/swarm-roster.ts";
 import { SessionUnreadPatchGuard } from "../../lib/sessions/unread.ts";
 import { PollController } from "../../lit/poll-controller.ts";
-import { PRESENTATION_CHANGED_EVENT } from "../../lit/presentation-binding.ts";
 import {
   ControllerHost,
   SubscriptionsController,
