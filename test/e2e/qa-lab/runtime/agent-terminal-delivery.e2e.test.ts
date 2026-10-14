@@ -334,7 +334,7 @@ describe("provider terminal reply delivery", () => {
           { id: "quoted", raw: '"NO_REPLY"', expected: '"NO_REPLY"' },
           { id: "literal", raw: "NO_REPLY\nNO_REPLY", expected: "NO_REPLY" },
           { id: "crlf", raw: "NO_REPLY\r\nAnswer", expected: "NO_REPLY\r\nAnswer" },
-          { id: "indented", raw: " NO_REPLY\nAnswer", expected: "NO_REPLY\nAnswer" },
+          { id: "indented", raw: " NO_REPLY\nAnswer", expected: " NO_REPLY\nAnswer" },
         ];
         const sessionKeys = cases.map(({ id }) => `agent:qa:qa:terminal-${id}`);
         const deliveredTexts = (target: string) =>
@@ -418,7 +418,7 @@ describe("provider terminal reply delivery", () => {
               event.payload?.runId === runId &&
               event.payload.state === "final",
           );
-          expect(deliveredTexts(target)).toEqual(expected);
+          expect(deliveredTexts(target)).toEqual(expected.map((text) => text.trim()));
           const history = await client.request<{ sessionId: string; messages: unknown[] }>(
             "chat.history",
             { sessionKey, limit: 20, maxChars: 50_000 },
