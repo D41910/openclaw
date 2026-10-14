@@ -630,12 +630,9 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     return normalized.length > 0 && normalized === state.lastAssistantTextNormalized;
   };
 
+  // Callers resolve replay identity first; equal chunks can represent distinct source ranges.
   const pushAssistantText = (text: string, normalizedText?: string) => {
-    if (
-      !text ||
-      (params.silentExpected && !isSilentReplyText(text, SILENT_REPLY_TOKEN)) ||
-      shouldSkipAssistantText(text, normalizedText)
-    ) {
+    if (!text || (params.silentExpected && !isSilentReplyText(text, SILENT_REPLY_TOKEN))) {
       return;
     }
     assistantTexts.push(text);
@@ -649,7 +646,7 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
     } else if (count > 0) {
       assistantTexts.splice(state.assistantTextBaseline, count, text);
       rememberAssistantText(text);
-    } else {
+    } else if (!shouldSkipAssistantText(text)) {
       pushAssistantText(text);
     }
   };
@@ -672,7 +669,12 @@ export function createReplyDelivery({ params, state, log }: ReplyDeliveryParams)
       // Without block replies, the final payload still owns text seen during interim streaming.
       replaceCurrentAssistantText(text);
       state.suppressBlockChunks = true;
-    } else if (!addedDuringMessage && text && !chunkerHasBuffered) {
+    } else if (
+      !addedDuringMessage &&
+      text &&
+      !chunkerHasBuffered &&
+      !shouldSkipAssistantText(text)
+    ) {
       pushAssistantText(text);
     }
 

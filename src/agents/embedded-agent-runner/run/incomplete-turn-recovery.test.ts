@@ -163,6 +163,38 @@ describe("incomplete-turn recovery policy", () => {
     },
   );
 
+  it.each([
+    { answer: "The earlier answer.", commentary: "NO_REPLY" },
+    { answer: "NO_REPLY", commentary: "This is still commentary." },
+  ])(
+    "still requests a required answer after phased silence: $answer / $commentary",
+    ({ answer, commentary }) => {
+      const assistant = emptyAssistant({
+        content: [
+          {
+            type: "text",
+            text: answer,
+            textSignature: JSON.stringify({ v: 1, id: "answer", phase: "final_answer" }),
+          },
+          {
+            type: "text",
+            text: commentary,
+            textSignature: JSON.stringify({ v: 1, id: "tail", phase: "commentary" }),
+          },
+        ],
+      });
+      expect(
+        resolveEmptyResponseRetryInstruction({
+          modelApi: "openai-completions",
+          payloadCount: 0,
+          aborted: false,
+          timedOut: false,
+          attempt: emptyAttempt(assistant),
+        }),
+      ).toBe(EMPTY_RESPONSE_RETRY_INSTRUCTION);
+    },
+  );
+
   it("does not retry an empty turn after side effects", () => {
     const assistant = emptyAssistant({ stopReason: "stop", model: "gpt-5.4" });
     const attempt = emptyAttempt(assistant);

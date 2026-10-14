@@ -1,7 +1,10 @@
 import { asPositiveFiniteNumber } from "@openclaw/normalization-core/number-coercion";
 import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/string-coerce";
 import { getReplyPayloadMetadata } from "../../../auto-reply/reply-payload.js";
-import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
+import {
+  parseReplyDirectives,
+  parseReplyDirectivesForMessage,
+} from "../../../auto-reply/reply/reply-directives.js";
 import type { AssistantMessage } from "../../../llm/types.js";
 import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
 import type { CompletedAssistantAnswer } from "../../embedded-agent-subscribe.handlers.types.js";
@@ -88,7 +91,14 @@ export function hasComposedVisibleAnswerAfterSettledTools(params: {
   if (
     currentMessages
       .slice(lastToolResultIndex + 1)
-      .some((message) => readAssistantSnapshotText(message).length > 0)
+      .some(
+        (message) =>
+          message.role === "assistant" &&
+          parseReplyDirectivesForMessage(
+            extractEmbeddedAssistantText(message),
+            resolveRawAssistantAnswerText(message),
+          ).text.trim().length > 0,
+      )
   ) {
     return true;
   }
@@ -233,11 +243,12 @@ export function classifyAssistantTurn(params: {
   >;
 }) {
   const assistant = resolveCurrentAttemptAssistant(params.attempt);
-  const output = parseReplyDirectives(
-    assistant
-      ? resolveRawAssistantAnswerText(assistant)
-      : joinAssistantTexts(params.attempt.assistantTexts),
-  );
+  const output = assistant
+    ? parseReplyDirectivesForMessage(
+        extractEmbeddedAssistantText(assistant),
+        resolveRawAssistantAnswerText(assistant),
+      )
+    : parseReplyDirectives(joinAssistantTexts(params.attempt.assistantTexts));
   const visibleText = output.text.trim();
   const reasoningOnly = Boolean(
     assistant && assessLastAssistantMessage(assistant) === "incomplete-text",

@@ -1,6 +1,9 @@
 import { isPromiseLike } from "@openclaw/normalization-core/promise-like";
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
-import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
+import {
+  parseReplyDirectives,
+  parseReplyDirectivesForMessage,
+} from "../auto-reply/reply/reply-directives.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { applyAssistantDeliveryDirectives } from "../config/sessions/transcript-assistant-delivery.js";
 import { resolveAssistantMessagePhase } from "../shared/chat-message-content.js";
@@ -167,11 +170,7 @@ export function handleMessageEnd(
   ctx.resetPartialReplyDirectives();
   // Silence belongs to the whole message, including text excluded by phase selection.
   const messageText = messageToolText === undefined ? getRawText() : text;
-  const messageReply = parseReplyDirectives(messageText);
-  const parsedText =
-    messageReply.hasSilentIntent || messageText === text
-      ? messageReply
-      : parseReplyDirectives(text);
+  const parsedText = parseReplyDirectivesForMessage(messageText, text);
   const cleanedText = parsedText.text;
   const { mediaUrls } = resolveSendableOutboundReplyParts(parsedText, { text: "" });
   const managedMediaUrls = resolveManagedStreamMediaUrls(ctx.state, mediaUrls);
@@ -294,7 +293,7 @@ export function handleMessageEnd(
   const chunkerHasBuffered = Boolean(ctx.params.onBlockReply) && ctx.blockChunker.hasBuffered();
   ctx.finalizeAssistantTexts({
     text: finalAssistantText,
-    hasSilentIntent: messageReply.hasSilentIntent,
+    hasSilentIntent: parsedText.hasSilentIntent,
     addedDuringMessage,
     chunkerHasBuffered,
   });
@@ -357,7 +356,7 @@ export function handleMessageEnd(
     // streamReasoning rendering setting (gated inside emitReasoningStream).
     ctx.emitReasoningStream(rawThinking);
   }
-  ctx.settleAssistantMessageDelivery({ silent: messageReply.hasSilentIntent });
+  ctx.settleAssistantMessageDelivery({ silent: parsedText.hasSilentIntent });
 
   if (
     !ctx.params.silentExpected &&

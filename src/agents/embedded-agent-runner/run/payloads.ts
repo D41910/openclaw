@@ -14,7 +14,10 @@ import {
   setReplyPayloadMetadata,
   type ReplyPayload,
 } from "../../../auto-reply/reply-payload.js";
-import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
+import {
+  parseReplyDirectives,
+  parseReplyDirectivesForMessage,
+} from "../../../auto-reply/reply/reply-directives.js";
 import type { ReasoningLevel, ThinkLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
 import {
   HEARTBEAT_TOKEN,
@@ -46,6 +49,7 @@ import { isToolAuthoredSourceReplyForAssistant } from "../../embedded-agent-tool
 import {
   extractAssistantThinking,
   extractAssistantVisibleText,
+  extractEmbeddedAssistantText,
 } from "../../embedded-agent-utils.js";
 import { isTimeoutErrorMessage } from "../../failover/classify.js";
 import type { PreparedProviderFailoverOwner } from "../../failover/provider-patterns.js";
@@ -284,18 +288,21 @@ export function buildEmbeddedRunPayloads(params: {
         ? extractAssistantVisibleText(assistantForPayload)
         : "";
       const fallbackRawAnswerText = resolveRawAssistantAnswerText(assistantForPayload);
-      const rawAnswerDirectiveState = fallbackRawAnswerText
-        ? parseReplyDirectives(fallbackRawAnswerText)
+      const rawAnswerDirectiveState = assistantForPayload
+        ? parseReplyDirectivesForMessage(
+            extractEmbeddedAssistantText(assistantForPayload),
+            fallbackRawAnswerText,
+          )
         : null;
       const reasoningText =
         terminalAssistant && params.reasoningLevel === "on" && params.thinkingLevel !== "off"
           ? extractAssistantThinking(terminalAssistant)
           : "";
-      if (reasoningText) {
+      if (reasoningText && terminalAssistant) {
         const reasoningIsSilent = (
           terminalAssistant === assistantForPayload
             ? rawAnswerDirectiveState
-            : parseReplyDirectives(resolveRawAssistantAnswerText(terminalAssistant) ?? "")
+            : parseReplyDirectives(extractEmbeddedAssistantText(terminalAssistant))
         )?.hasSilentIntent;
         if (!reasoningIsSilent) {
           replyItems.push({ text: reasoningText, isReasoning: true });

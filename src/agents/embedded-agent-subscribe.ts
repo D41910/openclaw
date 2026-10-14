@@ -349,7 +349,7 @@ export function subscribeEmbeddedAgentSession(input: SubscribeEmbeddedAgentSessi
     ).trimEnd();
     if (assistantTexts.length > state.assistantTextBaseline || state.hasFlushedPartialText) {
       replyDelivery.replaceCurrentAssistantText(visibleText);
-    } else if (visibleText) {
+    } else if (visibleText && !replyDelivery.shouldSkipAssistantText(visibleText)) {
       replyDelivery.pushAssistantText(visibleText);
     }
     state.hasFlushedPartialText = Boolean(visibleText);

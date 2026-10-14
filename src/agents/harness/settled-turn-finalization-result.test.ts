@@ -99,6 +99,43 @@ describe("assertSettledTurnFinalizationResult", () => {
     }
   });
 
+  it.each([
+    { answer: "The earlier answer.", commentary: "NO_REPLY", empty: true },
+    { answer: "NO_REPLY", commentary: "This is still commentary.", empty: true },
+    {
+      answer: "The earlier answer.",
+      commentary: "NO_REPLY\nMEDIA:https://example.com/result.png",
+      empty: false,
+    },
+    { answer: "The earlier answer.", commentary: "NO_REPLY\nMEDIA:media://inbound/", empty: false },
+  ])(
+    "resolves full-message intent before selecting the finalizer answer: $answer / $commentary",
+    ({ answer, commentary, empty }) => {
+      const result = {
+        assistant: assistantMessage([
+          {
+            type: "text",
+            text: answer,
+            textSignature: JSON.stringify({ v: 1, id: "answer", phase: "final_answer" }),
+          },
+          {
+            type: "text",
+            text: commentary,
+            textSignature: JSON.stringify({ v: 1, id: "tail", phase: "commentary" }),
+          },
+        ]),
+      };
+      if (empty) {
+        expect(() => assertSettledTurnFinalizationResult(result)).toThrow(
+          EmptySettledTurnFinalizationError,
+        );
+      } else {
+        expect(assertSettledTurnFinalizationResult(result)).toBe(result);
+        expect(resolveSettledTurnFinalizationText(result)).toBe(`${answer}\n${commentary}`);
+      }
+    },
+  );
+
   it("rejects an assistant stopped at the length limit", () => {
     expect(() =>
       assertSettledTurnFinalizationResult({

@@ -1,7 +1,10 @@
-import { parseReplyDirectives } from "../../auto-reply/reply/reply-directives.js";
+import { parseReplyDirectivesForMessage } from "../../auto-reply/reply/reply-directives.js";
 import { hasReplyPayloadContent } from "../../interactive/payload.js";
 import { normalizeAgentRunAttemptTerminal } from "../agent-run-terminal-outcome.js";
-import { resolveFinalAssistantVisibleText } from "../embedded-agent-runner/run/helpers.js";
+import {
+  extractAssistantVisibleText,
+  extractEmbeddedAssistantText,
+} from "../embedded-agent-utils.js";
 import { EmptySettledTurnFinalizationError } from "./settled-turn-finalization-outcome.js";
 import type {
   AgentHarnessAttemptResult,
@@ -62,11 +65,13 @@ export function assertSettledTurnFinalizationResult(
 export function resolveSettledTurnFinalizationText(
   result: AgentHarnessSettledTurnFinalizationResult,
 ): string {
-  const text = resolveFinalAssistantVisibleText(result.assistant);
-  if (!text || !hasReplyPayloadContent(parseReplyDirectives(text))) {
+  const messageText = extractEmbeddedAssistantText(result.assistant);
+  const selectedText = extractAssistantVisibleText(result.assistant).trim();
+  const parsed = parseReplyDirectivesForMessage(messageText, selectedText);
+  if (!hasReplyPayloadContent(parsed)) {
     throw new EmptySettledTurnFinalizationError(result);
   }
-  return text;
+  return parsed.hasSilentIntent ? messageText : selectedText;
 }
 
 /**

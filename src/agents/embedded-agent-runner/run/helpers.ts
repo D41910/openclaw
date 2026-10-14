@@ -1,7 +1,12 @@
+import { parseReplyDirectivesFromMedia } from "../../../auto-reply/reply/reply-directives-core.js";
 import { generateSecureToken } from "../../../infra/secure-random.js";
 import type { AssistantMessage } from "../../../llm/types.js";
+import { splitMediaOutput } from "../../../media/parse-output.js";
 import { extractAssistantTextForPhase } from "../../../shared/chat-message-content.js";
-import { extractAssistantVisibleText } from "../../embedded-agent-utils.js";
+import {
+  extractAssistantVisibleText,
+  extractEmbeddedAssistantText,
+} from "../../embedded-agent-utils.js";
 import {
   deriveContextPromptTokens,
   hasNonzeroUsage,
@@ -174,7 +179,12 @@ export function resolveFinalAssistantVisibleText(
   if (!lastAssistant) {
     return undefined;
   }
-  const visibleText = extractAssistantVisibleText(lastAssistant).trim();
+  const message = parseReplyDirectivesFromMedia(
+    splitMediaOutput(extractEmbeddedAssistantText(lastAssistant)),
+  );
+  const visibleText = message.hasSilentIntent
+    ? message.text.trim()
+    : extractAssistantVisibleText(lastAssistant).trim();
   return visibleText || undefined;
 }
 

@@ -221,6 +221,7 @@ export function reconcileBlockReplySnapshot(
     oldPrefix === nextPrefix &&
     previous.blockText.startsWith(oldPrefix) &&
     next.blockText.startsWith(nextPrefix) &&
+    !crossesCode(next, nextPrefix.length + retained) &&
     oldText.slice(0, retained) === nextText.slice(0, retained);
   if (
     retainedPrefix &&
@@ -291,6 +292,7 @@ export function reconcileBlockReplySnapshot(
   }
   const sourceBreaks: number[] = [];
   if (
+    !replacedPreparedSource &&
     scopeRetained &&
     oldScope.index === nextScope.index &&
     oldPrefix === nextPrefix &&

@@ -20,6 +20,7 @@ import {
   formatUserFacingAssistantErrorText,
   GENERIC_ASSISTANT_ERROR_TEXT,
 } from "../../embedded-agent-helpers/error-text.js";
+import { extractEmbeddedAssistantText } from "../../embedded-agent-utils.js";
 import { runAgentHarnessSettledTurnFinalization } from "../../harness/selection.js";
 import { resolveSettledTurnFinalizationText } from "../../harness/settled-turn-finalization-result.js";
 import type {
@@ -41,7 +42,6 @@ import {
 import { copyAttemptDeliveryState } from "./attempt-delivery-state.js";
 import type { EmbeddedRunAttemptWithReceiptEvidence } from "./attempt-result.js";
 import { resolveRuntimeModelAttempt } from "./backend.js";
-import { resolveFinalAssistantVisibleText } from "./helpers.js";
 import {
   resolveSettledToolBatchEvidence,
   shouldTreatEmptyAssistantReplyAsSilent,
@@ -489,7 +489,7 @@ function buildSettledTurnFinalizationAttemptResult(input: {
   runtimePlan?: EmbeddedRunAttemptParams["runtimePlan"];
 }): EmbeddedRunAttemptWithReceiptEvidence {
   const { result, settledAttempt } = input;
-  const authoredText = resolveFinalAssistantVisibleText(result.assistant) ?? "";
+  const authoredText = extractEmbeddedAssistantText(result.assistant);
   const text =
     input.outcome === "empty"
       ? parseReplyDirectives(authoredText).hasSilentIntent

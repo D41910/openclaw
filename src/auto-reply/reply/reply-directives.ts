@@ -7,6 +7,17 @@ import {
 
 export type { ReplyDirectiveParseResult } from "./reply-directives-core.js";
 
+/** Whole-message silence outranks phase selection; selected silence does not erase commentary. */
+export function parseReplyDirectivesForMessage(
+  messageText: string,
+  selectedText: string,
+): ReplyDirectiveParseResult {
+  const message = parseReplyDirectives(messageText);
+  return message.hasSilentIntent || messageText === selectedText
+    ? message
+    : { ...parseReplyDirectives(selectedText), hasSilentIntent: false };
+}
+
 export function parseReplyDirectives(
   raw: string,
   options: {

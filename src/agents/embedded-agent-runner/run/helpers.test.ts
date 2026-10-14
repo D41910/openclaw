@@ -87,6 +87,23 @@ describe("resolveFinalAssistantVisibleText", () => {
     expect(resolveFinalAssistantVisibleText(lastAssistant)).toBe("Section 1\nSection 2");
   });
 
+  it("keeps an answer retracted by later commentary out of visible metadata while retaining raw diagnostics", () => {
+    const assistant = makeAssistantMessage([
+      {
+        type: "text",
+        text: "The earlier answer.",
+        textSignature: JSON.stringify({ v: 1, id: "answer", phase: "final_answer" }),
+      },
+      {
+        type: "text",
+        text: "NO_REPLY",
+        textSignature: JSON.stringify({ v: 1, id: "tail", phase: "commentary" }),
+      },
+    ]);
+    expect(resolveFinalAssistantVisibleText(assistant)).toBeUndefined();
+    expect(resolveFinalAssistantRawText(assistant)).toBe("The earlier answer.");
+  });
+
   it("returns undefined when the final visible text is empty", () => {
     const lastAssistant = makeAssistantMessage([
       {
