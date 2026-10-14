@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import type { SidebarAttentionElementAttributes } from "../components/sidebar-attention-element.ts";
 import type { ApplicationContext } from "./context.ts";
 import { floatingSidebarAttentionVisible } from "./navigation-surface.ts";
 
@@ -17,9 +18,7 @@ type FloatingUpdateCardProps = {
 declare module "@solidjs/web" {
   namespace JSX {
     interface IntrinsicElements {
-      "openclaw-sidebar-attention": HTMLAttributes<HTMLElement> & {
-        "prop:onNavigate"?: FloatingUpdateCardProps["onNavigate"];
-      };
+      "openclaw-sidebar-attention": SidebarAttentionElementAttributes;
       "openclaw-sidebar-update-card": HTMLAttributes<HTMLElement> & {
         "prop:updateRun": FloatingUpdateCardProps["updateRun"];
         "prop:statusBanner": FloatingUpdateCardProps["statusBanner"];
