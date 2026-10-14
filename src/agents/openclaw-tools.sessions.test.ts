@@ -651,10 +651,9 @@ describe("sessions tools", () => {
           return { runId: "inline-result", status: "accepted" };
         }
         if (request.method === "agent.wait") {
-          await writeFinal(targetKey, "inline-result", "initial");
           return {
             status: "ok",
-            terminalReply: { disposition: "visible", text: "bounded snapshot" },
+            terminalReply: { disposition: "visible", text: "initial" },
           };
         }
         return {};
