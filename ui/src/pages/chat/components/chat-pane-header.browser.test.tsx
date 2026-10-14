@@ -1,5 +1,5 @@
 import { html } from "lit";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { installTitleTooltips } from "../../../components/tooltip-title.ts";
 import "../../../components/web-awesome.ts";
 import { i18n, t } from "../../../i18n/index.ts";
@@ -97,13 +97,24 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
     });
 
     it("keeps mobile panel choices first and opens Details from the native trigger", async () => {
+      await page.viewport(390, 844);
+      const originalDirection = document.documentElement.dir;
+      onTestFinished(() => {
+        document.documentElement.dir = originalDirection;
+      });
       const onOpenDetails = vi.fn();
       const { container } = mountChatPaneHeader(containers, {
         mergedChrome: true,
         narrow: true,
         onOpenDetails,
         panelMenuActions: [
-          { id: "terminal", label: "Terminal", icon: html``, onActivate: vi.fn() },
+          {
+            id: "terminal",
+            label: "Terminal",
+            icon: html``,
+            shortcut: KEYBOARD_SHORTCUT_COMBOS.terminalPanel,
+            onActivate: vi.fn(),
+          },
         ],
         onOpenSplitView: vi.fn(),
       });
@@ -120,6 +131,19 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
           item.getAttribute("data-value"),
         ),
       ).toEqual(["details", "terminal", "open-split-view"]);
+      const surface = menu.querySelector<HTMLElement>(":scope > .oc-menu")!;
+      for (const direction of ["ltr", "rtl"]) {
+        document.documentElement.dir = direction;
+        const bounds = surface.getBoundingClientRect();
+        expect(bounds.left).toBeCloseTo(8, 0);
+        expect(window.innerWidth - bounds.right).toBeCloseTo(8, 0);
+        expect(window.innerHeight - bounds.bottom).toBeCloseTo(8, 0);
+      }
+      const terminalDetails = surface.querySelector<HTMLElement>(
+        '[data-value="terminal"] > .oc-menu-item__details',
+      )!;
+      expect(terminalDetails.querySelector("kbd")).not.toBeNull();
+      expect(getComputedStyle(terminalDetails).display).toBe("none");
       await selectChatLayoutAction(scope, t("chat.sessionDetails.title"));
       expect(onOpenDetails).toHaveBeenCalledExactlyOnceWith(trigger);
       expect(trigger.getAttribute("aria-expanded")).toBe("false");
