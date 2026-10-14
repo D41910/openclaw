@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import { getDatabaseEngineSelection } from "../infra/database-engine/context.js";
 import {
   assertStateDatabaseAccessAllowed,
   assertStateDatabaseReadAllowed,
@@ -317,7 +316,6 @@ function publishOpenClawStateDatabase(
     pathname,
     Object.assign(database, {
       schemaFacts,
-      databaseEngineInput: getDatabaseEngineSelection()?.input,
     }),
   );
   registerStateDatabaseWalAdmission(database, identity, admission, env);

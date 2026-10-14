@@ -14,7 +14,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveDatabaseEngineInput } from "../infra/database-engine/config.js";
 import {
   getDatabaseEngineSelection,
-  withDatabaseEngineInput,
+  installDatabaseEngineSelection,
   type DatabaseEngineSelection,
 } from "../infra/database-engine/context.js";
 import type { DeferredPluginMigration } from "../infra/deferred-plugin-migrations.js";
@@ -193,95 +193,92 @@ export async function readAdmittedConfigSnapshot(params: {
       const engineInput = selection
         ? selection.input
         : await resolveDatabaseEngineInput(selected.config, params.env);
-      return await withDatabaseEngineInput(engineInput, async () => {
-        const withStateSnapshot: typeof withOpenClawStateDatabaseReadSnapshot = engineInput
-          ? (operation) => operation()
-          : withOpenClawStateDatabaseReadSnapshot;
-        const admitted = await measureDoctorConfigPreflightStep("admission.state-snapshot", () =>
-          withStateSnapshot(
-            async () => {
-              const recoveryOptions = {
-                configPath: selected.path,
-                observe: false,
-                env: params.env,
-              };
-              const coreRecovery = await measureDoctorConfigPreflightStep(
-                "admission.core-recovery",
-                () =>
-                  createConfigIO({
-                    ...recoveryOptions,
-                    pluginValidation: "core-only",
-                  }).prepareConfigRecovery(selected),
-              );
-              const candidate = coreRecovery?.snapshot ?? selected;
-              // Both readers use the admitted snapshot. Pin schema selection before the
-              // full config read applies env defaults, and join both before releasing it.
-              const [readiness, configRead] = await Promise.allSettled([
-                (async () => {
-                  await assertStartupStateReady({
-                    cfg: candidate.sourceConfig ?? candidate.config,
-                    env: cloneEnvWithPlatformSemantics(params.env),
-                  });
-                  if (candidate.valid) {
-                    await params.validateConfig?.(candidate);
-                  }
-                })(),
-                measureDoctorConfigPreflightStep("admission.plugin-config", () =>
-                  params.readSnapshot(coreRecovery ? { isolateEnv: true } : undefined),
-                ),
-              ]);
-              if (readiness.status === "rejected") {
-                throw readiness.reason;
-              }
-              if (configRead.status === "rejected") {
-                throw configRead.reason;
-              }
-              let read = configRead.value;
-              if (isConfigReadFailure(read.snapshot)) {
-                throw createConfigReadError(read.snapshot);
-              }
-              const recovery = await measureDoctorConfigPreflightStep(
-                "admission.config-recovery",
-                () => createConfigIO(recoveryOptions).prepareConfigRecovery(read.snapshot),
-              );
-              if (recovery) {
-                read = {
-                  snapshot: recovery.snapshot,
-                  pluginMetadataSnapshot: recovery.pluginMetadataSnapshot,
-                };
-              }
-              if (read.snapshot.valid) {
-                await params.validateConfig?.(read.snapshot);
-                await measureDoctorConfigPreflightStep("admission.device-identity", async () => {
-                  const { loadDeviceIdentityIfPresentAsync } =
-                    await import("../infra/device-identity-async.js");
-                  await loadDeviceIdentityIfPresentAsync({ env: params.env });
-                });
-              }
-              return { ...read, ...(recovery ? { recovery } : {}) };
-            },
-            {
+      installDatabaseEngineSelection({ input: engineInput });
+      const withStateSnapshot: typeof withOpenClawStateDatabaseReadSnapshot = engineInput
+        ? (operation) => operation()
+        : withOpenClawStateDatabaseReadSnapshot;
+      const admitted = await measureDoctorConfigPreflightStep("admission.state-snapshot", () =>
+        withStateSnapshot(
+          async () => {
+            const recoveryOptions = {
+              configPath: selected.path,
+              observe: false,
               env: params.env,
-              admissionTimeoutMs: STARTUP_STATE_ADMISSION_TIMEOUT_MS,
-              reuseCleanClose: true,
-            },
-          ),
-        );
-        if (
-          params.beforeStatePreparation &&
-          !(await measureDoctorConfigPreflightStep("admission.config-guard", () =>
-            params.beforeStatePreparation?.(admitted.snapshot),
-          ))
-        ) {
-          throwStartupMigrationGuardRejected();
-        }
-        return {
-          ...admitted,
-          ...(engineInput
-            ? { databaseEngineSelection: Object.freeze({ input: engineInput }) }
-            : {}),
-        };
-      });
+            };
+            const coreRecovery = await measureDoctorConfigPreflightStep(
+              "admission.core-recovery",
+              () =>
+                createConfigIO({
+                  ...recoveryOptions,
+                  pluginValidation: "core-only",
+                }).prepareConfigRecovery(selected),
+            );
+            const candidate = coreRecovery?.snapshot ?? selected;
+            // Both readers use the admitted snapshot. Pin schema selection before the
+            // full config read applies env defaults, and join both before releasing it.
+            const [readiness, configRead] = await Promise.allSettled([
+              (async () => {
+                await assertStartupStateReady({
+                  cfg: candidate.sourceConfig ?? candidate.config,
+                  env: cloneEnvWithPlatformSemantics(params.env),
+                });
+                if (candidate.valid) {
+                  await params.validateConfig?.(candidate);
+                }
+              })(),
+              measureDoctorConfigPreflightStep("admission.plugin-config", () =>
+                params.readSnapshot(coreRecovery ? { isolateEnv: true } : undefined),
+              ),
+            ]);
+            if (readiness.status === "rejected") {
+              throw readiness.reason;
+            }
+            if (configRead.status === "rejected") {
+              throw configRead.reason;
+            }
+            let read = configRead.value;
+            if (isConfigReadFailure(read.snapshot)) {
+              throw createConfigReadError(read.snapshot);
+            }
+            const recovery = await measureDoctorConfigPreflightStep(
+              "admission.config-recovery",
+              () => createConfigIO(recoveryOptions).prepareConfigRecovery(read.snapshot),
+            );
+            if (recovery) {
+              read = {
+                snapshot: recovery.snapshot,
+                pluginMetadataSnapshot: recovery.pluginMetadataSnapshot,
+              };
+            }
+            if (read.snapshot.valid) {
+              await params.validateConfig?.(read.snapshot);
+              await measureDoctorConfigPreflightStep("admission.device-identity", async () => {
+                const { loadDeviceIdentityIfPresentAsync } =
+                  await import("../infra/device-identity-async.js");
+                await loadDeviceIdentityIfPresentAsync({ env: params.env });
+              });
+            }
+            return { ...read, ...(recovery ? { recovery } : {}) };
+          },
+          {
+            env: params.env,
+            admissionTimeoutMs: STARTUP_STATE_ADMISSION_TIMEOUT_MS,
+            reuseCleanClose: true,
+          },
+        ),
+      );
+      if (
+        params.beforeStatePreparation &&
+        !(await measureDoctorConfigPreflightStep("admission.config-guard", () =>
+          params.beforeStatePreparation?.(admitted.snapshot),
+        ))
+      ) {
+        throwStartupMigrationGuardRejected();
+      }
+      return {
+        ...admitted,
+        ...(engineInput ? { databaseEngineSelection: getDatabaseEngineSelection() } : {}),
+      };
     } catch (error) {
       return rethrowStartupConfigFailure(error);
     }

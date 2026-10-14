@@ -5,7 +5,7 @@ import { withEngineStoreAdmission } from "../infra/database-engine/admission-sco
 import { resolveDatabaseEngineInput } from "../infra/database-engine/config.js";
 import {
   getDatabaseEngineSelection,
-  withDatabaseEngineInput,
+  installDatabaseEngineSelection,
   type DatabaseEngineSelection,
 } from "../infra/database-engine/context.js";
 import { assertDatabasePortStartupAllowed } from "../infra/database-port-recovery.js";
@@ -32,17 +32,17 @@ export function recordGatewayDatabaseBoot(env: NodeJS.ProcessEnv, startedAtMs: n
 }
 
 /** Direct servers and embedded kernels enter before locks, state reads, or plugin config. */
-export async function withGatewayDatabaseEngine<T>(
-  snapshot: ConfigFileSnapshot | undefined,
-  operation: () => Promise<T>,
+export async function installGatewayDatabaseEngine(
+  snapshot?: ConfigFileSnapshot,
   selection?: DatabaseEngineSelection,
-): Promise<T> {
-  if (getDatabaseEngineSelection()) {
-    return operation();
-  }
+): Promise<void> {
   assertDatabasePortStartupAllowed(resolveStateDir(process.env));
   if (selection) {
-    return withDatabaseEngineInput(selection.input, operation);
+    installDatabaseEngineSelection(selection);
+    return;
+  }
+  if (getDatabaseEngineSelection()) {
+    return;
   }
   const selected =
     snapshot ??
@@ -52,5 +52,5 @@ export async function withGatewayDatabaseEngine<T>(
       pluginValidation: "core-only",
     }));
   const input = await resolveDatabaseEngineInput(selected.config);
-  return withDatabaseEngineInput(input, operation);
+  installDatabaseEngineSelection({ input });
 }

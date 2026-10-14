@@ -1,24 +1,52 @@
-import { expect, it } from "vitest";
-import { getDatabaseEngineSelection, withDatabaseEngineInput } from "./context.js";
+import { afterEach, expect, it } from "vitest";
+import { getDatabaseEngineSelection, installDatabaseEngineSelection } from "./context.js";
+import { resetDatabaseEngineSelectionForTest } from "./context.test-support.js";
 
-it("retains independent immutable selections across overlapping owners", async () => {
+afterEach(resetDatabaseEngineSelectionForTest);
+
+it("publishes one immutable selection to existing and new async callers", async () => {
+  const readLater = async () => {
+    await Promise.resolve();
+    return getDatabaseEngineSelection();
+  };
+  const pending = readLater();
   const input = { connection: "postgresql://localhost/synthetic", schemaPrefix: "test" };
-  const [postgres, sqlite] = await Promise.all([
-    withDatabaseEngineInput(input, async () => {
-      await Promise.resolve();
-      const selected = getDatabaseEngineSelection();
-      expect(selected?.input).toBe(input);
-      expect(Object.isFrozen(input)).toBe(true);
-      expect(Object.isFrozen(selected)).toBe(true);
-      return selected?.input;
-    }),
-    withDatabaseEngineInput(undefined, async () => {
-      await Promise.resolve();
-      expect(getDatabaseEngineSelection()).toEqual({ input: undefined });
-      return getDatabaseEngineSelection()?.input;
-    }),
-  ]);
-  expect(postgres).toBe(input);
-  expect(sqlite).toBeUndefined();
+  installDatabaseEngineSelection({ input });
+  const selected = getDatabaseEngineSelection();
+  expect(await pending).toBe(selected);
+  expect(await readLater()).toBe(selected);
+  expect(selected?.input).toEqual(input);
+  expect(Object.isFrozen(input)).toBe(true);
+  expect(Object.isFrozen(selected)).toBe(true);
+  installDatabaseEngineSelection({ input: { ...input } });
+  expect(getDatabaseEngineSelection()).toBe(selected);
+});
+
+it("keeps an explicit SQLite selection and refuses a different engine", () => {
   expect(getDatabaseEngineSelection()).toBeUndefined();
+  installDatabaseEngineSelection({ input: undefined });
+  const selected = getDatabaseEngineSelection();
+  expect(selected).toEqual({ input: undefined });
+  installDatabaseEngineSelection({ input: undefined });
+  expect(() =>
+    installDatabaseEngineSelection({
+      input: { connection: "postgresql://localhost/synthetic", schemaPrefix: "test" },
+    }),
+  ).toThrow("conflicts with the installed process selection");
+  expect(getDatabaseEngineSelection()).toBe(selected);
+});
+
+it.each([
+  { connection: "postgresql://localhost/other", schemaPrefix: "test" },
+  { connection: "postgresql://localhost/synthetic", schemaPrefix: "other" },
+  undefined,
+])("refuses to replace PostgreSQL connection or namespace: %j", (input) => {
+  installDatabaseEngineSelection({
+    input: { connection: "postgresql://localhost/synthetic", schemaPrefix: "test" },
+  });
+  const selected = getDatabaseEngineSelection();
+  expect(() => installDatabaseEngineSelection({ input })).toThrow(
+    "conflicts with the installed process selection",
+  );
+  expect(getDatabaseEngineSelection()).toBe(selected);
 });

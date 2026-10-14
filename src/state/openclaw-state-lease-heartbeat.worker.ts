@@ -1,9 +1,6 @@
 import { parentPort, workerData, type MessagePort } from "node:worker_threads";
 import { coerceErrorMessage, toErrorObject } from "@openclaw/normalization-core/error-coercion";
-import {
-  assertSameDatabaseEngineInput,
-  withDatabaseEngineInput,
-} from "../infra/database-engine/context.js";
+import { installDatabaseEngineSelection } from "../infra/database-engine/context.js";
 import { assertStateDatabaseAccessAllowed } from "../infra/gateway-state-owner.js";
 import { isPostgresSqlConnection, type EngineConnection } from "../infra/sql-connection.js";
 import { runWithSqliteBusyTimeout } from "../infra/sqlite-busy-timeout.js";
@@ -45,7 +42,6 @@ type HeartbeatRegistration = { registration: LeaseHeartbeatWorkerData; port: Mes
 type HeartbeatDatabase = {
   database: EngineConnection;
   close: () => void;
-  databaseEngineInput: LeaseHeartbeatWorkerData["databaseEngineInput"];
   renewals: ReturnType<typeof createStateLeaseRenewalScheduler>;
   references: number;
 };
@@ -59,17 +55,15 @@ function startHeartbeat(
   let retainedDatabase: HeartbeatDatabase | undefined;
   const databaseKey = JSON.stringify([params.path, params.expectedIdentity]);
   function withDatabaseAdmission<T>(operation: () => T): T {
-    return withDatabaseEngineInput(params.databaseEngineInput, () =>
-      withSqliteDatabaseAdmissionExchange(
-        (admissions, location, create) =>
-          exchangeSqliteDatabaseAdmissions(
-            params.databaseAdmissionPort,
-            admissions,
-            location,
-            create,
-          ),
-        operation,
-      ),
+    return withSqliteDatabaseAdmissionExchange(
+      (admissions, location, create) =>
+        exchangeSqliteDatabaseAdmissions(
+          params.databaseAdmissionPort,
+          admissions,
+          location,
+          create,
+        ),
+      operation,
     );
   }
   const shared = new BigInt64Array(params.shared);
@@ -432,12 +426,9 @@ function startHeartbeat(
     runAutomatic(() => receive(request), "automatic-renewal");
   }
   try {
+    installDatabaseEngineSelection({ input: params.databaseEngineInput });
     const existingDatabase = databases.get(databaseKey);
     if (existingDatabase) {
-      assertSameDatabaseEngineInput(
-        existingDatabase.databaseEngineInput,
-        params.databaseEngineInput,
-      );
       retainedDatabase = existingDatabase;
       retainedDatabase.references++;
     } else {
@@ -445,7 +436,6 @@ function startHeartbeat(
       const opened = withDatabaseAdmission(openHeartbeatDatabase);
       retainedDatabase = {
         ...opened,
-        databaseEngineInput: params.databaseEngineInput,
         renewals: createStateLeaseRenewalScheduler(opened.database),
         references: 1,
       };

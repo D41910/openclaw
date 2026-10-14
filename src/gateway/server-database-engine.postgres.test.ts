@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { runStartupConfigPreflight } from "../commands/startup-config-preflight.js";
 import { resetConfigRuntimeState } from "../config/runtime-snapshot.js";
 import type { ConfigFileSnapshot } from "../config/types.js";
+import { resetDatabaseEngineSelectionForTest } from "../infra/database-engine/context.test-support.js";
 import { acquireGatewayLock } from "../infra/gateway-lock.js";
 import { openNodeSqliteDatabase } from "../infra/node-sqlite.js";
 import { resetLogger } from "../logging/logger.js";
@@ -20,7 +21,7 @@ import {
   type OpenClawTestState,
 } from "../test-utils/openclaw-test-state.js";
 import { acquireTestPortBlock } from "../test-utils/port-claims.js";
-import { withGatewayDatabaseEngine } from "./server-database-engine.js";
+import { installGatewayDatabaseEngine } from "./server-database-engine.js";
 import { prepareGatewayServerBootstrap } from "./server-startup-bootstrap.js";
 
 const configured: unknown = getEnvironmentData("openclaw.test.state.conformance.connection");
@@ -70,7 +71,7 @@ async function readAnchor(state: OpenClawTestState): Promise<Anchor | undefined>
 }
 
 async function bootstrap(): Promise<ConfigFileSnapshot> {
-  // Each real entry point establishes its own engine scope, as the CLI and direct server do.
+  // Each entry point reuses the process selection established by preflight.
   const preflight = await runStartupConfigPreflight({ gateway: true, observe: false });
   expect(preflight.snapshot.valid).toBe(true);
   try {
@@ -122,6 +123,7 @@ describe.skipIf(!connection)("Gateway PostgreSQL shared-state bootstrap", () => 
       await state?.cleanup();
       state = undefined;
       resetLogger();
+      resetDatabaseEngineSelectionForTest();
     }
   });
 
@@ -177,7 +179,8 @@ describe.skipIf(!connection)("Gateway PostgreSQL shared-state bootstrap", () => 
     );
     expect(metadata.rows).toEqual([{ store_id: anchor.storeId }]);
 
-    await withGatewayDatabaseEngine(snapshot, async () => {
+    await installGatewayDatabaseEngine(snapshot);
+    {
       const context = captureOpenClawStateWorkerContext({ env: current.env });
       // A captured lifetime must not re-resolve its SecretRef when a worker opens later.
       process.env[DSN_ENV] = "postgresql://127.0.0.1:1/unreachable";
@@ -195,7 +198,7 @@ describe.skipIf(!connection)("Gateway PostgreSQL shared-state bootstrap", () => 
       } finally {
         process.env[DSN_ENV] = connection;
       }
-    });
+    }
     await closeStateDatabaseForTest();
     clearSecretsRuntimeSnapshot();
     resetConfigRuntimeState();
@@ -247,7 +250,8 @@ describe.skipIf(!connection)("Gateway PostgreSQL shared-state bootstrap", () => 
     }
     const claim = await acquireTestPortBlock({ offsets: [0] });
     try {
-      await withGatewayDatabaseEngine(snapshot, async () => {
+      await installGatewayDatabaseEngine(snapshot);
+      {
         // Acquisition awaits the real heartbeat worker's initial durable renewal.
         const lock = await acquireGatewayLock({
           env: current.env,
@@ -285,7 +289,7 @@ describe.skipIf(!connection)("Gateway PostgreSQL shared-state bootstrap", () => 
           ["gateway-owner", "global"],
         );
         expect(released.rows).toEqual([]);
-      });
+      }
     } finally {
       await claim.release();
     }

@@ -3,7 +3,7 @@ import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import { withArtifactPreservingStateReads } from "../state/artifact-preserving-state-reads.js";
 import type { OpenClawStateIntegrityAdmission } from "../state/openclaw-state-db-async-lifecycle.js";
 import { withExistingOpenClawStateSchema } from "../state/openclaw-state-db-schema-policy.js";
-import { withDatabaseEngineInput } from "./database-engine/context.js";
+import { getDatabaseEngineSelection } from "./database-engine/context.js";
 import type { DatabaseEngineInput } from "./database-engine/types.js";
 
 /** Resolved host facts for the canonical shared-state owner, never authority. */
@@ -28,7 +28,7 @@ export function captureSqliteWorkerStateContext(
   context: SqliteWorkerStateContext,
 ): SqliteWorkerStateContext {
   return {
-    databaseEngineInput: context.databaseEngineInput,
+    databaseEngineInput: context.databaseEngineInput ?? getDatabaseEngineSelection()?.input,
     environment: { ...context.environment },
     ...(context.initializationEnvironment
       ? { initializationEnvironment: { ...context.initializationEnvironment } }
@@ -123,12 +123,10 @@ export function runWithSqliteWorkerStateContext<T>(
   operation: () => T,
 ): T {
   const run = () =>
-    withDatabaseEngineInput(context.databaseEngineInput, () =>
-      stateContexts.run(context, () =>
-        context.existingSchemaPath === undefined
-          ? operation()
-          : withExistingOpenClawStateSchema({ path: context.existingSchemaPath }, operation),
-      ),
+    stateContexts.run(context, () =>
+      context.existingSchemaPath === undefined
+        ? operation()
+        : withExistingOpenClawStateSchema({ path: context.existingSchemaPath }, operation),
     );
   return context.artifactPreservingReads
     ? withArtifactPreservingStateReads(run, { agentDatabases: true })

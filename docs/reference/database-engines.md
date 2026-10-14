@@ -54,7 +54,9 @@ that stores without a PostgreSQL schema remain on SQLite.
 
 Shared state and workboard currently support PostgreSQL. The Gateway resolves
 the selected engine before its first shared-state read and retains that immutable
-selection for its reader, writer, and lease workers until shutdown. Restart after
+selection for the lifetime of the process. Reader, writer, and lease workers receive
+the resolved selection explicitly; they never resolve the connection again. A
+different selection in the same process is refused. Restart the process after
 changing the connection or engine.
 
 This is an intermediate state behind the experimental gate: agent databases,

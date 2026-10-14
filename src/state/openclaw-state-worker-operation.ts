@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { withDatabaseEngineInput } from "../infra/database-engine/context.js";
 import type { SqliteWorkerAdmissionFactory } from "../infra/sqlite-worker-operation-admission.js";
 import {
   getSqliteWorkerActorIdentity,
@@ -39,9 +38,7 @@ export function runWithCapturedWorkerContext<T>(
   const maintenance = context.maintenanceScope;
   const run = () =>
     maintenance ? maintenance.run(() => maintenance.track(operation())) : operation();
-  return withDatabaseEngineInput(context.databaseEngineInput, () =>
-    context.runInCapturedSchemaScope ? context.runInCapturedSchemaScope(run) : run(),
-  );
+  return context.runInCapturedSchemaScope ? context.runInCapturedSchemaScope(run) : run();
 }
 
 export function runWithOpenClawStateWorkerStore<T>(

@@ -1,5 +1,4 @@
 import type { PostgresPhysicalFacts } from "../infra/database-engine/physical-facts.js";
-import type { DatabaseEngineInput } from "../infra/database-engine/types.js";
 import type { EngineConnection } from "../infra/sql-connection.js";
 import type { SqliteSchemaFacts } from "../infra/sqlite-schema-facts.js";
 import type { createSqliteTerminalOpenLatch } from "../infra/sqlite-terminal-open-latch.js";
@@ -13,7 +12,6 @@ import type {
 } from "./openclaw-state-db-contract.js";
 
 export type CachedOpenClawStateDatabase = OpenClawStateDatabase & {
-  databaseEngineInput?: DatabaseEngineInput;
   schemaFacts: SqliteSchemaFacts | PostgresPhysicalFacts | undefined;
 };
 
