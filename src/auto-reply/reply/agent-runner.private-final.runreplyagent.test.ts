@@ -98,6 +98,7 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
     isHeartbeat?: boolean;
     terminalReplyExpectation?: "required" | "optional";
     pendingContinuation?: boolean;
+    implicitContinuation?: boolean;
     onDeliberateSilentTerminalReply?: () => void;
     onObservedReplyDelivery?: () => Promise<void> | void;
     onReplyOperationOwned?: (operation: ReplyOperation) => boolean | void;
@@ -122,6 +123,7 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
         finalAssistantVisibleText: finalAssistantText,
         stopReason: params.stopReason,
         yielded: params.pendingContinuation,
+        continuationPending: params.implicitContinuation,
         finalAssistantRawText: params.finalAssistantRawText,
         terminalReply: prepareAgentRunTerminalReply({
           rawText: params.finalAssistantRawText ?? finalAssistantText,
@@ -399,11 +401,21 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
     },
   );
 
-  it("does not settle a pending continuation as a stranded terminal reply", async () => {
-    const { terminalEvent } = await runPrivateFinalCase({ pendingContinuation: true });
-    expect((terminalEvent?.data.terminalReply as { code?: unknown } | undefined)?.code).not.toBe(
-      "message-tool-not-called",
-    );
+  it.each([
+    {
+      name: "yielded visible final",
+      params: { pendingContinuation: true },
+    },
+    {
+      name: "implicit continuation with no final",
+      params: { implicitContinuation: true, finalAssistantText: "", payloads: [] },
+    },
+  ])("does not settle a $name as a stranded terminal reply", async ({ params }) => {
+    const { terminalEvent, runResult, finalAssistantText } = await runPrivateFinalCase(params);
+    const expected = prepareAgentRunTerminalReply({ rawText: finalAssistantText }).terminalReply;
+    expect(terminalEvent?.data.terminalReply).toEqual(expected);
+    expect(runResult.meta.terminalReply).toEqual(expected);
+    expectNoRecovery();
   });
 
   it.each([undefined, false, true])(

@@ -192,6 +192,32 @@ function settledToolMessages(): EmbeddedRunAttemptResult["messagesSnapshot"] {
 }
 
 describe("attempt result projection", () => {
+  it.each([
+    { parts: ["First part.", "Second part."], text: "First part.\nSecond part." },
+    { parts: ["NO_RE", "PLY\nFirst part.", "Second part."], text: "First part.\nSecond part." },
+  ])("preserves native answer boundaries for $parts", ({ parts, text }) => {
+    const assistant = makeAssistantMessageFixture({
+      stopReason: "stop",
+      content: parts.map((part) => ({ type: "text", text: part })),
+    });
+    const result = completeResult({
+      currentAttemptCompletedAssistant: assistant,
+      assistantTexts: parts,
+      hasSuccessfulModelResponse: true,
+    });
+    expect(result.preparedTerminalReply).toEqual({
+      text,
+      terminalReply: { disposition: "visible", text },
+    });
+    expect(
+      buildPayloads({
+        ...result,
+        currentAssistant: assistant,
+        lastAssistant: assistant,
+      }),
+    ).toMatchObject([{ text }]);
+  });
+
   it("keeps the settled result snapshot when an output hook replaces live state", () => {
     const assistant = makeAssistantMessageFixture({ content: [{ type: "text", text: "settled" }] });
     const fixture = createResultFixture({

@@ -1308,7 +1308,9 @@ describe("runCliAgent reliability", () => {
       },
     });
     const messages = await readTranscriptMessages(sessionTarget);
-    expect(messages).toEqual([]);
+    expect(messages).toMatchObject([
+      { role: "assistant", content: [{ type: "text", text: SILENT_REPLY_TOKEN }] },
+    ]);
     expect(result.payloads).toBeUndefined();
     expect(result.meta.terminalReply).toEqual({ disposition: "silent" });
     expect(result.meta.finalAssistantRawText).toBe(SILENT_REPLY_TOKEN);

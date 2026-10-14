@@ -111,7 +111,10 @@ export async function resolveDescendantSubagentFollowup(params: {
   let hasUnsettledDescendants = await subagentRegistryRuntime.hasUnsettledCronDescendants(
     params.sessionKey,
   );
-  const shouldCheckCompletedDescendants = !params.abortSignal?.aborted && !hasUnsettledDescendants;
+  const shouldCheckCompletedDescendants =
+    !params.abortSignal?.aborted &&
+    !hasUnsettledDescendants &&
+    (params.spawnOnlyHandoff || !params.initialSynthesizedText.trim());
   const needsFollowupRuntime = shouldCheckCompletedDescendants || hasUnsettledDescendants;
   const followupRuntime = needsFollowupRuntime
     ? await subagentFollowupRuntimeLoader.load()
@@ -131,7 +134,7 @@ export async function resolveDescendantSubagentFollowup(params: {
       ),
     };
   }
-  // A child may settle before delivery starts; consume its recorded result.
+  // A settled child replaces absent parent output or a recorded handoff, not a finished synthesis.
   const completedDescendantReply = shouldCheckCompletedDescendants
     ? await followupRuntime?.readDescendantSubagentFallbackReply({
         sessionKey: params.sessionKey,

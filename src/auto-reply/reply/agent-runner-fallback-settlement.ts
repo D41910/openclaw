@@ -134,7 +134,9 @@ export async function settleAgentFallbackCycle(params: {
     : undefined;
   const successfulSourceReplyDelivery = hasCompletedSourceReplyDeliveryEvidence(runResult);
   const hasPendingContinuation =
-    runResult.meta?.yielded === true || (runResult.meta?.pendingToolCalls?.length ?? 0) > 0;
+    runResult.meta?.yielded === true ||
+    runResult.meta?.continuationPending === true ||
+    (runResult.meta?.pendingToolCalls?.length ?? 0) > 0;
   const privateFinalTerminalReply =
     !hasPendingContinuation &&
     isStrandedPrivateMessageToolFinal({

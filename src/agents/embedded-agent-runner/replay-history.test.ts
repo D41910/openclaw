@@ -7,6 +7,7 @@ import { resolveOpenAICompletionsCompat } from "../../../packages/ai/src/transpo
 import { markInboundContextLabel } from "../../auto-reply/reply/inbound-context-marker.js";
 import { createAssistantMessageEventStream } from "../../llm/utils/event-stream.js";
 import { OPENCLAW_TRANSCRIPT_ARTIFACT_API } from "../../shared/transcript-only-openclaw-assistant.js";
+import { projectAgentHarnessTranscriptMessageForDisplay } from "../harness/transcript-visibility.js";
 import {
   INTERNAL_RUNTIME_CONTEXT_BEGIN,
   INTERNAL_RUNTIME_CONTEXT_END,
@@ -76,6 +77,84 @@ function openclawTranscriptAssistant(model: "delivery-mirror" | "gateway-injecte
 }
 
 describe("normalizeAssistantReplayContent", () => {
+  it("reconstructs hidden tool calls, results, and internal answers in the provider request", () => {
+    const model = makeProviderModelFixture<"openai-completions">({
+      id: "test-model",
+      api: "openai-completions",
+      provider: "custom-openai-compatible",
+      baseUrl: "https://proxy.example/v1",
+    });
+    const toolCall = { type: "toolCall" as const, id: "call_hidden", name: "read", arguments: {} };
+    const hiddenCall = projectAgentHarnessTranscriptMessageForDisplay({
+      hidden: true,
+      message: makeAssistantMessageFixture({
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        content: [toolCall],
+        stopReason: "toolUse",
+        errorMessage: undefined,
+      }),
+    });
+    const hiddenAnswer = projectAgentHarnessTranscriptMessageForDisplay({
+      hidden: true,
+      message: makeAssistantMessageFixture({
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        content: [{ type: "text", text: "Internal result: file is ready." }],
+        stopReason: "stop",
+        errorMessage: undefined,
+      }),
+    });
+    const messages: AgentMessage[] = [
+      userMessage("Read the file internally."),
+      hiddenCall,
+      {
+        role: "toolResult",
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        content: [{ type: "text", text: "file contents" }],
+        isError: false,
+        timestamp: 1,
+      },
+      hiddenAnswer,
+      userMessage("What did the file contain?"),
+    ];
+    const converted = convertMessages(
+      model,
+      {
+        messages: normalizeAssistantReplayContent(messages).filter(
+          (message) =>
+            message.role === "user" ||
+            message.role === "assistant" ||
+            message.role === "toolResult",
+        ),
+      },
+      resolveOpenAICompletionsCompat(model),
+    );
+
+    expect(converted.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user",
+    ]);
+    expect(converted[1]).toMatchObject({
+      tool_calls: [
+        { id: "call_hidden", type: "function", function: { name: "read", arguments: "{}" } },
+      ],
+    });
+    expect(converted[2]).toMatchObject({
+      tool_call_id: "call_hidden",
+      content: "file contents",
+    });
+    expect(converted[3]?.content).toBe("Internal result: file is ready.");
+    expect(hiddenCall).toHaveProperty("display", false);
+    expect(hiddenAnswer).toHaveProperty("display", false);
+  });
+
   it.each(["error", "aborted"] as const)(
     "preserves signed thinking for completed calls after %s",
     (stopReason) => {

@@ -551,7 +551,7 @@ async function runPreparedCliAgentOwned(
           runParams: params,
           // Dispatch owns source-reply transcript mirrors and their idempotency keys.
           // Persisting them here would duplicate the same visible assistant reply.
-          text: sourceReplyWasDelivered ? "" : preparedReply.text,
+          text: sourceReplyWasDelivered ? "" : output.text,
           modelId: context.modelId,
           usage: output.usage,
           stopReason: resolveCliAssistantStopReason(output),

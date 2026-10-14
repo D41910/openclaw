@@ -13,6 +13,7 @@ import type { PreparedCliRunContext, RunCliAgentParams } from "./cli-runner/type
 import { applyCliSessionBindingResult, getCliSessionBinding } from "./cli-session.js";
 import type { EmbeddedAgentRunResult } from "./embedded-agent-runner/types.js";
 import { FailoverError, hasModelFallbackStop } from "./failover-error.js";
+import { extractStoredAssistantText } from "./tools/chat-history-text.js";
 import { createMessageTool } from "./tools/message-tool-execution.js";
 
 /** Register required-reply cases inside the reliability suite's existing process fixture. */
@@ -44,6 +45,37 @@ export function registerCliReplyCompletionTests({
   ) => Partial<RunCliAgentParams>;
   readTranscriptMessages: (sessionTarget: SessionTranscriptRuntimeTarget) => Promise<unknown[]>;
 }) {
+  it.each([
+    { raw: "NO_REPLY\nNO_REPLY", visible: "NO_REPLY" },
+    { raw: "NO_REPLY\nVisible answer", visible: "Visible answer" },
+    { raw: "NO_REPLY\nNO_REPLY\nVisible answer", visible: "NO_REPLY\nVisible answer" },
+  ])("preserves raw CLI output through stored-history reload: $raw", async ({ raw, visible }) => {
+    const sessionKey = "agent:main:telegram:direct:cli-raw-history";
+    const { dir, sessionTarget } = createSessionFixture({ sessionKey });
+    const context = createContext({
+      sessionKey,
+      runId: "cli-raw-history",
+      ...sessionParams(sessionTarget, dir),
+      storePath: sessionTarget.storePath,
+      persistAssistantTranscript: true,
+      messageChannel: "telegram",
+    });
+    supervisorSpawnMock.mockResolvedValueOnce(makeManagedRun({ stdout: raw }));
+
+    const result = await run(context);
+    const messages = await readTranscriptMessages(sessionTarget);
+
+    expect(result.meta.terminalReply).toEqual({ disposition: "visible", text: visible });
+    expect(result.payloads).toEqual([{ text: visible }]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: "assistant",
+      content: [{ type: "text", text: raw }],
+    });
+    expect(extractStoredAssistantText(messages[0])).toBe(visible);
+    expect(supervisorSpawnMock).toHaveBeenCalledOnce();
+  });
+
   it.each(["abort", "timeout", "session-expired", "fork-abort"] as const)(
     "does not replay delivery and resumes valid history after %s",
     async (failure) => {

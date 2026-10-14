@@ -106,8 +106,7 @@ function renderNativeAssistantReply(
   }
   // Native part boundaries carry fence context that is lost after joining the text.
   applyAssistantDeliveryDirectives(rendered);
-  const text = resolveRawAssistantAnswerText(rendered);
-  return extractAssistantVisibleText(rendered, (_text, final) => (final ? text : ""));
+  return extractAssistantVisibleText(rendered);
 }
 
 /**

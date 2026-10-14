@@ -137,6 +137,23 @@ function isTransientSettledTurnFailure(failure: unknown): boolean {
   );
 }
 
+function prepareTerminalAssistantReply(
+  assistant: EmbeddedRunAttemptResult["currentAttemptCompletedAssistant"],
+) {
+  const rawText = resolveRawAssistantAnswerText(assistant);
+  const reply = prepareAgentRunTerminalReply({ rawText });
+  if (assistant && reply.terminalReply.disposition !== "silent") {
+    let remainingPrefix = rawText.length - reply.text.length;
+    reply.text = extractAssistantVisibleText(assistant, (text) => {
+      const removed = Math.min(remainingPrefix, text.length);
+      remainingPrefix -= removed;
+      return text.slice(removed);
+    });
+    reply.terminalReply = sanitizeAgentRunTerminalReply(parseReplyDirectives(reply.text).text);
+  }
+  return reply;
+}
+
 export function completeEmbeddedAttemptResult(
   input: EmbeddedAttemptExecutionPhaseInput & { preparedStreamRuntime: PreparedStreamRuntime },
   settled: Awaited<ReturnType<typeof settleEmbeddedAttemptStream>>,
@@ -253,18 +270,7 @@ export function completeEmbeddedAttemptResult(
   // The runtime has settled. Progress sent as the last tool batch was written
   // after every other tool result; an empty stop after it is the reply.
   const terminalAssistant = state.currentAttemptCompletedAssistant ?? state.currentAttemptAssistant;
-  const closingReply = prepareAgentRunTerminalReply({
-    rawText: resolveRawAssistantAnswerText(terminalAssistant),
-  });
-  if (terminalAssistant && closingReply.terminalReply.disposition !== "silent") {
-    const rawText = closingReply.text;
-    closingReply.text = extractAssistantVisibleText(terminalAssistant, (_text, final) =>
-      final ? rawText : "",
-    );
-    closingReply.terminalReply = sanitizeAgentRunTerminalReply(
-      parseReplyDirectives(closingReply.text).text,
-    );
-  }
+  const closingReply = prepareTerminalAssistantReply(terminalAssistant);
   const progressIsReply =
     subscription.endsWithSourceProgress() &&
     resolveReplyExpectation(attempt) !== "result-required" &&
@@ -287,18 +293,7 @@ export function completeEmbeddedAttemptResult(
     terminal: state.terminal,
   });
   const keptAnswer = evidence.keptAnswer;
-  const keptReply = keptAnswer
-    ? prepareAgentRunTerminalReply({ rawText: resolveRawAssistantAnswerText(keptAnswer.assistant) })
-    : closingReply;
-  if (keptAnswer && keptReply.terminalReply.disposition !== "silent") {
-    const rawText = keptReply.text;
-    keptReply.text = extractAssistantVisibleText(keptAnswer.assistant, (_text, final) =>
-      final ? rawText : "",
-    );
-    keptReply.terminalReply = sanitizeAgentRunTerminalReply(
-      parseReplyDirectives(keptReply.text).text,
-    );
-  }
+  const keptReply = keptAnswer ? prepareTerminalAssistantReply(keptAnswer.assistant) : closingReply;
   const result: EmbeddedRunAttemptWithReceiptEvidence = {
     ...state,
     ...evidence,

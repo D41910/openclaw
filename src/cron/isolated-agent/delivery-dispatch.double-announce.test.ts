@@ -449,6 +449,24 @@ describe("dispatchCronDelivery", () => {
   });
 
   it.each([true, false])(
+    "preserves the completed parent synthesis over settled children with bestEffort=%s",
+    async (deliveryBestEffort) => {
+      const text = "The combined report reconciles both child findings and recommends option B.";
+      vi.mocked(readDescendantSubagentFallbackReply).mockResolvedValue(
+        "Partial child finding recommends option A.",
+      );
+      const state = await dispatchCronDelivery(
+        makeBaseParams({ synthesizedText: text, deliveryBestEffort }),
+      );
+
+      expectDelivered(state);
+      expect(state).toMatchObject({ summary: text, outputText: text, synthesizedText: text });
+      expect(deliverOutboundPayloads).toHaveBeenCalledTimes(1);
+      expectDeliveryCall(0, { payloads: [{ text }] });
+    },
+  );
+
+  it.each([true, false])(
     "does not infer interim status from visible final prose with bestEffort=%s",
     async (bestEffort) => {
       vi.mocked(hasUnsettledCronDescendants)
@@ -736,6 +754,10 @@ describe("dispatchCronDelivery", () => {
     const runStartedAt = 1_000;
     const agentSessionKey = "agent:main:cron:daily-monitor";
     const runSessionKey = "agent:main:cron:daily-monitor:run:test-session-id";
+    vi.mocked(hasUnsettledCronDescendants)
+      .mockReset()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
     vi.mocked(readDescendantSubagentFallbackReply).mockImplementation(async (params) =>
       params.sessionKey === runSessionKey
         ? "Run-scoped child result, everything finished successfully."
@@ -1279,6 +1301,10 @@ describe("dispatchCronDelivery", () => {
         runStartedAt: descendant ? 3_500 : 2_500,
       });
       if (descendant) {
+        vi.mocked(hasUnsettledCronDescendants)
+          .mockReset()
+          .mockResolvedValueOnce(true)
+          .mockResolvedValue(false);
         vi.mocked(readDescendantSubagentFallbackReply).mockResolvedValue("Final descendant reply");
         params.synthesizedText = params.summary = params.outputText = "Example report";
         params.deliveryPayloads = [

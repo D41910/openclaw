@@ -315,7 +315,8 @@ function normalizeAssistantReplayMessage(
     return null;
   }
   const replayContent = (message as { content?: unknown }).content;
-  if (isSilentAssistantTranscriptMessage(message)) {
+  // Hidden transcript rows still belong to model context, including tool-call/result pairs.
+  if (asOptionalRecord(message)?.display !== false && isSilentAssistantTranscriptMessage(message)) {
     return null;
   }
   if (typeof replayContent === "string") {
