@@ -603,7 +603,6 @@ export function projectChatTranscript(props: ChatThreadProps, transcript: ChatTr
     props.startupLabel,
     props.retryAt,
     props.onRetryRun,
-    props.onChangeFailureModel,
     props.failureActionsRunId,
     Boolean(props.waitingApproval),
     props.questionPrompts,
