@@ -5,17 +5,16 @@ import type { SessionGoal } from "../../api/types.ts";
 import "@awesome.me/webawesome/dist/styles/themes/default.css";
 import { SolidContentPresentation } from "../../lit/solid-content.tsx";
 import { cleanupSolid, mountSolid } from "../../test-helpers/mount-solid.ts";
+import { mountSolid as mountSolidProps } from "../../test-helpers/solid-render.tsx";
 import { flush } from "../../test-helpers/solid-settle.ts";
-import {
-  createComposerContainer,
-  createComposerProps,
-  disposeComposer,
-  renderComposerInto,
-} from "./chat-composer.test-support.ts";
+import { createComposerContainer, createComposerProps } from "./chat-composer.test-support.ts";
+import type { ChatAttachmentControlsProps } from "./components/chat-attachment-controls.types.ts";
 import { AttachmentPreview } from "./components/chat-attachments.tsx";
 import { ChatGoal } from "./components/chat-composer-goal.tsx";
 import { ComposerMenu } from "./components/chat-composer-menu.tsx";
 import { resetChatComposerState } from "./components/chat-composer-state.ts";
+import type { ChatComposerProps } from "./components/chat-composer-types.ts";
+import { ChatComposer } from "./components/chat-composer.tsx";
 import { subscribeTranscriptScroll } from "./components/chat-transcript-scroll-events.ts";
 import baseStyles from "../../styles/base.css?inline";
 import contextStripStyles from "../../styles/chat/composer-context-strip.css?inline";
@@ -37,6 +36,48 @@ const afterLayout = () =>
 describe("composer overflow presentation", () => {
   let container: HTMLDivElement;
   let styles: HTMLStyleElement;
+  const [presented, setPresented] = createSignal(true);
+  type ComposerFixtureProps = {
+    input: ChatComposerProps;
+    revision: object;
+    thread: boolean;
+  };
+  let composerView: ReturnType<typeof mountSolidProps<ComposerFixtureProps>> | undefined;
+  let attachmentsView: ReturnType<typeof mountSolidProps<ChatAttachmentControlsProps>> | undefined;
+
+  function ComposerFixture(props: ComposerFixtureProps) {
+    return (
+      <SolidContentPresentation value={presented}>
+        {props.thread ? <div class="chat-thread" /> : null}
+        <ChatComposer {...props.input} renderRevision={props.revision} />
+      </SolidContentPresentation>
+    );
+  }
+
+  function AttachmentFixture(props: ChatAttachmentControlsProps) {
+    return (
+      <SolidContentPresentation value={presented}>
+        <AttachmentPreview {...props} />
+      </SolidContentPresentation>
+    );
+  }
+
+  const connection = {
+    setConnected(active: boolean) {
+      setPresented(active);
+      flush();
+    },
+  };
+
+  function drawComposer(input: ChatComposerProps, thread = false) {
+    const props = { input: { ...input }, revision: {}, thread };
+    if (composerView) {
+      composerView.update(props);
+    } else {
+      composerView = mountSolidProps(ComposerFixture, props, container);
+    }
+    return connection;
+  }
 
   beforeEach(async () => {
     await page.viewport(1200, 800);
@@ -53,11 +94,13 @@ describe("composer overflow presentation", () => {
     container.className = "agent-chat__input";
     container.style.width = "760px";
     document.body.append(container);
+    setPresented(true);
   });
 
   afterEach(() => {
-    disposeComposer(container);
     cleanupSolid();
+    composerView = undefined;
+    attachmentsView = undefined;
     container.remove();
     styles.remove();
     resetChatComposerState();
@@ -70,7 +113,7 @@ describe("composer overflow presentation", () => {
       container.className = "";
       container.style.cssText = `position: fixed; bottom: 24px; left: 16px; width: ${Math.min(width - 32, 760)}px`;
       const props = createComposerProps({
-        onRequestUpdate: () => renderComposerInto(container, props),
+        onRequestUpdate: () => drawComposer(props),
         capabilityMenu: {
           basePath: "",
           skills: [
@@ -102,7 +145,7 @@ describe("composer overflow presentation", () => {
           onNavigate: vi.fn(),
         },
       });
-      renderComposerInto(container, props);
+      drawComposer(props);
       await page
         .elementLocator(
           container.querySelector<HTMLElement>(
@@ -141,28 +184,14 @@ describe("composer overflow presentation", () => {
     },
   );
 
-  function drawAttachments(count = 1) {
-    const [currentCount, setCount] = createSignal(count);
-    const [presented, setPresented] = createSignal(true);
-    mountSolid(
-      () => (
-        <SolidContentPresentation value={presented}>
-          <AttachmentPreview attachments={attachments.slice(0, currentCount())} />
-        </SolidContentPresentation>
-      ),
-      { container },
-    );
-    flush();
-    return {
-      update: (nextCount: number) => {
-        setCount(nextCount);
-        flush();
-      },
-      setPresented: (active: boolean) => {
-        setPresented(active);
-        flush();
-      },
-    };
+  function drawAttachments(count: number) {
+    const props = { attachments: attachments.slice(0, count) };
+    if (attachmentsView) {
+      attachmentsView.update(props);
+    } else {
+      attachmentsView = mountSolidProps(AttachmentFixture, props, container);
+    }
+    return connection;
   }
 
   function rail() {
@@ -175,8 +204,7 @@ describe("composer overflow presentation", () => {
       await page.viewport(width, 900);
       container.className = "";
       container.style.width = `${Math.min(width - 32, 760)}px`;
-      renderComposerInto(
-        container,
+      drawComposer(
         createComposerProps({
           goalDraftMode: { action: "start" },
           replyTarget: {
@@ -227,8 +255,7 @@ describe("composer overflow presentation", () => {
     container.className = "";
     container.dir = "rtl";
     container.style.width = "358px";
-    renderComposerInto(
-      container,
+    drawComposer(
       createComposerProps({
         draft: "@Jordan Rivera\nReview the attached file.\nKeep this third line.",
         attachments: attachments.slice(0, 1),
@@ -266,8 +293,7 @@ describe("composer overflow presentation", () => {
     const onClearReply = vi.fn();
     const onGoalDraftModeChange = vi.fn();
     const onDraftChange = vi.fn();
-    renderComposerInto(
-      container,
+    drawComposer(
       createComposerProps({
         draft: "@Jordan Rivera Review this file.",
         mentions: [{ profileId: "jordan", start: 0, end: 14 }],
@@ -344,7 +370,7 @@ describe("composer overflow presentation", () => {
         { profileId: "morgan", start: 15, end: 31 },
       ],
     });
-    renderComposerInto(container, props);
+    drawComposer(props);
     let strip = container.querySelector<HTMLElement>('[role="status"]')!;
     const visibleNames = () =>
       [...strip.querySelectorAll<HTMLElement>(".composer-context-strip__person")]
@@ -368,7 +394,7 @@ describe("composer overflow presentation", () => {
       characterData: true,
     });
     try {
-      renderComposerInto(container, { ...props, draft: props.draft + " please review" });
+      drawComposer({ ...props, draft: props.draft + " please review" });
       await afterLayout();
       expect(mutations).not.toHaveBeenCalled();
     } finally {
@@ -392,7 +418,7 @@ describe("composer overflow presentation", () => {
     expect(more.hidden).toBe(true);
     const longName = "Morgan Alexandra Penelope Williams ".repeat(3).trim();
     const draft = "@Jordan Rivera @" + longName;
-    renderComposerInto(container, {
+    drawComposer({
       ...props,
       draft,
       mentions: [props.mentions![0]!, { profileId: "morgan", start: 15, end: draft.length }],
@@ -438,11 +464,8 @@ describe("composer overflow presentation", () => {
           draw();
         },
       });
-      const draw = () => renderComposerInto(container, props);
+      const draw = () => drawComposer(props, true);
       draw();
-      const thread = document.createElement("div");
-      thread.className = "chat-thread";
-      container.prepend(thread);
       const textarea = container.querySelector<HTMLTextAreaElement>(
         ".agent-chat__composer-combobox > textarea",
       )!;
@@ -525,19 +548,19 @@ describe("composer overflow presentation", () => {
   it.each([false, true])(
     "updates attachment edges after resizing (reconnect=%s)",
     async (reconnect) => {
-      const view = drawAttachments(3);
+      const part = drawAttachments(3);
       const element = rail();
       await afterLayout();
       await expectEdges(element, false);
 
       if (reconnect) {
-        view.setPresented(false);
+        part.setConnected(false);
       }
       container.style.width = "400px";
       if (reconnect) {
         await afterLayout();
         await expectEdges(element, false);
-        view.setPresented(true);
+        part.setConnected(true);
       }
       expect(rail()).toBe(element);
       expect(element.scrollWidth).toBeGreaterThan(element.clientWidth);
@@ -667,7 +690,7 @@ describe("composer overflow presentation", () => {
 
   it("lets native textarea sizing grow and cap multiline drafts", async () => {
     await page.viewport(1440, 900);
-    renderComposerInto(container, createComposerProps());
+    drawComposer(createComposerProps());
     const textarea = container.querySelector<HTMLTextAreaElement>("textarea")!;
     expect(getComputedStyle(textarea).fieldSizing).toBe("content");
 
@@ -717,7 +740,6 @@ describe("composer overflow presentation", () => {
       const [currentGoal, setGoal] = createSignal(goal, { equals: false });
       let goalView: ReturnType<typeof mountSolid> | undefined;
       let menuView: ReturnType<typeof mountSolid> | undefined;
-      let attachmentView: ReturnType<typeof drawAttachments> | undefined;
       const [menuExpanded, setMenuExpanded] = createSignal(false);
       const draw = (expanded: boolean) => {
         goal.objective = expanded ? "Fixture objective\n".repeat(30) : "Short objective";
@@ -747,8 +769,7 @@ describe("composer overflow presentation", () => {
           flush();
           return;
         }
-        attachmentView ??= drawAttachments();
-        attachmentView.update(expanded ? 7 : 1);
+        drawAttachments(expanded ? 7 : 1);
       };
       draw(false);
       const element = container.querySelector<HTMLElement>(selector)!;
