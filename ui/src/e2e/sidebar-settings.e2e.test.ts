@@ -1,4 +1,5 @@
 import path from "node:path";
+import { withTimeout } from "@openclaw/fs-safe/advanced";
 import { expect, it } from "vitest";
 import {
   installMockGateway,
@@ -504,7 +505,35 @@ suite.define(() => {
       expect(await credential.inputValue()).toBe("browser-proof-secret");
       expect(await credential.isEditable()).toBe(true);
 
-      await gateway.waitForRequest("system.info");
+      try {
+        await gateway.waitForRequest("system.info");
+      } catch (error) {
+        try {
+          const [browser, systemInfoRequestCount] = await withTimeout(
+            Promise.all([
+              page.evaluate(() => {
+                const host = document.querySelector("openclaw-connection-page");
+                return {
+                  visibilityState: document.visibilityState,
+                  hasFocus: document.hasFocus(),
+                  connectionHostPresent: host !== null,
+                  connectionHostConnected: host?.isConnected ?? null,
+                };
+              }),
+              gateway.getRequests("system.info").then((requests) => requests.length),
+            ]),
+            5_000,
+            "connection system.info failure diagnostics",
+          );
+          console.error(
+            "[sidebar-settings] initial system.info wait failed",
+            JSON.stringify({ ...browser, systemInfoRequestCount }),
+          );
+        } catch {
+          console.error("[sidebar-settings] initial system.info diagnostics unavailable");
+        }
+        throw error;
+      }
       const reads = (await gateway.getRequests("system.info")).length;
       const connections = (await gateway.getRequests("connect")).length;
       await gateway.deferNext("connect");
