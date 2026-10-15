@@ -614,11 +614,9 @@ describe("manual code folding", () => {
     const click = (selector: string) => panel.querySelector<HTMLButtonElement>(selector)!.click();
     async function menu(trigger: string, action: string) {
       click(trigger);
-      await waitForSolid(() => expect(panel.querySelector("wa-dropdown")).not.toBeNull());
-      panel
-        .querySelector("wa-dropdown")!
-        .dispatchEvent(new CustomEvent("wa-select", { detail: { item: { value: action } } }));
-      flush();
+      const selector = `.session-diff-menu__surface button[data-value="${action}"]`;
+      await waitForSolid(() => expect(panel.querySelector(selector)).not.toBeNull());
+      click(selector);
     }
     await waitForSolid(() =>
       expect(panel.querySelectorAll(".session-diff__code-toggle")).toHaveLength(2),
