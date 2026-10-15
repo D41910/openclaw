@@ -745,10 +745,13 @@ describe("native subagent submission receipts in the binding store", () => {
     },
   );
 
-  it.each([{ version: 2, future: ["preserve-me"] }])(
-    "preserves unreadable receipt metadata through unrelated writes",
+  it.each([
+    { version: 2, future: ["preserve-me"] },
+    { version: 1, receipts: ["malformed"] },
+  ])(
+    "preserves unreadable receipt metadata through writes and retirement (version $version)",
     async (metadata) => {
-      const { state, store, owner } = await fixture();
+      const { root, state, store, owner } = await fixture();
       state.register(bindingStoreKey(identity), {
         version: 1,
         state: "active",
@@ -779,6 +782,33 @@ describe("native subagent submission receipts in the binding store", () => {
         ).rejects.toThrow(/native subagent submission/i);
       }
       expect(state.lookup(bindingStoreKey(identity))).toEqual(before);
+
+      const assignment = {
+        runId: "codex-thread:child-thread:turn:child-turn-b",
+        childThreadId: receipt.childThreadId,
+        nativeTurnId: receipt.submissionId,
+        nativeParentThreadId: owner.parentThreadId,
+        owner,
+      };
+      await store.mutate(
+        identity,
+        { kind: "record-native-subagent-assignment", owner, assignment },
+        currentAuthority,
+      );
+      const retirement = {
+        kind: "consume-native-subagent-assignment" as const,
+        owner,
+        assignment,
+        undelivered: true as const,
+      };
+      await expect(store.mutate(identity, retirement, currentAuthority)).resolves.toBe(true);
+      await expect(store.mutate(identity, retirement, currentAuthority)).resolves.toBe(false);
+      await closeOpenClawStateDatabaseAsync();
+      resetPluginStateStoreForTests();
+      const reopenedState = openState(root);
+      const reopened = createLazyCodexAppServerBindingStore(reopenedState);
+      expect(await reopened.readNativeSubagentAssignments?.(identity, owner)).toEqual([]);
+      expect(reopenedState.lookup(bindingStoreKey(identity))).toEqual(before);
     },
   );
 });

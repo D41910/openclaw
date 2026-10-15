@@ -10,6 +10,7 @@ import {
   readCodexNativeSubagentSubmissions,
   matchesCodexNativeSubagentSubmissionOwner,
   type CodexNativeSubagentSubmission,
+  type CodexNativeSubagentSubmissions,
 } from "./native-subagent-submission.js";
 import {
   matchesCodexNativeSubagentSubmissionBinding,
@@ -82,9 +83,12 @@ export function mutateNativeSubagentBinding({
     const { nativeSubagentAssignments: _previous, ...bindingOwner } = current;
     const retired = changed.consumed;
     if (retired && mutation.kind === "consume-native-subagent-assignment" && mutation.undelivered) {
-      const submissions = readCodexNativeSubagentSubmissions(
-        bindingOwner.nativeSubagentSubmissions,
-      );
+      let submissions: CodexNativeSubagentSubmissions | undefined;
+      try {
+        submissions = readCodexNativeSubagentSubmissions(bindingOwner.nativeSubagentSubmissions);
+      } catch {
+        // Preserve unreadable receipts without keeping a terminal assignment alive.
+      }
       if (
         submissions &&
         matchesCodexNativeSubagentSubmissionOwner(submissions.owner, mutation.owner)
