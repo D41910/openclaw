@@ -49,6 +49,16 @@ type SubmenuOptions = {
   title?: string;
 };
 
+const STANDARD_ITEMS = {
+  "copy-session-preview-link": ["sessionsView.copySessionPreviewLink", "link"],
+  "copy-markdown": ["sessionsView.copyMarkdown", "fileText"],
+  "copy-session-id": ["sessionsView.copySessionId", "copy"],
+  "open-new-tab": ["sessionsView.openNewTab", "externalLink"],
+  "open-new-window": ["sessionsView.openNewWindow", "monitor"],
+  "split-right": ["chat.splitView.splitRight", "columns2"],
+  "split-below": ["sessionsView.splitBelow", "panelBottomOpen"],
+} as const;
+
 export function useSessionMenuEntries(
   host: HTMLElement,
   actions: SessionMenuActions,
@@ -262,47 +272,20 @@ export function useSessionMenuEntries(
       };
     });
   }
+  const items = (kinds: readonly (keyof typeof STANDARD_ITEMS)[]) =>
+    kinds.map((kind) =>
+      item({ kind, label: t(STANDARD_ITEMS[kind][0]), icon: STANDARD_ITEMS[kind][1] }),
+    );
   function copyOptions(): MenuEntry[] {
     return [
-      ...(state.navigationAllowed
-        ? [
-            item({
-              kind: "copy-session-preview-link",
-              label: t("sessionsView.copySessionPreviewLink"),
-              icon: "link",
-            }),
-          ]
-        : []),
-      item({ kind: "copy-markdown", label: t("sessionsView.copyMarkdown"), icon: "fileText" }),
-      item({ kind: "copy-session-id", label: t("sessionsView.copySessionId"), icon: "copy" }),
+      ...(state.navigationAllowed ? items(["copy-session-preview-link"]) : []),
+      ...items(["copy-markdown", "copy-session-id"]),
     ];
   }
   function openOptions(): MenuEntry[] {
     return [
-      ...(state.navigationAllowed
-        ? [
-            item({
-              kind: "open-new-tab",
-              label: t("sessionsView.openNewTab"),
-              icon: "externalLink",
-            }),
-            item({
-              kind: "open-new-window",
-              label: t("sessionsView.openNewWindow"),
-              icon: "monitor",
-            }),
-          ]
-        : []),
-      ...(state.splitAllowed
-        ? [
-            item({ kind: "split-right", label: t("chat.splitView.splitRight"), icon: "columns2" }),
-            item({
-              kind: "split-below",
-              label: t("sessionsView.splitBelow"),
-              icon: "panelBottomOpen",
-            }),
-          ]
-        : []),
+      ...(state.navigationAllowed ? items(["open-new-tab", "open-new-window"]) : []),
+      ...(state.splitAllowed ? items(["split-right", "split-below"]) : []),
       ...(options.openInExtra?.() ?? []),
       ...(state.worktreePath
         ? [
