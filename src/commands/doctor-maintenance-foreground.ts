@@ -93,10 +93,16 @@ export async function acquireDoctorGatewayMaintenanceOwner(
         params.assertCurrent?.();
         lastContention = error;
         const now = performance.now();
-        // A recorded non-Gateway role is a command that finishes on its own. An
+        // Another process with a recorded non-Gateway role finishes on its own. This
+        // process's own owner cannot release while Doctor waits on it, and an
         // unknown or Gateway holder keeps the existing serving-owner decisions.
         const role = error.holder?.role;
-        if (role !== undefined && role !== "gateway") {
+        if (
+          role !== undefined &&
+          role !== "gateway" &&
+          error.holder?.pid !== undefined &&
+          error.holder.pid !== process.pid
+        ) {
           if (now >= contentionDeadlineMs) {
             return false;
           }

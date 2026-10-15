@@ -22,7 +22,7 @@ afterEach(() => {
   closeOpenClawStateDatabaseForTest();
 });
 
-function holdState(role: GatewayLockRole, update: boolean) {
+function holdState(role: GatewayLockRole, update: boolean, pid = process.ppid) {
   const stateDir = dirs.make("doctor-contention-wait-");
   vi.stubEnv("OPENCLAW_STATE_DIR", stateDir);
   vi.stubEnv("OPENCLAW_CONFIG_PATH", path.join(stateDir, "openclaw.json"));
@@ -30,10 +30,12 @@ function holdState(role: GatewayLockRole, update: boolean) {
   withOpenClawStateStartupMigrationCheckpointDatabase(() => {});
   closeOpenClawStateDatabaseForTest();
   const databasePath = path.join(stateDir, "state", "openclaw.sqlite");
+  // The in-process owner stands in for another OpenClaw process: Doctor never waits
+  // on its own PID, so the recorded holder is this test's parent process.
   const holder = acquireGatewayStateOwner({
     databasePath,
     payload: {
-      pid: process.pid,
+      pid,
       role,
       createdAt: new Date().toISOString(),
       configPath: path.join(stateDir, "openclaw.json"),
@@ -80,11 +82,11 @@ it("waits for a transient OpenClaw command to release state before update Doctor
   try {
     await doctor.firstWait;
     expect(doctor.log).toHaveBeenCalledWith(
-      `Waiting up to 660 s for the OpenClaw agent-embedded process ${process.pid} to release ${databasePath} before Doctor maintenance. Let it finish, or stop it to continue sooner.`,
+      `Waiting up to 660 s for the OpenClaw agent-embedded process ${process.ppid} to release ${databasePath} before Doctor maintenance. Let it finish, or stop it to continue sooner.`,
     );
     await doctor.advanceTo(45_000);
     expect(doctor.log).toHaveBeenCalledWith(
-      `Still waiting for the OpenClaw agent-embedded process ${process.pid} to release ${databasePath} (45 s of 660 s).`,
+      `Still waiting for the OpenClaw agent-embedded process ${process.ppid} to release ${databasePath} (45 s of 660 s).`,
     );
     // Waiting holds no lock and writes nothing; the holder can finish and release.
     await doctor.advanceTo(DOCTOR_MAINTENANCE_CONTENTION_WAIT_MS - 1_000);
@@ -123,9 +125,9 @@ it("fails update Doctor admission after the wait budget, naming the holder and n
     const message = (error as Error).message;
     expect(message).toContain("Doctor could not enter maintenance.");
     expect(message).toContain(
-      `Doctor waited 660 s for the OpenClaw agent-embedded process ${process.pid} to finish;`,
+      `Doctor waited 660 s for the OpenClaw agent-embedded process ${process.ppid} to finish;`,
     );
-    expect(message).toContain(`The holder ${process.pid} is alive on this host, stop it first.`);
+    expect(message).toContain(`The holder ${process.ppid} is alive on this host, stop it first.`);
     expect(message).toContain("then run openclaw doctor --fix from an independent shell.");
   } finally {
     holder.release();
@@ -135,8 +137,19 @@ it("fails update Doctor admission after the wait budget, naming the holder and n
 it.each([
   { name: "manual doctor --fix with a transient holder", role: "agent-embedded", update: false },
   { name: "update Doctor with a Gateway holder", role: "gateway", update: true },
-] as const)("keeps immediate contention failure for $name", async ({ role, update }) => {
-  const { holder } = holdState(role, update);
+  // This process's own owner cannot release while Doctor waits on it.
+  {
+    name: "update Doctor with its own process's owner",
+    role: "sqlite-maintenance",
+    update: true,
+    own: true,
+  },
+] as const)("keeps immediate contention failure for $name", async (fixture) => {
+  const { holder } = holdState(
+    fixture.role,
+    fixture.update,
+    "own" in fixture ? process.pid : undefined,
+  );
   const doctor = startDoctor();
   try {
     const completed = await doctor.result;
