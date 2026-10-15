@@ -54,6 +54,7 @@ declare module "@solidjs/web" {
           entry: import("../pages/agents-home/claws-catalog-client.ts").ClawCatalogEntry,
         ) => void;
       };
+      "openclaw-modal-actions": HTMLAttributes<HTMLElement>;
       "openclaw-github-identity": HTMLAttributes<HTMLElement>;
       "openclaw-plugins-page": HTMLAttributes<HTMLElement>;
       "openclaw-dashboards-page": HTMLAttributes<HTMLElement>;
