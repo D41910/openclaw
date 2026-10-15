@@ -8,11 +8,11 @@ describe("database engine selection", () => {
     );
   });
 
-  it("registers PostgreSQL support for shared state and Workboard", () => {
+  it("registers PostgreSQL support for shared state, Workboard, and Logbook", () => {
     expect(
       listDatabaseEngineStores()
         .filter((store) => store.postgres)
         .map((store) => store.id),
-    ).toEqual(["state", "workboard"]);
+    ).toEqual(["state", "workboard", "logbook"]);
   });
 });
