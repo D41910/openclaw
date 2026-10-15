@@ -4,18 +4,6 @@ import OpenClawKit
 import OpenClawProtocol
 import SwiftUI
 
-private struct ChatScrollEdgeTreatment: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            // The shared canvas supplies color for the native blur. Automatic
-            // edge effects harden to black when the host inserts an opaque fill.
-            content.scrollEdgeEffectStyle(.soft, for: .vertical)
-        } else {
-            content
-        }
-    }
-}
-
 struct ChatProTab: View {
     enum GatewayStatusTone: Equatable {
         case success
@@ -77,8 +65,9 @@ struct ChatProTab: View {
     }
 
     private var content: some View {
+        // The shared canvas supplies color for the native blur.
         self.chatSurface
-            .modifier(ChatScrollEdgeTreatment())
+            .scrollEdgeEffectStyle(.soft, for: .vertical)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -87,26 +76,14 @@ struct ChatProTab: View {
                         action: headerSidebarAction,
                         placement: .topBarLeading)
                 }
-                if #available(iOS 26.0, *) {
-                    ToolbarItem(placement: .topBarLeading) {
-                        self.headerAgentIdentity
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .topBarLeading) {
-                        self.headerAgentIdentity
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    self.headerAgentIdentity
                 }
-                if #available(iOS 26.0, *) {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        self.chatActionsMenu
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        self.chatActionsMenu
-                    }
+                .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarTrailing) {
+                    self.chatActionsMenu
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
             .sheet(item: self.$transcriptShareItem) { item in
                 OpenClawChatFileShareSheet(fileURL: item.fileURL)

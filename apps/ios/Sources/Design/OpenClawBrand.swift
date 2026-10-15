@@ -256,56 +256,21 @@ extension View {
     }
 }
 
-/// Capsule surface shared by the branded button styles. iOS 26 uses system
-/// Liquid Glass (prominent is tinted); earlier systems get a flat adaptive fill.
-/// No gradients, sheens, or shadows: they turn into a muddy halo on dark surfaces.
+/// Capsule surface shared by the branded button styles; prominent Liquid Glass is tinted.
 enum OpenClawButtonSurfaceKind {
     case prominent
     case secondary
 }
 
-private struct OpenClawButtonSurfaceModifier: ViewModifier {
-    let kind: OpenClawButtonSurfaceKind
-    let isEnabled: Bool
-    let isPressed: Bool
-
-    private var isFilled: Bool {
-        self.kind == .prominent && self.isEnabled
-    }
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(self.glass, in: .capsule)
-        } else {
-            content
-                .background(Capsule(style: .continuous).fill(self.fallbackFill))
-                .overlay {
-                    if !self.isFilled {
-                        Capsule(style: .continuous).strokeBorder(Color(uiColor: .separator), lineWidth: 0.75)
-                    }
-                }
-                .opacity(self.isPressed && self.isEnabled ? 0.82 : 1)
-                .animation(.smooth(duration: 0.14), value: self.isPressed)
-        }
-    }
-
-    @available(iOS 26.0, *)
-    private var glass: Glass {
-        self.isFilled ? .regular.tint(OpenClawBrand.accentFill).interactive() : .regular.interactive(self.isEnabled)
-    }
-
-    private var fallbackFill: Color {
-        self.isFilled ? OpenClawBrand.accentFill : OpenClawBrand.activationNeutralSurface
-    }
-}
-
 extension View {
     func openClawButtonSurface(
         _ kind: OpenClawButtonSurfaceKind,
-        isEnabled: Bool,
-        isPressed: Bool) -> some View
+        isEnabled: Bool) -> some View
     {
-        self.modifier(OpenClawButtonSurfaceModifier(kind: kind, isEnabled: isEnabled, isPressed: isPressed))
+        let glass: Glass = kind == .prominent && isEnabled
+            ? .regular.tint(OpenClawBrand.accentFill).interactive()
+            : .regular.interactive(isEnabled)
+        return self.glassEffect(glass, in: .capsule)
     }
 
     /// System prominent button filled with the accent. The app tint is the readable
@@ -330,7 +295,7 @@ struct OpenClawPrimaryActionButtonStyle: ButtonStyle {
             .minimumScaleFactor(0.8)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: self.height)
-            .openClawButtonSurface(.prominent, isEnabled: self.isEnabled, isPressed: configuration.isPressed)
+            .openClawButtonSurface(.prominent, isEnabled: self.isEnabled)
             .contentShape(Capsule(style: .continuous))
     }
 }
@@ -348,7 +313,7 @@ struct OpenClawSecondaryActionButtonStyle: ButtonStyle {
             .minimumScaleFactor(0.8)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: self.height)
-            .openClawButtonSurface(.secondary, isEnabled: self.isEnabled, isPressed: configuration.isPressed)
+            .openClawButtonSurface(.secondary, isEnabled: self.isEnabled)
             .contentShape(Capsule(style: .continuous))
     }
 }
@@ -366,7 +331,7 @@ struct OpenClawCloseButtonStyle: ButtonStyle {
             .fixedSize(horizontal: true, vertical: false)
             .frame(minWidth: self.minWidth, minHeight: self.height)
             .padding(.horizontal, 7)
-            .openClawButtonSurface(.secondary, isEnabled: self.isEnabled, isPressed: configuration.isPressed)
+            .openClawButtonSurface(.secondary, isEnabled: self.isEnabled)
             // Visual stays 36pt; the vertical padding brings the hit area to 44pt.
             .padding(.vertical, 4)
             .contentShape(Rectangle())

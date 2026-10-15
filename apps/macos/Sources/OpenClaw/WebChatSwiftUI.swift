@@ -314,23 +314,9 @@ struct MacGatewayChatTransport: OpenClawChatGatewayTransport {
         sessionKey: String,
         serverLease: GatewayConnection.ServerLease) async throws -> Bool
     {
-        let request = OpenClawChatGatewayRequests.chatMetadata(
-            sessionKey: sessionKey,
-            fallbackAgentID: self.chatGatewayAgentID)
-        let data = try await self.connection.request(request, ifCurrentServerLease: serverLease)
-        return try JSONDecoder().decode(OpenClawChatMetadataCapabilities.self, from: data).swarmEnabled
-    }
-
-    func listSessions(
-        limit: Int?,
-        search: String?,
-        archived: Bool) async throws -> OpenClawChatSessionsListResponse
-    {
-        try await self.listSessions(
-            limit: limit,
-            search: search,
-            archived: archived,
-            agentID: self.chatGatewayAgentID)
+        try await self.isSwarmEnabled(sessionKey: sessionKey) { request in
+            try await self.connection.request(request, ifCurrentServerLease: serverLease)
+        }
     }
 
     func listSessions(
@@ -371,17 +357,8 @@ struct MacGatewayChatTransport: OpenClawChatGatewayTransport {
         parentKey: String,
         serverLease: GatewayConnection.ServerLease) async throws -> OpenClawChatChildSessionsResult
     {
-        try await OpenClawChatChildSessionPager.collect { offset in
-            let request = OpenClawChatGatewayRequests.sessionsList(
-                limit: 10000,
-                search: nil,
-                archived: false,
-                includeGlobal: false,
-                spawnedBy: parentKey,
-                offset: offset,
-                configuredAgentsOnly: true)
-            let data = try await self.connection.request(request, ifCurrentServerLease: serverLease)
-            return try JSONDecoder().decode(OpenClawChatSessionsListResponse.self, from: data)
+        try await self.listChildSessions(parentKey: parentKey) { request in
+            try await self.connection.request(request, ifCurrentServerLease: serverLease)
         }
     }
 
@@ -644,12 +621,9 @@ struct MacGatewayChatTransport: OpenClawChatGatewayTransport {
     }
 
     func compactSession(sessionKey: String) async throws {
-        let target = self.sessionTarget(for: sessionKey)
-        let request = OpenClawChatGatewayRequests.compactSession(
-            sessionKey: target.sessionKey,
-            agentID: target.agentID)
-        let response = try await connection.request(request, retryTransportFailures: false)
-        try OpenClawSessionsCompactResponse.requireSuccess(from: response)
+        try await self.compactSession(sessionKey: sessionKey) { request in
+            try await self.connection.request(request, retryTransportFailures: false)
+        }
     }
 
     func events() -> AsyncStream<OpenClawChatTransportEvent> {
