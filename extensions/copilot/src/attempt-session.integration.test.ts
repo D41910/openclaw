@@ -1,6 +1,5 @@
 import type { CopilotClient, Tool as SdkTool } from "@github/copilot-sdk";
 import { expectDefined } from "@openclaw/normalization-core";
-import { Type } from "@sinclair/typebox";
 import type {
   AgentHarnessAttemptParamsV2,
   AnyAgentTool,
@@ -13,6 +12,7 @@ import {
 import { readSessionTranscriptEvents } from "openclaw/plugin-sdk/session-transcript-runtime";
 import { useSqliteWorkerFault } from "openclaw/plugin-sdk/sqlite-runtime-testing";
 import { asOptionalRecord } from "openclaw/plugin-sdk/string-coerce-runtime";
+import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFakeSession,
@@ -20,7 +20,7 @@ import {
   event,
   transcriptMessages,
 } from "./attempt-transcript-journal.test-helpers.js";
-import type { AttemptResultWithSdkSessionId } from "./attempt-types.js";
+import type { AttemptParamsLike, AttemptResultWithSdkSessionId } from "./attempt-types.js";
 import { runCopilotAttempt } from "./attempt.js";
 import {
   makeAssistantMessageEvent,
@@ -144,31 +144,29 @@ describe("Copilot canonical session persistence", () => {
         });
       });
       const pool = makeFakePool(sdk);
-      const pending = runCopilotAttempt(
-        {
-          ...attempt,
-          abortSignal: controller.signal,
-          agentDir: tempDir,
-          auth: { useLoggedInUser: true },
-          config: { tools: { toolSearch: false } },
-          disableTools: false,
-          hostCapabilities: createCopilotTestHostCapabilities(() => [sourceTool]),
-          model: {
-            api: "openai-responses",
-            id: "gpt-5.6-luna",
-            name: "Luna",
-            provider: "github-copilot",
-            baseUrl: "https://api.githubcopilot.com",
-            reasoning: true,
-            input: ["text"],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 128_000,
-            maxTokens: 4096,
-          },
-          promptMode: "none",
+      const params = {
+        ...attempt,
+        abortSignal: controller.signal,
+        agentDir: tempDir,
+        auth: { useLoggedInUser: true },
+        config: { tools: { toolSearch: false } },
+        disableTools: false,
+        hostCapabilities: createCopilotTestHostCapabilities(() => [sourceTool]),
+        model: {
+          api: "openai-responses",
+          id: "gpt-5.6-luna",
+          name: "Luna",
+          provider: "github-copilot",
+          baseUrl: "https://api.githubcopilot.com",
+          reasoning: true,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128_000,
+          maxTokens: 4096,
         },
-        { pool },
-      ).finally(() => {
+        promptMode: "none",
+      } satisfies AgentHarnessAttemptParamsV2 & Pick<AttemptParamsLike, "auth">;
+      const pending = runCopilotAttempt(params, { pool }).finally(() => {
         attemptSettled = true;
       });
       const joined = pending.catch(() => undefined);
