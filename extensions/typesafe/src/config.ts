@@ -1,71 +1,84 @@
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "typebox";
 
-const LOCAL_BASE_URL_PATTERN = String.raw`^https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?/?$`;
-const REMOTE_BASE_URL_PATTERN = String.raw`^https://(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\[[a-fA-F0-9:]+\])(?::[0-9]{1,5})?/?$`;
+const LOCAL_BASE_URL_PATTERN =
+  "^https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{1,5})?/?$";
 const localBaseUrlPattern = new RegExp(LOCAL_BASE_URL_PATTERN);
-const remoteBaseUrlPattern = new RegExp(REMOTE_BASE_URL_PATTERN);
-export const HOSTED_ORIGIN = "https://api.typesafe.ai";
-const SecretRefSchema = Type.Object(
+export const ConfigSchema = Type.Object(
   {
-    source: Type.Union([
-      Type.Literal("env"),
-      Type.Literal("store"),
-      Type.Literal("file"),
-      Type.Literal("exec"),
-    ]),
-    provider: Type.String({ minLength: 1, maxLength: 128 }),
-    id: Type.String({ minLength: 1, maxLength: 1024 }),
+    baseUrl: Type.Optional(Type.String({ maxLength: 128, pattern: LOCAL_BASE_URL_PATTERN })),
+    apiKey: Type.Optional(
+      Type.Object(
+        {
+          source: Type.Union([
+            Type.Literal("env"),
+            Type.Literal("store"),
+            Type.Literal("file"),
+            Type.Literal("exec"),
+          ]),
+          provider: Type.String({ minLength: 1, maxLength: 128 }),
+          id: Type.String({ minLength: 1, maxLength: 1024 }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    timeoutMs: Type.Optional(Type.Integer({ minimum: 1000, maximum: 60000, default: 30000 })),
   },
   { additionalProperties: false },
 );
-export const ConfigSchema = Type.Object(
-  {
-    baseUrl: Type.Optional(Type.String({ maxLength: 128 })),
-    allowNonLoopback: Type.Optional(Type.Boolean({ default: false })),
-    apiKey: Type.Optional(SecretRefSchema),
-    endpointAuth: Type.Optional(SecretRefSchema),
-    timeoutMs: Type.Optional(Type.Integer({ minimum: 1000, maximum: 60000, default: 30000 })),
-  },
-  {
-    additionalProperties: false,
-    anyOf: [
-      { properties: { baseUrl: { pattern: LOCAL_BASE_URL_PATTERN } } },
-      {
-        required: ["allowNonLoopback"],
-        properties: {
-          allowNonLoopback: { const: true },
-          baseUrl: { pattern: REMOTE_BASE_URL_PATTERN },
-        },
-      },
-    ],
-  },
-);
 
+type RuntimeSnapshot = ReturnType<OpenClawPluginApi["runtime"]["config"]["current"]>;
+export type ModelProviderConfig = NonNullable<
+  NonNullable<RuntimeSnapshot["models"]>["providers"]
+>[string];
 export type RuntimeConfig = {
   apiKey?: string;
   baseUrl?: string;
-  allowNonLoopback?: boolean;
-  endpointAuth?: string;
-  endpointAuthRequired?: boolean;
+  providerConfig?: ModelProviderConfig;
+  credentialsUnavailable?: boolean;
   timeoutMs: number;
 };
+export const HOSTED_ORIGIN = "https://api.typesafe.ai";
 
-/** Operator consent grants one exact origin, not arbitrary private-network access. */
-export function configuredBaseUrl(value: unknown, allowNonLoopback?: boolean): string | undefined {
+/** Model providers configure the API root; origin-only System One URLs imply /v1. */
+export function providerBaseUrl(value: string | undefined): string {
+  const parsed = value ? URL.parse(value) : null;
+  if (
+    !parsed ||
+    !["http:", "https:"].includes(parsed.protocol) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error(
+      "Invalid models.providers.typesafe.baseUrl; use an HTTP(S) API base URL without credentials, query, or fragment.",
+    );
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/v1";
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+export function usesHostedEndpoint(config: Pick<RuntimeConfig, "baseUrl">): boolean {
+  return !config.baseUrl || new URL(config.baseUrl).origin === HOSTED_ORIGIN;
+}
+
+export function hasCredentials(config: RuntimeConfig): boolean {
+  return !config.credentialsUnavailable && Boolean(config.baseUrl || config.apiKey);
+}
+
+/** A configured endpoint grants access to one loopback origin, never arbitrary private hosts. */
+export function localBaseUrl(value: unknown): string | undefined {
   if (value === undefined) {
     return undefined;
   }
   const parsed =
-    typeof value === "string" &&
-    value.length <= 128 &&
-    value === value.trim() &&
-    (localBaseUrlPattern.test(value) ||
-      (allowNonLoopback === true && remoteBaseUrlPattern.test(value)))
+    typeof value === "string" && value === value.trim() && localBaseUrlPattern.test(value)
       ? URL.parse(value)
       : null;
-  if (!parsed || parsed.origin === HOSTED_ORIGIN) {
+  if (!parsed) {
     throw new Error(
-      "Invalid TypeSafe baseUrl; use an http(s) loopback origin, or opt in with allowNonLoopback: true for a non-hosted HTTPS origin. Paths, credentials, query, and fragment are not allowed. Omit baseUrl for hosted Jev.",
+      "Invalid TypeSafe baseUrl; use an http(s) loopback origin without a path, credentials, query, or fragment.",
     );
   }
   return parsed.origin;
@@ -73,11 +86,7 @@ export function configuredBaseUrl(value: unknown, allowNonLoopback?: boolean): s
 
 /** Validate runtime settings and recognize materialized credentials without resolving inputs. */
 export function runtimeConfig(config: Record<string, unknown> | undefined): RuntimeConfig {
-  const allowNonLoopback = config?.allowNonLoopback;
-  if (allowNonLoopback !== undefined && typeof allowNonLoopback !== "boolean") {
-    throw new Error("Invalid TypeSafe allowNonLoopback; use an explicit boolean.");
-  }
-  const baseUrl = configuredBaseUrl(config?.baseUrl, allowNonLoopback);
+  const baseUrl = localBaseUrl(config?.baseUrl);
   const timeoutMs = config?.timeoutMs ?? 30000;
   if (
     typeof timeoutMs !== "number" ||
@@ -88,25 +97,8 @@ export function runtimeConfig(config: Record<string, unknown> | undefined): Runt
     throw new Error("Invalid TypeSafe configuration; check plugin Settings.");
   }
   if (baseUrl) {
-    const auth = config?.endpointAuth;
-    return {
-      baseUrl,
-      timeoutMs,
-      ...(allowNonLoopback === true ? { allowNonLoopback } : {}),
-      ...(auth !== undefined
-        ? {
-            endpointAuthRequired: true,
-            endpointAuth: typeof auth === "string" && auth.trim() ? auth : undefined,
-          }
-        : {}),
-    };
+    return { baseUrl, timeoutMs };
   }
   const key = config?.apiKey;
   return { apiKey: typeof key === "string" && key.trim() ? key : undefined, timeoutMs };
-}
-
-export function hasCredentials(config: RuntimeConfig): boolean {
-  return config.baseUrl
-    ? !config.endpointAuthRequired || Boolean(config.endpointAuth)
-    : Boolean(config.apiKey);
 }

@@ -52,10 +52,9 @@ export function createDecisionProvider(getConfig: () => RuntimeConfig): Decision
             const current = getConfig();
             return (
               current.baseUrl === config.baseUrl &&
-              current.allowNonLoopback === config.allowNonLoopback &&
+              current.providerConfig === config.providerConfig &&
               current.apiKey === config.apiKey &&
-              current.endpointAuth === config.endpointAuth &&
-              current.endpointAuthRequired === config.endpointAuthRequired
+              !current.credentialsUnavailable
             );
           },
         );

@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:https";
 import type { LookupFunction, Server } from "node:net";
-import { getCACertificates, setDefaultCACertificates } from "node:tls";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import {
+  redactProviderResponseErrorText,
+  resolveProviderHttpRequestConfigWithOriginTrust,
+} from "openclaw/plugin-sdk/provider-http";
 import { getPreparedPluginSecretInput } from "openclaw/plugin-sdk/secret-input-runtime";
 import type { LookupFn } from "openclaw/plugin-sdk/ssrf-runtime";
 import {
@@ -14,6 +17,7 @@ import {
 import { Agent, EnvHttpProxyAgent, ProxyAgent, fetch as undiciFetch } from "undici";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import plugin from "../index.js";
+import type { ModelProviderConfig } from "./config.js";
 
 vi.mock("openclaw/plugin-sdk/secret-input-runtime", () => ({
   getPreparedPluginSecretInput: vi.fn(),
@@ -38,10 +42,10 @@ class FixtureAgent extends Agent {
           return;
         }
         if (Array.isArray(address)) {
-          expect(address).toEqual([{ address: "10.123.0.5", family: 4 }]);
+          expect(address).toEqual([{ address: pinnedAddress, family: 4 }]);
           callback(null, [{ address: "127.0.0.1", family: 4 }]);
         } else {
-          expect(address).toBe("10.123.0.5");
+          expect(address).toBe(pinnedAddress);
           callback(null, "127.0.0.1", 4);
         }
       });
@@ -75,9 +79,10 @@ const answer = {
 };
 const received: Array<{ url?: string; host?: string; authorization?: string; body: unknown }> = [];
 let redirect: string | undefined;
+let responseModel: string | undefined;
 let fixture: Awaited<ReturnType<typeof listen<ReturnType<typeof createServer>>>>;
 let baseUrl: string;
-const originalCAs = getCACertificates("default");
+let pinnedAddress = "10.123.0.5";
 
 beforeAll(async () => {
   fixture = await listen(
@@ -98,13 +103,22 @@ beforeAll(async () => {
             response.end();
           } else {
             response.setHeader("content-type", "application/json");
-            response.end(JSON.stringify(answer));
+            response.end(JSON.stringify({ ...answer, model: responseModel ?? answer.model }));
           }
         });
       },
     ),
   );
   baseUrl = `https://files.proxy.test:${fixture.claim.port}`;
+  // Network proof starts after host-policy/loader initialization, as on a running
+  // Gateway. Cold import and deadline admission have separate registration.lazy tests.
+  await import("./client.js");
+  resolveProviderHttpRequestConfigWithOriginTrust({
+    provider: "typesafe",
+    baseUrl,
+    defaultBaseUrl: baseUrl,
+  });
+  redactProviderResponseErrorText("{}", {});
 });
 afterAll(async () => {
   await fixture.releaseListener();
@@ -113,7 +127,8 @@ afterAll(async () => {
 beforeEach(() => {
   received.length = 0;
   redirect = undefined;
-  setDefaultCACertificates([...originalCAs, PROXY_FIXTURE_CERTIFICATE]);
+  responseModel = undefined;
+  pinnedAddress = "10.123.0.5";
   vi.mocked(lookup).mockReset();
   vi.mocked(lookup).mockResolvedValue([{ address: "10.123.0.5", family: 4 }]);
   vi.stubGlobal("__OPENCLAW_TEST_UNDICI_RUNTIME_DEPS__", {
@@ -123,10 +138,10 @@ beforeEach(() => {
     fetch: undiciFetch,
   });
   vi.mocked(getPreparedPluginSecretInput).mockReset();
-  vi.mocked(getPreparedPluginSecretInput).mockImplementation((_plugin, path) => ({
+  vi.mocked(getPreparedPluginSecretInput).mockReturnValue({
     revision: 1,
-    value: path === "endpointAuth" ? "synthetic-endpoint-key" : "synthetic-hosted-key",
-  }));
+    value: "synthetic-hosted-key",
+  });
   for (const key of [
     "HTTP_PROXY",
     "HTTPS_PROXY",
@@ -143,15 +158,32 @@ beforeEach(() => {
   vi.stubEnv("OPENCLAW_DEBUG_PROXY_ENABLED", "false");
 });
 afterEach(() => {
-  setDefaultCACertificates(originalCAs);
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-function provider(config: Record<string, unknown>) {
+
+function provider(source: ModelProviderConfig | (() => ModelProviderConfig)) {
   const registerDecisionProvider = vi.fn<OpenClawPluginApi["registerDecisionProvider"]>();
   plugin.register({
-    runtime: { config: { current: () => ({ plugins: { entries: { typesafe: { config } } } }) } },
+    runtime: {
+      config: {
+        current: () => ({
+          models: { providers: { typesafe: typeof source === "function" ? source() : source } },
+          plugins: {
+            entries: {
+              typesafe: {
+                config: {
+                  get apiKey(): never {
+                    throw new Error("hosted key read");
+                  },
+                },
+              },
+            },
+          },
+        }),
+      },
+    },
     registerDecisionProvider,
   } as unknown as OpenClawPluginApi);
   const registered = registerDecisionProvider.mock.calls[0]?.[0];
@@ -163,17 +195,22 @@ const context = () => ({
   signal: new AbortController().signal,
   deadlineMonotonicMs: performance.now() + 3000,
 });
-const endpointRef = { source: "store", provider: "default", id: "SYNTHETIC_ENDPOINT_TOKEN" };
+const endpointRef = {
+  source: "store",
+  provider: "default",
+  id: "SYNTHETIC_SYSTEM_ONE_TOKEN",
+} as const;
+const settings = (overrides: Partial<ModelProviderConfig> = {}): ModelProviderConfig => ({
+  baseUrl,
+  models: [],
+  request: { tls: { ca: PROXY_FIXTURE_CERTIFICATE } },
+  ...overrides,
+});
 
 it.each([false, true])(
-  "reaches a private HTTPS reverse-proxy origin with endpoint auth=%s, ignoring ambient proxies",
+  "uses models.providers.typesafe for private HTTPS with apiKey=%s",
   async (auth) => {
-    const registered = provider({
-      baseUrl,
-      allowNonLoopback: true,
-      apiKey: "must-not-read",
-      ...(auth ? { endpointAuth: endpointRef } : {}),
-    });
+    const registered = provider(settings(auth ? { apiKey: "synthetic-server-key" } : {}));
     expect(registered.isReady?.()).toBe(true);
     await expect(registered.evaluate(batch, context())).resolves.toMatchObject({
       status: "ok",
@@ -186,7 +223,7 @@ it.each([false, true])(
       {
         url: "/v1/systemone",
         host: new URL(baseUrl).host,
-        authorization: auth ? "Bearer synthetic-endpoint-key" : undefined,
+        authorization: auth ? "Bearer synthetic-server-key" : undefined,
         body: {
           ...batch,
           model: "nemotron-deciffusion",
@@ -195,31 +232,55 @@ it.each([false, true])(
       },
     ]);
     expect(lookup).toHaveBeenCalled();
-    expect(vi.mocked(lookup).mock.calls.every(([host]) => host === "files.proxy.test")).toBe(true);
-    expect(
-      vi
-        .mocked(getPreparedPluginSecretInput)
-        .mock.calls.every(([, path]) => path === "endpointAuth"),
-    ).toBe(true);
+    expect(lookup.mock.calls.every(([host]) => host === "files.proxy.test")).toBe(true);
+    expect(getPreparedPluginSecretInput).not.toHaveBeenCalled();
   },
 );
 
-it.each(["untrusted certificate", "hostname mismatch"])(
-  "retains TLS verification: %s",
+it("uses the common private-network opt-out and explicit opt-in", async () => {
+  const tls = { ca: PROXY_FIXTURE_CERTIFICATE };
+  await expect(
+    provider(settings({ request: { allowPrivateNetwork: false, tls } })).evaluate(batch, context()),
+  ).resolves.toEqual({ status: "unavailable", reason: "transport" });
+  expect(received).toHaveLength(0);
+  pinnedAddress = "127.0.0.1";
+  lookup.mockResolvedValue([{ address: pinnedAddress, family: 4 }]);
+  await expect(
+    provider(settings({ request: { allowPrivateNetwork: true, tls } })).evaluate(batch, context()),
+  ).resolves.toMatchObject({ status: "ok" });
+  expect(received).toHaveLength(1);
+});
+
+it("applies the shared bearer override and /v1 base URL without duplicating paths", async () => {
+  await expect(
+    provider(
+      settings({
+        baseUrl: baseUrl + "/v1/",
+        apiKey: "synthetic-key",
+        request: {
+          tls: { ca: PROXY_FIXTURE_CERTIFICATE },
+          auth: { mode: "authorization-bearer", token: "synthetic-override" },
+        },
+      }),
+    ).evaluate(batch, context()),
+  ).resolves.toMatchObject({ status: "ok" });
+  expect(received).toHaveLength(1);
+  expect(received[0]).toMatchObject({
+    url: "/v1/systemone",
+    authorization: "Bearer synthetic-override",
+  });
+});
+
+it.each(["untrusted certificate", "hostname mismatch", "insecure override"])(
+  "preserves shared TLS verification: %s",
   async (failure) => {
-    if (failure === "untrusted certificate") {
-      setDefaultCACertificates(originalCAs);
-    }
-    const registered = provider({
-      baseUrl:
-        failure === "hostname mismatch"
-          ? baseUrl.replace("files.proxy.test", "other.proxy.test")
-          : baseUrl,
-      allowNonLoopback: true,
-    });
-    await expect(registered.evaluate(batch, context())).resolves.toEqual({
+    const config = settings(
+      failure === "hostname mismatch"
+        ? { baseUrl: baseUrl.replace("files.proxy.test", "other.proxy.test") }
+        : { request: failure === "insecure override" ? { tls: { insecureSkipVerify: true } } : {} },
+    );
+    await expect(provider(config).evaluate(batch, context())).resolves.toMatchObject({
       status: "unavailable",
-      reason: "transport",
     });
     expect(received).toHaveLength(0);
   },
@@ -230,35 +291,28 @@ it.each(["https://api.typesafe.ai/v1/systemone", "https://other.proxy.test/sink"
   async (target) => {
     redirect = target;
     await expect(
-      provider({ baseUrl, allowNonLoopback: true, endpointAuth: endpointRef }).evaluate(
-        batch,
-        context(),
-      ),
+      provider(settings({ apiKey: "synthetic-server-key" })).evaluate(batch, context()),
     ).resolves.toEqual({ status: "unavailable", reason: "transport" });
     expect(received).toHaveLength(1);
     expect(received[0]?.host).toBe(new URL(baseUrl).host);
   },
 );
 
-it.each(["origin", "opt-in", "credential", "credential loss"])(
-  "rechecks current %s authority after DNS before sending",
+it.each(["origin", "policy", "credential", "credential loss"])(
+  "rechecks current provider %s after DNS before dispatch",
   async (change) => {
-    const config = { baseUrl, allowNonLoopback: true, endpointAuth: endpointRef };
-    const registered = provider(config);
-    vi.mocked(lookup).mockImplementationOnce(async () => {
-      if (change === "origin") {
-        config.baseUrl = "https://other.proxy.test";
-      }
-      if (change === "opt-in") {
-        config.allowNonLoopback = false;
-      }
-      if (change.startsWith("credential")) {
-        vi.mocked(getPreparedPluginSecretInput).mockReturnValue({
-          revision: 2,
-          value: change === "credential" ? "synthetic-rotated" : undefined,
-        });
-      }
-      return [{ address: "10.123.0.5", family: 4 }];
+    let config = settings({ apiKey: "synthetic-server-key" });
+    const registered = provider(() => config);
+    lookup.mockImplementationOnce(async () => {
+      config = {
+        ...config,
+        ...(change === "origin"
+          ? { baseUrl: "https://other.proxy.test" }
+          : change === "policy"
+            ? { request: { allowPrivateNetwork: false } }
+            : { apiKey: change === "credential" ? "synthetic-rotated" : endpointRef }),
+      };
+      return [{ address: pinnedAddress, family: 4 }];
     });
     await expect(registered.evaluate(batch, context())).resolves.toEqual({
       status: "unavailable",
@@ -276,15 +330,12 @@ it("honors an explicit managed proxy rather than bypassing its refusal", async (
     socket.end("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
   });
   try {
-    const url = `http://127.0.0.1:${proxy.claim.port}`;
+    const url = "http://127.0.0.1:" + proxy.claim.port;
     vi.stubEnv("HTTPS_PROXY", url);
     vi.stubEnv("https_proxy", url);
     vi.stubEnv("OPENCLAW_PROXY_ACTIVE", "1");
     await expect(
-      provider({ baseUrl, allowNonLoopback: true, endpointAuth: endpointRef }).evaluate(
-        batch,
-        context(),
-      ),
+      provider(settings({ apiKey: "synthetic-server-key" })).evaluate(batch, context()),
     ).resolves.toEqual({ status: "unavailable", reason: "transport" });
     expect(connects).toEqual([new URL(baseUrl).host]);
     expect(received).toHaveLength(0);
@@ -294,45 +345,84 @@ it("honors an explicit managed proxy rather than bypassing its refusal", async (
   }
 });
 
-it("fails cold for an unavailable endpoint credential and observes rotation and recovery", async () => {
-  const registered = provider({
-    baseUrl,
-    allowNonLoopback: true,
-    endpointAuth: endpointRef,
-    apiKey: "synthetic-hosted-key",
-  });
+it("fails cold for unavailable provider secrets and observes rotation and recovery", async () => {
+  let config = settings({ apiKey: endpointRef });
+  const registered = provider(() => config);
   for (const key of [
-    undefined,
+    endpointRef,
     "synthetic-first",
     "synthetic-rotated",
-    undefined,
+    endpointRef,
     "synthetic-recovered",
   ]) {
-    vi.mocked(getPreparedPluginSecretInput).mockReturnValue({ revision: 1, value: key });
-    expect(registered.isReady?.()).toBe(Boolean(key));
+    config = settings({ apiKey: key });
+    expect(registered.isReady?.()).toBe(typeof key === "string");
     received.length = 0;
     const result = await registered.evaluate(batch, context());
-    if (key) {
+    if (typeof key === "string") {
       expect(result.status).toBe("ok");
       expect(received).toHaveLength(1);
-      expect(received[0]?.authorization).toBe(`Bearer ${key}`);
+      expect(received[0]?.authorization).toBe("Bearer " + key);
     } else {
       expect(result).toEqual({ status: "unavailable", reason: "credentials-unavailable" });
       expect(received).toHaveLength(0);
     }
   }
-  expect(
-    vi.mocked(getPreparedPluginSecretInput).mock.calls.every(([, path]) => path === "endpointAuth"),
-  ).toBe(true);
+  expect(getPreparedPluginSecretInput).not.toHaveBeenCalled();
+});
+
+it.each<ModelProviderConfig>([
+  { baseUrl: "https://files.proxy.test", models: [], headers: { Authorization: endpointRef } },
+  {
+    baseUrl: "https://files.proxy.test",
+    models: [],
+    request: { auth: { mode: "authorization-bearer", token: endpointRef } },
+  },
+])("fails closed for unresolved configured headers/request auth", async (config) => {
+  await expect(
+    provider(settings({ ...config, baseUrl })).evaluate(batch, context()),
+  ).resolves.toEqual({ status: "unavailable", reason: "credentials-unavailable" });
+  expect(received).toHaveLength(0);
+  expect(lookup).not.toHaveBeenCalled();
 });
 
 it.each(["127.0.0.1", "169.254.169.254", "0.0.0.0"])(
-  "does not expand exact-origin permission to unsafe DNS answer %s",
+  "retains the common unsafe DNS restriction for %s",
   async (address) => {
-    vi.mocked(lookup).mockResolvedValue([{ address, family: 4 }]);
-    await expect(
-      provider({ baseUrl, allowNonLoopback: true }).evaluate(batch, context()),
-    ).resolves.toEqual({ status: "unavailable", reason: "transport" });
+    lookup.mockResolvedValue([{ address, family: 4 }]);
+    await expect(provider(settings()).evaluate(batch, context())).resolves.toEqual({
+      status: "unavailable",
+      reason: "transport",
+    });
     expect(received).toHaveLength(0);
+  },
+);
+
+it("rejects reflected shared request credentials without returning them", async () => {
+  responseModel = "synthetic-request-token";
+  const result = await provider(
+    settings({
+      request: {
+        tls: { ca: PROXY_FIXTURE_CERTIFICATE },
+        auth: { mode: "authorization-bearer", token: responseModel },
+      },
+    }),
+  ).evaluate(batch, context());
+  expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
+  expect(JSON.stringify(result)).not.toContain(responseModel);
+});
+
+it.each(["authorization-bearer", "header"] as const)(
+  "fails closed instead of sending anonymous requests for empty %s auth",
+  async (mode) => {
+    const auth =
+      mode === "authorization-bearer"
+        ? { mode, token: "" }
+        : { mode, headerName: "X-Server-Key", value: "" };
+    await expect(
+      provider(settings({ request: { auth } })).evaluate(batch, context()),
+    ).resolves.toEqual({ status: "unavailable", reason: "credentials-unavailable" });
+    expect(received).toHaveLength(0);
+    expect(lookup).not.toHaveBeenCalled();
   },
 );

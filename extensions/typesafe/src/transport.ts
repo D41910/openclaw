@@ -4,13 +4,25 @@ import {
   shouldUseEnvHttpProxyForUrl,
   withTrustedEnvProxyGuardedFetchMode,
 } from "openclaw/plugin-sdk/fetch-runtime";
+import {
+  redactProviderResponseErrorText,
+  resolveProviderHttpRequestConfigWithOriginTrust,
+  resolveProviderTransportSsrFPolicy,
+  sanitizeConfiguredModelProviderRequest,
+} from "openclaw/plugin-sdk/provider-http";
 import { parseRetryAfterHeaderSeconds } from "openclaw/plugin-sdk/retry-runtime";
+import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input";
 import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
-import { configuredBaseUrl, HOSTED_ORIGIN } from "./config.js";
+import {
+  localBaseUrl,
+  providerBaseUrl,
+  HOSTED_ORIGIN,
+  type ModelProviderConfig,
+} from "./config.js";
 import { EvaluationError } from "./errors.js";
 import { MAX_JSON_BYTES, type EvaluationInput } from "./schema.js";
 
-const ENDPOINT = `${HOSTED_ORIGIN}/v1/systemone`;
+const API_BASE_URL = `${HOSTED_ORIGIN}/v1`;
 
 function httpError(response: Response): EvaluationError {
   if (response.status === 401 || response.status === 403) {
@@ -86,16 +98,62 @@ export async function requestEvaluation(params: {
   body: EvaluationInput & { model: string };
   apiKey?: string;
   baseUrl?: string;
-  allowNonLoopback?: boolean;
-  endpointAuth?: string;
+  providerConfig?: ModelProviderConfig;
   timeoutMs: number;
   signal?: AbortSignal;
   deadlineMonotonicMs?: number;
   isAdmissible?: () => boolean;
 }): Promise<unknown> {
-  const baseUrl = configuredBaseUrl(params.baseUrl, params.allowNonLoopback);
-  const endpoint = baseUrl ? `${baseUrl}/v1/systemone` : ENDPOINT;
-  const credential = baseUrl ? params.endpointAuth : params.apiKey;
+  const baseUrl = params.providerConfig
+    ? providerBaseUrl(params.providerConfig.baseUrl)
+    : localBaseUrl(params.baseUrl);
+  const apiBaseUrl = params.providerConfig ? baseUrl : baseUrl ? `${baseUrl}/v1` : API_BASE_URL;
+  let resolved: ReturnType<typeof resolveProviderHttpRequestConfigWithOriginTrust>;
+  try {
+    const headers: Record<string, string> = {};
+    for (const [name, value] of Object.entries(params.providerConfig?.headers ?? {})) {
+      const headerValue = normalizeResolvedSecretInputString({
+        value,
+        path: `models.providers.typesafe.headers.${name}`,
+      });
+      if (headerValue !== undefined) {
+        headers[name] = headerValue;
+      }
+    }
+    // Legacy loopback config never uses the hosted plugin key. Standard model
+    // provider config supplies only its own prepared credential and request policy.
+    const credential = !baseUrl || params.providerConfig ? params.apiKey : undefined;
+    resolved = resolveProviderHttpRequestConfigWithOriginTrust({
+      provider: "typesafe",
+      capability: "other",
+      transport: "http",
+      baseUrl: apiBaseUrl,
+      defaultBaseUrl: API_BASE_URL,
+      defaultHeaders: {
+        ...(credential && params.providerConfig?.authHeader !== false
+          ? { Authorization: `Bearer ${credential}` }
+          : {}),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      headers,
+      request: sanitizeConfiguredModelProviderRequest(params.providerConfig?.request),
+    });
+  } catch {
+    throw new EvaluationError(
+      "TypeSafe provider credentials or request settings are unavailable.",
+      "credentials-unavailable",
+    );
+  }
+  const endpoint = `${resolved.baseUrl}/systemone`;
+  const policy = baseUrl
+    ? resolveProviderTransportSsrFPolicy({
+        baseUrl: resolved.baseUrl,
+        url: endpoint,
+        allowPrivateNetwork: resolved.allowPrivateNetwork,
+        trustConfiguredBaseUrlOrigin: resolved.trustConfiguredBaseUrlOrigin,
+      })
+    : undefined;
   const body = JSON.stringify(params.body);
   if (Buffer.byteLength(body) > MAX_JSON_BYTES) {
     throw new EvaluationError("TypeSafe request exceeds its limit.", "unsupported-input");
@@ -131,7 +189,8 @@ export async function requestEvaluation(params: {
       url: endpoint,
       fetchImpl: globalThis.fetch,
       requireHttps: !baseUrl || new URL(baseUrl).protocol === "https:",
-      ...(baseUrl ? { policy: { allowedOrigins: [baseUrl] } } : {}),
+      policy,
+      dispatcherPolicy: resolved.dispatcherPolicy,
       ...(baseUrl && new URL(baseUrl).hostname === "localhost"
         ? {
             // Keep localhost local even when system DNS or hosts entries override its meaning.
@@ -146,16 +205,12 @@ export async function requestEvaluation(params: {
       beforeRequest: assertActive,
       init: {
         method: "POST",
-        headers: {
-          ...(credential ? { Authorization: `Bearer ${credential}` } : {}),
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers: resolved.headers,
         body,
       },
     };
     const guarded = await fetchWithSsrFGuard(
-      !baseUrl && shouldUseEnvHttpProxyForUrl(endpoint)
+      !baseUrl && !resolved.dispatcherPolicy && shouldUseEnvHttpProxyForUrl(endpoint)
         ? withTrustedEnvProxyGuardedFetchMode(request)
         : request,
     );
@@ -170,10 +225,18 @@ export async function requestEvaluation(params: {
         throw httpError(response);
       }
       const bytes = await readBody(response, signal);
+      let text: string;
       try {
-        payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+        text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        payload = JSON.parse(text);
       } catch {
         throw new EvaluationError("TypeSafe returned invalid JSON.", "invalid-response");
+      }
+      if (redactProviderResponseErrorText(text, resolved.headers) !== text) {
+        throw new EvaluationError(
+          "TypeSafe evaluation failed or returned an invalid response.",
+          "invalid-response",
+        );
       }
     } finally {
       await release();

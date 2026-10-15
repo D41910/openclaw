@@ -172,10 +172,11 @@ the hosted TypeSafe endpoint.
 
 `baseUrl` accepts HTTP or HTTPS on `localhost`, `127.0.0.1`, or `[::1]`, with an
 optional port and trailing slash. Supply the origin, without `/v1`, credentials,
-query, or fragment; the plugin appends `/v1/systemone`. Other origins require
-the explicit HTTPS opt-in described below. Ordinary ambient HTTP proxy variables
-are not used for configured endpoints; explicitly enabled managed proxy policy
-still applies. `localhost` remains pinned to loopback, independently of system DNS.
+query, or fragment; the plugin appends `/v1/systemone`. This existing plugin
+setting remains loopback-only. For a separate inference host or reverse proxy,
+use the standard model-provider configuration below. Ordinary ambient HTTP proxy
+variables are not used for configured endpoints; explicitly enabled managed proxy
+policy still applies. `localhost` stays pinned to loopback, independently of system DNS.
 
 Kev runs one checkpoint per server process. Its request model label does not
 load or switch weights. Choose the checkpoint when starting the server and
@@ -202,24 +203,24 @@ decision results. Kev's optional nonnegative `latency_ms` field is validated and
 removed; all answer types, labels, probabilities, and rubric bounds retain the
 same validation as hosted results.
 
-## Remote HTTPS System One server
+## Custom endpoint and provider request settings
 
-To use a self-hosted server on another machine or behind an HTTPS reverse proxy,
-set an exact `baseUrl` and explicitly opt in with `allowNonLoopback: true`:
+Use the same `models.providers.<id>` configuration as other providers to connect
+TypeSafe decisions to a self-hosted System One server or HTTPS reverse proxy:
 
 ```json5
 {
   plugins: {
     allow: ["typesafe"],
-    entries: {
+    entries: { typesafe: { enabled: true } },
+  },
+  models: {
+    providers: {
       typesafe: {
-        enabled: true,
-        config: {
-          baseUrl: "https://decision.example.com:8009",
-          allowNonLoopback: true,
-          // Optional: omit when the endpoint does not require bearer authentication.
-          endpointAuth: { source: "store", provider: "default", id: "SYSTEM_ONE_TOKEN" },
-        },
+        baseUrl: "https://decision.example.com/v1",
+        // Optional: omit when this server does not require authentication.
+        apiKey: { source: "store", provider: "default", id: "SYSTEM_ONE_TOKEN" },
+        models: [],
       },
     },
   },
@@ -229,41 +230,56 @@ set an exact `baseUrl` and explicitly opt in with `allowNonLoopback: true`:
 }
 ```
 
-Merge this example with existing settings. Without `allowNonLoopback: true`,
-only the existing loopback origins are accepted. Non-loopback HTTP is never
-supported. TLS certificate and hostname verification remain enabled; configure
-normal host certificate trust for a private CA rather than disabling verification.
-The exact configured origin may resolve to a private address. This grants no
-permission to other origins, and redirects are rejected rather than followed.
-Existing DNS protections against loopback rebinding, link-local, and cloud
-metadata addresses still apply to non-loopback hostnames.
-Supply no path, credentials, query, fragment, or wildcard in `baseUrl`.
+Merge the example with existing configuration. The provider `baseUrl` is the API
+root; OpenClaw appends `/systemone`. An origin-only URL implies `/v1`, so both
+`https://decision.example.com` and `https://decision.example.com/v1` target
+`/v1/systemone`. Do not include URL credentials, a query, or a fragment.
 
-**Trust and egress:** Every configured-endpoint evaluation sends its state,
-questions, and rubrics to that server. Evaluation state is user content; with a
-remote endpoint it leaves the Gateway host. Only choose an operator-controlled
-origin you trust with that content. Request content and model output cannot
-select the destination. `allowNonLoopback` acknowledges this destination trust;
-`endpointAuth` only authenticates OpenClaw to the server and does not establish
-that the server is trustworthy.
+The adapter uses the shared provider HTTP request and network-policy owners:
 
-`apiKey` remains hosted-only and is never read for any configured `baseUrl`,
-loopback or remote. The optional `endpointAuth` is a separate bearer SecretRef,
-read only for a configured endpoint and never sent to the hosted TypeSafe origin.
-Omit `baseUrl` to use hosted Jev; the hosted origin cannot be repurposed as a
-configured endpoint. The host prepares SecretRefs through the normal secret
-lifecycle. If a configured endpoint credential is unavailable, decisions fail
-closed rather than sending an unauthenticated request or falling back to hosted
-Jev. Remove unused references if the host should stop preparing them. Endpoint
-and credential authority are checked again immediately before the request leaves.
+- A configured custom/local origin is trusted for ordinary LAN and tailnet
+  addresses by default. No extra TypeSafe network switch is required.
+- `models.providers.typesafe.request.allowPrivateNetwork: false` opts out of
+  exact-origin private-network trust. `true` explicitly permits broader private
+  destinations under the same policy used by other model providers. Use it only
+  when that broader access is intended; it is not needed for an ordinary private
+  HTTPS reverse proxy.
+- `headers`, `authHeader`, and `request.auth` use the shared header/auth contract.
+  Explicit bearer/header auth overrides reject empty or unavailable credentials
+  rather than silently sending an unauthenticated request.
+  `request.proxy` and `request.tls` use the shared transport contract, including
+  private CA certificates and client TLS credentials. TLS certificate/hostname
+  verification stays enabled; insecure verification overrides are rejected.
+- The common provider contract accepts HTTP(S) API roots. Prefer HTTPS outside
+  loopback so evaluation content and credentials are encrypted. Redirects remain
+  rejected, and ambient proxies are not implicitly enabled for configured endpoints.
+- `timeoutSeconds` sets the provider request budget, still bounded by the native
+  decision deadline. It does not extend the consumer's deadline or add retries.
 
-Use your server's routing model ID, such as `typesafe/nemotron-deciffusion`, in
-`decisionModel`. The model portion is sent unchanged to `/v1/systemone`. Unlike
-Kev's single-checkpoint server, routers such as Llama swap may reject
-`kev-latest` if no route has that name. Custom IDs can be configured even when
-not among the plugin's declared picker presets. This endpoint support does not
-relax response validation or guarantee compatibility with every System One
-implementation's additional response fields.
+See [custom provider network policy](/concepts/model-providers/custom-providers#local-proxies-lm-studio-vllm-litellm-etc)
+for the shared exact-origin and private-network rules.
+
+**Trust and credentials:** Evaluation state, questions, and rubrics are user
+content. They leave the Gateway host when the selected endpoint is remote. Only
+configure a server you trust with that content. Authentication proves OpenClaw's
+identity to the server; it does not establish that the server is trustworthy.
+Request content and model output cannot change the destination.
+
+An explicit `models.providers.typesafe` entry owns the complete route and uses
+only its configured, host-prepared `apiKey` or request credentials. It never reads
+or inherits `plugins.entries.typesafe.config.apiKey`, which remains hosted-only,
+and does not search ambient or profile credentials. Unavailable configured
+secrets fail closed, without unauthenticated or hosted fallback. Removing an
+unused legacy SecretRef also stops the host preparing it. Without a model-provider
+entry, existing hosted and plugin loopback configuration behaves as before.
+
+Use the server's routing model ID in `decisionModel`. The selected model portion
+is transmitted unchanged; routers such as Llama swap may reject `kev-latest` if
+no route has that name. `models: []` supplies the ordinary custom-provider config
+shape without registering conversational models. The native decision role can
+use custom IDs not among the plugin's declared picker presets. This endpoint
+support does not relax System One response validation or guarantee compatibility
+with additional response fields returned by every server implementation.
 
 ## Decision contract
 
@@ -292,7 +308,7 @@ not demonstrated accuracy guarantees or permission to act.
 The host owns concurrency, circuit health, deadlines, cancellation, and provider
 lifecycle. Native decisions have a 30-second maximum; shorter consumer or
 plugin timeouts still apply. Requests use the fixed TypeSafe HTTPS endpoint unless
-`baseUrl` selects a self-hosted server. Both paths reject
+provider configuration or the existing loopback `baseUrl` selects a self-hosted server. Both paths reject
 redirects, and do not retry automatically. Consumers decide what to do with
 unavailable decisions; caller cancellation must not start fallback work.
 
