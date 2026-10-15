@@ -58,7 +58,10 @@ import {
   shouldPrepareDiagnosticTracePropagation,
 } from "./diagnostic-trace-propagation.js";
 import { isBlockedObjectKey } from "./prototype-keys.js";
-import { normalizeDiagnosticWorkerScript } from "./worker-diagnostic-script.js";
+import {
+  MAX_DIAGNOSTIC_WORKER_SLOTS,
+  normalizeDiagnosticWorkerScript,
+} from "./worker-diagnostic-script.js";
 
 export type { DiagnosticMemoryUsage } from "./diagnostic-process-types.js";
 
@@ -1254,10 +1257,32 @@ function emitDiagnosticEventWithTrust(
       default:
         enriched.kind = undefined;
     }
+    switch (enriched.reason) {
+      case "none":
+      case "forced":
+      case "synchronous_phantom_processing":
+      case "all_available_garbage":
+      case "all_external_memory":
+      case "schedule_idle":
+      case "construct_retained":
+      case "other":
+        break;
+      default:
+        enriched.reason = "other";
+    }
     enriched.thread =
       enriched.thread === undefined || enriched.thread === "main"
         ? "main"
         : normalizeDiagnosticWorkerScript(enriched.thread);
+    if (
+      enriched.thread !== "code-mode-node.worker.js" ||
+      typeof enriched.workerSlot !== "number" ||
+      !Number.isInteger(enriched.workerSlot) ||
+      enriched.workerSlot < 1 ||
+      enriched.workerSlot > MAX_DIAGNOSTIC_WORKER_SLOTS
+    ) {
+      enriched.workerSlot = undefined;
+    }
   }
   const { hostPluginId, internal = false, privateData } = options;
   const trustedTraceContext = options.trustedTraceContext === true;
