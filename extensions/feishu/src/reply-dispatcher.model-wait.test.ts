@@ -42,7 +42,10 @@ describe("Feishu model-wait card lifecycle", () => {
     const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
     vi.spyOn(ssrfRuntime, "fetchWithSsrFGuard").mockImplementation(async ({ url, init }) => {
       const path = new URL(url).pathname;
-      const body: Record<string, unknown> = JSON.parse(String(init?.body ?? "{}"));
+      if (typeof init?.body !== "string") {
+        throw new Error("Expected a serialized Feishu request body");
+      }
+      const body: Record<string, unknown> = JSON.parse(init.body);
       requests.push({ path, body });
       const data = path.includes("/auth/")
         ? { tenant_access_token: "owned-fixture-token", expire: 7200 }
@@ -96,7 +99,7 @@ describe("Feishu model-wait card lifecycle", () => {
       await dispatcher.dispatcherOptions.onReplyStart?.();
       if (previousText) {
         dispatcher.replyOptions.onPartialReply?.({ text: previousText });
-        dispatcher.replyOptions.onItemEvent?.({
+        await dispatcher.replyOptions.onItemEvent?.({
           itemId: "existing-work",
           kind: "tool",
           title: "Checking fixtures",
