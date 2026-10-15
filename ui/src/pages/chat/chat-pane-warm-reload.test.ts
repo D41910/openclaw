@@ -17,7 +17,7 @@ import {
   type TestChatPane,
 } from "./chat-pane.test-support.ts";
 import { createTestTranscript } from "./chat-view.test-helpers.ts";
-import { createChatThreadHarness } from "./components/chat-message-native.test-support.tsx";
+import { mountChatThread } from "./components/chat-thread.test-support.ts";
 import {
   installTranscriptDomMocks,
   resetTranscriptTestDom,
@@ -158,8 +158,7 @@ describe("chat pane warm reload", () => {
       );
       const client = createGatewayBrowserClientFixture({ request });
       const transcript = createTestTranscript();
-      const container = document.body.appendChild(document.createElement("div"));
-      const view = createChatThreadHarness(container, transcript);
+      let view: ReturnType<typeof mountChatThread> | undefined;
 
       try {
         expect(() => getPaneTestRuntime(pane).connectedCallback()).toThrow(attached);
@@ -168,7 +167,11 @@ describe("chat pane warm reload", () => {
         expect(pane.state.chatMessages).toEqual(priorProjection ? [] : messages);
         expect(pane.state.connected).toBe(false);
         expect(request).not.toHaveBeenCalled();
-        view.render(threadProps("warm-reload-pane", sessionKey, pane.state.chatMessages));
+        view = mountChatThread(
+          threadProps("warm-reload-pane", sessionKey, pane.state.chatMessages),
+          transcript,
+        );
+        const { container } = view;
         transcript.hostConnected();
         transcript.hostUpdated();
         if (!empty && !priorProjection) {
@@ -181,7 +184,7 @@ describe("chat pane warm reload", () => {
         await resumePendingChatHistoryLoad(pane.state);
 
         expect(pane.state.chatMessages).toEqual(priorProjection ? currentMessages : messages);
-        view.render(threadProps("warm-reload-pane", sessionKey, pane.state.chatMessages));
+        view.update(threadProps("warm-reload-pane", sessionKey, pane.state.chatMessages));
         transcript.hostUpdated();
         if (priorProjection && !networkEmpty) {
           expect(container.textContent).toContain("A newer turn is present on the Gateway.");
@@ -201,7 +204,7 @@ describe("chat pane warm reload", () => {
         );
         expect(pane.state.chatMessages).toEqual(priorProjection ? currentMessages : messages);
       } finally {
-        view.unmount();
+        view?.unmount();
         transcript.hostDisconnected();
         pane.disconnectedCallback();
         pane.context.sessions.dispose();

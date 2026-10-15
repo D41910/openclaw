@@ -1,19 +1,20 @@
 /* @vitest-environment jsdom */
 
 import { expectDefined } from "@openclaw/normalization-core";
-import { createComponent, createSignal, merge } from "solid-js";
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { GatewaySessionRow, SessionsListResult } from "../../api/types.ts";
 import { createApplicationContextProvider } from "../../test-helpers/application-context.ts";
 import { sessionMutationGatewayHello } from "../../test-helpers/gateway-methods.ts";
-import { mountSolid } from "../../test-helpers/mount-solid.ts";
-import { createSolidApplicationContextProvider } from "../../test-helpers/solid-application-context.tsx";
 import { flush } from "../../test-helpers/solid-settle.ts";
-import { createComposerProps } from "./chat-composer.test-support.ts";
+import {
+  createComposerContainer,
+  createComposerProps,
+  renderComposerInto,
+} from "./chat-composer.test-support.ts";
 import { createRefreshChatPane } from "./chat-pane-history.test-support.ts";
 import { renderChatPropsInto } from "./chat-view.test-helpers.ts";
-import { ChatComposer, resetChatComposerState } from "./components/chat-composer.tsx";
+import { resetChatComposerState } from "./components/chat-composer.tsx";
 import {
   installTranscriptDomMocks,
   resetTranscriptTestDom,
@@ -176,9 +177,7 @@ describe("composer run status", () => {
           },
           context,
         );
-        await container.querySelector<HTMLElement & { updateComplete: Promise<boolean> }>(
-          "openclaw-chat-subagent-activity",
-        )?.updateComplete;
+        flush();
         expect(container.querySelector(".agent-chat__composer-run-status")).toBeNull();
       };
       await draw([], false);
@@ -218,27 +217,11 @@ describe("composer run status", () => {
 
   it("keeps the composer free of duplicate working status across run and access states", () => {
     const { context } = createRefreshChatPane();
-    const container = document.body.appendChild(createApplicationContextProvider(context));
-    let view: ReturnType<typeof mountSolid> | undefined;
-    onTestFinished(() => {
-      view?.unmount();
-      container.remove();
-    });
+    const container = createComposerContainer();
+    container.setContext(context);
     const props = createComposerProps();
-    let update: (props: Parameters<typeof ChatComposer>[0]) => void;
     const draw = () => {
-      const next: Parameters<typeof ChatComposer>[0] = { ...props, renderRevision: {} };
-      if (view) {
-        update(next);
-      } else {
-        const [current, setCurrent] = createSignal(next);
-        update = setCurrent;
-        view = mountSolid(() => createComponent(ChatComposer, merge(current)), {
-          container,
-          wrapper: createSolidApplicationContextProvider(context).wrapper,
-        });
-      }
-      flush();
+      renderComposerInto(container, props);
     };
     draw();
     expect(container.querySelector(".agent-chat__composer-run-status")).toBeNull();

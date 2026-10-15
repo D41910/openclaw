@@ -22,7 +22,7 @@ import { applyChatPendingInputs, getChatPendingInputs } from "./chat-pending-inp
 import type { ChatPageHost } from "./chat-state-host.ts";
 import { createTestTranscript } from "./chat-view.test-helpers.ts";
 import { releaseChatMediaResourceSubscriber } from "./components/chat-message-media.ts";
-import { createChatThreadHarness } from "./components/chat-message-native.test-support.tsx";
+import { mountChatThread } from "./components/chat-thread.test-support.ts";
 import {
   installTranscriptDomMocks,
   resetTranscriptTestDom,
@@ -171,17 +171,22 @@ describe("stored chat snapshot hydration", () => {
       }
       const remounted = mount(cacheMode === "stored");
       const transcript = createTestTranscript();
-      const container = document.body.appendChild(document.createElement("div"));
-      const view = createChatThreadHarness(container, transcript);
-      const renderPane = () => {
-        view.render({
+      let view: ReturnType<typeof mountChatThread> | undefined;
+      const renderPane = (): ReturnType<typeof mountChatThread> => {
+        const props = {
           ...threadProps("cached-initial-pane", targetSessionKey, remounted.state.chatMessages),
           pendingInputs: getChatPendingInputs(remounted.state)?.page.items,
           assistantAttachmentAuthToken: "test-auth-token",
           connectionEpoch: 1,
           onRequestUpdate: renderPane,
-        });
+        };
+        if (view) {
+          view.update(props);
+        } else {
+          view = mountChatThread(props, transcript);
+        }
         transcript.hostUpdated();
+        return view;
       };
       try {
         await vi.waitFor(() =>
@@ -191,7 +196,7 @@ describe("stored chat snapshot hydration", () => {
             }),
           ).not.toBeNull(),
         );
-        renderPane();
+        const { container } = renderPane();
         transcript.hostConnected();
         flush();
         const displayed = expectDefined(
@@ -260,7 +265,7 @@ describe("stored chat snapshot hydration", () => {
         expect(container.textContent).not.toContain(custodyMessage.content);
         expect(request.mock.calls.every(([method]) => method === "chat.history")).toBe(true);
       } finally {
-        view.unmount();
+        view?.unmount();
         releaseChatMediaResourceSubscriber(renderPane);
         transcript.hostDisconnected();
         remounted.disconnectedCallback();

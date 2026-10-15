@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { flush } from "../../test-helpers/solid-settle.ts";
 import { createRefreshChatPane } from "./chat-pane-history.test-support.ts";
 import { stubAnimationFrames } from "./chat-view.test-helpers.ts";
-import { createChatThreadHarness } from "./components/chat-message-native.test-support.tsx";
+import { mountChatThread } from "./components/chat-thread.test-support.ts";
 import {
   installTranscriptDomMocks,
   resetTranscriptTestDom,
@@ -30,10 +30,9 @@ async function mountSession(paneId: string, sessionKey: string) {
   }));
   pane.render();
   const props = expectDefined(pane.chatProps, "pane transcript props");
-  const container = document.body.appendChild(document.createElement("div"));
-  const view = createChatThreadHarness(container, props.transcript);
   props.transcript.hostConnected();
-  view.render(props);
+  const view = mountChatThread(props, props.transcript);
+  const { container } = view;
   const thread = expectDefined(container.querySelector<HTMLDivElement>(".chat-thread"), "thread");
   Object.defineProperties(thread, {
     clientHeight: { configurable: true, value: 600 },
@@ -49,7 +48,6 @@ async function mountSession(paneId: string, sessionKey: string) {
     dispose: () => {
       props.transcript.hostDisconnected();
       view.unmount();
-      container.remove();
     },
   };
 }

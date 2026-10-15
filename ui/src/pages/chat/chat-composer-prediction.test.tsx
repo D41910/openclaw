@@ -1,11 +1,12 @@
 /* @vitest-environment jsdom */
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import { createDeferred } from "../../../../test/helpers/promise.js";
 import type { GatewayBrowserClient, GatewayEventFrame } from "../../api/gateway.ts";
 import { flush, waitForSolid } from "../../test-helpers/solid-settle.ts";
 import {
   createComposerContainer,
   createComposerProps,
+  disposeComposer,
   renderComposerInto,
   resetComposerFixture,
 } from "./chat-composer.test-support.ts";
@@ -45,8 +46,13 @@ function fixture(
     },
   });
   const container = document.body.appendChild(createComposerContainer());
-  const paint = () => renderComposerInto(container, props);
+  const paint = () => {
+    renderComposerInto(container, props);
+  };
   props.onRequestUpdate = paint;
+  onTestFinished(() => {
+    disposeComposer(container);
+  });
   paint();
   const input = container.querySelector("textarea")!;
   const finish = (runId = "run-a") =>
