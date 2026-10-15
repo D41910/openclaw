@@ -511,25 +511,29 @@ suite.define(() => {
         await gateway.waitForRequest("system.info");
       } catch (error) {
         try {
-          const [browser, systemInfoRequestCount] = await withTimeout(
+          const [browser, systemInfoRequestCount, heartbeatRequestCount] = await withTimeout(
             Promise.all([
               page.evaluate(() => {
                 const host = document.querySelector("openclaw-connection-page");
+                const systemInfoSection = host?.querySelector("#settings-connection-host");
                 return {
                   visibilityState: document.visibilityState,
                   hasFocus: document.hasFocus(),
                   connectionHostPresent: host !== null,
                   connectionHostConnected: host?.isConnected ?? null,
+                  systemInfoSectionPresent: Boolean(systemInfoSection),
+                  systemInfoSectionBusy: systemInfoSection?.getAttribute("aria-busy") === "true",
                 };
               }),
               gateway.getRequests("system.info").then((requests) => requests.length),
+              gateway.getRequests("last-heartbeat").then((requests) => requests.length),
             ]),
             5_000,
             "connection system.info failure diagnostics",
           );
           console.error(
             "[sidebar-settings] initial system.info wait failed",
-            JSON.stringify({ ...browser, systemInfoRequestCount }),
+            JSON.stringify({ ...browser, systemInfoRequestCount, heartbeatRequestCount }),
           );
         } catch {
           console.error("[sidebar-settings] initial system.info diagnostics unavailable");
