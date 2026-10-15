@@ -82,6 +82,7 @@ export const UpdateCandidateStateSnapshotSchema = z.object({
 type StateInput = {
   stateDir: string;
   config: OpenClawConfigWithLegacyRoster;
+  includeLocalStoreVersions?: boolean;
   env?: NodeJS.ProcessEnv;
   sourceBundledPlugins?: UpdateCandidateBundledSource;
 };
@@ -217,10 +218,11 @@ export async function collectStateDatabasePaths(
   );
 }
 
-/** Released updaters compare exact response paths, so every raw alias is published. */
+/** Publish exact aliases; released shared/agent callers opt out of local schema versions. */
 function publishStateDatabaseVersions(
   files: Map<string, StateDatabaseDiscovery>,
   inspected: Map<string, Omit<UpdateStateSchemaVersion, "path">>,
+  input: StateInput,
 ): UpdateStateSchemaVersion[] {
   const versions: UpdateStateSchemaVersion[] = [];
   for (const [identity, discovery] of files) {
@@ -232,7 +234,12 @@ function publishStateDatabaseVersions(
       versions.push({ path: spelling, ...result });
     }
   }
-  return versions;
+  return input.includeLocalStoreVersions === false
+    ? versions.filter(
+        ({ path: file }) =>
+          file !== resolveDaemonRuntimePinStorePath({ OPENCLAW_STATE_DIR: input.stateDir }),
+      )
+    : versions;
 }
 
 /** Read registrations and plugin ownership from one private shared copy before budgeting. */
@@ -407,7 +414,7 @@ export async function readUpdateStateSchemaVersionsInProcess(
       ),
     );
   }
-  return publishStateDatabaseVersions(files, inspected);
+  return publishStateDatabaseVersions(files, inspected, input);
 }
 
 /** Released candidates can snapshot shared state even when they cannot expose discovery. */
@@ -698,7 +705,7 @@ export async function snapshotUpdateCandidateState(
   }
   input.onProgress?.({ phase: "execution approvals snapshot", path: sourceRoot });
   await execApprovals.copySources();
-  const versions = publishStateDatabaseVersions(files, inspected);
+  const versions = publishStateDatabaseVersions(files, inspected, input);
   const pluginCodeLinks: UpdateCandidatePluginCodeLink[] = [];
   input.onProgress?.({ phase: "plugin snapshot", path: sourceRoot });
   const pluginPaths = await copyUpdateCandidatePlugins(plugins, {
