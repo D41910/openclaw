@@ -215,7 +215,20 @@ suite.define(() => {
           await worked.waitFor();
           await worked.click();
           await expect.poll(() => worked.getAttribute("aria-expanded")).toBe("true");
-          await expandRawDetails();
+          if (reasoningLevel === "stream") {
+            await expandRawDetails();
+          } else {
+            await expect.poll(() => rawDetails.count()).toBe(0);
+          }
+          for (const index of [0, 1]) {
+            await expect
+              .poll(() =>
+                pane
+                  .locator(".chat-tool-msg-summary", { hasText: `evidence-${index}.txt` })
+                  .count(),
+              )
+              .toBe(1);
+          }
           await expect
             .poll(() => pane.locator(".chat-thinking").count())
             .toBe(reasoningLevel === "on" ? 3 : 0);
