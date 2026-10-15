@@ -130,7 +130,7 @@ function renderQueue(props: Parameters<typeof renderChatQueueSolid>[0]) {
   flush();
   return {
     container,
-    update(next: Parameters<typeof renderChatQueueSolid>[0]) {
+    update(this: void, next: Parameters<typeof renderChatQueueSolid>[0]) {
       setCurrent(next);
       flush();
     },

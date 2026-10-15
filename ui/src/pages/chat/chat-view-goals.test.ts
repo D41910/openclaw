@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { GatewaySessionRow } from "../../api/types.ts";
+import { createComposerContainer } from "./chat-composer.test-support.ts";
 import { resetChatViewState } from "./chat-view-state.ts";
 import {
   disposeChatView,
@@ -57,7 +58,7 @@ describe("chat goal status", () => {
     "renders goal details and gates actions when connected=%s",
     (connected) => {
       const onGoalAction = vi.fn();
-      const container = document.createElement("div");
+      const container = createComposerContainer();
       const props = {
         selectedSession: goalSession(),
         onGoalAction,
@@ -114,7 +115,7 @@ describe("chat goal status", () => {
   );
 
   it("exposes the pause reason in a keyboard-accessible tooltip and freezes elapsed time", () => {
-    const container = document.createElement("div");
+    const container = createComposerContainer();
     const now = Date.now();
     const selectedSession = goalSession({ createdAt: now - 60_000 });
     const onGoalAction = vi.fn();
@@ -159,7 +160,7 @@ describe("chat goal status", () => {
   });
 
   it("restores goal actions and expansion after a transient missing session goal", () => {
-    const container = document.createElement("div");
+    const container = createComposerContainer();
     onTestFinished(() => {
       disposeChatView(container);
     });
@@ -184,7 +185,7 @@ describe("chat goal status", () => {
 
   it("edits the plain objective and restores the conversation draft on cancellation", () => {
     let draft = "Keep my conversation draft";
-    const container = document.createElement("div");
+    const container = createComposerContainer();
     const onDraftChange = vi.fn((next: string) => {
       draft = next;
     });
