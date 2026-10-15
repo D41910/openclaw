@@ -6,7 +6,7 @@ import {
 
 const suite = createNewSessionPageE2eSuite();
 suite.define(() => {
-  it("keeps model options stable while typing with unrelated session updates", async () => {
+  it("keeps model options stable and welcome recents current through typing and row updates", async () => {
     await suite.withPage({ viewport: { width: 1440, height: 900 } }, async ({ page }) => {
       const gateway = await installMockGateway(page, {
         models: [
@@ -118,6 +118,27 @@ suite.define(() => {
         .toContain("Background update j");
       expect((await gateway.getRequests()).slice(requestsBefore.length)).toEqual([]);
       await observation.dispose();
+      // Reveal catches up from the current owner, not a retained mutable roster.
+      await input.fill("");
+      await expect
+        .poll(() => page.locator(".agent-chat__recent-name").first().textContent())
+        .toBe("Background update j");
+      await gateway.emitGatewayEvent("sessions.changed", {
+        agentId: "main",
+        sessionKey,
+        reason: "patch",
+        ancestorSessions: [],
+        session: {
+          ...row,
+          label: "Visible recent update",
+          displayName: "Visible recent update",
+          updatedAt: Date.now(),
+          snapshotAt: Date.now(),
+        },
+      });
+      await expect
+        .poll(() => page.locator(".agent-chat__recent-name").first().textContent())
+        .toBe("Visible recent update");
     });
   });
 });
