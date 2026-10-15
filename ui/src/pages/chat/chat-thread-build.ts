@@ -726,5 +726,6 @@ export function buildChatItems(
     items: complete,
     people: props.replyPeople,
     localPerson: props.replyLocalPerson,
+    showReasoning: props.showReasoning,
   });
 }

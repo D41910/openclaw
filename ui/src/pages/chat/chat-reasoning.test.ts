@@ -351,7 +351,6 @@ it("does not let an earlier receipt consume equal reasoning from the next assist
   applySessionMessagePayload(
     state,
     {
-      runId,
       messageId: "earlier",
       messageSeq: 2,
       message: {
@@ -360,7 +359,7 @@ it("does not let an earlier receipt consume equal reasoning from the next assist
         stopReason: "toolUse",
         content: [
           { type: "thinking", thinking: text },
-          { type: "toolCall", id: "tool-1", name: "read", arguments: {} },
+          { type: "toolCall", id: "tool-1", name: "read", arguments: { path: "earlier.txt" } },
         ],
         __openclaw: { id: "earlier", seq: 2, runId },
       },
@@ -374,6 +373,63 @@ it("does not let an earlier receipt consume equal reasoning from the next assist
     show(container, state, mode);
     expect(container.querySelectorAll(".chat-thinking")).toHaveLength(2);
   }
+
+  const currentText = "Checking the current step.";
+  thinking(state, currentText, 4, runId, "current");
+  handleAgentEvent(state, {
+    runId,
+    seq: 5,
+    stream: "thinking",
+    ts: 5,
+    sessionKey: "main",
+    data: { phase: "persisted", itemId: "later", messageId: "later", messageRunId: runId },
+  });
+  applySessionMessagePayload(
+    state,
+    {
+      messageId: "later",
+      messageSeq: 3,
+      message: {
+        role: "assistant",
+        timestamp: 4,
+        stopReason: "toolUse",
+        content: [
+          { type: "thinking", thinking: text },
+          { type: "toolCall", id: "tool-2", name: "read", arguments: { path: "later.txt" } },
+        ],
+        __openclaw: { id: "later", seq: 3, runId },
+      },
+    },
+    true,
+    { kind: "live", activeRunId: runId },
+  );
+  show(container, state);
+  const steps = Array.from(
+    container.querySelectorAll(".chat-thinking, .chat-tool-msg-summary"),
+    (element) => {
+      const content = element.textContent ?? "";
+      return content.includes(currentText)
+        ? "current"
+        : content.includes(text)
+          ? "saved thought"
+          : content.includes("earlier.txt")
+            ? "earlier tool"
+            : content.includes("later.txt")
+              ? "later tool"
+              : content;
+    },
+  );
+  expect(steps).toEqual([
+    "saved thought",
+    "earlier tool",
+    "saved thought",
+    "later tool",
+    "current",
+  ]);
+  expect(state.chatReasoning?.items.at(-1)?.receipt).toBeUndefined();
+  show(container, state, "off");
+  expect(container.querySelector(".chat-thinking")).toBeNull();
+  expect(container.querySelectorAll(".chat-activity-group__summary")).toHaveLength(1);
 });
 
 it("does not attach known-committed pre-tool reasoning to a later final answer", () => {

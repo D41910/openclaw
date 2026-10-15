@@ -4,6 +4,7 @@ import { messageClientSourcesKey } from "../../../../src/chat/message-client-sou
 import type { GatewaySessionRow } from "../../api/types.ts";
 import type { ChatItem, MessageGroup } from "../../lib/chat/chat-types.ts";
 import { resolveMessageDisplayMarkdown } from "../../lib/chat/message-display.ts";
+import { extractThinkingCached } from "../../lib/chat/message-extract.ts";
 import { normalizeRoleForGrouping } from "../../lib/chat/message-normalizer.ts";
 import { resolveMessageVisibleContent } from "../../lib/chat/message-visibility.ts";
 import {
@@ -185,6 +186,8 @@ export type ReplyAttributionContext = {
   people?: readonly string[];
   /** Key of the signed-in viewer, who authors local user messages without a sender. */
   localPerson?: string;
+  /** Keep assistant reasoning visible between tool iterations when enabled. */
+  showReasoning?: boolean;
 };
 
 export function groupMessages(
@@ -194,8 +197,11 @@ export function groupMessages(
   const result = groupChatItems(
     items,
     replyContext.items && rowsAfterHiddenTurns(items, replyContext.items),
+    replyContext.showReasoning,
   );
-  const context = replyContext.items ? groupChatItems(replyContext.items) : result;
+  const context = replyContext.items
+    ? groupChatItems(replyContext.items, undefined, replyContext.showReasoning)
+    : result;
   return stampReplyAttribution(result, context, replyContext);
 }
 
@@ -218,6 +224,7 @@ function rowsAfterHiddenTurns(items: ChatItem[], context: ChatItem[]): Set<strin
 function groupChatItems(
   items: ChatItem[],
   rowsAfterHiddenTurn?: ReadonlySet<string>,
+  showReasoning = false,
 ): Array<ChatItem | MessageGroup> {
   const result: Array<ChatItem | MessageGroup> = [];
   let currentGroup: MessageGroup | null = null;
@@ -240,9 +247,14 @@ function groupChatItems(
       record?.role === "assistant" &&
       record.stopReason === "toolUse" &&
       Boolean(resolveMessageDisplayMarkdown(item.message, normalized).trim());
-    // Tool-use narration stays visible between iterations. Legacy mixed rows
-    // retain their tool grouping and forwarded file-link attribution.
-    const role = hasAssistantText ? "assistant" : normalizeRoleForGrouping(normalized.role);
+    const hasAssistantReasoning =
+      showReasoning && record?.role === "assistant" && Boolean(extractThinkingCached(item.message));
+    // Tool-use narration and enabled reasoning stay visible between iterations.
+    // Other mixed rows retain their tool grouping and forwarded file-link attribution.
+    const role =
+      hasAssistantText || hasAssistantReasoning
+        ? "assistant"
+        : normalizeRoleForGrouping(normalized.role);
     // Classify after content projection and keep the fact with its group; later
     // presentation passes reuse it; replacing a message refreshes its facts.
     const visibleContent = resolveMessageVisibleContent(item.message, normalized);
@@ -252,6 +264,7 @@ function groupChatItems(
       duplicateCount: item.duplicateCount,
       ...(normalized.replyTarget ? { replyTarget: normalized.replyTarget } : {}),
       hasVisibleContent:
+        hasAssistantReasoning ||
         visibleContent === "non-text" ||
         Boolean(resolveMessageDisplayMarkdown(item.message, normalized).trim()),
     };
