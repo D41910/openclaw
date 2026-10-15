@@ -155,11 +155,8 @@ export function assertCompactionRequestCanFit(
   budget: CompactionRequestBudget | undefined,
   hasCompactableHistory: boolean,
 ): void {
-  // Summaries cannot reclaim fixed or pending input; an unavailable cut cannot reclaim history.
-  if (
-    budget &&
-    (!hasCompactableHistory || budget.fixedTokens + budget.pendingTokens > budget.contextWindow)
-  ) {
+  // Try useful history reduction for pending input; only fixed overhead is unreclaimable here.
+  if (budget && (!hasCompactableHistory || budget.fixedTokens > budget.contextWindow)) {
     const requestTokens = estimateCompactedRequestTokens(messages, budget);
     if (requestTokens > budget.contextWindow) {
       const historyTokens = requestTokens - budget.fixedTokens - budget.pendingTokens;

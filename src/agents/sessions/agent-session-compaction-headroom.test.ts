@@ -207,7 +207,7 @@ it.each([
   const originalSummary = "The project uses blue buttons. ".repeat(40);
   sessionManager.appendCompaction(originalSummary, keptId, 2_000);
   sessionManager.appendMessage(createAssistant(model, [{ type: "text", text: "Ready." }]));
-  const pending = "Pending project material. ".repeat(350);
+  const pending = "Pending project material. ".repeat(550);
   const pendingKey = outcome.endsWith("pending user") ? "protected-pending" : undefined;
   let firstKeptEntryId = keptId;
   if (pendingKey) {
