@@ -217,6 +217,7 @@ async function runCli(args: string[]) {
 
 async function capture(page: Page, bubble: Locator, name: string) {
   const body = (await page.locator("body").textContent()) ?? "";
+  // oxlint-disable-next-line unicorn/prefer-dom-node-text-content -- innerText separately proves rendered visible text.
   const visibleText = await page.locator("body").innerText();
   for (const [category, privateValue] of [
     ["gatewayToken", instance.gatewayToken],

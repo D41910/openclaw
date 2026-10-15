@@ -142,6 +142,7 @@ function assertClocks(measured: Awaited<ReturnType<typeof clocks>>, endedAt: num
 }
 async function capture(page: Page, parent: Locator, name: string, content: Locator[]) {
   const text = (await page.locator("body").textContent()) ?? "";
+  // oxlint-disable-next-line unicorn/prefer-dom-node-text-content -- innerText separately proves rendered visible text.
   const visibleText = await page.locator("body").innerText();
   for (const [category, secret] of [
     ["gatewayToken", instance.gatewayToken],

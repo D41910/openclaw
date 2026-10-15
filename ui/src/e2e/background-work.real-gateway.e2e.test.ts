@@ -111,6 +111,7 @@ async function capture(page: Page, name: string, focus: Locator) {
     name + " interaction must fit the viewport",
   ).toBe(true);
   const visibleText = (await page.locator("body").textContent()) ?? "";
+  // oxlint-disable-next-line unicorn/prefer-dom-node-text-content -- innerText separately proves rendered visible text.
   const renderedText = await page.locator("body").innerText();
   // Synthetic content only. Never retain handoffs, fixture secrets or private fixture paths.
   for (const [category, secret] of [
