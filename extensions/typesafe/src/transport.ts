@@ -137,8 +137,8 @@ export async function requestEvaluation(params: {
           : {}),
         Accept: "application/json",
         "Content-Type": "application/json",
+        ...headers,
       },
-      headers,
       request: configuredRequest,
     });
   } catch {

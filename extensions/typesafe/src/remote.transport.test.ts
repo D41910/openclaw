@@ -274,6 +274,7 @@ it("applies the shared bearer override and /v1 base URL without duplicating path
       settings({
         baseUrl: baseUrl + "/v1/",
         apiKey: "synthetic-key",
+        headers: { authorization: "Bearer synthetic-stale" },
         request: {
           tls: { ca: PROXY_FIXTURE_CERTIFICATE },
           auth: { mode: "authorization-bearer", token: "synthetic-override" },
@@ -287,6 +288,40 @@ it("applies the shared bearer override and /v1 base URL without duplicating path
     authorization: "Bearer synthetic-override",
   });
 });
+
+it.each(["header-auth", "request-headers"] as const)(
+  "applies %s after provider header defaults",
+  async (mode) => {
+    const tls = { ca: PROXY_FIXTURE_CERTIFICATE };
+    const request: NonNullable<ModelProviderConfig["request"]> =
+      mode === "header-auth"
+        ? { tls, auth: { mode: "header", headerName: "X-API-Key", value: "synthetic-replacement" } }
+        : {
+            tls,
+            headers: {
+              Authorization: "Bearer synthetic-override",
+              "X-API-Key": "synthetic-replacement",
+            },
+          };
+    await expect(
+      provider(
+        settings({
+          apiKey: "synthetic-default",
+          headers: {
+            authorization: "Bearer synthetic-stale",
+            "x-api-key": "synthetic-stale-header",
+          },
+          request,
+        }),
+      ).evaluate(batch, context()),
+    ).resolves.toMatchObject({ status: "ok" });
+    expect(received).toHaveLength(1);
+    expect(received[0]?.authorization).toBe(
+      mode === "header-auth" ? undefined : "Bearer synthetic-override",
+    );
+    expect(received[0]?.apiKey).toBe("synthetic-replacement");
+  },
+);
 
 it.each(["untrusted certificate", "hostname mismatch", "insecure override"])(
   "preserves shared TLS verification: %s",
