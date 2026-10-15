@@ -3,6 +3,7 @@ import { publishTranscriptUpdate } from "../config/sessions/session-accessor.js"
 import type { TranscriptEntryAnchor } from "../config/sessions/transcript-entry-anchor.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { bindAgentAssistantSource, readAgentAssistantSource } from "../infra/agent-events.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import type {
   PluginHookBeforeMessageWriteEvent,
   PluginHookBeforeMessageWriteResult,
@@ -49,6 +50,7 @@ import {
   rewriteToolResultIds,
 } from "./tool-call-id.js";
 type UserAgentMessage = Extract<AgentMessage, { role: "user" }>;
+const log = createSubsystemLogger("agents/transcript");
 export type NextUserMessagePersistence = "normal" | "suppress" | "runtime";
 type AsyncMessageCallback<T extends AgentMessage> = (message: T) => void | Promise<void>;
 type UserMessagePersistedCallback = (
@@ -571,6 +573,10 @@ export function installSessionToolResultGuard(
         messageId: typeof result === "string" ? result : undefined,
         ...(messageSeq !== undefined ? { messageSeq } : {}),
         ...(runId ? { runId } : {}),
+      }).catch(() => {
+        log.warn(
+          "Transcript update publication failed after append; reload the session to refresh its transcript.",
+        );
       });
     }
 

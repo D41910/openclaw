@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { SessionManager } from "openclaw/plugin-sdk/agent-sessions";
 import { upsertSessionEntry } from "openclaw/plugin-sdk/session-store-runtime";
 import { closeOpenClawAgentDatabasesForTest } from "openclaw/plugin-sdk/sqlite-runtime-testing";
@@ -26,6 +27,7 @@ import { projectInFlightRunSnapshot } from "../gateway/chat-inflight-snapshot.js
 import { createAgentEventTestHarness } from "../gateway/server-chat.agent-events.test-harness.js";
 import { subscribeAgentEvents } from "../gateway/server-chat.agent-events.test-helpers.js";
 import type { AgentEventRuntimePayload } from "../infra/agent-events.js";
+import { createWarnLogCapture } from "../logging/test-helpers/warn-log-capture.js";
 import {
   initializeGlobalHookRunner,
   resetGlobalHookRunner,
@@ -53,6 +55,21 @@ import { installSessionToolResultGuard } from "./session-tool-result-guard.js";
 import { persistAgentSessionMessage } from "./sessions/agent-session-transcript.js";
 import { makeAgentAssistantMessage } from "./test-helpers/agent-message-fixtures.js";
 import { makeProviderModelFixture } from "./test-helpers/provider-model-fixture.js";
+const publicationFailure = vi.hoisted(() => ({ error: undefined as Error | undefined }));
+
+// mock-isolation: Fail only the post-commit notification; append and SQLite ownership stay real.
+vi.mock("../config/sessions/session-accessor.sqlite-events.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../config/sessions/session-accessor.sqlite-events.js")>();
+  return {
+    ...actual,
+    publishTranscriptUpdate: (...args: Parameters<typeof actual.publishTranscriptUpdate>) =>
+      publicationFailure.error
+        ? Promise.reject(publicationFailure.error)
+        : actual.publishTranscriptUpdate(...args),
+  };
+});
+
 const assistantText = (text: string) =>
   makeAgentAssistantMessage({ content: [{ type: "text", text }] });
 const model = makeProviderModelFixture({
@@ -112,6 +129,7 @@ async function openPersistedSessionManager(
 }
 
 beforeEach(() => {
+  publicationFailure.error = undefined;
   setRuntimeConfigSnapshot({});
 });
 
@@ -581,6 +599,45 @@ describe("guardSessionManager transcript updates", () => {
     });
     expect(guarded.getEntry(entryId)).not.toHaveProperty("message.__openclaw.humanMentions");
   });
+
+  it.each(["sync", "async"] as const)(
+    "keeps a committed %s append successful when transcript publication rejects",
+    async (mode) => {
+      const { sessionManager, target } = await openPersistedSessionManager();
+      const guarded = guardSessionManager(sessionManager, {
+        agentId: target.agentId,
+        sessionKey: target.sessionKey,
+      });
+      const warnings = createWarnLogCapture("transcript-publication-failure");
+      const unhandled: unknown[] = [];
+      const onUnhandled = (error: unknown) => unhandled.push(error);
+      process.on("unhandledRejection", onUnhandled);
+      const message = assistantText("private message text");
+      publicationFailure.error = new Error("private publication error detail");
+      try {
+        const entryId =
+          mode === "sync"
+            ? guarded.appendMessage(message)
+            : await guarded.appendMessageAsync(message);
+        if (!entryId) {
+          throw new Error("Expected a committed append receipt");
+        }
+        expect(guarded.getEntry(entryId)).toMatchObject({ message });
+        // Unhandled rejections are emitted after microtasks; observe one actual event-loop turn.
+        await yieldToEventLoop();
+        expect(unhandled).toEqual([]);
+        expect(await warnings.findText("Transcript update publication failed")).toContain(
+          "reload the session",
+        );
+        expect(await warnings.findText("private message text")).toBeUndefined();
+        expect(await warnings.findText("private publication error detail")).toBeUndefined();
+      } finally {
+        publicationFailure.error = undefined;
+        process.off("unhandledRejection", onUnhandled);
+        warnings.cleanup();
+      }
+    },
+  );
 
   it("broadcasts the committed SQLite owner when a callback rebinds the manager", async () => {
     const updates = collectUpdates();
