@@ -41,6 +41,7 @@ declare module "@solidjs/web" {
       messageActions: MessageActionDetails | null | undefined;
     }
     interface IntrinsicElements {
+      "openclaw-modal-actions": HTMLAttributes<HTMLElement>;
       "openclaw-working-phrase": HTMLAttributes<HTMLElement> & {
         "prop:startMs"?: number | null;
         "prop:seed"?: string;
