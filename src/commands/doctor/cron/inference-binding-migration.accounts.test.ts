@@ -11,9 +11,11 @@ import type { OpenClawConfig } from "../../../config/types.openclaw.js";
 import { loadCronJobsStore, saveCronJobsStore } from "../../../cron/store.js";
 import type { CronStoredJob } from "../../../cron/types.js";
 import * as snapshots from "../../../infra/sqlite-snapshot.js";
+import { runOpenClawStateWriteTransaction } from "../../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../../test-utils/openclaw-test-state.js";
 import { withDoctorConfigMaintenance } from "../../doctor-config-flow.test-support.js";
 import { maybeRepairCronInferenceBindings } from "./inference-binding-migration.js";
+import { inspectCronJobsForDoctor } from "./store-repair.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -202,13 +204,35 @@ it("preserves explicit selections while refusing ambiguity, missing accounts and
       ];
       const storePath = state.statePath("cron", "jobs.json");
       await saveCronJobsStore(storePath, { version: 1, jobs: original });
+      const malformedPath = state.statePath("inactive-cron", "jobs.json");
+      const laterPath = state.statePath("z-later-cron", "jobs.json");
+      await saveCronJobsStore(malformedPath, {
+        version: 1,
+        jobs: [job("malformed", "openai/gpt-5.5@openai:a")],
+      });
+      await saveCronJobsStore(laterPath, {
+        version: 1,
+        jobs: [job("after-malformed", "openai/gpt-5.5@openai:a")],
+      });
+      // Reproduce persisted legacy bytes rejected by current creation; no runtime load repairs it.
+      runOpenClawStateWriteTransaction(({ db }) => {
+        db.prepare(
+          "UPDATE cron_jobs SET job_json = json_set(job_json, '$.sessionTarget', 'session:') WHERE job_id = 'malformed'",
+        ).run();
+      });
       await withDoctorConfigMaintenance(async () => {
+        const malformedBefore = (await inspectCronJobsForDoctor({ env: process.env })).jobs.find(
+          (entry) => entry.id === "malformed",
+        );
+        expect(malformedBefore?.definition?.sessionTarget).toBe("session:");
         const preview = await maybeRepairCronInferenceBindings({ cfg, shouldRepair: false });
         expect(preview.changes).toEqual([]);
         expect(preview.warnings.join("\n")).toContain("openclaw doctor --fix");
         expect((await loadCronJobsStore(storePath)).jobs).toEqual(original);
         const result = await maybeRepairCronInferenceBindings({ cfg, shouldRepair: true });
         const warnings = result.warnings.join("\n");
+        expect(warnings).toContain("malformed");
+        expect(warnings).toContain("invalid cron sessionTarget session id");
         expect(warnings).toContain("ambiguous");
         expect(warnings).toContain("More than one inference account");
         expect(warnings).toContain("openai:missing");
@@ -235,6 +259,14 @@ it("preserves explicit selections while refusing ambiguity, missing accounts and
           provider: "synthetic",
           profileId: "synthetic:stored",
         });
+        expect((await loadCronJobsStore(laterPath)).jobs[0]?.inferenceBinding).toMatchObject({
+          profileId: "openai:a",
+        });
+        expect(
+          (await inspectCronJobsForDoctor({ env: process.env })).jobs.find(
+            (entry) => entry.id === "malformed",
+          ),
+        ).toEqual(malformedBefore);
         for (const id of [
           "ambiguous",
           "missing",
@@ -255,8 +287,8 @@ it("preserves explicit selections while refusing ambiguity, missing accounts and
   );
 });
 
-it.each(["job edit", "account replacement"] as const)(
-  "refuses a stale plan after %s before backup publication",
+it.each(["job edit", "account replacement", "backup failure"] as const)(
+  "leaves jobs unchanged when %s prevents safe migration",
   async (change) => {
     await withOpenClawTestState(
       {
@@ -300,6 +332,9 @@ it.each(["job edit", "account replacement"] as const)(
         const snapshot = snapshots.createVerifiedSqliteSnapshot;
         vi.spyOn(snapshots, "createVerifiedSqliteSnapshot").mockImplementationOnce(
           async (params) => {
+            if (change === "backup failure") {
+              throw new Error("Synthetic backup unavailable");
+            }
             if (change === "job edit") {
               await saveCronJobsStore(storePath, {
                 version: 1,
@@ -327,6 +362,9 @@ it.each(["job edit", "account replacement"] as const)(
           expect(result.changes).toEqual([]);
           expect(snapshots.createVerifiedSqliteSnapshot).toHaveBeenCalledOnce();
           expect(result.warnings.join("\n")).toContain("not committed");
+          if (change === "backup failure") {
+            expect(result.warnings.join("\n")).toContain("Synthetic backup unavailable");
+          }
           expect((await loadCronJobsStore(storePath)).jobs[0]).toEqual(
             change === "job edit" ? { ...original, name: "Edited after inspection" } : original,
           );

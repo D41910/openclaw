@@ -36,6 +36,7 @@ import { prepareCronSession } from "../../../cron/isolated-agent/session.js";
 import { normalizeCronJobCreate } from "../../../cron/normalize.js";
 import {
   isDetachedCronSessionTarget,
+  isInvalidCronSessionTargetIdError,
   resolveCronSessionTargetSessionKey,
 } from "../../../cron/session-target.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
@@ -73,14 +74,16 @@ export async function maybeRepairCronInferenceBindings(params: {
       ) {
         continue;
       }
-      // Normalize only the resolver input. The committed definition retains every authored field.
-      const job = normalizeCronJobCreate(definition);
-      if (!job || job.payload.kind !== "agentTurn" || job.sessionTarget === "main") {
-        continue;
-      }
-      let modelRef = job.payload.model;
+      let modelRef: string | undefined;
       const label = `${normalizeOptionalString(definition.name) ?? stored.id} (${stored.id})`;
       try {
+        // Malformed legacy rows must not abandon adoption for unrelated jobs or partitions.
+        // Normalize only resolver input; the committed definition retains every authored field.
+        const job = normalizeCronJobCreate(definition);
+        if (!job || job.payload.kind !== "agentTurn" || job.sessionTarget === "main") {
+          continue;
+        }
+        modelRef = job.payload.model;
         const agentId = tryResolveCronJobEffectiveAgentId(
           job,
           tryResolveAmbientOwnerAgentId(params.cfg),
@@ -329,8 +332,11 @@ export async function maybeRepairCronInferenceBindings(params: {
         });
         descriptions.push(description);
       } catch (error) {
+        const recovery = isInvalidCronSessionTargetIdError(error)
+          ? `Repair its session target with openclaw automations edit ${quoteCliArg(stored.id)} --session <target>, then retry Doctor.`
+          : `Explicitly adopt the intended stored account with openclaw automations edit ${quoteCliArg(stored.id)} --model ${quoteCliArg(`${modelRef ?? "<provider/model>"}@<profileId>`)}.`;
         warnings.push(
-          `Automation ${label}: inference account was not migrated: ${formatErrorMessage(error)} Explicitly adopt the intended stored account with openclaw automations edit ${quoteCliArg(stored.id)} --model ${quoteCliArg(`${modelRef ?? "<provider/model>"}@<profileId>`)}.`,
+          `Automation ${label}: inference account was not migrated: ${formatErrorMessage(error)} ${recovery}`,
         );
       }
     }
