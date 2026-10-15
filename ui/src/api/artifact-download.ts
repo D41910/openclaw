@@ -104,7 +104,7 @@ export async function downloadArtifact(
     const blobType = blob.type.split(";", 1)[0]?.trim().toLowerCase();
     if (
       blobType !== (mimeType || "application/octet-stream") &&
-      !(variant === "thumbnail" && result.artifact.type === "image" && blobType === "image/png")
+      !(variant === "thumbnail" && result.artifact.type === "image" && blobType === "image/webp")
     ) {
       throw new Error("Artifact download returned an unexpected content type");
     }

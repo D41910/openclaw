@@ -124,7 +124,9 @@ describe("resolveArtifactDownloadSource", () => {
     "uses raw HTTP bytes only for $page with $gateway ($variant)",
     async ({ page, gateway, http, variant }) => {
       vi.stubGlobal("location", new URL(page));
-      const blob = new Blob(["png"], { type: "image/png" });
+      const blob = new Blob(["png"], {
+        type: variant === "thumbnail" ? "image/webp" : "image/png",
+      });
       const fetchMock = vi.fn(async () => ({
         ok: true,
         headers: new Headers({ "Content-Disposition": ' AtTaChMeNt ; filename="image.png" ' }),

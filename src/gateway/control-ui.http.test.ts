@@ -413,47 +413,60 @@ describe("handleControlUiHttpRequest", () => {
     expect(parseBootstrapPayload(bootstrap.end).terminalEnabled).toBe(true);
   });
 
-  it("serves a bounded inbound photo preview without replacing its original", async () => {
-    const state = testTempDirs.make("inbound-preview-");
-    await withEnvAsync({ OPENCLAW_STATE_DIR: state }, async () => {
-      const bytes = createNoisyPngBuffer(600, 300);
-      await fs.mkdir(path.join(state, "media", "inbound"), { recursive: true });
-      const photoPath = path.join(state, "media", "inbound", "photo.png");
-      await fs.writeFile(photoPath, bytes);
-      const modified = new Date("2025-01-01T00:00:00.000Z");
-      await fs.utimes(photoPath, modified, modified);
-      const url =
-        "/__openclaw__/assistant-media?source=media%3A%2F%2Finbound%2Fphoto.png&token=test-token";
-      const preview = await runAssistantMediaRequest({ url: `${url}&variant=thumbnail` });
-      expect(preview.res.statusCode).toBe(200);
-      const body = preview.end.mock.calls[0]?.[0];
-      expect(Buffer.isBuffer(body)).toBe(true);
-      expect(body.byteLength).toBeLessThanOrEqual(512 * 1024);
-      expect(body.byteLength).toBeLessThan(bytes.byteLength);
-      expect(await createImageProcessor().probe(body)).toMatchObject({
-        format: "png",
-        width: 400,
-        height: 200,
+  it.each(["inbound", "local"] as const)(
+    "serves a bounded %s photo preview without replacing its original",
+    async (kind) => {
+      const state = testTempDirs.make("inbound-preview-");
+      await withEnvAsync({ OPENCLAW_STATE_DIR: state }, async () => {
+        const bytes = createNoisyPngBuffer(600, 300);
+        await fs.mkdir(path.join(state, "media", "inbound"), { recursive: true });
+        const photoPath = path.join(state, "media", "inbound", "photo.png");
+        await fs.writeFile(photoPath, bytes);
+        const modified = new Date("2025-01-01T00:00:00.000Z");
+        await fs.utimes(photoPath, modified, modified);
+        const source = kind === "inbound" ? "media://inbound/photo.png" : photoPath;
+        const url = `/__openclaw__/assistant-media?source=${encodeURIComponent(source)}&token=test-token`;
+        const preview = await runAssistantMediaRequest({ url: `${url}&variant=thumbnail` });
+        expect(preview.res.statusCode).toBe(200);
+        const body = preview.end.mock.calls[0]?.[0];
+        expect(Buffer.isBuffer(body)).toBe(true);
+        expect(body.byteLength).toBeLessThanOrEqual(256 * 1024);
+        expect(preview.setHeader).toHaveBeenCalledWith("Content-Type", "image/webp");
+        expect(body.byteLength).toBeLessThan(bytes.byteLength);
+        expect(await createImageProcessor().probe(body)).toMatchObject({
+          format: "webp",
+          width: 600,
+          height: 300,
+        });
+        const small = await runAssistantMediaRequest({ url: `${url}&variant=thumbnail&width=480` });
+        expect(await createImageProcessor().probe(small.end.mock.calls[0]?.[0])).toMatchObject({
+          format: "webp",
+          width: 240,
+          height: 120,
+        });
+        const head = await runAssistantMediaRequest({
+          url: `${url}&variant=thumbnail`,
+          method: "HEAD",
+        });
+        expect(head.setHeader).toHaveBeenCalledWith("Content-Length", String(body.byteLength));
+        expect(head.end).toHaveBeenCalledWith(undefined);
+        const original = await runAssistantMediaRequest({ url, method: "HEAD" });
+        expect(original.setHeader).toHaveBeenCalledWith("Content-Length", String(bytes.byteLength));
+        expect(await fs.readFile(photoPath)).toEqual(bytes);
+        const solid = createSolidPngBuffer(600, 300, { r: 20, g: 40, b: 60 });
+        // PNG decoders ignore trailing bytes; pad this fixture to preserve the source size.
+        const replacement = Buffer.concat([
+          solid,
+          Buffer.alloc(bytes.byteLength - solid.byteLength),
+        ]);
+        await fs.writeFile(photoPath, replacement);
+        await fs.utimes(photoPath, modified, modified);
+        const refreshed = await runAssistantMediaRequest({ url: `${url}&variant=thumbnail` });
+        expect(refreshed.res.statusCode).toBe(200);
+        expect(refreshed.end.mock.calls[0]?.[0]).not.toEqual(body);
       });
-      const head = await runAssistantMediaRequest({
-        url: `${url}&variant=thumbnail`,
-        method: "HEAD",
-      });
-      expect(head.setHeader).toHaveBeenCalledWith("Content-Length", String(body.byteLength));
-      expect(head.end).toHaveBeenCalledWith(undefined);
-      const original = await runAssistantMediaRequest({ url, method: "HEAD" });
-      expect(original.setHeader).toHaveBeenCalledWith("Content-Length", String(bytes.byteLength));
-      expect(await fs.readFile(photoPath)).toEqual(bytes);
-      const solid = createSolidPngBuffer(600, 300, { r: 20, g: 40, b: 60 });
-      // PNG decoders ignore trailing bytes; pad this fixture to preserve the source size.
-      const replacement = Buffer.concat([solid, Buffer.alloc(bytes.byteLength - solid.byteLength)]);
-      await fs.writeFile(photoPath, replacement);
-      await fs.utimes(photoPath, modified, modified);
-      const refreshed = await runAssistantMediaRequest({ url: `${url}&variant=thumbnail` });
-      expect(refreshed.res.statusCode).toBe(200);
-      expect(refreshed.end.mock.calls[0]?.[0]).not.toEqual(body);
-    });
-  });
+    },
+  );
 
   it("serves fresh media after an in-place rewrite preserves size and mtime", async () => {
     const original = Buffer.from("original media bytes");

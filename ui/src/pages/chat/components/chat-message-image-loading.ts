@@ -146,7 +146,7 @@ function buildManagedOutgoingImageVariantUrl(
     parsed.pathname = parsed.pathname.replace(/\/(?:full|thumbnail)$/u, `/${variant}`);
     if (variant === "thumbnail") {
       // Thumbnails are immutable in HTTP caches; replace pre-byte-limit renditions.
-      parsed.searchParams.set("v", "3");
+      parsed.searchParams.set("v", "4");
     }
     if (/^https?:\/\//iu.test(source)) {
       return parsed.href;
