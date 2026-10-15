@@ -171,23 +171,36 @@ describe("executeAgentTurn: command events", () => {
       {
         itemId: "model-wait",
         kind: "model-wait",
+        suppressDurableProgress: true,
         phase: "update",
         progressText: "Waiting for the local model to respond",
       },
       {
         itemId: "model-wait",
         kind: "model-wait",
+        suppressDurableProgress: true,
         phase: "update",
         progressText: "Waiting for a free model slot",
       },
-      { itemId: "model-wait", kind: "model-wait", phase: "end" },
       {
         itemId: "model-wait",
         kind: "model-wait",
+        suppressDurableProgress: true,
+        phase: "end",
+      },
+      {
+        itemId: "model-wait",
+        kind: "model-wait",
+        suppressDurableProgress: true,
         phase: "update",
         progressText: "Waiting for the local model to respond",
       },
-      { itemId: "model-wait", kind: "model-wait", phase: "end" },
+      {
+        itemId: "model-wait",
+        kind: "model-wait",
+        suppressDurableProgress: true,
+        phase: "end",
+      },
     ]);
   });
 

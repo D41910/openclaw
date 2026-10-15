@@ -76,6 +76,7 @@ export function createAgentRunEventHandler(params: {
         await params.turn.opts?.onItemEvent?.({
           itemId: "model-wait",
           kind: "model-wait",
+          suppressDurableProgress: true,
           phase: waiting ? "update" : "end",
           ...(waiting
             ? {
