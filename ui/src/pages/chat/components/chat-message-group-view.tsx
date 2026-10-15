@@ -44,7 +44,7 @@ import {
 import { ReplyLineView, ReplyLineConnector } from "./chat-reply-attribution.tsx";
 import { ChatSessionActivity } from "./chat-session-activity.solid.tsx";
 import { renderBrowserTabPreviews } from "./chat-tool-cards.ts";
-import { renderTurnRecapRow } from "./chat-working-indicator.ts";
+import { TurnRecapRow } from "./chat-working-indicator.tsx";
 
 export type { NativeMessageGroupOptions } from "./chat-message-group-frame.ts";
 
@@ -418,9 +418,7 @@ function FramedMessageGroup(props: {
           when={Boolean(options().activeContinuation)}
           fallback={
             options().turnRecap ? (
-              <LitContent
-                value={renderTurnRecapRow(options().turnRecap!, { presentation: "continuation" })}
-              />
+              <TurnRecapRow recap={options().turnRecap!} presentation="continuation" />
             ) : undefined
           }
         >
