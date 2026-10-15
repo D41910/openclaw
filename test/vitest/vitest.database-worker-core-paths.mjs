@@ -952,7 +952,6 @@ export const databaseWorkerCoreTestFiles = [
   "src/audit/execution-owner-lifecycle-receipts.test.ts",
   "src/claws/provenance-runtime-read.async.test.ts",
   "src/claws/provenance-runtime-read.test.ts",
-  "src/claws/tool-policy-runtime.integration.test.ts",
   "src/projects/project-registry.test.ts",
   "src/commands/doctor-project-clone-shape.test.ts",
   "src/auto-reply/reply/commands-plugins.install.test.ts",
