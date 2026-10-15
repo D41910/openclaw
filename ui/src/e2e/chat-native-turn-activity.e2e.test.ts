@@ -27,6 +27,7 @@ suite.define(() => {
       await expect.poll(() => thread.count()).toBe(0);
       await expect.poll(() => composer.textContent()).toBe("");
       await expect.poll(() => sidebar.count()).toBeGreaterThan(0);
+      await expect.poll(() => favicon.getAttribute("href")).toMatch(/^data:image\/svg\+xml,/);
       const activeFavicon = await favicon.getAttribute("href");
       await emit(
         2,
