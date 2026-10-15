@@ -1,9 +1,11 @@
 import { html, nothing, render } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderDecisionModelPicker } from "./decision-model-picker.ts";
-import { renderModelPicker, type ModelPickerOption } from "./model-picker.ts";
+import { solidContent } from "../lit/solid-content.tsx";
+import type { ModelPickerOption, ModelPickerParams } from "./model-picker-options.ts";
 import { renderPicker, type SelectPicker } from "./select-picker.ts";
 import { renderSettingsRow } from "./settings-ui.ts";
+import { DecisionModelPicker } from "./solid/decision-model-picker.tsx";
+import { ModelPicker } from "./solid/model-picker.tsx";
 import "@awesome.me/webawesome/dist/styles/themes/default.css";
 import "../styles/base.css";
 import "../styles/settings-controls.css";
@@ -35,13 +37,10 @@ function fixtureModels(labels: string[]): ModelPickerOption[] {
   }));
 }
 
-async function mountModel(
-  params: Omit<Parameters<typeof renderModelPicker>[0], "label" | "onChange">,
-  style: string,
-) {
+async function mountModel(params: Omit<ModelPickerParams, "label" | "onChange">, style: string) {
   const host = mountHost(style);
   const onChange = vi.fn();
-  render(renderModelPicker({ label: "Model", onChange, ...params }), host);
+  render(solidContent(ModelPicker, { label: "Model", onChange, ...params }), host);
   const picker = host.querySelector<SelectPicker>("openclaw-select-picker")!;
   await picker.updateComplete;
   return { picker, onChange };
@@ -74,8 +73,8 @@ describe.runIf("__vitest_browser__" in globalThis)("searchable model menu layout
       })}`;
       render(
         html`
-          ${renderSettingsRow({ title: "Primary", control: html`${renderModelPicker({ label: "Primary", value: "fixture/model-0", options, onChange })}` })}
-          ${renderSettingsRow({ title: "Decision", control: html`${renderDecisionModelPicker({ id: "alignment-decision", models: [{ provider: "fixture", id: "one", name: "Decision one", pluginId: "fixture" }], value: "fixture/one", disabled: false, onChange })}` })}
+          ${renderSettingsRow({ title: "Primary", control: html`${solidContent(ModelPicker, { label: "Primary", value: "fixture/model-0", options, onChange })}` })}
+          ${renderSettingsRow({ title: "Decision", control: html`${solidContent(DecisionModelPicker, { id: "alignment-decision", models: [{ provider: "fixture", id: "one", name: "Decision one", pluginId: "fixture" }], value: "fixture/one", disabled: false, onChange })}` })}
           ${renderSettingsRow({ title: "Shared", control: shared })} ${shared}
           ${renderSettingsRow({ title: "Value", control: html`<input class="settings-input" aria-label="Value" value="42" /><span class="settings-secret"><input class="settings-input" aria-label="Nested value" value="example" /></span>` })}
         `,
@@ -154,7 +153,7 @@ describe.runIf("__vitest_browser__" in globalThis)("searchable model menu layout
     name: string;
     width: number;
     style: string;
-    params: Omit<Parameters<typeof renderModelPicker>[0], "label" | "onChange">;
+    params: Omit<ModelPickerParams, "label" | "onChange">;
     selected: string;
     sizing: "custom" | "viewport" | "trigger" | "wrap";
   }>([
@@ -297,7 +296,7 @@ describe.runIf("__vitest_browser__" in globalThis)("searchable model menu layout
     const primaryChange = vi.fn();
     render(
       html`
-        ${renderModelPicker({
+        ${solidContent(ModelPicker, {
           id: "saved-utility",
           label: "Utility Model",
           value: unavailable.value,
@@ -309,7 +308,7 @@ describe.runIf("__vitest_browser__" in globalThis)("searchable model menu layout
           ],
           onChange: utilityChange,
         })}
-        ${renderModelPicker({
+        ${solidContent(ModelPicker, {
           id: "available-primary",
           label: "Model",
           value: "fixture/global-three",
@@ -397,7 +396,7 @@ describe.runIf("__vitest_browser__" in globalThis)("searchable model menu layout
       const onChange = vi.fn();
       const renderDecision = (value: string) =>
         render(
-          html`${renderDecisionModelPicker({
+          html`${solidContent(DecisionModelPicker, {
               id: "decisions",
               models: [
                 { provider: "alpha", id: "one", name: "Alpha decision model", pluginId: "alpha" },
