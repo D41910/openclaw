@@ -86,10 +86,14 @@ suite.define(() => {
           .poll(() => info.evaluate((element) => element === document.activeElement))
           .toBe(true);
         expect(await help.isVisible()).toBe(false);
-        await waitForControlUiProofSurface(menuSurface, [info]);
+        const current = menu.locator('.chat-pane__branch-item[data-active="true"]');
+        await waitForControlUiProofSurface(menuSurface, [
+          info,
+          current.locator(".chat-pane__branch-copy"),
+          current.locator(".chat-pane__branch-active svg"),
+        ]);
         const infoIconBox = await info.locator("svg").boundingBox();
         expect(infoIconBox).not.toBeNull();
-        const current = menu.locator('.chat-pane__branch-item[data-active="true"]');
         expect(await current.locator(".chat-pane__branch-headline").textContent()).toBe(
           "A simpler way to stay organized",
         );
