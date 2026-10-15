@@ -160,6 +160,7 @@ last_update_observation_root="$UNIT_ROOT/observations"
 package_root() { printf '%s\\n' "$UNIT_ROOT/package"; }
 phase() {
   printf '%s\\n' "$1" >> "$UNIT_ROOT/events"
+  if [ "$1" = cron-owner-candidate-startup ]; then printf '%s\\n' "$@" > "$UNIT_ROOT/startup-arguments"; fi
   if [ "$1" = assert-cron-owner-update ] && [ "$UNIT_FAIL_ASSERTION" = 1 ]; then return 42; fi
 }
 ${source.slice(start, end)}
@@ -190,6 +191,17 @@ ${source.slice(start, end)}
         expect(result.status, result.stdout + result.stderr).toBe(0);
         before("assert-cron-owner-update", "cron-owner-repeat-doctor");
         before("assert-cron-owner-idempotence", "cron-owner-candidate-gateway-start");
+        before("cron-owner-candidate-gateway-start", "cron-owner-candidate-startup");
+        before("cron-owner-candidate-startup", "run-cron-owner-runtime");
+        expect(
+          readFileSync(path.join(root, "startup-arguments"), "utf8").trim().split("\n"),
+        ).toEqual([
+          "cron-owner-candidate-startup",
+          "probe_gateway_endpoint",
+          "/startupz",
+          "started",
+          path.join(root, "cron-owner-startup.json"),
+        ]);
         before("cron-owner-candidate-gateway-stop", "assert-cron-owner-runtime");
       }
     },
