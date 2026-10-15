@@ -181,9 +181,6 @@ function loadModelsJsonCostIndex(
       const parsed = tryReadJsonSync<{
         providers?: Record<string, ModelProviderConfig>;
       }>(modelsPath);
-      if (!parsed) {
-        return EMPTY_PROVIDER_COST_INDEX;
-      }
       modelsJsonCostCache = {
         providers: parsed?.providers,
         entries: new WeakMap(),

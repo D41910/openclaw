@@ -292,6 +292,7 @@ describe("models-config write serialization", () => {
           model: "priced",
           allowPluginNormalization: false,
         })?.input;
+      expect([price(firstDir), price(secondDir)]).toEqual([1, 1]);
       await ensureOpenClawModelsJson(config, firstDir, options);
       await ensureOpenClawModelsJson(configFor(5), secondDir, options);
       expect([price(firstDir), price(secondDir)]).toEqual([1, 5]);
