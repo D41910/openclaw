@@ -1,8 +1,14 @@
-import type { createColdLoadEventStream } from "./control-ui-cold-load-event-stream.ts";
+import { createColdLoadEventStream } from "./control-ui-cold-load-event-stream.ts";
+import { createColdLoadFrameProbe } from "./control-ui-cold-load-probe-init.ts";
 import type * as ProbeInit from "./control-ui-cold-load-probe-init.ts";
 
+export function createColdLoadProbeInitScript(input: ProbeInit.ColdLoadProbeInput): string {
+  // Serialized closures share the Node transform's function-name helper.
+  return `;(() => { const __name = (target) => target; (${installColdLoadProbes.toString()})(${JSON.stringify(input)}, ${createColdLoadFrameProbe.toString()}, ${createColdLoadEventStream.toString()}); })();`;
+}
+
 /** Serialized after the mock Gateway, before application modules execute. */
-export function installColdLoadProbes(
+function installColdLoadProbes(
   input: ProbeInit.ColdLoadProbeInput,
   createFrameProbe: typeof ProbeInit.createColdLoadFrameProbe,
   createEventStream: typeof createColdLoadEventStream,

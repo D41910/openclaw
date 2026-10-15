@@ -7,12 +7,7 @@ import { chromium, type Browser } from "playwright";
 import { buildSandboxHostPath } from "../src/agents/sandbox-host.js";
 import { createSandboxHostHttpServer } from "../src/gateway/mcp-app-sandbox-http.js";
 import { shareSidebarSessionRows } from "../src/gateway/session-row-presentation.js";
-import { createColdLoadEventStream } from "../ui/src/test-helpers/control-ui-cold-load-event-stream.ts";
-import {
-  createColdLoadFrameProbe,
-  type ColdLoadProbeInput,
-} from "../ui/src/test-helpers/control-ui-cold-load-probe-init.ts";
-import { installColdLoadProbes } from "../ui/src/test-helpers/control-ui-cold-load-probes.ts";
+import { createColdLoadProbeInitScript } from "../ui/src/test-helpers/control-ui-cold-load-probes.ts";
 import {
   createControlUiMockBootstrapConfig,
   createControlUiMockGatewayInitScript,
@@ -31,10 +26,6 @@ import {
   summarizeColdLoadTrace,
   summarizeCpuProfile,
 } from "./lib/control-ui-cold-load-trace.ts";
-
-function createColdLoadProbeInitScript(input: ColdLoadProbeInput): string {
-  return `(${installColdLoadProbes.toString()})(${JSON.stringify(input)}, ${createColdLoadFrameProbe.toString()}, ${createColdLoadEventStream.toString()});`;
-}
 
 function summarizeResponseTasks(raw: unknown[]) {
   const events = raw.map(prepareColdLoadTraceEvent);
