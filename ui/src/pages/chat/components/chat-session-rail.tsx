@@ -14,7 +14,6 @@ import { PanelLoadingSkeleton } from "../../../components/solid/panel-loading-sk
 import { formatTimeMs } from "../../../lib/format.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../../../lit/solid-bridge.ts";
-import { LitContent } from "../../../lit/solid-content.tsx";
 import type {
   ChatSessionCompanionThread,
   ChatSessionCompanionTurn,
@@ -23,7 +22,7 @@ import type { ChatAttachmentControlsProps } from "./chat-attachment-controls.typ
 import { createChatAttachmentDropHandlers } from "./chat-attachments.ts";
 import { MessageMarkdown } from "./chat-message-text-view.tsx";
 import { SessionRailComposer, sessionRailQuestion } from "./chat-session-rail-composer.tsx";
-import { renderChatWorkingIndicator } from "./chat-working-indicator.ts";
+import { ChatWorkingIndicator } from "./chat-working-indicator.tsx";
 
 function checksSummary(pullRequest: ControlUiSessionPullRequest): string | null {
   const checks = pullRequest.checks;
@@ -242,15 +241,13 @@ function ChatSessionRailContent(props: ChatSessionRailProps) {
                         {(waiting) => (
                           // Same working indicator the main transcript shows while a run has no output yet.
                           <div class="chat-group assistant chat-session-rail__message">
-                            <LitContent
-                              value={renderChatWorkingIndicator(
-                                {
-                                  kind: "reading-indicator",
-                                  key: `side-chat:${waiting().startedAt}`,
-                                  startedAt: waiting().startedAt,
-                                },
-                                { workingPhrases: currentThemeBranding().workingPhrases },
-                              )}
+                            <ChatWorkingIndicator
+                              part={{
+                                kind: "reading-indicator",
+                                key: `side-chat:${waiting().startedAt}`,
+                                startedAt: waiting().startedAt,
+                              }}
+                              options={{ workingPhrases: currentThemeBranding().workingPhrases }}
                             />
                           </div>
                         )}
