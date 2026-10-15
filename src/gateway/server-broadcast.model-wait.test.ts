@@ -23,11 +23,9 @@ it.each([false, true])(
     publish({ ...status, phase: "waiting_for_model", waitReason: "response" });
     expect(legacy.socket.send).not.toHaveBeenCalled();
     expect(current.socket.send).toHaveBeenCalledOnce();
-    expect(JSON.parse(current.socket.send.mock.calls[0][0]).payload).toEqual({
-      ...status,
-      phase: "waiting_for_model",
-      waitReason: "response",
-    });
+    expect(current.socket.send.mock.calls.map(([raw]) => JSON.parse(raw).payload)).toEqual([
+      { ...status, phase: "waiting_for_model", waitReason: "response" },
+    ]);
 
     publish({ ...status, phase: "starting_model" });
     publish({ ...status, state: "aborted" });
