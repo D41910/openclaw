@@ -12,7 +12,6 @@ import {
 } from "../../lib/reactive/domain-capabilities.ts";
 import { createParkedProjection } from "../../lib/reactive/parked-projection.ts";
 import { sessionNavigationTarget } from "../../lib/sessions/route-navigation.ts";
-import { defineSolidBridge } from "../../lit/solid-bridge.ts";
 import { LAB_FEATURES, resolveLabFeatureState } from "../labs/labs-registry.ts";
 import type { ClawCatalogEntry } from "./claws-catalog-client.ts";
 import { ClawsCatalogDialog } from "./claws-catalog-dialog.tsx";
@@ -20,7 +19,7 @@ import { AgentsHomeView } from "./view.tsx";
 
 const clawsLab = LAB_FEATURES.find((feature) => feature.id === "claws");
 
-function AgentsHomePageContent(props: { active: boolean }) {
+export function AgentsHomePage(props: { active?: boolean }) {
   const context = useApplication();
   const store = rosterActivityStore(context);
   const roster = projectRosterActivity(store);
@@ -29,7 +28,7 @@ function AgentsHomePageContent(props: { active: boolean }) {
   const runtimeConfig = projectRuntimeConfig(context.runtimeConfig);
   const [catalogOpen, setCatalogOpen] = createSignal(false);
   createEffect(
-    () => props.active,
+    () => props.active ?? true,
     (active) => {
       if (!active) {
         return;
@@ -51,7 +50,7 @@ function AgentsHomePageContent(props: { active: boolean }) {
         ),
       };
     },
-    () => props.active,
+    () => props.active ?? true,
   );
   const cards = createMemo(() => {
     const defaultId = snapshot().defaultId;
@@ -81,7 +80,7 @@ function AgentsHomePageContent(props: { active: boolean }) {
     });
   };
   return (
-    <>
+    <openclaw-agents-home-page>
       <AgentsHomeView
         cards={cards()}
         context={context}
@@ -101,12 +100,14 @@ function AgentsHomePageContent(props: { active: boolean }) {
           onAdded={() => void store.refresh()}
         />
       ) : undefined}
-    </>
+    </openclaw-agents-home-page>
   );
 }
 
-export const AgentsHomePage = defineSolidBridge(
-  "openclaw-agents-home-page",
-  AgentsHomePageContent,
-  { properties: { active: { default: true, attribute: false } } },
-);
+declare module "@solidjs/web" {
+  namespace JSX {
+    interface IntrinsicElements {
+      "openclaw-agents-home-page": HTMLAttributes<HTMLElement>;
+    }
+  }
+}

@@ -77,7 +77,9 @@ export function rowToRef(row: McpRefRow): PersistedClawMcpServerRef {
   };
 }
 
-export function readAllClawMcpServerRefsInDatabase(db: EngineConnection): PersistedClawMcpServerRef[] {
+export function readAllClawMcpServerRefsInDatabase(
+  db: EngineConnection,
+): PersistedClawMcpServerRef[] {
   if (!tableExists(db, "claw_mcp_server_refs")) {
     return [];
   }

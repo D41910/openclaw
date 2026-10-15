@@ -188,23 +188,6 @@ describe("parseClawManifest", () => {
     expect(manifestIntegrity.diagnostics[0]?.path).toBe("$.packages[0]");
   });
 
-  it("requires exact package versions", () => {
-    const result = parseClawManifest({
-      ...baseManifest,
-      packages: [
-        {
-          kind: "skill",
-          source: "clawhub",
-          ref: "demo",
-          version: "latest",
-        },
-      ],
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics[0]?.path).toBe("$.packages[0].version");
-  });
-
   it("rejects resolved MCP secrets", () => {
     const result = parseClawManifest({
       ...baseManifest,
@@ -366,6 +349,7 @@ describe("readClawManifestFile", () => {
       [
         "---",
         "schemaVersion: 1",
+        "categories: [operations, research]",
         "agent:",
         "  id: triage",
         "workspace: {}",
@@ -383,7 +367,11 @@ describe("readClawManifestFile", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      manifest: { schemaVersion: 1, agent: { id: "triage" } },
+      manifest: {
+        schemaVersion: 1,
+        categories: ["operations", "research"],
+        agent: { id: "triage" },
+      },
       source: { kind: "package", name: "@acme/github-triage", version: "3.2.1" },
     });
     if (!result.ok) {

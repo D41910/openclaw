@@ -1,3 +1,4 @@
+import { createComponent } from "solid-js";
 import { vi } from "vitest";
 import { GatewayRequestError, type GatewayEventListener } from "../../api/gateway.ts";
 import type {
@@ -14,10 +15,12 @@ import { createAgentCapability } from "../../lib/agents/index.ts";
 import type { PluginListResult } from "../../lib/plugins/index.ts";
 import { createSessionCapability } from "../../lib/sessions/index.ts";
 import { createContext } from "../../test-helpers/app-sidebar.ts";
+import { mountSolid } from "../../test-helpers/mount-solid.ts";
 import {
   createApplicationContextProvider,
   createApplicationGateway,
 } from "../../test-helpers/application-context.ts";
+import { createSolidApplicationContextProvider } from "../../test-helpers/solid-application-context.tsx";
 import {
   createGatewayRequestMock,
   createTestGatewayClient,
@@ -316,7 +319,6 @@ export function createPage(options: PageOptions = {}) {
   const agentSelection = createAgentSelectionCapability(source.gateway, agents);
   const agentIdentity = createAgentIdentityCapability(source.gateway);
   const sessionCapability = createSessionCapability(source.gateway, agentSelection);
-  const page = new AgentsHomePage.Element();
   const navigate = vi.fn<ApplicationContext["navigate"]>();
   const context = {
     ...createContext(source.gateway, sessionCapability, roster, [], agentIdentity),
@@ -331,9 +333,14 @@ export function createPage(options: PageOptions = {}) {
   };
   const baselineEventListeners = eventListeners.size;
   const provider = createApplicationContextProvider(context);
-  provider.append(page);
   document.body.append(provider);
+  const solidProvider = createSolidApplicationContextProvider(context);
+  const view = mountSolid(() => createComponent(AgentsHomePage, {}), {
+    wrapper: solidProvider.wrapper,
+  });
+  const page = view.container;
   disposers.push(() => {
+    view.unmount();
     agentSelection.dispose();
     agents.dispose();
     sessionCapability.dispose();

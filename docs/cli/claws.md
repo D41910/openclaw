@@ -69,6 +69,7 @@ schemaVersion: 1
 agent:
   id: incident-triage
   name: Incident triage
+categories: [operations, research]
 workspace:
   bootstrapFiles: {}
 packages: []
@@ -81,6 +82,23 @@ cronJobs: []
 Review incoming incidents, identify severity and ownership, and leave
 a concise handoff with evidence.
 ```
+
+`categories` is optional. Declare one to three distinct lowercase slugs for
+catalog discovery; the receiving registry decides which category names it
+accepts. Categories do not change the agent's runtime behavior.
+
+OpenClaw automatically discovers the optional `profiles/openclaw.yml` file.
+No manifest pointer is required. Other harnesses may discover their own
+conventional profile, such as `profiles/codex.yml`, without changing the
+portable manifest.
+
+The older `metadata.openclaw.config` pointer is deprecated but still read, so
+packages published against it keep working. Reading one reports a
+`deprecated_openclaw_profile_pointer` warning; move that file to
+`profiles/openclaw.yml` and remove the metadata entry. A pointer that is not a
+package-relative `.yml`/`.yaml` path is rejected, and a pointer that references
+a different file while `profiles/openclaw.yml` also exists is rejected as a
+conflict.
 
 A package may add named bootstrap files and other workspace files from
 package-relative sources. These go into the new agent's dedicated workspace:
