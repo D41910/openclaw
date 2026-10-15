@@ -79,6 +79,7 @@ for (const stopMethod of ["button", "slash"] as const) {
 
   async function capture(page: Page, name: string, surface: Locator, content: Locator[]) {
     const text = (await page.locator("body").textContent()) ?? "";
+    // oxlint-disable-next-line unicorn/prefer-dom-node-text-content -- innerText separately proves rendered visible text.
     const visibleText = await page.locator("body").innerText();
     for (const [category, secret] of [
       ["gatewayToken", instance.gatewayToken],
