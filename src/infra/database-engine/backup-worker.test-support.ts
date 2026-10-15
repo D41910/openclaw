@@ -19,11 +19,16 @@ vi.mock("../worker-task-server.js", async (importOriginal) => ({
     backup.handle = handle;
   },
 }));
-vi.mock("../sqlite-snapshot-source.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../sqlite-snapshot-source.js")>()),
-  prepareSqliteReadOnlyLocationSync: (await import("../sqlite-readonly-location.js"))
-    .prepareSqliteReadOnlyLocationSyncInProcess,
-}));
+vi.mock("../sqlite-snapshot-source.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../sqlite-snapshot-source.js")>();
+  const copy = await import("../sqlite-readonly-location.js");
+  return {
+    ...actual,
+    prepareSqliteReadOnlyLocationSync: copy.prepareSqliteReadOnlyLocationSyncInProcess,
+    prepareSqliteReadOnlyLocation: (pathname: string) =>
+      copy.prepareSqliteReadOnlyCopyInProcess(pathname),
+  };
+});
 vi.mock("../worker-task-pool.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../worker-task-pool.js")>();
   return {
