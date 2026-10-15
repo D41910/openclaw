@@ -173,23 +173,28 @@ describe("hosted model pricing", () => {
     await prepareModelPricingContext(secondConfig);
     enumeratePolicies.mockClear();
     const agentDir = tempDirs.make("openclaw-policy-pricing-");
-    const lookup = () =>
+    const lookup = (pricingAgentDir: string) =>
       [firstConfig, secondConfig].flatMap((config) =>
         ["first", "second"].map(
           (modelId) =>
-            resolveModelCostConfig({ config, agentDir, provider: "fixture", model: modelId })
-              ?.input,
+            resolveModelCostConfig({
+              config,
+              agentDir: pricingAgentDir,
+              provider: "fixture",
+              model: modelId,
+            })?.input,
         ),
       );
-    expect(lookup()).toEqual([3, undefined, undefined, 3]);
-    expect(lookup()).toEqual([3, undefined, undefined, 3]);
+    expect(lookup(agentDir)).toEqual([3, undefined, undefined, 3]);
+    expect(lookup(agentDir)).toEqual([3, undefined, undefined, 3]);
 
     const fileModel = { ...model, id: "alias", cost: { ...model.cost, input: 17 } };
+    const fileAgentDir = tempDirs.make("openclaw-file-policy-pricing-");
     await fs.writeFile(
-      path.join(agentDir, "models.json"),
+      path.join(fileAgentDir, "models.json"),
       JSON.stringify({ providers: { fixture: { ...providers.fixture, models: [fileModel] } } }),
     );
-    expect(lookup()).toEqual([17, undefined, undefined, 17]);
+    expect(lookup(fileAgentDir)).toEqual([17, undefined, undefined, 17]);
     expect(metadataSpy).toHaveBeenCalledTimes(2);
     expect(enumeratePolicies).not.toHaveBeenCalled();
   });
