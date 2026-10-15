@@ -437,15 +437,21 @@ poolIt(
       expect(getSqliteWorkerActorIdentity(peer.store)).toBe(first.actor);
 
       resume.resolve();
-      await expect(active).resolves.toBeNull();
-      await expect(executeOpenClawStateWorker(next, read)).resolves.toBeNull();
+      await expect(active).resolves.toEqual({ entry: null, expectedToken: null });
+      await expect(executeOpenClawStateWorker(next, read)).resolves.toEqual({
+        entry: null,
+        expectedToken: null,
+      });
       await expect(first.store.execute(read)).rejects.toMatchObject({ code: "closed" });
       expect(getSqliteWorkerActorIdentity(peer.store)).toBe(first.actor);
-      await expect(executeOpenClawStateWorker(peerContext, read)).resolves.toBeNull();
+      await expect(executeOpenClawStateWorker(peerContext, read)).resolves.toEqual({
+        entry: null,
+        expectedToken: null,
+      });
 
       await expect(
         executeOpenClawStateWorker(context, {
-          type: "deviceIdentity.read",
+          type: "deviceIdentity.load",
           input: { identityKey },
         }),
       ).resolves.toEqual(identity);
