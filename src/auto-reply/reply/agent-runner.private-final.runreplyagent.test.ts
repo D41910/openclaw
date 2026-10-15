@@ -96,6 +96,7 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
     strandedReplyRetry?: boolean;
     sendPolicyDenied?: boolean;
     isHeartbeat?: boolean;
+    chatType?: "direct" | "group";
     terminalReplyExpectation?: "required" | "optional";
     pendingContinuation?: boolean;
     implicitContinuation?: boolean;
@@ -115,18 +116,21 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
     await replaceSessionEntry({ storePath, sessionKey }, sessionEntry);
 
     const finalAssistantText = params.finalAssistantText ?? "Done — deployed v2 to staging.";
-    const createRunResult = (retryDelivered?: boolean) => ({
+    const createRunResult = (retryDelivered?: boolean, retryText?: string) => ({
       // Metadata payloads must not be mistaken for the assistant's final text.
-      payloads: params.payloads ?? [{ text: params.payloadText ?? finalAssistantText }],
+      payloads:
+        retryText === undefined
+          ? (params.payloads ?? [{ text: params.payloadText ?? finalAssistantText }])
+          : [{ text: retryText }],
       meta: {
         agentMeta: {},
-        finalAssistantVisibleText: finalAssistantText,
+        finalAssistantVisibleText: retryText ?? finalAssistantText,
         stopReason: params.stopReason,
         yielded: params.pendingContinuation,
         continuationPending: params.implicitContinuation,
-        finalAssistantRawText: params.finalAssistantRawText,
+        finalAssistantRawText: retryText ?? params.finalAssistantRawText,
         terminalReply: prepareAgentRunTerminalReply({
-          rawText: params.finalAssistantRawText ?? finalAssistantText,
+          rawText: retryText ?? params.finalAssistantRawText ?? finalAssistantText,
         }).terminalReply,
       },
       messagingToolSentTargets: params.messagingToolSentTargets,
@@ -144,7 +148,7 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
       OriginatingTo: "+15550001111",
       AccountId: "primary",
       MessageSid: "msg",
-      ChatType: "direct",
+      ChatType: params.chatType ?? "direct",
       InboundEventKind: params.inboundEventKind,
     });
     const followupRun = createTestQueuedFollowupRun({
@@ -242,10 +246,30 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
     return {
       ...(await execute(followupRun, createRunResult())),
       followupRun,
-      executeRetry: (queuedRun: FollowupRun, delivered: boolean) =>
-        execute(queuedRun, createRunResult(delivered)),
+      executeRetry: (queuedRun: FollowupRun, delivered: boolean, retryText?: string) =>
+        execute(queuedRun, createRunResult(delivered, retryText)),
     };
   }
+
+  it.each([false, true])(
+    "keeps an optional group private final quiet (retry=%s)",
+    async (strandedReplyRetry) => {
+      vi.mocked(routeReply).mockClear();
+      const { result, terminalEvent } = await runPrivateFinalCase({
+        chatType: "group",
+        terminalReplyExpectation: "optional",
+        finalAssistantText: "No response needed.",
+        strandedReplyRetry,
+      });
+      expectNoRecovery();
+      expect(terminalEvent?.data.terminalReply).toEqual({
+        disposition: "visible",
+        text: "No response needed.",
+      });
+      expect(normalizeReplyPayloads(result).some((payload) => payload.isStatusNotice)).toBe(false);
+      expect(routeReply).not.toHaveBeenCalled();
+    },
+  );
 
   const visibleFinal = "Visible answer that should be delivered to the source chat.";
   it.each([
@@ -294,6 +318,7 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
     { name: "missed", outcome: "missed", emptyPayloads: false },
     { name: "missed without payloads", outcome: "missed", emptyPayloads: true },
     { name: "silent", outcome: "silent", emptyPayloads: false },
+    { name: "retry decides no reply is needed", outcome: "retry-silent", emptyPayloads: false },
   ] as const)(
     "settles message-tool-only terminal outcome: $name",
     async ({ outcome, emptyPayloads }) => {
@@ -321,6 +346,9 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
       expect(retryRun.prompt).toContain("Done — deployed v2 to staging.");
       expect(retryRun.prompt).toMatch(/^\[System\] /);
       expect(retryRun.prompt).toContain("message(action=send)");
+      expect(retryRun.prompt).toContain("If the user should see a reply, send it now");
+      expect(retryRun.prompt).toContain("If no reply is needed, answer exactly NO_REPLY.");
+      expect(retryRun.prompt).not.toContain("Please deliver this reply now");
       expect(retryRun.prompt).not.toBe(initial.followupRun.prompt);
       expect(retryRun.transcriptPrompt).toBeUndefined();
       expect(retryRun.userTurnTranscriptRecorder).toBeUndefined();
@@ -337,7 +365,11 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
       expect(vi.mocked(enqueueFollowupRun).mock.calls[0]?.[5]).toBe(false);
       expect(vi.mocked(enqueueFollowupRun).mock.calls[0]?.[6]).toEqual({ position: "front" });
 
-      const retry = await initial.executeRetry(retryRun, outcome === "delivered");
+      const retry = await initial.executeRetry(
+        retryRun,
+        outcome === "delivered",
+        outcome === "retry-silent" ? "NO_REPLY" : undefined,
+      );
       expect(runEmbeddedAgentMock).toHaveBeenCalledTimes(2);
       expect(runEmbeddedAgentMock.mock.calls[1]?.[0]).toMatchObject({
         prompt: retryRun.prompt,
@@ -351,6 +383,13 @@ describe("runReplyAgent stranded message_tool_only finals (#85714)", () => {
       const deliverable = normalizeReplyPayloads(retry.result).filter(
         (payload) => getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression,
       );
+      if (outcome === "retry-silent") {
+        expect(retry.terminalEvent?.data.terminalReply).toEqual({ disposition: "silent" });
+        expect(deliverable).toEqual([]);
+        expect(normalizeReplyPayloads(retry.result).some((payload) => payload.isError)).toBe(false);
+        expect(routeReply).not.toHaveBeenCalled();
+        return;
+      }
       if (outcome === "delivered") {
         expect(retry.runResult.messagingToolSourceReplyPayloads).toEqual([
           { text: "Done — deployed v2 to staging." },

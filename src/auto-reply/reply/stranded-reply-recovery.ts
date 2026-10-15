@@ -1,5 +1,8 @@
 import type { AgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.types.js";
-import { createMissingReplyNotice } from "../../agents/reply-completion.js";
+import {
+  createMissingReplyNotice,
+  resolveReplyExpectation,
+} from "../../agents/reply-completion.js";
 import { isRuntimeToolAllowed } from "../../agents/tool-policy-match.js";
 import { formatSystemTurnPrompt } from "../../sessions/system-turn-prompt.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
@@ -29,7 +32,10 @@ export function resolveStrandedReplyRecovery(params: {
 }): StrandedReplyRecovery {
   // Host-owned payloads can still be awaiting transport when completion bookkeeping runs.
   if (
-    !isStrandedPrivateMessageToolFinal(params) ||
+    !isStrandedPrivateMessageToolFinal({
+      ...params,
+      replyExpectation: resolveReplyExpectation(params.base.run),
+    }) ||
     params.payloads.some(
       (payload) =>
         (isReplyPayloadTerminalContent(payload) || payload.isError === true) &&
@@ -73,10 +79,9 @@ export function resolveStrandedReplyRecovery(params: {
 
 function buildStrandedReplyRetryPrompt(finalText: string): string {
   return formatSystemTurnPrompt(
-    `Your previous reply was not delivered to the conversation because ` +
-      `you did not call message(action=send). Your reply text was:\n\n` +
-      `"${finalText}"\n\n` +
-      `Please deliver this reply now by calling message(action=send). ` +
-      `Do not add any extra commentary; just deliver the original reply.`,
+    `Your previous reply was not delivered because you did not call message(action=send). ` +
+      `Your reply text was: "${finalText}". ` +
+      `If the user should see a reply, send it now with message(action=send). ` +
+      `If no reply is needed, answer exactly NO_REPLY.`,
   );
 }

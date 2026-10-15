@@ -1,10 +1,15 @@
 import type { AgentRunTerminalReplySnapshot } from "../../agents/agent-run-terminal-reply.types.js";
+import {
+  isRequiredReplyExpectation,
+  type ReplyExpectation,
+} from "../../agents/reply-completion.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { SourceReplyDeliveryMode } from "../get-reply-options.types.js";
 
 const privateFinalReplyLogger = createSubsystemLogger("source-reply/private-final");
 
 type PrivateMessageToolFinalContext = {
+  replyExpectation: ReplyExpectation;
   sourceReplyDeliveryMode: SourceReplyDeliveryMode | undefined;
   sendPolicyDenied: boolean;
   successfulSourceReplyDelivery: boolean;
@@ -16,6 +21,7 @@ type PrivateMessageToolFinalContext = {
 /** A terminal reply is stranded when the configured tool did not deliver it. */
 export function isStrandedPrivateMessageToolFinal(params: PrivateMessageToolFinalContext): boolean {
   return Boolean(
+    isRequiredReplyExpectation(params.replyExpectation) &&
     params.terminalReply &&
     params.terminalReply.disposition !== "silent" &&
     params.sourceReplyDeliveryMode === "message_tool_only" &&

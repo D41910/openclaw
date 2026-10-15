@@ -5,6 +5,7 @@ import {
   PROVIDER_CONVERSATION_STATE_ERROR_USER_MESSAGE,
   renderControlUiAgentFailureCopy,
 } from "../../agents/failover/user-copy.js";
+import { resolveReplyExpectation } from "../../agents/reply-completion.js";
 import { logVerbose } from "../../globals.js";
 import { emitAgentEvent } from "../../infra/agent-events.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -140,6 +141,7 @@ export async function settleAgentFallbackCycle(params: {
   const privateFinalTerminalReply =
     !hasPendingContinuation &&
     isStrandedPrivateMessageToolFinal({
+      replyExpectation: resolveReplyExpectation(turn.followupRun.run),
       sourceReplyDeliveryMode: sourceReplyPolicy?.sourceReplyDeliveryMode,
       sendPolicyDenied: sourceReplyPolicy?.sendPolicyDenied === true,
       successfulSourceReplyDelivery,
