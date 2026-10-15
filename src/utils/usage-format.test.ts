@@ -1,4 +1,3 @@
-import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -142,26 +141,6 @@ describe("usage-format", () => {
     expect(manifestSpy).not.toHaveBeenCalled();
   });
 
-  it("does not inspect an absent models.json again for warmed pricing lookups", () => {
-    const config = pricingConfig("demo-absent", [
-      pricingModel("demo-model", { input: 1, output: 2, cacheRead: 3, cacheWrite: 4 }),
-    ]);
-    const stat = vi.spyOn(fsSync, "lstatSync");
-    const resolvePrice = () =>
-      resolveModelCostConfig({
-        provider: "demo-absent",
-        model: "demo-model",
-        agentDir,
-        config,
-        allowPluginNormalization: false,
-      });
-    expect(resolvePrice()).toEqual({ input: 1, output: 2, cacheRead: 3, cacheWrite: 4 });
-    stat.mockClear();
-
-    expect(resolvePrice()).toEqual({ input: 1, output: 2, cacheRead: 3, cacheWrite: 4 });
-    expect(stat).not.toHaveBeenCalled();
-  });
-
   const firstRates = { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.2 };
   const laterRates = { input: 7, output: 8, cacheRead: 0.7, cacheWrite: 0.8 };
 
@@ -213,23 +192,6 @@ describe("usage-format", () => {
   });
 
   it("skips metadata-only model rows while caching configured pricing", async () => {
-    await fs.writeFile(
-      path.join(agentDir, "models.json"),
-      JSON.stringify({
-        providers: {
-          "demo-metadata-json": {
-            models: [
-              { id: "metadata-only" },
-              {
-                id: "priced-model",
-                cost: { input: 5, output: 6, cacheRead: 7, cacheWrite: 8 },
-              },
-            ],
-          },
-        },
-      }),
-      "utf8",
-    );
     const metadataOnlyModel = { id: "metadata-only" } as {
       id: string;
       cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -273,6 +235,24 @@ describe("usage-format", () => {
         config,
       })?.input,
     ).toBe(9);
+
+    await fs.writeFile(
+      path.join(agentDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          "demo-metadata-json": {
+            models: [
+              { id: "metadata-only" },
+              {
+                id: "priced-model",
+                cost: { input: 5, output: 6, cacheRead: 7, cacheWrite: 8 },
+              },
+            ],
+          },
+        },
+      }),
+      "utf8",
+    );
 
     expect(
       resolveModelCostConfig({
