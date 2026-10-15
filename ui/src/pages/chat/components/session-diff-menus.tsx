@@ -51,6 +51,7 @@ export type SessionDiffMenuData = SessionDiffMenuDraft & {
 };
 
 export type SessionDiffMenuAction =
+  | { kind: "collapse-code" | "collapse-functions" | "expand-code"; path: string }
   | { kind: "collapse-all" }
   | { kind: "expand-all" }
   | { kind: "open-editor"; editor: EditorId; path: string }
@@ -123,7 +124,12 @@ function SessionDiffMenuContent(props: SessionDiffMenuProps) {
       "scope:uncommitted": { kind: "scope", value: { scope: "uncommitted" } },
     };
     let action = simple[value];
-    if (menu.kind === "file" && (value === "open-file" || value === "reveal-file")) {
+    if (
+      menu.kind === "file" &&
+      (value === "collapse-code" || value === "collapse-functions" || value === "expand-code")
+    ) {
+      action = { kind: value, path: menu.path };
+    } else if (menu.kind === "file" && (value === "open-file" || value === "reveal-file")) {
       action = { kind: value, path: menu.path };
     } else if (value.startsWith("open-editor:") && menu.kind === "file" && menu.absolutePath) {
       const editor = EDITOR_IDS.find((candidate) => value === `open-editor:${candidate}`);
@@ -143,6 +149,10 @@ function SessionDiffMenuContent(props: SessionDiffMenuProps) {
   function items(menu: SessionDiffMenuData): MenuEntry[] {
     if (menu.kind === "file") {
       return [
+        menuItem("collapse-code", t("chat.sessionDiff.collapseCode")),
+        menuItem("collapse-functions", t("chat.sessionDiff.collapseFunctions")),
+        menuItem("expand-code", t("chat.sessionDiff.expandCode")),
+        separator("code-actions"),
         {
           kind: "content",
           id: "path",

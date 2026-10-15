@@ -96,61 +96,62 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
       expect(onBrowser).toHaveBeenCalledOnce();
     });
 
-    it("keeps mobile panel choices first and opens Details from the native trigger", async () => {
-      await page.viewport(390, 844);
-      const originalDirection = document.documentElement.dir;
-      onTestFinished(() => {
-        document.documentElement.dir = originalDirection;
-      });
-      const onOpenDetails = vi.fn();
-      const { container } = mountChatPaneHeader(containers, {
-        mergedChrome: true,
-        narrow: true,
-        onOpenDetails,
-        panelMenuActions: [
-          {
-            id: "terminal",
-            label: "Terminal",
-            icon: html``,
-            shortcut: KEYBOARD_SHORTCUT_COMBOS.terminalPanel,
-            onActivate: vi.fn(),
-          },
-          ...Array.from({ length: 7 }, (_, index) => ({
-            id: `panel-${index + 1}`,
-            label: `Panel ${index + 1}`,
-            icon: html``,
-            onActivate: vi.fn(),
-          })),
-        ],
-        onOpenSplitView: vi.fn(),
-      });
-      const scope = {
-        container,
-        click: (element: HTMLElement) => page.elementLocator(element).click(),
-      };
-      const menu = await openChatLayoutMenu(scope);
-      const trigger = menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!;
-      expect(trigger.getAttribute("aria-label")).toBe(t("chat.sessionHeader.panels"));
-      expect(trigger.textContent?.trim()).toBe("");
-      expect(
-        [...menu.querySelectorAll("[role^=menuitem]")].map((item) =>
-          item.getAttribute("data-value"),
-        ),
-      ).toEqual([
-        "details",
-        "terminal",
-        "panel-1",
-        "panel-2",
-        "panel-3",
-        "panel-4",
-        "panel-5",
-        "panel-6",
-        "panel-7",
-        "open-split-view",
-      ]);
-      const surface = menu.querySelector<HTMLElement>(":scope > .oc-menu")!;
-      for (const direction of ["ltr", "rtl"]) {
+    it.each(["ltr", "rtl"])(
+      "keeps mobile panel choices first and opens Details from the native trigger in %s",
+      async (direction) => {
+        await page.viewport(390, 844);
+        const originalDirection = document.documentElement.dir;
+        onTestFinished(() => {
+          document.documentElement.dir = originalDirection;
+        });
         document.documentElement.dir = direction;
+        const onOpenDetails = vi.fn();
+        const { container } = mountChatPaneHeader(containers, {
+          mergedChrome: true,
+          narrow: true,
+          onOpenDetails,
+          panelMenuActions: [
+            {
+              id: "terminal",
+              label: "Terminal",
+              icon: html``,
+              shortcut: KEYBOARD_SHORTCUT_COMBOS.terminalPanel,
+              onActivate: vi.fn(),
+            },
+            ...Array.from({ length: 7 }, (_, index) => ({
+              id: `panel-${index + 1}`,
+              label: `Panel ${index + 1}`,
+              icon: html``,
+              onActivate: vi.fn(),
+            })),
+          ],
+          onOpenSplitView: vi.fn(),
+        });
+        const scope = {
+          container,
+          click: (element: HTMLElement) => page.elementLocator(element).click(),
+        };
+        const menu = await openChatLayoutMenu(scope);
+        const trigger = menu.querySelector<HTMLButtonElement>(".chat-pane__layout-trigger")!;
+        expect(trigger.getAttribute("aria-label")).toBe(t("chat.sessionHeader.panels"));
+        expect(trigger.textContent?.trim()).toBe("");
+        expect(
+          [...menu.querySelectorAll("[role^=menuitem]")].map((item) =>
+            item.getAttribute("data-value"),
+          ),
+        ).toEqual([
+          "details",
+          "terminal",
+          "panel-1",
+          "panel-2",
+          "panel-3",
+          "panel-4",
+          "panel-5",
+          "panel-6",
+          "panel-7",
+          "open-split-view",
+        ]);
+        const surface = menu.querySelector<HTMLElement>(":scope > .oc-menu")!;
         const bounds = surface.getBoundingClientRect();
         expect(bounds.width).toBeCloseTo(264, 0);
         expect(direction === "ltr" ? bounds.left : window.innerWidth - bounds.right).toBeCloseTo(
@@ -159,17 +160,17 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         );
         expect(window.innerHeight - bounds.bottom).toBeCloseTo(8, 0);
         expect(bounds.height).toBeCloseTo(360, 0);
-      }
-      expect(surface.scrollHeight).toBeGreaterThan(surface.clientHeight);
-      const terminalDetails = surface.querySelector<HTMLElement>(
-        '[data-value="terminal"] > .oc-menu-item__details',
-      )!;
-      expect(terminalDetails.querySelector("kbd")).not.toBeNull();
-      expect(getComputedStyle(terminalDetails).display).toBe("none");
-      await selectChatLayoutAction(scope, t("chat.sessionDetails.title"));
-      expect(onOpenDetails).toHaveBeenCalledExactlyOnceWith(trigger);
-      expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    });
+        expect(surface.scrollHeight).toBeGreaterThan(surface.clientHeight);
+        const terminalDetails = surface.querySelector<HTMLElement>(
+          '[data-value="terminal"] > .oc-menu-item__details',
+        )!;
+        expect(terminalDetails.querySelector("kbd")).not.toBeNull();
+        expect(getComputedStyle(terminalDetails).display).toBe("none");
+        await selectChatLayoutAction(scope, t("chat.sessionDetails.title"));
+        expect(onOpenDetails).toHaveBeenCalledExactlyOnceWith(trigger);
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      },
+    );
 
     it("closes Layout before changing its contents and restores focus on selection and Escape", async () => {
       const { userEvent } = await import("vitest/browser");
