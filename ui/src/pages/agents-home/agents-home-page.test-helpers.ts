@@ -15,17 +15,17 @@ import { createAgentCapability } from "../../lib/agents/index.ts";
 import type { PluginListResult } from "../../lib/plugins/index.ts";
 import { createSessionCapability } from "../../lib/sessions/index.ts";
 import { createContext } from "../../test-helpers/app-sidebar.ts";
-import { mountSolid } from "../../test-helpers/mount-solid.ts";
 import {
   createApplicationContextProvider,
   createApplicationGateway,
 } from "../../test-helpers/application-context.ts";
-import { createSolidApplicationContextProvider } from "../../test-helpers/solid-application-context.tsx";
 import {
   createGatewayRequestMock,
   createTestGatewayClient,
 } from "../../test-helpers/gateway-client.ts";
 import { gatewayHelloForMethods } from "../../test-helpers/gateway-methods.ts";
+import { mountSolid } from "../../test-helpers/mount-solid.ts";
+import { createSolidApplicationContextProvider } from "../../test-helpers/solid-application-context.tsx";
 import { AgentsHomePage } from "./agents-home-page.tsx";
 
 const roster: AgentsListResult = {
