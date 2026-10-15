@@ -109,6 +109,71 @@ async function fixture(initialReceipt?: CodexNativeSubagentSubmission) {
 }
 
 describe("native subagent submission receipts in the binding store", () => {
+  it.each(["child-turn-b", "resumed-turn"])(
+    "deduplicates and durably retires only the exact child turn and receipt (%s)",
+    async (nativeTurnId) => {
+      const { root, state, store, owner } = await fixture(receipt);
+      const first = {
+        runId: "codex-thread:child-thread:turn:child-turn-b",
+        childThreadId: "child-thread",
+        nativeTurnId,
+        nativeParentThreadId: binding.threadId,
+        owner,
+      };
+      const second = {
+        ...first,
+        runId: "codex-thread:child-thread:turn:child-turn-c",
+        nativeTurnId: "child-turn-c",
+      };
+      const nextReceipt = { ...receipt, callId: "call-two", submissionId: "child-turn-c" };
+      await store.mutate(
+        identity,
+        { kind: "record-native-subagent-submission", owner, receipt: nextReceipt },
+        currentAuthority,
+      );
+      const row = state.lookup(bindingStoreKey(identity));
+      assert(row);
+      state.register(bindingStoreKey(identity), {
+        ...row,
+        nativeSubagentAssignments: { version: 1, assignments: [first, first, second] },
+      });
+      await store.mutate(
+        identity,
+        { kind: "record-native-subagent-assignment", owner, assignment: first },
+        currentAuthority,
+      );
+      await store.mutate(
+        identity,
+        {
+          kind: "record-native-subagent-assignment",
+          owner,
+          assignment: { ...first, runId: "codex-thread:child-thread" },
+        },
+        currentAuthority,
+      );
+      expect(await store.readNativeSubagentAssignments?.(identity, owner)).toHaveLength(2);
+      const retirement = {
+        kind: "consume-native-subagent-assignment" as const,
+        owner,
+        assignment: first,
+        undelivered: true as const,
+      };
+      await expect(store.mutate(identity, retirement, currentAuthority)).resolves.toBe(true);
+      await expect(store.mutate(identity, retirement, currentAuthority)).resolves.toBe(false);
+      await closeOpenClawStateDatabaseAsync();
+      resetPluginStateStoreForTests();
+      const reopened = createLazyCodexAppServerBindingStore(openState(root));
+      expect(await reopened.readNativeSubagentSubmissions(identity, owner)).toEqual([nextReceipt]);
+      await reopened.mutate(identity, {
+        kind: "replace-thread",
+        expectedThreadId: binding.threadId,
+        binding: { ...binding, threadId: "rotated-parent" },
+      });
+      const rotated = { ...owner, parentThreadId: "rotated-parent" };
+      expect(await reopened.readNativeSubagentAssignments?.(identity, rotated)).toEqual([second]);
+    },
+  );
+
   it.each(["receipt", "assignment"] as const)(
     "Stop preserves recovery across a rejected %s acknowledgement and consumes it on retry",
     async (rejectedOwner) => {

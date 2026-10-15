@@ -4,6 +4,7 @@ import {
   clearRuntimeConfigSnapshot,
   setRuntimeConfigSnapshot,
 } from "openclaw/plugin-sdk/runtime-config-snapshot";
+import { readVisibleSessionTranscriptMessageEntries } from "openclaw/plugin-sdk/session-transcript-runtime";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   fixture,
@@ -544,8 +545,8 @@ describe("native pending assignment inventory through registered monitor admissi
     },
   );
 
-  it.each(["followup", "empty"] as const)(
-    "preserves closed-child settlement across retry exhaustion (%s)",
+  it.each(["followup", "empty", "blocked"] as const)(
+    "retires terminal give-up without restoring the completion (%s)",
     async (assignment) => {
       const { f, client, parent } = await startAssignment();
       if (assignment === "followup") {
@@ -572,22 +573,37 @@ describe("native pending assignment inventory through registered monitor admissi
         delivered: false,
         path: "direct",
         error: "Delivery unavailable",
+        ...(assignment === "blocked" ? { recoveryBlocked: true as const } : {}),
       });
       await parent.unregister();
       await vi.advanceTimersByTimeAsync(600_000);
       const attempts = f.deliver.mock.calls.length;
       if (assignment === "empty") {
         expect(attempts).toBe(0);
+      } else if (assignment === "blocked") {
+        expect(attempts).toBe(1);
       } else {
         expect(attempts).toBeGreaterThan(1);
       }
       await vi.advanceTimersByTimeAsync(600_000);
       expect(f.deliver).toHaveBeenCalledTimes(attempts);
+      const settled = await f.register(client);
+      await settled.ready;
+      await settled.unregister();
       const saved = await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner());
-      expect(saved).toHaveLength(assignment === "empty" ? 0 : 1);
-      expect(
-        await f.store.readNativeSubagentSubmissions(f.identity, f.historyOwner()),
-      ).toHaveLength(assignment === "followup" ? 1 : 0);
+      expect(saved).toEqual([]);
+      expect(await f.store.readNativeSubagentSubmissions(f.identity, f.historyOwner())).toEqual([]);
+      const notes = await readVisibleSessionTranscriptMessageEntries(f.identity);
+      expect(notes).toHaveLength(assignment === "empty" ? 0 : 1);
+      if (assignment !== "empty") {
+        expect(notes[0]?.message).toMatchObject({
+          role: "custom",
+          customType: "openclaw.system-note",
+          display: true,
+          content: expect.stringContaining("status succeeded"),
+        });
+        expect(notes[0]?.message.content).toContain("child session key: codex-thread:child-thread");
+      }
       parent.closeCaller();
       client.close();
       f.deliver.mockClear();
@@ -606,13 +622,7 @@ describe("native pending assignment inventory through registered monitor admissi
       const recovered = await f.register(recoveredClient);
       await recovered.ready;
       await recovered.unregister();
-      if (assignment === "empty") {
-        expect(f.deliver).not.toHaveBeenCalled();
-      } else {
-        expect(f.deliver).toHaveBeenCalledExactlyOnceWith(
-          expect.objectContaining({ result: "Pending result" }),
-        );
-      }
+      expect(f.deliver).not.toHaveBeenCalled();
       expect(await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner())).toEqual(
         [],
       );
@@ -621,7 +631,10 @@ describe("native pending assignment inventory through registered monitor admissi
       const duplicate = await f.register(createClient());
       await duplicate.ready;
       await duplicate.unregister();
-      expect(f.deliver).toHaveBeenCalledTimes(assignment === "empty" ? 0 : 1);
+      expect(f.deliver).not.toHaveBeenCalled();
+      expect(await readVisibleSessionTranscriptMessageEntries(f.identity)).toHaveLength(
+        assignment === "empty" ? 0 : 1,
+      );
     },
   );
 
@@ -644,5 +657,121 @@ describe("native pending assignment inventory through registered monitor admissi
         ],
       }),
     ).toThrow("Invalid Codex native subagent submission metadata");
+  });
+
+  it("restores and delivers two distinct pending turns of the same child", async () => {
+    const f = await fixture();
+    for (const turnId of ["first-turn", "second-turn"]) {
+      await f.store.mutate(
+        f.identity,
+        {
+          kind: "record-native-subagent-assignment",
+          owner: f.historyOwner(),
+          assignment: {
+            runId: `codex-thread:child-thread:turn:${turnId}`,
+            childThreadId: "child-thread",
+            nativeTurnId: turnId,
+            nativeParentThreadId: "parent-thread",
+            owner: f.historyOwner(),
+          },
+        },
+        () => {},
+      );
+    }
+    expect(
+      await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner()),
+    ).toHaveLength(2);
+    const client = createClient();
+    const first = threadRead({
+      turnId: "first-turn",
+      result: "First result",
+      resultPhase: "final_answer",
+    });
+    const second = threadRead({
+      turnId: "second-turn",
+      result: "Second result",
+      resultPhase: "final_answer",
+    });
+    assert(first.thread.turns && second.thread.turns);
+    first.thread.turns.push(...second.thread.turns);
+    client.setThreadRead("child-thread", first);
+    const parent = await f.register(client);
+    await parent.ready;
+    await parent.unregister();
+    expect(f.deliver.mock.calls.map(([completion]) => completion.result)).toEqual([
+      "First result",
+      "Second result",
+    ]);
+    expect(await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner())).toEqual([]);
+    client.close();
+  });
+
+  it("retries a rejected retirement without resending the completion", async () => {
+    const { f, client, parent } = await startAssignment();
+    f.deliver.mockResolvedValue({ delivered: false, path: "none", recoveryBlocked: true });
+    const mutate = f.store.mutate.bind(f.store);
+    let reject = true;
+    vi.spyOn(f.store, "mutate").mockImplementation((identity, mutation, guard, authority) => {
+      if (
+        mutation.kind === "consume-native-subagent-assignment" &&
+        mutation.undelivered &&
+        reject
+      ) {
+        reject = false;
+        return Promise.resolve(false);
+      }
+      return mutate(identity, mutation, guard, authority);
+    });
+    await client.notify(
+      childTurnCompletedNotification({
+        status: "completed",
+        items: [{ id: "final", type: "agentMessage", phase: "final_answer", text: "Result" }],
+      }),
+    );
+    await parent.unregister();
+    expect(
+      await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner()),
+    ).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    const settled = await f.register(client);
+    await settled.ready;
+    await settled.unregister();
+    expect(f.deliver).toHaveBeenCalledOnce();
+    expect(await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner())).toEqual([]);
+    expect(await readVisibleSessionTranscriptMessageEntries(f.identity)).toHaveLength(1);
+    client.close();
+  });
+
+  it("does not restore an assignment retired while native history was being read", async () => {
+    const { f, client, parent } = await startAssignment();
+    f.deliver.mockResolvedValue({ delivered: false, path: "none", error: "Unavailable" });
+    await client.notify(
+      childTurnCompletedNotification({
+        status: "completed",
+        items: [{ id: "final", type: "agentMessage", phase: "final_answer", text: "Result" }],
+      }),
+    );
+    await parent.unregister();
+    const entered = createDeferred<void>();
+    const history = createDeferred<ReturnType<typeof threadRead>>();
+    const replacementClient = createClient();
+    replacementClient.setThreadReadFactory("child-thread", () => {
+      entered.resolve();
+      return history.promise;
+    });
+    const replacement = await f.register(replacementClient);
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner())).toEqual([]);
+    const attempts = f.deliver.mock.calls.length;
+    history.resolve(
+      threadRead({ turnId: "child-turn", result: "Result", resultPhase: "final_answer" }),
+    );
+    await replacement.ready;
+    await replacement.unregister();
+    expect(f.deliver).toHaveBeenCalledTimes(attempts);
+    expect(await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner())).toEqual([]);
+    client.close();
+    replacementClient.close();
   });
 });

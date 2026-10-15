@@ -55,11 +55,7 @@ const inventorySchema = z
     version: z.literal(1),
     assignments: z.array(assignmentSchema),
   })
-  .strict()
-  .refine(
-    ({ assignments }) =>
-      new Set(assignments.map((entry) => entry.runId)).size === assignments.length,
-  );
+  .strict();
 
 export type CodexNativeSubagentPendingAssignment = z.infer<typeof assignmentSchema>;
 export type CodexNativeSubagentAssignmentStore = {
@@ -71,7 +67,11 @@ export type CodexNativeSubagentAssignmentStore = {
     assignment: CodexNativeSubagentPendingAssignment,
     assertCurrent: () => void,
   ): Promise<boolean>;
-  consume: CodexNativeSubagentAssignmentStore["record"];
+  consume(
+    assignment: CodexNativeSubagentPendingAssignment,
+    assertCurrent: () => void,
+    undelivered?: { status: "succeeded" | "failed" | "cancelled" },
+  ): Promise<boolean>;
 };
 
 /** Native parent rotation is not physical requester or connection adoption. */
@@ -91,10 +91,39 @@ export function readNativePendingAssignments(value: unknown) {
     return undefined;
   }
   const parsed = inventorySchema.safeParse(value);
-  if (!parsed.success) {
+  if (
+    !parsed.success ||
+    new Set(parsed.data.assignments.map((entry) => entry.runId)).size !==
+      parsed.data.assignments.length
+  ) {
     throw new Error("Invalid Codex native pending assignment metadata.");
   }
   return parsed.data;
+}
+
+/** Doctor and binding writes collapse only equivalent obligations, never distinct turns. */
+export function normalizeNativePendingAssignments(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+  const inventory = inventorySchema.parse(value);
+  const assignments: CodexNativeSubagentPendingAssignment[] = [];
+  for (const entry of inventory.assignments) {
+    const { runId: _runId, ...fact } = entry;
+    if (
+      !assignments.some(
+        ({ runId, ...saved }) =>
+          isDeepStrictEqual(saved, fact) &&
+          (entry.nativeTurnId !== undefined || runId === entry.runId),
+      )
+    ) {
+      assignments.push(entry);
+    }
+  }
+  if (new Set(assignments.map((entry) => entry.runId)).size !== assignments.length) {
+    throw new Error("Conflicting Codex native pending assignment metadata.");
+  }
+  return { version: 1 as const, assignments };
 }
 
 export function mutateNativePendingAssignments(params: {
@@ -103,14 +132,20 @@ export function mutateNativePendingAssignments(params: {
   assignment: CodexNativeSubagentPendingAssignment;
   consume: boolean;
 }) {
-  const current = readNativePendingAssignments(params.current);
+  const current = normalizeNativePendingAssignments(params.current);
   const assignment = assignmentSchema.parse(params.assignment);
   const owner = codexNativeSubagentHistoryOwnerSchema.parse(params.owner);
   if (!matchesNativeAssignmentLifecycle(assignment.owner, owner)) {
     return { applied: false };
   }
   const assignments = current?.assignments ?? [];
-  const existing = assignments.find((entry) => entry.runId === assignment.runId);
+  const existing = assignments.find(
+    (entry) =>
+      entry.runId === assignment.runId ||
+      (assignment.nativeTurnId !== undefined &&
+        entry.childThreadId === assignment.childThreadId &&
+        entry.nativeTurnId === assignment.nativeTurnId),
+  );
   if (
     (existing &&
       (!isDeepStrictEqual(existing.owner, assignment.owner) ||
@@ -122,6 +157,9 @@ export function mutateNativePendingAssignments(params: {
   }
   const remaining = assignments.filter((entry) => entry !== existing);
   if (!params.consume) {
+    if (!assignment.submission && existing?.nativeTurnId === assignment.nativeTurnId) {
+      assignment.runId = existing?.runId ?? assignment.runId;
+    }
     if (existing?.recordedCompletion && !assignment.recordedCompletion) {
       assignment.recordedCompletion = existing.recordedCompletion;
     }

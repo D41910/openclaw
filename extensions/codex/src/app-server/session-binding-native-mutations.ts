@@ -1,3 +1,4 @@
+import { codexNativeSubagentRunId } from "./native-subagent-assignment.js";
 /** Pure native metadata mutations, invoked inside the binding owner's transaction. */
 import type { CodexNativeSubagentHistoryOwner } from "./native-subagent-history-owner.js";
 import {
@@ -6,6 +7,8 @@ import {
 } from "./native-subagent-pending-assignments.js";
 import {
   mutateCodexNativeSubagentSubmissions,
+  readCodexNativeSubagentSubmissions,
+  matchesCodexNativeSubagentSubmissionOwner,
   type CodexNativeSubagentSubmission,
 } from "./native-subagent-submission.js";
 import {
@@ -25,6 +28,7 @@ export type CodexNativeSubagentBindingMutation =
       kind: "consume-native-subagent-assignment";
       owner: CodexNativeSubagentHistoryOwner;
       assignment: CodexNativeSubagentPendingAssignment;
+      undelivered?: true;
     }
   | {
       kind: "record-native-subagent-submission";
@@ -83,6 +87,25 @@ export function mutateNativeSubagentBinding({
     return { result: false };
   }
   const { [field]: _previous, ...bindingOwner } = current;
+  if (mutation.kind === "consume-native-subagent-assignment" && mutation.undelivered) {
+    const submissions = readCodexNativeSubagentSubmissions(bindingOwner.nativeSubagentSubmissions);
+    if (
+      submissions &&
+      matchesCodexNativeSubagentSubmissionOwner(submissions.owner, mutation.owner)
+    ) {
+      const receipts = submissions.receipts.filter(
+        (receipt) =>
+          receipt.childThreadId !== mutation.assignment.childThreadId ||
+          (receipt.submissionId !== mutation.assignment.nativeTurnId &&
+            codexNativeSubagentRunId(receipt.childThreadId, receipt.submissionId) !==
+              mutation.assignment.runId),
+      );
+      delete bindingOwner.nativeSubagentSubmissions;
+      if (receipts.length) {
+        bindingOwner.nativeSubagentSubmissions = { ...submissions, receipts };
+      }
+    }
+  }
   return {
     result: true,
     next: {

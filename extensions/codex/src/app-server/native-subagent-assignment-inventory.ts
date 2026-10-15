@@ -102,6 +102,7 @@ export class CodexNativeSubagentAssignmentInventory {
       !assignment ||
       !state.assignmentStore ||
       child.nativeCompletionDelivered ||
+      child.completionDeliveryAbandoned ||
       child.subscriptionClosed
     ) {
       return;
@@ -128,8 +129,7 @@ export class CodexNativeSubagentAssignmentInventory {
 
   settle(state: ParentState, child: ChildState): void {
     const assignment = this.fact(child);
-    // Disconnection, interrupted execution, and an exhausted delivery retry do
-    // not acknowledge the result. Leave their durable locators for registration.
+    // Disconnection and interrupted execution leave locators for registration.
     if (
       !assignment ||
       !state.assignmentStore ||
@@ -141,6 +141,27 @@ export class CodexNativeSubagentAssignmentInventory {
       await state.assignmentStore?.consume(assignment, () =>
         this.dependencies.assertCurrent(state),
       );
+    });
+  }
+
+  abandon(state: ParentState, child: ChildState, assertCurrent: () => void): Promise<void> {
+    return this.enqueue(state, async () => {
+      const assignment = this.fact(child);
+      if (!assignment || !state.assignmentStore || !child.pendingCompletion) {
+        return;
+      }
+      if (
+        !(await state.assignmentStore.consume(
+          assignment,
+          () => {
+            this.dependencies.assertCurrent(state);
+            assertCurrent();
+          },
+          { status: child.pendingCompletion.status },
+        ))
+      ) {
+        throw new Error("Undeliverable native assignment was not retired.");
+      }
     });
   }
 
@@ -183,11 +204,21 @@ export class CodexNativeSubagentAssignmentInventory {
           continue;
         }
         const recovery = await this.dependencies.readHistory(assignment);
-        await store.assertCurrentAsync();
+        const pending = await store.read();
         if (!this.dependencies.isCurrent(state) || !custody.isCurrent()) {
           return;
         }
-        if (!recovery || recovery.parentThreadId !== assignment.nativeParentThreadId) {
+        if (
+          !recovery ||
+          recovery.parentThreadId !== assignment.nativeParentThreadId ||
+          !pending.some(
+            (entry) =>
+              entry.runId === assignment.runId &&
+              entry.nativeTurnId === assignment.nativeTurnId &&
+              entry.nativeParentThreadId === assignment.nativeParentThreadId &&
+              matchesNativeAssignmentLifecycle(entry.owner, assignment.owner),
+          )
+        ) {
           continue;
         }
         await this.dependencies.restore(state, assignment, recovery, custody);

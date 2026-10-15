@@ -187,6 +187,8 @@ class Monitor {
       parents: this.parentStates,
       retiredParents: this.retiredParentStates,
       unregisterChild: (child) => this.unregisterChild(child),
+      abandon: (state, child, assertCurrent) =>
+        this.assignments.abandon(state, child, assertCurrent),
       releaseClientRetentionIfIdle: () => this.releaseClientRetentionIfIdle(),
     });
     this.turnObservation = new CodexNativeSubagentTurnObservation({
