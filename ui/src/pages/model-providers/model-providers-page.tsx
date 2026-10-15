@@ -1,14 +1,5 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onSettled,
-  Show,
-  untrack,
-} from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from "solid-js";
 import type { ApplicationContext } from "../../app/context-types.ts";
-import { SettingsLoadingSkeleton } from "../../components/solid/settings-ui.tsx";
 import { useApplication } from "../../lib/reactive/context.ts";
 import { defineSolidBridge, type SolidBridgeElement } from "../../lit/solid-bridge.ts";
 import { ModelProviderAccountRecovery, ModelProviderLoginView } from "./login-view.tsx";
@@ -32,7 +23,7 @@ export function ModelProvidersContent(props: {
     return controller.viewProps();
   });
   let initialLoadComplete = false;
-  const showContent = createMemo(() => {
+  const showProviderDetails = createMemo(() => {
     const snapshot = current();
     if (
       snapshot.props.connected &&
@@ -56,21 +47,13 @@ export function ModelProvidersContent(props: {
   return (
     <ModelProvidersPageShell
       body={
-        <Show
-          when={showContent()}
-          fallback={
-            <div class="model-providers__loading">
-              <SettingsLoadingSkeleton rows={1} />
-            </div>
-          }
-        >
-          <ModelProviders
-            {...current().props}
-            accountRecovery={<Recovery />}
-            installedAgents={current().installedAgentsAvailable ? installedAgents : undefined}
-            providerScope={<ModelProviderScope {...current().scope} />}
-          />
-        </Show>
+        <ModelProviders
+          {...current().props}
+          providerDetailsReady={showProviderDetails()}
+          accountRecovery={<Recovery />}
+          installedAgents={current().installedAgentsAvailable ? installedAgents : undefined}
+          providerScope={<ModelProviderScope {...current().scope} />}
+        />
       }
       loginMessage={current().loginMessage}
       login={
