@@ -17,6 +17,7 @@ import {
 import { useSessionMenuControllers } from "./session-menu-controllers.ts";
 import { SessionMenuShortcut, useSessionMenuEntries } from "./session-menu-view.tsx";
 import { Icon } from "./solid/icon.tsx";
+import { pointMenuTriggerAttributes } from "./solid/menu-trigger.tsx";
 import { Menu, type MenuEntry, type MenuItem, type MenuHandle } from "./solid/menu.tsx";
 
 /** Only resolved local worktree destinations are offered by the menu host. */
@@ -262,19 +263,10 @@ function SessionMenuContent(
       label={label()}
       items={items()}
       onSelect={select}
-      triggerAttributes={{
-        tabindex: -1,
-        "aria-hidden": "true",
-        style: {
-          position: "fixed",
-          left: `${Math.max(8, Math.min(anchor.x, window.innerWidth - 248))}px`,
-          top: `${Math.max(8, Math.min(anchor.y, window.innerHeight - 468))}px`,
-          width: "1px",
-          height: "1px",
-          opacity: 0,
-          "pointer-events": "none",
-        },
-      }}
+      triggerAttributes={pointMenuTriggerAttributes({
+        x: Math.max(8, Math.min(anchor.x, window.innerWidth - 248)),
+        y: Math.max(8, Math.min(anchor.y, window.innerHeight - 468)),
+      })}
       ref={(handle) => {
         menu = handle;
         if (props.trigger) {
