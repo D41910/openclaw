@@ -57,7 +57,11 @@ describe("run-android-gradle", () => {
         ["scripts/run-android-gradle.mts", "--proof", ":wear-shared:testDebugUnitTest"],
         {
           encoding: "utf8",
-          env: { ...process.env, JAVA_HOME: "/openclaw-missing-proof-jdk" },
+          env: {
+            ...process.env,
+            JAVA_HOME: "/openclaw-missing-proof-jdk",
+            OPENCLAW_ANDROID_GRADLE_ALLOW_LINUX_ARM: "1",
+          },
         },
       );
       expect(result.status).toBe(1);
