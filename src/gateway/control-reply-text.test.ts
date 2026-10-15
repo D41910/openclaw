@@ -23,6 +23,8 @@ describe("control reply display projection", () => {
       "REPLY_SKIP means the peer exchange is over.",
       "The literal marker is `REPLY_SKIP`.",
       "  keep padded  ",
+      "<final>NO_REPLY</final>\nI will inspect the attachment.",
+      "Example: `<final>Draft explanation.\nNO_REPLY</final>`",
     ].map((text) => ({ text, visible: text })),
     { text: "The handoff is complete.\n\nREPLY_SKIP", visible: "The handoff is complete." },
     { text: "Done. NO_REPLY", visible: "Done." },
@@ -40,6 +42,16 @@ describe("control reply display projection", () => {
         expect(projectChatDisplayMessages([assistant(content)])).toEqual(
           visible ? [assistant(expected)] : [],
         );
+      }
+    },
+  );
+
+  it.each(["NO_REPLY</final>", "NO_REPLY\n</final>"])(
+    "suppresses wrapped silent history before display caps (%s)",
+    (tail) => {
+      const text = `<final>Draft explanation.\n${tail}`;
+      for (const content of [text, [textBlock(text)]]) {
+        expect(projectChatDisplayMessages([assistant(content)], { maxChars: 8 })).toEqual([]);
       }
     },
   );

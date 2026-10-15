@@ -1,4 +1,5 @@
 import { escapeRegExp } from "../shared/regexp.js";
+import { stripFinalTags } from "../shared/text/final-tags.js";
 
 /** Token that marks a heartbeat response as an acknowledgement with no user notification. */
 export const HEARTBEAT_TOKEN = "HEARTBEAT_OK";
@@ -55,8 +56,6 @@ export function isSilentReplyText(
   if (!text) {
     return false;
   }
-  // Match only token-only replies, including repeated tokens separated by whitespace.
-  // This prevents substantive replies ending with NO_REPLY from being suppressed (#19537).
   // Models sometimes wrap the token in punctuation. Preserve exact custom-token matching,
   // but keep symbols such as emoji substantive so they are still delivered.
   return (
@@ -103,8 +102,8 @@ export function isSilentReplyPayloadText(
   text: string | undefined,
   token: string = SILENT_REPLY_TOKEN,
 ): boolean {
-  const trimmed = text?.trim();
-  const finalLine = trimmed?.slice(
+  const trimmed = stripFinalTags(text ?? "").trim();
+  const finalLine = trimmed.slice(
     Math.max(trimmed.lastIndexOf("\n"), trimmed.lastIndexOf("\r")) + 1,
   );
   return (
@@ -112,7 +111,7 @@ export function isSilentReplyPayloadText(
     (finalLine !== trimmed && isSilentReplyText(finalLine, token)) ||
     // Final fragments need the underscore; a complete answer of "NO" is legitimate text.
     (token === SILENT_REPLY_TOKEN &&
-      trimmed?.startsWith("NO_") === true &&
+      trimmed.startsWith("NO_") &&
       isSilentReplyPrefixText(trimmed, token)) ||
     isSilentReplyJsonText(text, token)
   );
