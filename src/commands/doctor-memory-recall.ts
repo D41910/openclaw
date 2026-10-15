@@ -3,8 +3,10 @@ import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import {
+  DEFAULT_MEMORY_DREAMING_PLUGIN_ID,
   resolveMemoryDreamingConfig,
   resolveMemoryDreamingPluginConfig,
+  resolveMemoryDreamingPluginId,
 } from "../memory-host-sdk/dreaming.js";
 import { readMemorySearchManagerStatus } from "../memory-host-sdk/host/types.js";
 import {
@@ -14,6 +16,7 @@ import {
   repairShortTermPromotionArtifacts,
   type ShortTermAuditSummary,
 } from "../plugin-sdk/memory-core-bundled-runtime.js";
+import { loadPluginRegistryHandle } from "../plugins/loader.js";
 import {
   getActiveMemorySearchManagerCore,
   resolveActiveMemoryBackendConfig,
@@ -77,23 +80,25 @@ async function runMemoryRecallHealth(
     const agentMessage = (message: string) =>
       formatMemoryDoctorAgentMessage(scope.agentId, labelAgents, message);
     const report = (message: string) => note(agentMessage(message), "Memory search");
-    const backend = resolveActiveMemoryBackendConfig({ cfg, agentId: scope.agentId });
-    if (backend?.backend === "provider-runtime") {
-      report(`Not applicable: ${backend.providerId} uses the provider runtime; see its health.`);
-      continue;
-    }
-    if (prompter) {
-      await maybeRepairWorkspaceMemoryHealth({
-        prompter,
-        scope: {
-          agentId: scope.agentId,
-          workspaceDir: scope.workspaceDir,
-          labelAgent: labelAgents,
-        },
-      });
-    }
     try {
-      const workspaceDir = deep && (await resolveRuntimeMemoryWorkspaceDir(cfg, scope.agentId));
+      if (!deep) {
+        continue;
+      }
+      const backend = resolveActiveMemoryBackendConfig({ cfg, agentId: scope.agentId });
+      if (backend?.backend === "provider-runtime") {
+        continue;
+      }
+      if (prompter) {
+        await maybeRepairWorkspaceMemoryHealth({
+          prompter,
+          scope: {
+            agentId: scope.agentId,
+            workspaceDir: scope.workspaceDir,
+            labelAgent: labelAgents,
+          },
+        });
+      }
+      const workspaceDir = await resolveRuntimeMemoryWorkspaceDir(cfg, scope.agentId);
       if (!workspaceDir) {
         continue;
       }
@@ -179,9 +184,18 @@ async function runMemoryRecallHealth(
       );
     } finally {
       if (dreaming) {
-        report(
-          `Dreaming: ${dreaming.enabled ? "enabled" : "disabled"} (cadence ${dreaming.frequency}).`,
-        );
+        const enabled =
+          dreaming.enabled &&
+          loadPluginRegistryHandle({
+            config: cfg,
+            workspaceDir: scope.workspaceDir,
+            loadModules: false,
+            onlyPluginIds: [resolveMemoryDreamingPluginId(cfg)],
+          }).plugins.some(
+            (plugin) =>
+              plugin.id === DEFAULT_MEMORY_DREAMING_PLUGIN_ID && plugin.status === "loaded",
+          );
+        report(`Dreaming: ${enabled ? "enabled" : "disabled"} (cadence ${dreaming.frequency}).`);
       }
     }
   }
