@@ -787,17 +787,16 @@ suite.define(() => {
         message: {
           content: [{ text: "Working on it.", type: "text" }],
           role: "assistant",
-          phase: "commentary",
           timestamp: Date.now(),
         },
         runId,
         sessionKey: "agent:main:main",
         state: "delta",
       });
-      // The working row stays attached with elapsed/token telemetry throughout streaming.
+      // Answer publication ends visual activity while queue and Stop stay owned.
       await expect.poll(() => page.getByText("Working on it.").first().isVisible()).toBe(true);
-      await expect.poll(() => spark.isVisible()).toBe(true);
-      await expect.poll(() => announcement.textContent()).toContain("Rosita is responding");
+      await expect.poll(() => spark.count()).toBe(0);
+      await expect.poll(() => announcement.textContent()).toBe("");
       await expect.poll(() => layout.isVisible()).toBe(true);
       await expect.poll(() => model.isVisible()).toBe(true);
       await textarea.fill("Steer this queued follow-up");
