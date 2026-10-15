@@ -5,6 +5,7 @@ import { expect, it, vi } from "vitest";
 import { createNoisyPngBuffer, createSolidPngBuffer } from "../../test/helpers/image-fixtures.js";
 import { setRuntimeConfigSnapshot } from "../config/runtime-snapshot.js";
 import { upsertSessionEntryCore } from "../config/sessions/session-accessor.js";
+import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
 import { createImageProcessor } from "../media/image-processor.js";
 import { createDeferredCore } from "../shared/deferred.js";
 import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
@@ -324,8 +325,21 @@ it("serves distinct fixed WebP renditions over HTTP with alpha, orientation, and
     }).url;
   };
   const fetchImage = async (url: string) => {
-    const response = await fetch("http://127.0.0.1:" + server.claim.port + url);
-    return { response, bytes: Buffer.from(await response.arrayBuffer()) };
+    const origin = "http://127.0.0.1:" + server.claim.port;
+    const target = new URL(url, origin);
+    if (target.origin !== origin) {
+      throw new Error("Image fixture requests must stay on the leased loopback origin");
+    }
+    const { response, release } = await fetchWithSsrFGuard({
+      url: target.href,
+      policy: { allowedOrigins: [origin] },
+      maxRedirects: 0,
+    });
+    try {
+      return { response, bytes: Buffer.from(await response.arrayBuffer()) };
+    } finally {
+      await release();
+    }
   };
   try {
     const source = createSolidPngBuffer(2400, 1200, { r: 24, g: 64, b: 128, a: 96 });
