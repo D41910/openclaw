@@ -227,6 +227,23 @@ export function createTeamsReplyStreamController(params: {
     deferredReplacementEntries = [];
   };
 
+  const updateInformativeProgress = (text: string) => {
+    if (!stream || wasCanceled() || streamFinalizationPending) {
+      return false;
+    }
+    try {
+      stream.update(flattenInformativeStatus(text));
+      return true;
+    } catch (err) {
+      if (isStreamCancelledError(err)) {
+        canceledLocally = true;
+      } else {
+        params.log?.debug?.(`stream informative update failed: ${coerceErrorMessage(err)}`);
+      }
+      return false;
+    }
+  };
+
   // Teams cannot delete an empty interim card; final delivery settles it.
   const progressDraft = createChannelProgressDraftCompositor({
     preparedItems: true,
@@ -236,24 +253,12 @@ export function createTeamsReplyStreamController(params: {
     mode: streamMode,
     active: Boolean(stream) && streamMode === "progress",
     seed: params.progressSeed ?? "msteams",
-    update: (text) => {
-      if (!stream || wasCanceled() || streamFinalizationPending) {
-        return false;
-      }
-      try {
-        stream.update(flattenInformativeStatus(text));
-        return true;
-      } catch (err) {
-        if (isStreamCancelledError(err)) {
-          canceledLocally = true;
-        } else {
-          params.log?.debug?.(`stream informative update failed: ${coerceErrorMessage(err)}`);
-        }
-        return false;
-      }
-    },
+    update: updateInformativeProgress,
     deleteCurrent: async (options) => {
-      if (!stream || !options?.discardPreview) {
+      if (!options?.discardPreview) {
+        return updateInformativeProgress(progressDraft.getText());
+      }
+      if (!stream) {
         return;
       }
       try {
@@ -354,7 +359,7 @@ export function createTeamsReplyStreamController(params: {
       }
     },
 
-    beginAssistantMessage: progressDraft.beginAssistantMessage.bind(progressDraft),
+    beginAssistantMessage: progressDraft.beginAssistantMessage,
     pushItemEvent: progressDraft.pushItemEvent.bind(progressDraft),
     pushToolEvent: progressDraft.pushToolEvent,
 

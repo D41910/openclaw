@@ -205,7 +205,7 @@ describe("createMSTeamsReplyDispatcher", () => {
     if (!lastCreatedDispatcher) {
       throw new Error("createDispatcher must be called first");
     }
-    lastCreatedDispatcher.replyOptions.onPartialReply?.({ text });
+    await lastCreatedDispatcher.replyOptions.onPartialReply?.({ text });
   }
 
   function registerHooks(...hooks: string[]): void {
@@ -348,7 +348,7 @@ describe("createMSTeamsReplyDispatcher", () => {
     sendMSTeamsMessagesMock.mockResolvedValue(["final-id"] as never);
 
     const dispatcher = createDispatcher("personal", { streaming: { mode } });
-    dispatcher.replyOptions.onPartialReply?.({ text: "original partial" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "original partial" });
     await dispatcher.replyOptions.onToolStart?.({
       name: "exec",
       toolCallId: "exec-1",
@@ -379,7 +379,7 @@ describe("createMSTeamsReplyDispatcher", () => {
     const stream = getStreamMock();
     stream.close.mockResolvedValueOnce(undefined);
 
-    dispatcher.replyOptions.onPartialReply?.({ text: "hello" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "hello" });
     stream.acknowledge("hello");
     const result = await options.deliver({ mediaUrl: "https://example.com/image.png" });
     await dispatcher.dispatcherOptions.onSettled?.();
@@ -404,7 +404,7 @@ describe("createMSTeamsReplyDispatcher", () => {
     const stream = getStreamMock();
     stream.close.mockRejectedValueOnce(new Error("close failed"));
 
-    dispatcher.replyOptions.onPartialReply?.({ text: "hello" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "hello" });
     stream.acknowledge("hello");
     const result = await options.deliver({ text: "hello world" });
     const finalization = expect(result?.finalization).rejects.toMatchObject({
@@ -688,7 +688,7 @@ describe("createMSTeamsReplyDispatcher", () => {
     const teams = createDispatcher("personal", { streaming: { mode } });
     const stream = getStreamMock();
     if (mode === "partial") {
-      teams.replyOptions.onPartialReply?.({ text: "First result" });
+      await teams.replyOptions.onPartialReply?.({ text: "First result" });
     }
     const first = await teams.delivery.deliver({ text: "First result" }, { kind: "final" });
     stream.acknowledge("First result");
@@ -747,9 +747,9 @@ describe("createMSTeamsReplyDispatcher", () => {
       return undefined;
     });
 
-    dispatcher.replyOptions.onPartialReply?.({ text: "streamed preview" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "streamed preview" });
     stream.acknowledge("streamed preview");
-    dispatcher.replyOptions.onPartialReply?.({ text: "provider final" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "provider final" });
     const results = [];
     for (const payload of payloads) {
       results.push(await dispatcher.delivery.deliver(payload, { kind: "final" }));
@@ -774,9 +774,9 @@ describe("createMSTeamsReplyDispatcher", () => {
     const dispatcher = createDispatcher("personal");
     const stream = getStreamMock();
 
-    dispatcher.replyOptions.onPartialReply?.({ text: "streamed preview" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "streamed preview" });
     stream.acknowledge("streamed preview");
-    dispatcher.replyOptions.onPartialReply?.({ text: "provider final" });
+    await dispatcher.replyOptions.onPartialReply?.({ text: "provider final" });
     const nativeResult = await dispatcher.delivery.deliver(
       { text: "provider final" },
       { kind: "final" },

@@ -227,7 +227,7 @@ function setupMSTeamsTrace(recorder: WireRecorder, traceCase: MSTeamsTraceCase) 
       case "partial":
         // Only present when the controller owns a native stream (DM); the
         // channel case has no onPartialReply and partials are dropped.
-        created.replyOptions.onPartialReply?.({ text: step.text });
+        await created.replyOptions.onPartialReply?.({ text: step.text });
         break;
       case "block-final":
         await options.deliver({ text: step.text }, { kind: "block" });

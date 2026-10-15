@@ -626,7 +626,11 @@ export function createChannelProgressDraftGate(params: {
     clearTimer();
     started = true;
     const nextStart = Promise.resolve()
-      .then(params.onStart)
+      .then(() => {
+        if (!disposed && startPromise === nextStart) {
+          return params.onStart();
+        }
+      })
       .then(() => {
         if (disposed) {
           started = false;
@@ -638,8 +642,8 @@ export function createChannelProgressDraftGate(params: {
       .catch((error: unknown) => {
         if (startPromise === nextStart) {
           startPromise = undefined;
+          started = false;
         }
-        started = false;
         throw error;
       });
     // Hold one startup promise so timer and explicit starts cannot race into

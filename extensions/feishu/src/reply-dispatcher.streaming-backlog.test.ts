@@ -155,12 +155,12 @@ async function runStreamingTurn(queuedPreviews: string[], signal: AbortSignal) {
     });
     cleanup = dispatcher.dispatcherOptions.onCleanup;
     expect(dispatcher.replyOptions.onPartialReply).toBeTypeOf("function");
-    dispatcher.replyOptions.onPartialReply?.({ text: first });
+    await dispatcher.replyOptions.onPartialReply?.({ text: first });
     await withinTest(firstWriteStarted.promise, signal);
     // The first real CardKit HTTP response is still pending. Later snapshots
     // and the committed final enter the same callbacks used by inbound replies.
     for (const text of queuedPreviews) {
-      dispatcher.replyOptions.onPartialReply?.({ text });
+      await dispatcher.replyOptions.onPartialReply?.({ text });
     }
     const delivered = (await withinTest(
       dispatcher.delivery.deliver(

@@ -175,13 +175,11 @@ describe("channel progress draft compositor", () => {
         discardPreview: true,
         text: visible ? expect.stringContaining("Inspecting") : undefined,
       });
-      await progress.pushCommentaryProgress("Late reasoning", { itemId: "old" });
       await vi.advanceTimersByTimeAsync(INITIAL_DELAY_MS);
       expect(update).toHaveBeenCalledTimes(published);
       expect(progress.getSnapshot()).toEqual({ lines: [] });
       deletion.resolve();
       await expect(retracted).resolves.toBe(true);
-      progress.beginAssistantMessage();
       await expect(
         progress.pushCommentaryProgress("Retry answer", { itemId: "retry" }),
       ).resolves.toBe(true);

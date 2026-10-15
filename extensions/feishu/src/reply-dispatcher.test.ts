@@ -1122,7 +1122,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
     const { result, options } = createDispatcherHarness();
     await options.onReplyStart?.();
     for (const text of partials) {
-      result.replyOptions.onPartialReply?.({ text });
+      await result.replyOptions.onPartialReply?.({ text });
     }
     if (block) {
       await options.deliver({ text: block }, { kind: "block" });
@@ -1138,7 +1138,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
     const text = makeTableText(6);
     const { result, options } = createDispatcherHarness();
     await options.onReplyStart?.();
-    result.replyOptions.onPartialReply?.({ text });
+    await result.replyOptions.onPartialReply?.({ text });
     const delivery = await options.deliver({ text }, { kind: "block" });
     await options.onIdle?.();
     const finalized = await delivery?.finalization;
@@ -1196,7 +1196,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
 
   it("discards partial streaming text when final replies send voice media", async () => {
     const { result, options } = createDispatcherHarness();
-    result.replyOptions.onPartialReply?.({ text: "spoken reply" });
+    await result.replyOptions.onPartialReply?.({ text: "spoken reply" });
     await options.deliver(
       { text: "spoken reply", mediaUrl: "https://example.com/reply.mp3", audioAsVoice: true },
       { kind: "final" },
@@ -1347,7 +1347,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
 
   it("allows recovery after a final rewrite leaves only an earlier preview visible", async () => {
     const { result, options } = createDispatcherHarness();
-    result.replyOptions.onPartialReply?.({ text: "accepted preview" });
+    await result.replyOptions.onPartialReply?.({ text: "accepted preview" });
     const rejectedDelivery = await options.deliver({ text: "final answer" }, { kind: "final" });
     stream(0).closeWithResult.mockRejectedValueOnce(
       new FeishuStreamingFinalizationError(new Error("final update failed"), {
@@ -1513,7 +1513,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
   it("assigns an idle-closed card to its later matching final before media", async () => {
     const { result, options } = createDispatcherHarness();
     await options.onReplyStart?.();
-    result.replyOptions.onPartialReply?.({ text: "accepted answer" });
+    await result.replyOptions.onPartialReply?.({ text: "accepted answer" });
     await options.onIdle?.();
     sendMediaFeishuMock.mockResolvedValueOnce({ messageId: "om-media" });
     const delivery = await options.deliver(
@@ -1683,7 +1683,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
         result.replyOptions.onReasoningStream?.({ text });
       }
       if (partial) {
-        result.replyOptions.onPartialReply?.({ text: partial });
+        await result.replyOptions.onPartialReply?.({ text: partial });
       }
       result.replyOptions.onReasoningEnd?.();
       if (final) {
@@ -1767,7 +1767,7 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
       const { result, options } = createDispatcherHarness();
       await options.onReplyStart?.();
       result.replyOptions.onItemEvent?.(projectAgentToolActivity(event));
-      result.replyOptions.onPartialReply?.({ text: "final answer" });
+      await result.replyOptions.onPartialReply?.({ text: "final answer" });
       await options.onIdle?.();
       const updates = streamingUpdateTexts().join("\n");
       if (visible) {

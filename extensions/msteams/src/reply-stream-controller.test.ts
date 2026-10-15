@@ -72,12 +72,12 @@ function makeController(
 }
 
 describe("createTeamsReplyStreamController", () => {
-  it("keeps the next chunk after cumulative trailing whitespace is normalized", () => {
+  it("keeps the next chunk after cumulative trailing whitespace is normalized", async () => {
     const stream = makeStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "Intro\n\n " });
-    ctrl.onPartialReply({ text: "Intro\n\nNext" });
+    await ctrl.onPartialReply({ text: "Intro\n\n " });
+    await ctrl.onPartialReply({ text: "Intro\n\nNext" });
 
     expect(stream.emit).toHaveBeenNthCalledWith(1, "Intro\n\n ");
     expect(stream.emit).toHaveBeenNthCalledWith(2, "Next");
@@ -87,9 +87,9 @@ describe("createTeamsReplyStreamController", () => {
     const stream = makeAcknowledgedStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "abcde" });
+    await ctrl.onPartialReply({ text: "abcde" });
     stream.acknowledge("abcde");
-    ctrl.onPartialReply({ text: "provider replacement" });
+    await ctrl.onPartialReply({ text: "provider replacement" });
     expect(
       ctrl.preparePayload({
         text: "provider replacement",
@@ -117,8 +117,8 @@ describe("createTeamsReplyStreamController", () => {
     const stream = makeAcknowledgedStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "abcdef" });
-    ctrl.onPartialReply({ text: "abcXYZ" });
+    await ctrl.onPartialReply({ text: "abcdef" });
+    await ctrl.onPartialReply({ text: "abcXYZ" });
     expect(ctrl.preparePayload({ text: "abcXYZ" })).toBeUndefined();
     stream.acknowledge("abc");
     stream.close.mockRejectedValueOnce(new Error("close failed"));
@@ -134,10 +134,10 @@ describe("createTeamsReplyStreamController", () => {
     const stream = makeAcknowledgedStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "abcde" });
+    await ctrl.onPartialReply({ text: "abcde" });
     stream.acknowledge("abcde");
-    ctrl.onPartialReply({ text: "abXYZ" });
-    ctrl.onPartialReply({ text: "abcdef" });
+    await ctrl.onPartialReply({ text: "abXYZ" });
+    await ctrl.onPartialReply({ text: "abcdef" });
     expect(ctrl.preparePayload({ mediaUrl: "https://example.test/final.png" })).toBeUndefined();
 
     await expect(ctrl.finalize()).resolves.toEqual({
@@ -156,9 +156,9 @@ describe("createTeamsReplyStreamController", () => {
     const stream = makeAcknowledgedStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "abcde" });
+    await ctrl.onPartialReply({ text: "abcde" });
     stream.acknowledge("abcde");
-    ctrl.onPartialReply({ text: "provider replacement" });
+    await ctrl.onPartialReply({ text: "provider replacement" });
     stream.emit.mockImplementation(() => {
       const error = new Error("stream canceled");
       error.name = "StreamCancelledError";
@@ -178,9 +178,9 @@ describe("createTeamsReplyStreamController", () => {
     const stream = makeAcknowledgedStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "abcde" });
+    await ctrl.onPartialReply({ text: "abcde" });
     stream.acknowledge("abcde");
-    ctrl.onPartialReply({ text: "provider replacement" });
+    await ctrl.onPartialReply({ text: "provider replacement" });
     expect(ctrl.preparePayload({ mediaUrl: "https://example.test/before.png" })).toBeUndefined();
     stream.close.mockRejectedValueOnce(new Error("network failure"));
     expect(ctrl.preparePayload({ text: "provider replacement" })).toBeUndefined();
@@ -199,12 +199,12 @@ describe("createTeamsReplyStreamController", () => {
     });
   });
 
-  it("ignores duplicate or out-of-order partial replies that don't extend the text", () => {
+  it("ignores duplicate or out-of-order partial replies that don't extend the text", async () => {
     const stream = makeStream();
     const ctrl = makeController({ stream });
-    ctrl.onPartialReply({ text: "abcdef" });
-    ctrl.onPartialReply({ text: "abc" }); // shorter — could be edit-in-place semantics
-    ctrl.onPartialReply({ text: "abcdef" }); // back to known length
+    await ctrl.onPartialReply({ text: "abcdef" });
+    await ctrl.onPartialReply({ text: "abc" }); // shorter — could be edit-in-place semantics
+    await ctrl.onPartialReply({ text: "abcdef" }); // back to known length
     expect(stream.emit).toHaveBeenCalledTimes(1);
     expect(stream.emit).toHaveBeenCalledWith("abcdef");
   });
@@ -213,12 +213,12 @@ describe("createTeamsReplyStreamController", () => {
     const stream = makeStream();
     const ctrl = makeController({ stream });
 
-    ctrl.onPartialReply({ text: "First segment" });
+    await ctrl.onPartialReply({ text: "First segment" });
     expect(ctrl.preparePayload({ text: "First segment" })).toBeUndefined();
     expect(ctrl.claimNativeDelivery()).toBe(true);
     await ctrl.finalize();
 
-    ctrl.onPartialReply({ text: "Second segment after tools" });
+    await ctrl.onPartialReply({ text: "Second segment after tools" });
     const result = ctrl.preparePayload({ text: "Second segment after tools" });
     expect(result).toEqual({ text: "Second segment after tools" });
   });
@@ -234,7 +234,7 @@ describe("createTeamsReplyStreamController", () => {
       tableMode: "off",
     });
 
-    ctrl.onPartialReply({ text });
+    await ctrl.onPartialReply({ text });
     expect(ctrl.preparePayload({ text })).toBeUndefined();
     await expect(ctrl.finalize()).resolves.toEqual({
       visibleReplySent: true,
@@ -305,6 +305,28 @@ describe("createTeamsReplyStreamController", () => {
     expect(stream.update).not.toHaveBeenCalled();
   });
 
+  it("reports a rejected neutral-label update when the last plan is removed", async () => {
+    const stream = makeStream();
+    const ctrl = createTeamsReplyStreamController({
+      allowProviderPreview: true,
+      conversationType: "personal",
+      context: makeContext(stream),
+      feedbackLoopEnabled: false,
+      msteamsConfig: {
+        streaming: { mode: "progress", progress: { label: "Working", toolProgress: true } },
+      },
+    });
+    await expect(
+      ctrl.pushPlanProgress([{ step: "Inspect workspace", status: "in_progress" }]),
+    ).resolves.toBe(true);
+    stream.update.mockImplementationOnce(() => {
+      throw new Error("Teams rejected the informative update");
+    });
+    await expect(ctrl.pushPlanProgress([])).resolves.toBe(false);
+    ctrl.preparePayload({ text: "Inspection complete." });
+    await ctrl.finalize();
+  });
+
   it("falls back to normal delivery when progress final streaming fails", async () => {
     const stream = makeStream();
     stream.close.mockRejectedValueOnce(new Error("progress final failed"));
@@ -358,7 +380,7 @@ describe("createTeamsReplyStreamController", () => {
     it("swallows StreamCancelledError thrown from stream.emit during finalize", async () => {
       const stream = makeStream();
       const ctrl = makeController({ stream });
-      ctrl.onPartialReply({ text: "partial" });
+      await ctrl.onPartialReply({ text: "partial" });
       expect(ctrl.preparePayload({ text: "partial" })).toBeUndefined();
       // Cancel after we've started streaming, then make the final emit throw.
       stream.emit.mockImplementation(() => {
@@ -375,10 +397,10 @@ describe("createTeamsReplyStreamController", () => {
       const stream = makeAcknowledgedStream();
       const ctrl = makeController({ stream });
 
-      ctrl.onPartialReply({ text: "hello" });
+      await ctrl.onPartialReply({ text: "hello" });
       stream.acknowledge("hello");
       stream.close.mockRejectedValueOnce(new Error("network failure"));
-      ctrl.onPartialReply({ text: "hello world" });
+      await ctrl.onPartialReply({ text: "hello world" });
 
       expect(ctrl.preparePayload({ text: "hello world" })).toBeUndefined();
       await expect(ctrl.finalize()).resolves.toMatchObject({
@@ -393,7 +415,7 @@ describe("createTeamsReplyStreamController", () => {
       const stream = makeAcknowledgedStream();
       const ctrl = makeController({ stream });
 
-      ctrl.onPartialReply({ text: "hello" });
+      await ctrl.onPartialReply({ text: "hello" });
       stream.acknowledge("hello", { type: "message" });
       stream.acknowledge("hello", { channelData: { streamType: "informative" } });
       stream.acknowledge("unrelated");
@@ -401,7 +423,7 @@ describe("createTeamsReplyStreamController", () => {
       stream.acknowledge("hello", { id: "different-stream" });
       stream.acknowledge("h");
       stream.close.mockRejectedValueOnce(new Error("network failure"));
-      ctrl.onPartialReply({ text: "hello world" });
+      await ctrl.onPartialReply({ text: "hello world" });
 
       expect(ctrl.preparePayload({ text: "hello world" })).toBeUndefined();
       await expect(ctrl.finalize()).resolves.toMatchObject({
@@ -413,10 +435,10 @@ describe("createTeamsReplyStreamController", () => {
       const stream = makeAcknowledgedStream();
       const ctrl = makeController({ stream });
 
-      ctrl.onPartialReply({ text: "hello" });
+      await ctrl.onPartialReply({ text: "hello" });
       stream.acknowledge("hello");
       stream.close.mockRejectedValueOnce(new Error("network failure"));
-      ctrl.onPartialReply({ text: "hello world" });
+      await ctrl.onPartialReply({ text: "hello world" });
 
       expect(
         ctrl.preparePayload({ text: "hello", mediaUrl: "https://example.com/image.png" }),
@@ -427,17 +449,17 @@ describe("createTeamsReplyStreamController", () => {
       expect((await ctrl.finalize()).fallbackPayload).toBeUndefined();
     });
 
-    it("treats post-cancel stream as inactive without further emit attempts", () => {
+    it("treats post-cancel stream as inactive without further emit attempts", async () => {
       const stream = makeStream();
       stream.emit.mockImplementationOnce(() => {
         throw makeCancelError();
       });
       const ctrl = makeController({ stream });
-      ctrl.onPartialReply({ text: "first chunk after stop" });
+      await ctrl.onPartialReply({ text: "first chunk after stop" });
       // Subsequent partial replies should short-circuit and not call emit
       // again (the SDK would throw on every call once canceled).
-      ctrl.onPartialReply({ text: "second chunk" });
-      ctrl.onPartialReply({ text: "third chunk" });
+      await ctrl.onPartialReply({ text: "second chunk" });
+      await ctrl.onPartialReply({ text: "third chunk" });
       expect(stream.emit).toHaveBeenCalledTimes(1);
       expect(ctrl.isStreamActive()).toBe(false);
     });

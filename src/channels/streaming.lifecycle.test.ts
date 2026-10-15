@@ -292,6 +292,19 @@ describe("channel-streaming", () => {
     expect(gate.hasStarted).toBe(true);
   });
 
+  it("discards queued startup after reset and starts later work", async () => {
+    const onStart = vi.fn();
+    const gate = createChannelProgressDraftGate({ onStart });
+    const retiredStart = gate.startNow();
+    gate.reset();
+    await retiredStart;
+    expect(onStart).not.toHaveBeenCalled();
+    expect(gate.hasStarted).toBe(false);
+    await gate.startNow();
+    expect(onStart).toHaveBeenCalledOnce();
+    expect(gate.hasStarted).toBe(true);
+  });
+
   it("does not report started when delayed progress startup rejects", async () => {
     vi.useFakeTimers();
     const error = new Error("draft unavailable");
