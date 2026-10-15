@@ -384,7 +384,7 @@ describe("createCodexDynamicToolBridge", () => {
             const response = await bridge.handleToolCall(
               createDynamicToolCall("decision_evaluate", batch),
             );
-            expect(response.success).toBe(true);
+            expect(response.success).toBe(outcome.status === "ok");
             expect(JSON.parse(firstInputText(response))).toEqual(outcome);
             expect(execute).toHaveBeenCalledOnce();
             expect(execute.mock.calls[0]?.[1]).toEqual(batch);
