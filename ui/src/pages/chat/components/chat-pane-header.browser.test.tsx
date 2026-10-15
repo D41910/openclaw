@@ -203,19 +203,21 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
         click: (element: HTMLElement) => page.elementLocator(element).click(),
       });
       expect(shown).toHaveBeenCalledOnce();
-      surface.style.setProperty("--oc-overlay-hide-duration", "1s");
+      const closingAnimation = surface.animate({ opacity: [1, 0.9] }, { duration: 1000 });
+      closingAnimation.pause();
+      onTestFinished(() => closingAnimation.cancel());
       document.activeElement!.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
       );
       expect(surface.dataset.phase).toBe("closing");
       expect(surface.matches(":popover-open")).toBe(true);
       expect(document.activeElement).toBe(trigger);
+      closingAnimation.cancel();
       await openChatLayoutMenu({
         container: fixture.container,
         click: (element: HTMLElement) => page.elementLocator(element).click(),
       });
       expect(surface.dataset.phase).toBe("open");
-      surface.style.removeProperty("--oc-overlay-hide-duration");
       for (const label of ["Minimize side panel", "Side panel"]) {
         await selectChatLayoutAction(
           {
