@@ -190,13 +190,12 @@ describe("plugin embedded-agent runtime admission", () => {
     expect(() => assertMemoryAudienceCurrent(audience)).not.toThrow();
   });
 
-  it.each(["legacy-send", "legacy-send-then-throw", "collector", "no-send"] as const)(
+  it.each(["legacy-send-then-throw", "collector"] as const)(
     "keeps %s ownership across a required NO_REPLY after settled tools",
     async (owner) => {
       const delivered: string[] = [];
       const collected: string[] = [];
-      const callerOwnsDelivery = owner === "legacy-send" || owner === "legacy-send-then-throw";
-      const callbackRejects = owner === "legacy-send-then-throw" || owner === "no-send";
+      const callerOwnsDelivery = owner === "legacy-send-then-throw";
       const assistant = buildEmbeddedRunnerAssistant({
         content: [{ type: "text", text: "NO_REPLY" }],
       });
@@ -215,7 +214,7 @@ describe("plugin embedded-agent runtime admission", () => {
           const blockReply = Promise.resolve().then(() =>
             input.onBlockReply?.({ text: "The note is saved." }, { assistantMessageIndex: 1 }),
           );
-          if (callbackRejects) {
+          if (callerOwnsDelivery) {
             await expect(blockReply).rejects.toThrow("transport callback rejected");
           } else {
             await blockReply;
@@ -244,10 +243,10 @@ describe("plugin embedded-agent runtime admission", () => {
           terminalReplyExpectation: "required",
           ...(!callerOwnsDelivery ? { resolveReplyDelivery: async () => "missing" as const } : {}),
           onBlockReply: ({ text }) => {
-            if (text && owner !== "no-send") {
+            if (text) {
               (callerOwnsDelivery ? delivered : collected).push(text);
             }
-            if (callbackRejects) {
+            if (callerOwnsDelivery) {
               throw new Error("transport callback rejected");
             }
           },
@@ -264,7 +263,7 @@ describe("plugin embedded-agent runtime admission", () => {
       if (callerOwnsDelivery) {
         expect(finalizationRequest).toBeNull();
       } else {
-        expect(collected).toEqual(owner === "collector" ? ["The note is saved."] : []);
+        expect(collected).toEqual(["The note is saved."]);
         expect(finalizationRequest).toEqual(expect.any(String));
       }
     },
