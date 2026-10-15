@@ -30,11 +30,7 @@
 }
 
 /* Contributed dropdown rows share the menu typography without renderer-specific classes. */
-:is(
-  .session-menu .oc-menu-item,
-  .session-menu__item,
-  .sidebar-session-sort-menu__item
-) {
+:is(.session-menu .oc-menu-item, .session-menu__item, .sidebar-session-sort-menu__item) {
   font: inherit;
   font-size: calc(13px * var(--control-ui-text-scale));
 }

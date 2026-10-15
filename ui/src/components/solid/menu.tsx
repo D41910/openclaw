@@ -268,15 +268,11 @@ export function Menu(props: BranchProps): JSX.Element {
         return;
       }
       const search = overlay.surface.querySelector<HTMLInputElement>("input[data-search]");
-      const first = ownItems(overlay.surface)[0];
-      if (
-        target instanceof HTMLButtonElement &&
-        target.hasAttribute("data-form-control") &&
-        ["ArrowDown", "ArrowUp"].includes(event.key)
-      ) {
-        binding.keydown(event);
-        return;
-      }
+      const first = ownItems(overlay.surface).find(
+        (item) =>
+          !search ||
+          Boolean(search.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING),
+      );
       if (
         !event.defaultPrevented &&
         !event.isComposing &&
@@ -480,7 +476,7 @@ export function Menu(props: BranchProps): JSX.Element {
                       }}
                       onSelect={props.onSelect}
                       onNavigate={props.onNavigate}
-                      onBeforeShow={item().onBeforeShow}
+                      onBeforeShow={(event) => item().onBeforeShow?.(event)}
                       onEscape={(event) => props.onEscape?.(event) ?? false}
                     >
                       {item().content}

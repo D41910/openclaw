@@ -148,9 +148,23 @@ export function useMenuMachine(
         trackPositioning() {},
         trackInteractOutside() {},
         scrollToHighlightedItem() {},
-        // A fixed 100 ms close defeats slow diagonal travel inside the safe polygon.
-        // Pointer movement and MENU_POINTERENTER already settle this live branch.
-        waitForCloseDelay() {},
+        waitForCloseDelay(params) {
+          // SAFETY: the pinned menu effect returns its timer cleanup; Zag's shared type also permits watch effects.
+          const wait = () =>
+            machine.implementations!.effects!.waitForCloseDelay!(params) as VoidFunction;
+          let cancel = wait();
+          const keepMoving = () => {
+            cancel();
+            cancel = wait();
+          };
+          const doc = params.scope.getDoc();
+          // Keep slow diagonal travel alive, then let Zag settle a stopped pointer.
+          doc.addEventListener("pointermove", keepMoving);
+          return () => {
+            doc.removeEventListener("pointermove", keepMoving);
+            cancel();
+          };
+        },
       },
       actions: {
         ...machine.implementations?.actions,
@@ -205,6 +219,8 @@ export function useMenuMachine(
         focusTrigger() {},
         focusMenu() {},
         focusParentMenu() {},
+        // The overlay owns sibling admission without moving focus during pointer travel.
+        closeSiblingMenus() {},
         setIntentPolygon(params) {
           const trigger = overlay.trigger;
           if (!trigger) {
@@ -250,7 +266,6 @@ export function useMenuMachine(
         service.send({ type: overlay.open ? "CONTROLLED.OPEN" : "CONTROLLED.CLOSE" });
       }
     },
-    onSelect: ({ value }) => onSelect(value),
     // Zag's default link click is not cancelable; native click keeps selection vetoable.
     navigate: ({ node }) => queueMicrotask(() => node.click()),
   };
@@ -410,12 +425,12 @@ export function useMenuMachine(
       return {
         ...result,
         onClick: (event: MouseEvent) => {
+          if (disabled || !overlay.open) {
+            event.preventDefault();
+            return;
+          }
           const anchor = event.currentTarget;
           if (anchor instanceof HTMLAnchorElement) {
-            if (disabled) {
-              event.preventDefault();
-              return;
-            }
             if (
               !shouldHandleNavigationClick(event) ||
               (anchor.target !== "" && anchor.target !== "_self") ||
@@ -423,10 +438,11 @@ export function useMenuMachine(
             ) {
               return;
             }
-            // Selection is queued; prevent navigation now so its cancelable event can veto it.
+            // The cancelable selection event decides whether native navigation proceeds.
             event.preventDefault();
           }
-          result.onClick?.(event);
+          // Deliver the action before a queued render can retire its menu owner.
+          onSelect(value);
         },
         onContextMenu: (event: MouseEvent) => {
           if (event.currentTarget instanceof HTMLAnchorElement) {
@@ -508,12 +524,8 @@ export function useMenuMachine(
           }
           const item = parentBinding.read().getItemProps({ value: trigger.id });
           item.onPointerMove?.(event);
-          // The document pointer listener releases the old child's corridor lock.
-          // Decide child opening after that same event, rather than dropping it.
+          // Parent highlighting stays corridor-protected; the child owns its hover delay.
           queueMicrotask(() => {
-            if (parent?.refs.get("pointerRoutingLocked")) {
-              return;
-            }
             service.send({ type: "TRIGGER_POINTERMOVE", target, point });
           });
         },
