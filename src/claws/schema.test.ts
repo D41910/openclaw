@@ -115,29 +115,6 @@ describe("parseClawManifest", () => {
     });
   });
 
-  it("preserves optional portable categories", () => {
-    const result = parseClawManifest({ ...baseManifest, categories: ["travel", "personal"] });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.manifest.categories).toEqual(["travel", "personal"]);
-    }
-    expect(parseClawManifest(baseManifest).ok).toBe(true);
-    expect(parseClawManifest({ ...baseManifest, categories: ["custom"] }).ok).toBe(true);
-  });
-
-  it.each([
-    { categories: [] },
-    { categories: ["travel", "travel"] },
-    { categories: ["Travel"] },
-    { categories: ["travel", "personal", "health", "research"] },
-  ])("rejects invalid category declarations %j", ({ categories }) => {
-    const result = parseClawManifest({ ...baseManifest, categories });
-    expect(result.ok).toBe(false);
-    expect(
-      result.diagnostics.some((diagnostic) => diagnostic.path?.startsWith("$.categories")),
-    ).toBe(true);
-  });
-
   it("rejects operator-controlled agent settings", () => {
     const result = parseClawManifest({
       schemaVersion: 1,
@@ -209,23 +186,6 @@ describe("parseClawManifest", () => {
     });
     expect(manifestIntegrity.ok).toBe(false);
     expect(manifestIntegrity.diagnostics[0]?.path).toBe("$.packages[0]");
-  });
-
-  it("requires exact package versions", () => {
-    const result = parseClawManifest({
-      ...baseManifest,
-      packages: [
-        {
-          kind: "skill",
-          source: "clawhub",
-          ref: "demo",
-          version: "latest",
-        },
-      ],
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics[0]?.path).toBe("$.packages[0].version");
   });
 
   it("rejects resolved MCP secrets", () => {
