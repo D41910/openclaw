@@ -11,7 +11,6 @@ import {
   defaultControlUiFeatureMethods,
   installMockGateway,
   startBuiltControlUiE2eServer,
-  waitForConfirmModal,
 } from "../../test-helpers/control-ui-e2e.ts";
 import { workboardUi } from "../../test-helpers/control-ui-workboard-fixture.ts";
 
@@ -85,11 +84,10 @@ suite.define(() => {
       const url = new URL("workboard/ops", suite.server.baseUrl);
       url.hostname = "ui.example";
       url.hash = new URLSearchParams({ gatewayUrl }).toString();
-      await page.goto(url.href);
-      const confirmation = await waitForConfirmModal(page);
-      await confirmation
-        .getByRole("button", { name: "Switch to gateway.example", exact: true })
-        .click();
+      const response = await page.goto(url.href);
+      expect(response?.status()).toBe(200);
+      expect(errors).toEqual([]);
+      await page.getByRole("button", { name: "Switch to gateway.example", exact: true }).click();
       await page.locator(".workboard-page-title").filter({ hasText: "Operations" }).waitFor();
       expect(await page.evaluate(() => window.isSecureContext)).toBe(false);
       expect((await gateway.getSocketUrls()).at(-1)).toBe(gatewayUrl);
