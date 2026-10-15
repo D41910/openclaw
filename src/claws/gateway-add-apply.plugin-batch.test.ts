@@ -50,10 +50,10 @@ const dirs = useAutoCleanupTempDirTracker((cleanup) =>
   }),
 );
 
-const source = { source: { packageRoot: "/tmp/claw-source" } } as Extract<
-  ClawReadResult,
-  { ok: true }
->;
+const source = {
+  manifest: { agent: { id: "workflow-operator" } },
+  source: { packageRoot: "/tmp/claw-source" },
+} as Extract<ClawReadResult, { ok: true }>;
 const persisted = { source: { packageRoot: "/tmp/claw-cache" } } as Extract<
   ClawReadResult,
   { ok: true }
