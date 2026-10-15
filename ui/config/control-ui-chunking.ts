@@ -55,6 +55,14 @@ export const controlUiLocaleConfigHintsChunkPrefix = "locale-config-hints-";
 export function controlUiStableChunkName(id: string): string | undefined {
   const normalized = normalizeModuleId(id);
 
+  if (
+    id === "\0rolldown/runtime.js" ||
+    /^\0@oxc-project\+runtime@[^/]+\/helpers\/esm\/decorate\.js$/u.test(id)
+  ) {
+    // Shared decorator helpers must not make one lazy route depend on another.
+    return "rolldown-runtime";
+  }
+
   switch (controlUiBootManifestKey(id)) {
     case "ui/src/pages/plugins/plugins-page.tsx":
       return "plugins-page";
