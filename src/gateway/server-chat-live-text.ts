@@ -21,7 +21,7 @@ type LiveTextDelivery = NonNullable<GatewayBroadcastOpts["liveText"]>;
 
 export function projectChatStatusEvent(
   event: Pick<AgentEventPayload, "seq" | "data">,
-  identity: { runId: string; sessionKey: string; agentId?: string; spawnedBy?: string },
+  identity: { runId: string; sessionKey: string; agentId?: string; spawnedBy?: string | null },
 ): ChatStatusEvent | undefined {
   const payload = {
     runId: identity.runId,
