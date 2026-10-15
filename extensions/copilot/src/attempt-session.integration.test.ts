@@ -89,6 +89,7 @@ describe("Copilot canonical session persistence", () => {
         execute,
       };
       let sdkReply: unknown;
+      let sdkSendError: unknown;
       let attemptSettled = false;
       transcriptAppendControl.beforeAppend = async () => {
         appendEntered.resolve();
@@ -100,47 +101,52 @@ describe("Copilot canonical session persistence", () => {
 
       const sdk = makeFakeSdk((session, config) => {
         session.sendAndWait.mockImplementationOnce(async () => {
-          session.emit("user.message", {
-            __eventId: "initial-user",
-            content: attempt.prompt,
-          });
-          session.emit("assistant.message", {
-            __eventId: "assistant-boundary",
-            messageId: "assistant-boundary",
-            content: "checking",
-            toolRequests: [{ arguments: {}, name: "read", toolCallId: "call-boundary" }],
-          });
-          session.emit("tool.execution_start", {
-            toolName: "read",
-            toolCallId: "call-boundary",
-          });
-          const tool = expectDefined(
-            (config.tools as SdkTool[]).find((candidate) => candidate.name === "read"),
-            "registered read tool",
-          );
-          const handler = expectDefined(tool.handler, "registered read handler");
-          sdkReply = await handler(
-            {},
-            {
-              arguments: {},
-              sessionId: session.sessionId,
+          try {
+            session.emit("user.message", {
+              __eventId: "initial-user",
+              content: attempt.prompt,
+            });
+            session.emit("assistant.message", {
+              __eventId: "assistant-boundary",
+              messageId: "assistant-boundary",
+              content: "checking",
+              toolRequests: [{ arguments: {}, name: "read", toolCallId: "call-boundary" }],
+            });
+            session.emit("tool.execution_start", {
+              toolName: "read",
               toolCallId: "call-boundary",
-              toolName: tool.name,
-            },
-          );
-          const reply = expectDefined(asOptionalRecord(sdkReply), "SDK tool reply");
-          session.emit("tool.execution_complete", {
-            __eventId: "result-boundary",
-            result: { content: reply.textResultForLlm },
-            success: reply.resultType === "success",
-            toolCallId: "call-boundary",
-          });
-          const final = makeAssistantMessageEvent("finished", {
-            messageId: "assistant-final",
-          });
-          session.emit(final.type, { ...final.data, __eventId: "assistant-final" });
-          session.emit("session.idle", {});
-          return { ...final, id: "assistant-final" };
+            });
+            const tool = expectDefined(
+              (config.tools as SdkTool[]).find((candidate) => candidate.name === "read"),
+              "registered read tool",
+            );
+            const handler = expectDefined(tool.handler, "registered read handler");
+            sdkReply = await handler(
+              {},
+              {
+                arguments: {},
+                sessionId: session.sessionId,
+                toolCallId: "call-boundary",
+                toolName: tool.name,
+              },
+            );
+            const reply = expectDefined(asOptionalRecord(sdkReply), "SDK tool reply");
+            session.emit("tool.execution_complete", {
+              __eventId: "result-boundary",
+              result: { content: reply.textResultForLlm },
+              success: reply.resultType === "success",
+              toolCallId: "call-boundary",
+            });
+            const final = makeAssistantMessageEvent("finished", {
+              messageId: "assistant-final",
+            });
+            session.emit(final.type, { ...final.data, __eventId: "assistant-final" });
+            session.emit("session.idle", {});
+            return { ...final, id: "assistant-final" };
+          } catch (error) {
+            sdkSendError = error;
+            throw error;
+          }
         });
       });
       const pool = makeFakePool(sdk);
@@ -175,7 +181,8 @@ describe("Copilot canonical session persistence", () => {
         await Promise.race([
           appendEntered.promise,
           pending.then((result) => {
-            throw new Error(
+            throw new AggregateError(
+              [sdkSendError, projectAgentRunAttemptTerminal(result.terminal).promptError],
               `Attempt settled before the group append: ${JSON.stringify(result.terminal)}`,
             );
           }),
