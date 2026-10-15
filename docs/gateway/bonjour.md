@@ -72,19 +72,24 @@ Only the gateway advertises `_openclaw-gw._tcp`. LAN multicast advertising comes
 
 ## TXT keys (non-secret hints)
 
-| Key                           | When present                                                                   |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| `role=gateway`                | Always.                                                                        |
-| `displayName=<friendly name>` | Always.                                                                        |
-| `lanHost=<hostname>.local`    | Always.                                                                        |
-| `gatewayPort=<port>`          | Always (gateway WS + HTTP).                                                    |
-| `transport=gateway`           | Always.                                                                        |
-| `gatewayTls=1`                | Only when TLS is enabled.                                                      |
-| `gatewayTlsSha256=<sha256>`   | Only when TLS is enabled and a fingerprint is available.                       |
-| `gatewayDirectReachable=1`    | Only when the gateway is directly reachable (not only via a relay/proxy path). |
-| `tailnetDns=<magicdns>`       | mDNS full mode only; optional hint when Tailnet is available.                  |
-| `sshPort=<port>`              | Full mode only; omitted in minimal and off modes.                              |
-| `cliPath=<path>`              | Full mode only; omitted in minimal and off modes.                              |
+Two transports publish these keys: LAN multicast advertisements from the bundled
+`bonjour` plugin, and wide-area DNS-SD records written by the Gateway when
+`discovery.wideArea.domain` is set. Unless a row says otherwise, a key is present
+in both transports.
+
+| Key                           | When present                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| `role=gateway`                | Always.                                                                                          |
+| `displayName=<friendly name>` | Always.                                                                                          |
+| `lanHost=<hostname>.local`    | LAN advertisements only; absent from wide-area DNS-SD records.                                   |
+| `gatewayPort=<port>`          | Always (gateway WS + HTTP).                                                                      |
+| `transport=gateway`           | Always.                                                                                          |
+| `gatewayTls=1`                | Only when TLS is enabled.                                                                        |
+| `gatewayTlsSha256=<sha256>`   | Only when TLS is enabled and a fingerprint is available.                                         |
+| `gatewayDirectReachable=1`    | Only when the gateway is directly reachable (not only via a relay/proxy path).                   |
+| `tailnetDns=<magicdns>`       | LAN advertisements: full mode only. Wide-area DNS-SD: every mode. Hint requires a MagicDNS name. |
+| `sshPort=<port>`              | Full mode only; omitted in minimal and off modes.                                                |
+| `cliPath=<path>`              | Full mode only; omitted in minimal and off modes.                                                |
 
 Security notes:
 
@@ -140,13 +145,13 @@ Enable it explicitly when same-LAN auto-discovery is useful on Linux, Windows, o
 openclaw plugins enable bonjour
 ```
 
-When enabled, Bonjour uses `discovery.mdns.mode` to decide how much TXT metadata to publish; the same mode controls optional TXT hints in wide-area DNS-SD records. Modes:
+When enabled, Bonjour uses `discovery.mdns.mode` to decide how much TXT metadata to publish; in wide-area DNS-SD records the mode gates the optional `sshPort` and `cliPath` hints. Modes:
 
-| Mode                | Behavior                                                                                                                                 |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `minimal` (default) | Core TXT keys only; omits `sshPort`, `cliPath`, `tailnetDns`.                                                                            |
-| `full`              | Adds `sshPort`, `cliPath`, `tailnetDns` — use when clients need those hints.                                                             |
-| `off`               | Suppresses LAN multicast without changing plugin enablement; wide-area DNS-SD can still publish when `discovery.wideArea.domain` is set. |
+| Mode                | Behavior                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minimal` (default) | Core TXT keys only; LAN advertisements omit `sshPort`, `cliPath`, and `tailnetDns`. Wide-area DNS-SD records keep the `tailnetDns` hint in this mode.                     |
+| `full`              | Adds `sshPort`, `cliPath`, and `tailnetDns` to LAN advertisements — use when clients need those hints.                                                                    |
+| `off`               | Suppresses LAN multicast without changing plugin enablement; wide-area DNS-SD can still publish when `discovery.wideArea.domain` is set, including the `tailnetDns` hint. |
 
 Mode changes hot-apply without restarting the Gateway or disconnecting clients.
 The discovery owner stops the prior advertisements before publishing the new
@@ -225,17 +230,17 @@ Bonjour/DNS-SD often escapes bytes in service instance names as decimal `\DDD` s
 
 ## Enabling / disabling / configuration
 
-| Setting                                              | Effect                                                                            |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `openclaw plugins enable bonjour`                    | Enables the bundled LAN discovery plugin on hosts where it isn't default-enabled. |
-| `openclaw plugins disable bonjour`                   | Disables LAN multicast advertising by disabling the bundled plugin.               |
-| `OPENCLAW_DISABLE_BONJOUR=1` (or `true`/`yes`/`on`)  | Disables LAN multicast advertising without changing plugin config.                |
-| `OPENCLAW_DISABLE_BONJOUR=0` (or `false`/`no`/`off`) | Forces LAN multicast advertising on, including inside detected containers.        |
-| `discovery.mdns.mode`                                | `off` \| `minimal` (default) \| `full` — see modes above.                         |
-| `gateway.bind`                                       | Controls the gateway bind mode in `~/.openclaw/openclaw.json`.                    |
-| `OPENCLAW_SSH_PORT`                                  | Overrides the SSH port when `sshPort` is advertised (full mode).                  |
-| `OPENCLAW_TAILNET_DNS`                               | Publishes a MagicDNS hint in TXT when mDNS full mode is enabled.                  |
-| `OPENCLAW_CLI_PATH`                                  | Overrides the advertised CLI path (full mode).                                    |
+| Setting                                              | Effect                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `openclaw plugins enable bonjour`                    | Enables the bundled LAN discovery plugin on hosts where it isn't default-enabled.    |
+| `openclaw plugins disable bonjour`                   | Disables LAN multicast advertising by disabling the bundled plugin.                  |
+| `OPENCLAW_DISABLE_BONJOUR=1` (or `true`/`yes`/`on`)  | Disables LAN multicast advertising without changing plugin config.                   |
+| `OPENCLAW_DISABLE_BONJOUR=0` (or `false`/`no`/`off`) | Forces LAN multicast advertising on, including inside detected containers.           |
+| `discovery.mdns.mode`                                | `off` \| `minimal` (default) \| `full` — see modes above.                            |
+| `gateway.bind`                                       | Controls the gateway bind mode in `~/.openclaw/openclaw.json`.                       |
+| `OPENCLAW_SSH_PORT`                                  | Overrides the SSH port when `sshPort` is advertised (full mode).                     |
+| `OPENCLAW_TAILNET_DNS`                               | Supplies the MagicDNS hint for LAN (full mode) and wide-area (any mode) TXT records. |
+| `OPENCLAW_CLI_PATH`                                  | Overrides the advertised CLI path (full mode).                                       |
 
 macOS hosts auto-start the bundled LAN discovery plugin by default. When the Bonjour plugin is enabled and `OPENCLAW_DISABLE_BONJOUR` is unset, Bonjour advertises on normal hosts and auto-disables inside detected containers (Docker, Fly.io machines, and common container runtimes).
 
