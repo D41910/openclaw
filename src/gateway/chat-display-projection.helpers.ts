@@ -172,17 +172,22 @@ export function suppressSilentAssistantMessageText(message: unknown): unknown {
     takeAssistantManagedMediaUrlsForDisplay(projected, "assistant").urls.map((url) => url.trim()),
   );
   const mediaText = (start = 0, end = Infinity) =>
-    media
-      .filter(
-        ({ url, offset }) =>
-          offset >= start &&
-          offset < end &&
-          !(isRelativeAssistantMediaReference(url) && managed.has(url.trim())),
-      )
-      .map(({ url }) => {
-        const quote = url.includes('"') ? "'" : '"';
-        return `MEDIA:${quote}${url}${quote}`;
-      })
+    [
+      start === 0 ? parsed.text : "",
+      media
+        .filter(
+          ({ url, offset }) =>
+            offset >= start &&
+            offset < end &&
+            !(isRelativeAssistantMediaReference(url) && managed.has(url.trim())),
+        )
+        .map(({ url }) => {
+          const quote = url.includes('"') ? "'" : '"';
+          return `MEDIA:${quote}${url}${quote}`;
+        })
+        .join("\n"),
+    ]
+      .filter(Boolean)
       .join("\n");
   if (typeof projected.text === "string") {
     projected.text = mediaText();

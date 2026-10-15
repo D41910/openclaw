@@ -162,7 +162,7 @@ describe("channel progress draft compositor", () => {
       const deletion = createDeferred();
       const deleteCurrent = vi.fn(() => deletion.promise);
       const { progress, update } = createProgress(
-        { commentary: true, toolProgress: true },
+        { label: false, commentary: true, toolProgress: true },
         { deleteCurrent },
       );
       await progress.pushToolProgress("Inspecting");

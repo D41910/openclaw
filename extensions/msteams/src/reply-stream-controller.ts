@@ -354,7 +354,7 @@ export function createTeamsReplyStreamController(params: {
       }
     },
 
-    beginAssistantMessage: progressDraft.beginAssistantMessage,
+    beginAssistantMessage: progressDraft.beginAssistantMessage.bind(progressDraft),
     pushItemEvent: progressDraft.pushItemEvent.bind(progressDraft),
     pushToolEvent: progressDraft.pushToolEvent,
 

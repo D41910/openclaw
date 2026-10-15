@@ -179,12 +179,27 @@ describe("control reply display projection", () => {
     expect(sanitizeChatHistoryMessage(message, 8).message).toEqual(
       assistant([textBlock(""), image]),
     );
-    expect(
-      projectChatDisplayMessages([
-        assistant("No further explanation is needed.\nNO_REPLY\nMEDIA:media://inbound/"),
-      ]),
-    ).toEqual([]);
   });
+
+  it.each(["string", "blocks", "text"] as const)(
+    "keeps media-failure notices from a silent %s message through UI normalization",
+    (shape) => {
+      const text = "No explanation needed.\nNO_REPLY\nMEDIA:media://inbound/";
+      const message =
+        shape === "text"
+          ? { role: "assistant", text }
+          : assistant(shape === "string" ? text : [textBlock(text)]);
+      const original = structuredClone(message);
+      const projected = projectChatDisplayMessages([message]);
+      expect(projected).toHaveLength(1);
+      expect(normalizeMessage(projected[0]).content).toEqual([
+        textBlock(
+          "⚠️ Media not attached: Use a public HTTPS URL without credentials or attach a local file by a safe path.",
+        ),
+      ]);
+      expect(message).toEqual(original);
+    },
+  );
 
   it.each(["[[audio_as_voice]]", "[[reply_to_current]]"])(
     "hides silent-message reasoning before a trailing %s directive",

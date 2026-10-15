@@ -646,6 +646,7 @@ export function shouldDropAssistantHistoryMessage(message: unknown): boolean {
     return false;
   }
   return (
+    !parsed.mediaFailures?.length &&
     !parsed.mediaUrls?.length &&
     !hasAssistantDisplayableNonTextContent(message) &&
     !hasTranscriptMediaFacts(entry)
