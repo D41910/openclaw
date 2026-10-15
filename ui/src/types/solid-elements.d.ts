@@ -10,7 +10,6 @@ import type WaTabPanel from "@awesome.me/webawesome/dist/components/tab-panel/ta
 import type WaTab from "@awesome.me/webawesome/dist/components/tab/tab.js";
 import type { JSX } from "@solidjs/web";
 import type { ControlUiSessionPullRequest } from "../../../src/gateway/control-ui-contract.js";
-import type { UpdateRunRecord } from "../../../src/infra/update-run-record.ts";
 import type { ControlUiSurfaceProps } from "../../../src/plugin-sdk/control-ui.js";
 import type { ClawHubRecommendation } from "../../../src/shared/clawhub-recommendations.js";
 import type { ApplicationGateway } from "../app/gateway.ts";
@@ -51,8 +50,17 @@ declare module "@solidjs/web" {
       "openclaw-chat-ci-details": HTMLAttributes<HTMLElement> & ElementProperties<ChatCiProperties>;
       "openclaw-chat-ci-automation": HTMLAttributes<HTMLElement> &
         ElementProperties<ChatCiProperties & { sessionId: string }>;
+      "openclaw-appearance-background": HTMLAttributes<HTMLElement>;
+      "openclaw-config-page": HTMLAttributes<HTMLElement>;
+      "openclaw-meeting-capture-settings": HTMLAttributes<HTMLElement>;
+      "openclaw-session-storage-settings": HTMLAttributes<HTMLElement>;
+      "openclaw-talk-settings": HTMLAttributes<HTMLElement>;
+      "openclaw-memory-settings": HTMLAttributes<HTMLElement>;
+      "openclaw-memory-memories": HTMLAttributes<HTMLElement>;
       "openclaw-modal-actions": HTMLAttributes<HTMLElement>;
       "openclaw-github-identity": HTMLAttributes<HTMLElement>;
+      "openclaw-mcp-servers-card": HTMLAttributes<HTMLElement>;
+      "openclaw-update-run-view": HTMLAttributes<HTMLElement>;
       "openclaw-plugins-page": HTMLAttributes<HTMLElement>;
       "openclaw-dashboards-page": HTMLAttributes<HTMLElement>;
       "openclaw-lobster-pet": HTMLAttributes<HTMLElement> & ElementProperties<LobsterPetProps>;
@@ -65,10 +73,6 @@ declare module "@solidjs/web" {
       // Each caller validates the picker option/callback pairing before the DOM boundary.
       "openclaw-select-picker": HTMLAttributes<HTMLElementTagNameMap["openclaw-select-picker"]> & {
         "prop:params": unknown;
-      };
-      "openclaw-update-run-view": HTMLAttributes<HTMLElement> & {
-        "prop:run": UpdateRunRecord | null;
-        "prop:connected": boolean;
       };
       "openclaw-plugin-view": HTMLAttributes<HTMLElement> &
         PluginViewProperties & {

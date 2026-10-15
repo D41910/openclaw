@@ -17,6 +17,7 @@ export function ChatPullRequestChecks(props: {
   showLabel?: boolean;
   checksState: string;
   presented: PresentationValue;
+  dismissed?: boolean;
   children: JSX.Element;
 }) {
   let details!: HTMLDetailsElement;
@@ -37,11 +38,15 @@ export function ChatPullRequestChecks(props: {
   onCleanup(() => overlay.dispose());
   const sync = () => {
     if (mounted) {
+      // Explicit Details dismissal clears intent; parking only hides the surface.
+      if (props.dismissed) {
+        details.open = false;
+      }
       overlay.request(presented() && details.open);
     }
   };
   createEffect(
-    () => [props.presented, parentPresented()] as const,
+    () => [props.presented, parentPresented(), props.dismissed] as const,
     ([value]) => {
       sync();
       if (typeof value === "boolean") {

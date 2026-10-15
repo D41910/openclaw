@@ -33,13 +33,16 @@ it.each(["props", "owner", "parked"])(
     let isPresented = true;
     let updatePresented!: (value: boolean) => void;
     let updateParked!: (value: boolean) => void;
+    let updateDismissed!: (value: boolean) => void;
     const binding = { owner, isPresented: () => isPresented };
     mounted = mountSolid(
       () => {
         const [presented, setPresented] = createSignal(true);
         const [active, setActive] = createSignal(true);
+        const [dismissed, setDismissed] = createSignal(false);
         updatePresented = setPresented;
         updateParked = setActive;
+        updateDismissed = setDismissed;
         return (
           <SolidContentPresentation value={active}>
             <style>
@@ -64,6 +67,7 @@ it.each(["props", "owner", "parked"])(
                 ]}
                 status="ready"
                 presented={mode === "props" ? presented() : binding}
+                dismissed={dismissed()}
                 onDismiss={() => {}}
               />
             </section>
@@ -72,7 +76,8 @@ it.each(["props", "owner", "parked"])(
       },
       { container },
     );
-    const draw = (presented: boolean) => {
+    const draw = (presented: boolean, dismissed = false) => {
+      updateDismissed(dismissed);
       isPresented = presented;
       if (mode === "props") {
         updatePresented(presented);
@@ -104,6 +109,16 @@ it.each(["props", "owner", "parked"])(
     summary.focus();
     await userEvent.keyboard(" ");
     await expect.element(menu).not.toBeVisible();
+    if (mode === "props") {
+      await page.elementLocator(summary).click();
+      await expect.element(menu).toBeVisible();
+      draw(false, true);
+      await expect.element(menu).not.toBeVisible();
+      expect(disclosure.open).toBe(false);
+      draw(true);
+      await expect.element(menu).not.toBeVisible();
+      expect(disclosure.open).toBe(false);
+    }
   },
 );
 

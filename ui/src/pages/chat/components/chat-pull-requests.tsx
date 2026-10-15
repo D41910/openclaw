@@ -29,6 +29,7 @@ export type ChatPullRequestsProps = {
   sessionKey?: string;
   sessionId?: string;
   presented?: PresentationValue;
+  dismissed?: boolean;
   branch?: ControlUiSessionBranch;
   /** Hides the branch row and its idle publish offer; retained publication outcomes stay visible. */
   branchDismissed?: boolean;
@@ -95,6 +96,7 @@ function Checks(props: {
   sessionKey?: string;
   sessionId?: string;
   presented?: PresentationValue;
+  dismissed?: boolean;
 }) {
   const checks = () => props.pullRequest.checks;
   const label = () => {
@@ -125,6 +127,7 @@ function Checks(props: {
       showLabel={props.compact}
       checksState={checks()?.state ?? "none"}
       presented={props.presented ?? true}
+      dismissed={props.dismissed}
     >
       <div
         class="chat-pr__checks-menu"
@@ -424,6 +427,7 @@ function PullRequestRow(props: {
           sessionKey={props.owner.sessionKey}
           sessionId={props.owner.sessionId}
           presented={props.owner.presented}
+          dismissed={props.owner.dismissed}
         />
         <Show when={props.pullRequest.state !== "open"}>
           <span class="chat-pr__state">{t(STATE_LABEL_KEYS[props.pullRequest.state])}</span>
