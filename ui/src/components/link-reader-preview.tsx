@@ -12,7 +12,7 @@ import { t } from "../lib/reactive/i18n.ts";
 import { parseGitHubLinkTarget } from "./github-link-target.ts";
 import { createPreviewRenderer } from "./link-reader-preview-root.ts";
 import { linkReaderAuthorHref, linkReaderResponseMatchesTarget } from "./link-reader-response.ts";
-import type { LinkReaderTarget } from "./link-reader-target.ts";
+import { linkReaderTargetKey, type LinkReaderTarget } from "./link-reader-target.ts";
 import { BrandIcon, Icon } from "./solid/icon.tsx";
 export type LinkPreview = LinkReaderTarget & ControlUiLinkReaderPreview;
 
@@ -60,6 +60,7 @@ export function parsePreviewResponse(
   return {
     url: value.url,
     title,
+    stale: value.stale === true,
     subtitle: readNonBlankString(value.subtitle),
     badge,
     author: readNonBlankString(value.author),
@@ -96,6 +97,69 @@ export function parsePreviewResponse(
         )
       : undefined,
   };
+}
+
+export function cachedReaderPreview(
+  cache: ReadonlyMap<string, CacheEntry>,
+  target: LinkReaderTarget,
+): CacheEntry | undefined {
+  const cached = cache.get(linkReaderTargetKey(target));
+  return cached && !cached.controller.signal.aborted && cached.expiresAt > Date.now()
+    ? cached
+    : undefined;
+}
+
+/** Detail headers share facts, but retain the preview's deliberately compact metric projection. */
+export function cacheEntryFromDocument(
+  target: LinkReaderTarget,
+  detail: ControlUiLinkReaderPreview,
+  previous: ControlUiLinkReaderPreview | undefined,
+  expiresAt: number,
+): CacheEntry & { preview: ControlUiLinkReaderPreview } {
+  const preview = parsePreviewResponse(target, {
+    ...detail,
+    metadata: previous?.metadata,
+    coAuthors: detail.coAuthors ?? previous?.coAuthors,
+    coAuthorCount: detail.coAuthorCount ?? previous?.coAuthorCount,
+  });
+  return {
+    preview,
+    promise: Promise.resolve(preview),
+    expiresAt,
+    controller: new AbortController(),
+    subscribers: new Set(),
+  };
+}
+
+/** Preserve last-known facts on refresh failure, but never promote them to fresh cache data. */
+export async function requestReaderPreview(
+  client: GatewayBrowserClient | null,
+  target: LinkReaderTarget,
+  agentId: string | undefined,
+  signal: AbortSignal,
+  isCurrent: () => boolean,
+): Promise<ControlUiLinkReaderPreview> {
+  const method = target.reader.linkReader.previewMethod;
+  if (!client || !method || !isCurrent()) {
+    throw new Error("Link preview requires an available reader");
+  }
+  const params = { ...(agentId ? { agentId } : {}), url: target.href };
+  const preview = parsePreviewResponse(target, await client.request(method, params, { signal }));
+  if (!preview.stale || !isCurrent()) {
+    return preview;
+  }
+  // One awaited refresh joins the server's stale-while-revalidate work; no polling.
+  try {
+    return parsePreviewResponse(
+      target,
+      await client.request(method, { ...params, refresh: true }, { signal }),
+    );
+  } catch (error) {
+    if (signal.aborted) {
+      throw error;
+    }
+    return preview;
+  }
 }
 
 function Avatar(props: { imageUrl?: string; keepFallback?: boolean }) {
@@ -359,9 +423,10 @@ export function renderPreview(
   afterCommit: () => void,
 ): void {
   card.dataset.loading = "false";
-  card.dataset.cached = String(seeded);
+  const cached = seeded || preview.stale === true;
+  card.dataset.cached = String(cached);
   card.dataset.state = preview.badge?.tone ?? "neutral";
-  renderPreviewContent(card, { preview, seeded, error }, afterCommit);
+  renderPreviewContent(card, { preview, seeded: cached, error }, afterCommit);
   card.setAttribute("aria-label", t("linkReader.previewAriaLabel", { title: preview.title }));
 }
 

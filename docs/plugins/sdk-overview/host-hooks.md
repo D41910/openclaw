@@ -513,16 +513,19 @@ The UI clears removed contributions and ignores stale request results.
 
 The `linkReader` fields are:
 
-| Field           | Contract                                                                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hosts`         | One to sixteen exact lowercase DNS hostnames; no scheme, wildcard, or port.                                                                                                               |
-| `pathPattern`   | An anchored JavaScript Unicode regular expression, at most 1,024 characters, matched against the URL pathname. Installed plugin code owns the pattern; keep it simple and predictable.    |
-| `detailMethod`  | Same-plugin read method receiving `{ url, agentId?, refresh? }` and returning a `ControlUiLinkReaderDocument`.                                                                            |
-| `previewMethod` | Optional same-plugin read method receiving `{ url, agentId? }` and returning a `ControlUiLinkReaderPreview` for hover or keyboard focus. Omit it for URLs that should not fetch previews. |
-| `imageMethod`   | Optional same-plugin read method receiving `{ url }` and returning `{ url, dataUrl }` for inline images.                                                                                  |
+| Field           | Contract                                                                                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hosts`         | One to sixteen exact lowercase DNS hostnames; no scheme, wildcard, or port.                                                                                                                         |
+| `pathPattern`   | An anchored JavaScript Unicode regular expression, at most 1,024 characters, matched against the URL pathname. Installed plugin code owns the pattern; keep it simple and predictable.              |
+| `detailMethod`  | Same-plugin read method receiving `{ url, agentId?, refresh? }` and returning a `ControlUiLinkReaderDocument`.                                                                                      |
+| `previewMethod` | Optional same-plugin read method receiving `{ url, agentId?, refresh? }` and returning a `ControlUiLinkReaderPreview` for hover or keyboard focus. Omit it for URLs that should not fetch previews. |
+| `imageMethod`   | Optional same-plugin read method receiving `{ url }` and returning `{ url, dataUrl }` for inline images.                                                                                            |
 
-Preview and detail requests include the selected `agentId` when available; detail
-requests also accept `refresh: true`. The receiving owner must authorize identity
+Preview and detail requests include the selected `agentId` when available and
+accept `refresh: true` to wait for fresh metadata. An explicitly `stale` preview
+gets one refresh attempt; a still-stale or failed refresh retains a labeled cached
+preview with short backoff. Fresh reader details update matching hovercards on
+the same connection and agent without waiting for their browser cache to expire. The receiving owner must authorize identity
 selection rather than treating this hint as access authority.
 
 Method names are bounded to 128 characters. Credentials in URLs and non-HTTPS

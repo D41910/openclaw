@@ -14,10 +14,10 @@ export type ControlUiLinkReaderPreviewParams = {
   url: string;
   /** Selected agent hint; the receiving owner still authorizes identity selection. */
   agentId?: string;
-};
-export type ControlUiLinkReaderDetailParams = ControlUiLinkReaderPreviewParams & {
+  /** Wait for a fresh response instead of returning last-known cached metadata. */
   refresh?: boolean;
 };
+export type ControlUiLinkReaderDetailParams = ControlUiLinkReaderPreviewParams;
 export type ControlUiLinkReaderImage = {
   /** Echo the validated requested image URL. */
   url: string;

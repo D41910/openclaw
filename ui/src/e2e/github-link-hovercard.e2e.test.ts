@@ -60,6 +60,7 @@ async function captureArtifact(target: Page | Locator, name: string): Promise<vo
 async function openPullPreviewPage(
   deferPreview = false,
   previewResponse: ControlUiLinkReaderPreview = pullPreviewResponse,
+  detailResponse?: ControlUiLinkReaderPreview & { body: string },
 ): Promise<{
   card: Locator;
   commentLink: Locator;
@@ -84,6 +85,7 @@ async function openPullPreviewPage(
     featureMethods: [...defaultControlUiFeatureMethods, "forge.preview", "forge.detail"],
     deferredMethods: deferPreview ? ["forge.preview"] : [],
     methodResponses: {
+      ...(detailResponse ? { "forge.detail": detailResponse } : {}),
       "forge.preview": {
         cases: [
           {
@@ -151,6 +153,35 @@ async function openPullPreviewPage(
 }
 
 suite.define(() => {
+  it("reconciles a cached Open preview after the reader shows Merged", async () => {
+    const { card, page, pullLink, gateway } = await openPullPreviewPage(
+      false,
+      {
+        ...pullPreviewResponse,
+        badge: { label: "Open", tone: "positive" },
+      },
+      {
+        ...pullPreviewResponse,
+        badge: { label: "Merged", tone: "accent" },
+        body: "The pull request is merged. This is the current source status.",
+      },
+    );
+    await pullLink.focus();
+    await expectText(card.locator(".link-reader-hovercard__state"), "Open");
+    await page.keyboard.press("Escape");
+    await pullLink.click();
+    const panel = page.locator("openclaw-link-reader-panel");
+    await expectText(panel.locator(".lr-state"), "Merged");
+    await page.mouse.move(1, 1);
+    await page.clock.runFor(150);
+    await pullLink.hover();
+    await page.clock.runFor(300);
+    await card.waitFor({ state: "visible" });
+    await captureArtifact(page, "status-reconciliation");
+    await expectText(card.locator(".link-reader-hovercard__state"), "Merged");
+    expect(await gateway.getRequests("forge.preview")).toHaveLength(1);
+  });
+
   it("keeps all preview metadata readable with long authors on narrow screens", async () => {
     const metadata: NonNullable<ControlUiLinkReaderPreview["metadata"]> = [
       { label: "", value: "+1077", tone: "positive" },
