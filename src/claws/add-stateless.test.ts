@@ -3,10 +3,15 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAutoCleanupTempDirTracker } from "../../test/helpers/temp-dir.js";
 import { isAgentDeletionBlocked } from "../agents/agent-lifecycle-registry.js";
+import { writeSessionEntry } from "../config/sessions/session-accessor.sqlite-entry-store.js";
 import {
   completeAgentDeletionJournalInDatabase,
   readAgentDeletionJournal,
 } from "../state/agent-deletion-journal.js";
+import {
+  closeOpenClawAgentDatabasesForTest,
+  runOpenClawAgentWriteTransaction,
+} from "../state/openclaw-agent-db.js";
 import { runOpenClawStateWriteTransaction } from "../state/openclaw-state-db.js";
 import { beginAgentDeletionJournal } from "../test-utils/agent-deletion-journal.js";
 import { applyClawAddPlanStateless } from "./add-stateless.js";
@@ -18,6 +23,7 @@ import { readClawManifestFile } from "./reader.js";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 afterEach(() => vi.unstubAllEnvs());
+afterEach(() => closeOpenClawAgentDatabasesForTest());
 
 describe("stateless Claw Add", () => {
   it("reuses a deleted agent ID without leaving its database fenced", async () => {
@@ -43,6 +49,9 @@ describe("stateless Claw Add", () => {
       completeAgentDeletionJournalInDatabase(database, deletion.agentId, deletion.operationId),
     );
     expect(isAgentDeletionBlocked(agentId)).toBe(true);
+    expect(() =>
+      runOpenClawAgentWriteTransaction(() => undefined, { agentId, env: process.env }),
+    ).toThrow(`agent ${agentId} is deleted`);
 
     let config = { agents: { entries: {} } };
     const plan = await buildGatewayClawAddPlan(source, { config, sourceMcpServers: {} });
@@ -57,6 +66,16 @@ describe("stateless Claw Add", () => {
     expect(readAgentDeletionJournal(agentId, {}, "runtime")).toBeUndefined();
     expect(isAgentDeletionBlocked(agentId)).toBe(false);
     expect(config.agents.entries).toHaveProperty(agentId);
+    expect(() =>
+      runOpenClawAgentWriteTransaction(
+        (database) =>
+          writeSessionEntry(database, `agent:${agentId}:main`, {
+            sessionId: "new-chat-after-readd",
+            updatedAt: Date.now(),
+          }),
+        { agentId, env: process.env },
+      ),
+    ).not.toThrow();
   });
 
   it("does not publish an agent while its prior deletion is unfinished", async () => {
