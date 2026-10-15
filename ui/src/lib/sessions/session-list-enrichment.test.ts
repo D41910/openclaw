@@ -259,7 +259,8 @@ it("keeps filtered pages independent and accepts full rows from a server that on
       rowsRevision: id,
     };
   });
-  const { sessions } = createSessionCapabilityHarness(request);
+  const { gateway } = createGatewayHarness(createTestGatewayClient(request));
+  const sessions = createTestSessionCapability(gateway);
   for (const query of [
     { ownerId: "ada" },
     { ownerId: "ada", offset: 200 },
