@@ -187,26 +187,27 @@ function publishRuntimeConfigSnapshot(
   sourceConfig?: OpenClawConfig,
   valuesUnchanged = false,
 ): void {
-  const revision = ++runtimeConfigSnapshotRevision;
   const configFact = prepareRuntimeConfigValueFact(config, runtimeConfigValueFact);
-  const sourceFact =
-    sourceConfig && (sourceConfig !== config || !configFact.value)
-      ? prepareRuntimeConfigValueFact(sourceConfig, runtimeSourceConfigValueFact)
-      : configFact;
-  const metadata: RuntimeConfigSnapshotMetadata = {
-    revision,
-    fingerprint: configFact.fingerprint,
-    sourceFingerprint: sourceConfig ? sourceFact.fingerprint : null,
-    updatedAtMs: Date.now(),
-  };
   const facts = configFact.facts;
   // Compare with what the previous publication recorded, since its object may have been edited
   // in place; withhold only a distinct object matching that record, or a proven no-op.
   const matchesPublished =
     runtimeConfigSnapshot !== config &&
-    runtimeConfigSnapshotMetadata?.fingerprint === metadata.fingerprint &&
+    runtimeConfigSnapshotMetadata?.fingerprint === configFact.fingerprint &&
     isDeepStrictEqual(runtimeConfigValueFact?.facts, facts);
-  const shouldEmit = !valuesUnchanged && !matchesPublished;
+  if (valuesUnchanged || matchesPublished) {
+    return;
+  }
+  const sourceFact =
+    sourceConfig && (sourceConfig !== config || !configFact.value)
+      ? prepareRuntimeConfigValueFact(sourceConfig, runtimeSourceConfigValueFact)
+      : configFact;
+  const metadata: RuntimeConfigSnapshotMetadata = {
+    revision: ++runtimeConfigSnapshotRevision,
+    fingerprint: configFact.fingerprint,
+    sourceFingerprint: sourceConfig ? sourceFact.fingerprint : null,
+    updatedAtMs: Date.now(),
+  };
   // The live previous object may have been edited in place since it was published, so it cannot
   // classify the scope either: a narrow scope read from an edited object would leave rows built
   // from the earlier publication stale. Compare both what the previous publication recorded as
@@ -215,7 +216,6 @@ function publishRuntimeConfigSnapshot(
   // alone would let the edited object select a presentation-only scope against a distinct next
   // object that carries the same facts.
   const previousEditedInPlace =
-    shouldEmit &&
     runtimeConfigSnapshot !== null &&
     runtimeConfigValueFact !== null &&
     (!matchesRuntimeConfigValueFact(runtimeConfigSnapshot, runtimeConfigValueFact) ||
@@ -223,11 +223,9 @@ function publishRuntimeConfigSnapshot(
         serializeConfigResolutionFacts(runtimeConfigSnapshot),
         runtimeConfigValueFact.facts,
       ));
-  const scope = shouldEmit
-    ? previousEditedInPlace
-      ? "config"
-      : runtimeSessionChangeScope(runtimeConfigSnapshot, config)
-    : undefined;
+  const scope = previousEditedInPlace
+    ? "config"
+    : runtimeSessionChangeScope(runtimeConfigSnapshot, config);
   prepareRuntimePluginsConfig(config);
   runtimeConfigSnapshotGeneration += 1;
   clearExecutablePathCache();
@@ -245,9 +243,7 @@ function publishRuntimeConfigSnapshot(
   runtimeConfigPublication.current = { config, revision: metadata };
   runtimeConfigValueFact = configFact;
   runtimeSourceConfigValueFact = sourceFact;
-  if (scope) {
-    sessionChanges.emit({ all: true, scope });
-  }
+  sessionChanges.emit({ all: true, scope });
 }
 
 export function registerRuntimeConfigSnapshotPreparer(

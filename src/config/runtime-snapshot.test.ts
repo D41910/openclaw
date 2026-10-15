@@ -158,7 +158,7 @@ describe("runtime snapshot state", () => {
     );
   });
 
-  it("keeps model projections across display writes but invalidates source and resolution changes", () => {
+  it("keeps model projections across display and no-op source writes but invalidates resolution changes", () => {
     const initial: OpenClawConfig = {
       agents: { entries: { main: {} }, defaults: { model: "test/first" } },
     };
@@ -185,7 +185,7 @@ describe("runtime snapshot state", () => {
       }),
     ).toBe(true);
     const sourceKey = resolveRuntimeModelConfigCacheKey(getRuntimeConfigSnapshot()!);
-    expect(sourceKey).not.toBe(modelKey);
+    expect(sourceKey).toBe(modelKey);
 
     const resolved = { ...display };
     setConfigResolutionFacts(resolved, new Set());
@@ -711,18 +711,23 @@ describe("prepared runtime snapshots", () => {
     unregister.push(sessionChanges.subscribe(changes));
     const published = initial?.() ?? withTokenFacts(tokenConfig(), ["gateway.auth.token"]);
     setRuntimeConfigSnapshot(published);
+    const metadata = getRuntimeConfigSnapshotMetadata();
     expect(changes).toHaveBeenCalledExactlyOnceWith({ all: true, scope: "config" });
     changes.mockClear();
 
     setRuntimeConfigSnapshot(next(published));
-    expect(getRuntimeConfigSnapshotMetadata()?.revision).toBe(2);
+    // a same-value publication is a full no-op; revision is internal and keys caches
+    expect(getRuntimeConfigSnapshotMetadata()?.revision).toBe(emits ? 2 : 1);
     expect(changes).toHaveBeenCalledTimes(emits ? 1 : 0);
     if (emits) {
       expect(changes).toHaveBeenCalledExactlyOnceWith({ all: true, scope: "config" });
+    } else {
+      expect(getRuntimeConfigSnapshot()).toBe(published);
+      expect(getRuntimeConfigSnapshotMetadata()).toBe(metadata);
     }
     if (followup) {
       setRuntimeConfigSnapshot(followup());
-      expect(getRuntimeConfigSnapshotMetadata()?.revision).toBe(3);
+      expect(getRuntimeConfigSnapshotMetadata()?.revision).toBe(emits ? 3 : 2);
       expect(changes).toHaveBeenCalledExactlyOnceWith({ all: true, scope: "config" });
     }
   });
@@ -736,7 +741,9 @@ describe("prepared runtime snapshots", () => {
         { gateway: { port: 18789 }, meta: { lastTouchedVersion: version } },
         unresolvedPaths,
       );
-    const advance = (sourceConfig: OpenClawConfig) => {
+    const advance = (sourceConfig: OpenClawConfig, changed = true) => {
+      const previousSource = getRuntimeConfigSourceSnapshot();
+      const previousMetadata = getRuntimeConfigSnapshotMetadata();
       changes.mockClear();
       expect(
         setRuntimeConfigSourceSnapshotIfCurrent({
@@ -744,13 +751,17 @@ describe("prepared runtime snapshots", () => {
           sourceConfig,
         }),
       ).toBe(true);
-      expect(getRuntimeConfigSourceSnapshot()).toBe(sourceConfig);
+      expect(getRuntimeConfigSourceSnapshot()).toBe(changed ? sourceConfig : previousSource);
+      if (!changed) {
+        expect(getRuntimeConfigSnapshot()).toBe(runtime);
+        expect(getRuntimeConfigSnapshotMetadata()).toBe(previousMetadata);
+      }
       return changes.mock.calls.length;
     };
     setRuntimeConfigSnapshot(runtime, source("1"));
 
     // A value-identical config.apply only restamps the source's meta, so no row can change.
-    expect(advance(source("2"))).toBe(0);
+    expect(advance(source("2"), false)).toBe(0);
     // Changed provenance is copied onto the published object in place, so rows refresh.
     expect(advance(source("3", ["gateway.port"]))).toBe(1);
     // So does an in-place edit of the published object made since its last publication.
@@ -958,9 +969,7 @@ describe("captured async runtime reads", () => {
         const next = await loadPinnedRuntimeConfigAsync(async () => ({ config: {} }), {
           capture: true,
         });
-        expect(projectConfigOntoRuntimeSourceSnapshot(next.config)).toEqual({
-          gateway: { port: 19003 },
-        });
+        expect(projectConfigOntoRuntimeSourceSnapshot(next.config)).toEqual(firstSource);
       }
     },
   );
