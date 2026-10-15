@@ -305,7 +305,6 @@ export function createSlackCommandHandler(params: {
 }) {
   const { ctx: monitor, account: startupAccount, trackEvent } = params;
   const runtime = monitor.runtime;
-  const supportsInteractiveArgMenus = typeof monitor.app.action === "function";
   const slashCommand = resolveSlackSlashCommandConfig(
     monitor.slashCommand ?? startupAccount.config.slashCommand,
   );
@@ -525,7 +524,7 @@ export function createSlackCommandHandler(params: {
         return resolvedSlashRoute;
       };
 
-      if (commandDefinition && supportsInteractiveArgMenus) {
+      if (commandDefinition) {
         const menuNeedsModelContext =
           !(commandArgs?.raw && !commandArgs.values) &&
           commandDefinition.args?.some(
@@ -842,9 +841,7 @@ export async function registerSlackMonitorSlashCommands(params: {
       ctx,
       onDrop: (reason) => runtime.log?.(`slack: drop slash payload (${reason})`),
     });
-  const supportsInteractiveArgMenus = typeof ctx.app.action === "function";
-  let supportsExternalArgMenus = typeof ctx.app.options === "function";
-
+  let supportsExternalArgMenus = true;
   const slashCommand = resolveSlackSlashCommandConfig(
     ctx.slashCommand ?? account.config.slashCommand,
   );
@@ -965,14 +962,14 @@ export async function registerSlackMonitorSlashCommands(params: {
     logVerbose("slack: slash commands disabled");
   }
 
-  if (registration.mode !== "native" || !supportsInteractiveArgMenus) {
+  if (registration.mode !== "native") {
     return registration;
   }
 
-  const registerArgOptions = () => {
-    if (typeof ctx.app.options !== "function") {
-      return;
-    }
+  // Treat external arg-menu registration as best-effort: if Bolt's app.options()
+  // throws (e.g. from receiver init issues), disable external selects and fall back
+  // to static_select/button menus instead of crashing the entire provider startup.
+  try {
     ctx.app.options(SLACK_COMMAND_ARG_ACTION_ID, async (args: SlackArgOptionsHandlerArgs) => {
       const { ack, body } = args;
       if (resolveEventScope(args) === null) {
@@ -1017,12 +1014,6 @@ export async function registerSlackMonitorSlashCommands(params: {
       );
       await ack({ options });
     });
-  };
-  // Treat external arg-menu registration as best-effort: if Bolt's app.options()
-  // throws (e.g. from receiver init issues), disable external selects and fall back
-  // to static_select/button menus instead of crashing the entire provider startup.
-  try {
-    registerArgOptions();
   } catch (err) {
     supportsExternalArgMenus = false;
     runtime.log?.(

@@ -14,6 +14,10 @@ import {
 import { afterEach, beforeEach, vi } from "vitest";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import {
+  readAmbientTranscriptWatermarkAsync,
+  resolveAmbientTranscriptWatermarkKey,
+} from "./bot-message-context.session.runtime.js";
+import {
   runTelegramChannelInboundEventWithHarness,
   type TelegramTestMiddleware,
 } from "./bot.test-helpers.js";
@@ -402,6 +406,8 @@ export const telegramBotDepsForTest: TelegramBotDeps = {
   getSessionEntryAsync: async (params) => getSessionEntryMock(params),
   resolveStorePath: resolveStorePathMock,
   readSessionUpdatedAtAsync: readSessionUpdatedAtMock,
+  readAmbientTranscriptWatermarkAsync,
+  resolveAmbientTranscriptWatermarkKey,
   recordInboundSession: recordInboundSessionMock as TelegramBotDeps["recordInboundSession"],
   recordChannelActivity: vi.fn() as TelegramBotDeps["recordChannelActivity"],
   resolveInboundLastRouteSessionKey: ({ route, sessionKey }) =>

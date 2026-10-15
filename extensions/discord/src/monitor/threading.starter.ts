@@ -38,16 +38,6 @@ export function resolveDiscordThreadChannel(params: {
     return null;
   }
   const { message, channelInfo } = params;
-  const channel = "channel" in message ? (message as { channel?: unknown }).channel : undefined;
-  const isThreadChannel =
-    channel &&
-    typeof channel === "object" &&
-    "isThread" in channel &&
-    typeof (channel as { isThread?: unknown }).isThread === "function" &&
-    (channel as { isThread: () => boolean }).isThread();
-  if (isThreadChannel) {
-    return channel as unknown as DiscordThreadChannel;
-  }
   if (!isDiscordThreadChannelType(channelInfo?.type)) {
     return null;
   }
@@ -124,9 +114,7 @@ export async function resolveDiscordThreadStarter(params: {
   try {
     return await pending;
   } finally {
-    if (IN_FLIGHT_DISCORD_THREAD_STARTERS.get(cacheKey) === pending) {
-      IN_FLIGHT_DISCORD_THREAD_STARTERS.delete(cacheKey);
-    }
+    IN_FLIGHT_DISCORD_THREAD_STARTERS.delete(cacheKey);
   }
 }
 

@@ -31,6 +31,7 @@ import {
 import { prepareSkillCommandsForAgents } from "openclaw/plugin-sdk/skill-commands-runtime";
 import { enqueueRoutedSystemEvent } from "openclaw/plugin-sdk/system-event-runtime";
 import { loadWebMedia } from "openclaw/plugin-sdk/web-media";
+import type { TelegramMessageContextSessionRuntime } from "./bot-message-context.types.js";
 import { syncTelegramMenuCommands } from "./bot-native-command-menu.js";
 import {
   deliverReplies,
@@ -61,6 +62,7 @@ type ResolveTelegramApproval = (
 type RequiredTelegramBotDeps = Pick<
   typeof telegramBotImplementations,
   | "getRuntimeConfig"
+  | "getSessionEntryAsync"
   | "resolveStorePath"
   | "readChannelAllowFromStore"
   | "upsertChannelPairingRequest"
@@ -68,7 +70,8 @@ type RequiredTelegramBotDeps = Pick<
   | "dispatchReplyWithBufferedBlockDispatcher"
   | "buildModelsProviderData"
   | "prepareSkillCommandsForAgents"
->;
+> &
+  TelegramMessageContextSessionRuntime;
 
 export type TelegramBotDeps = RequiredTelegramBotDeps &
   Partial<

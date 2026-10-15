@@ -39,14 +39,15 @@ function normalizeDiscordStickerItems(value: unknown): APIStickerItem[] {
   );
 }
 
-export function resolveDiscordMessageStickers(message: Message): APIStickerItem[] {
-  const stickers = (message as { stickers?: unknown }).stickers;
-  const normalized = normalizeDiscordStickerItems(stickers);
+export function resolveDiscordMessageStickers(message: {
+  stickers?: unknown;
+  rawData?: { sticker_items?: unknown; stickers?: unknown };
+}): APIStickerItem[] {
+  const normalized = normalizeDiscordStickerItems(message.stickers);
   if (normalized.length > 0) {
     return normalized;
   }
-  const rawData = (message as { rawData?: { sticker_items?: unknown; stickers?: unknown } })
-    .rawData;
+  const rawData = message.rawData;
   return normalizeDiscordStickerItems(rawData?.sticker_items ?? rawData?.stickers);
 }
 

@@ -14,6 +14,7 @@ import {
 import { finalizeInboundContext, resetInboundDedupe } from "openclaw/plugin-sdk/reply-runtime";
 import type { GetReplyOptions, MsgContext } from "openclaw/plugin-sdk/reply-runtime";
 import { clearRuntimeConfigSnapshot } from "openclaw/plugin-sdk/runtime-config-snapshot";
+import { getSessionEntryAsync } from "openclaw/plugin-sdk/session-store-runtime";
 import {
   closeOpenClawAgentDatabasesAsync,
   closeOpenClawStateDatabaseAsync,
@@ -21,6 +22,7 @@ import {
 } from "openclaw/plugin-sdk/sqlite-runtime-testing";
 import { afterAll, afterEach, beforeEach, vi, type Mock } from "vitest";
 import type { TelegramBotDeps } from "./bot-deps.js";
+import * as telegramSessionRuntime from "./bot-message-context.session.runtime.js";
 import { runTelegramChannelInboundEventWithHarness } from "./bot.test-helpers.js";
 import { setTelegramRuntime } from "./runtime.js";
 import { resetTelegramTopicNameCacheForTest } from "./runtime.test-support.js";
@@ -213,6 +215,9 @@ vi.mock("openclaw/plugin-sdk/channel-inbound", async (importOriginal) => {
 });
 
 export const telegramBotDepsForTest: TelegramBotDeps = {
+  ...telegramSessionRuntime,
+  getSessionEntryAsync,
+  readSessionUpdatedAtAsync: async () => undefined,
   getRuntimeConfig: defaultRuntimeConfig,
   resolveStorePath: vi.fn(
     (storePath?: string) => storePath ?? path.join(ensureMediaHarnessStoreRoot(), "sessions.json"),
@@ -330,18 +335,6 @@ vi.mock("openclaw/plugin-sdk/media-runtime", async (importOriginal) => ({
     );
   },
 }));
-
-vi.doMock("./bot-message-context.session.runtime.js", async () => {
-  const actual = await vi.importActual<typeof import("./bot-message-context.session.runtime.js")>(
-    "./bot-message-context.session.runtime.js",
-  );
-  return {
-    ...actual,
-    readSessionUpdatedAtAsync: async () => undefined,
-    resolveStorePath: (storePath?: string) =>
-      storePath ?? path.join(ensureMediaHarnessStoreRoot(), "sessions.json"),
-  };
-});
 
 vi.mock("./bot-handlers.agent.runtime.js", () => ({
   resolveAgentDir: vi.fn(() => "/tmp/agent"),
