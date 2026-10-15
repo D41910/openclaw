@@ -423,13 +423,27 @@ function dispatchDetachedCronNotification(params: {
 
 /** Transports a scheduler-authorized cron failure alert. */
 export async function sendGatewayCronFailureAlert(params: CronFailureAlertParams): Promise<void> {
-  await runWithGatewayIndependentRootWorkContinuation(async () => {
-    const settled = await sendGatewayCronFailureAlertUnderAdmission(params);
-    await params.onDeliverySettled(settled.outcome);
-    if (settled.kind === "failed") {
-      throw settled.error;
+  let enteredAdmission = false;
+  try {
+    await runWithGatewayIndependentRootWorkContinuation(async () => {
+      enteredAdmission = true;
+      const settled = await sendGatewayCronFailureAlertUnderAdmission(params);
+      await params.onDeliverySettled(settled.outcome);
+      if (settled.kind === "failed") {
+        throw settled.error;
+      }
+    }, "cron:failure-alert");
+  } catch (error) {
+    // Admission refusal proves no transport ran; admitted sends own their settlement.
+    if (!enteredAdmission) {
+      await params.onDeliverySettled({
+        delivered: false,
+        status: "not-delivered",
+        error: formatErrorMessage(error),
+      });
     }
-  }, "cron:failure-alert");
+    throw error;
+  }
 }
 
 type FailureAlertTransportResult =
