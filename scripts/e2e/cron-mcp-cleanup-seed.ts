@@ -2,6 +2,10 @@ import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import {
+  applyAuthProfileConfig,
+  upsertApiKeyProfileAsync,
+} from "../../dist/plugin-sdk/provider-auth.js";
 import { applyDockerOpenAiProviderConfig, type OpenClawConfig } from "./docker-openai-seed.ts";
 
 const require = createRequire(import.meta.url);
@@ -67,7 +71,9 @@ async function main() {
   await fs.rm(exitPath, { force: true });
   await writeProbeServer({ serverPath, pidPath, pidsPath, exitPath });
 
-  const seededConfig = applyDockerOpenAiProviderConfig(
+  const profileId = "openai:cron-mcp-cleanup";
+  const apiKey = "sk-docker-cron-mcp-cleanup-test";
+  let seededConfig = applyDockerOpenAiProviderConfig(
     {
       gateway: {
         controlUi: {
@@ -112,8 +118,28 @@ async function main() {
         },
       },
     } satisfies OpenClawConfig,
-    "sk-docker-cron-mcp-cleanup-test",
+    apiKey,
   );
+  seededConfig = applyAuthProfileConfig(seededConfig, {
+    profileId,
+    provider: "openai",
+    mode: "api_key",
+  });
+  const provider = seededConfig.models?.providers?.openai;
+  const defaults = seededConfig.agents?.defaults;
+  if (!provider || !defaults) {
+    throw new Error("failed to seed cron cleanup inference account");
+  }
+  // Cron captures a durable account owner; a provider-config key cannot supply one.
+  delete provider.apiKey;
+  defaults.model = { primary: `openai/gpt-5.6-luna@${profileId}` };
+  await upsertApiKeyProfileAsync({
+    provider: "openai",
+    profileId,
+    input: apiKey,
+    agentDir: path.join(stateDir, "agents", "main", "agent"),
+    options: { config: seededConfig, secretInputMode: "plaintext" },
+  });
 
   await fs.writeFile(configPath, `${JSON.stringify(seededConfig, null, 2)}\n`, "utf-8");
 
