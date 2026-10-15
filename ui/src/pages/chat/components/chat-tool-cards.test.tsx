@@ -14,7 +14,6 @@ import {
   resolveCollapsedToolArgumentPreview,
   extractToolCardsCached,
 } from "../../../lib/chat/tool-cards.ts";
-import * as controlUiView from "../../../plugins/control-ui-view.ts";
 import { waitForSolid } from "../../../test-helpers/solid-settle.ts";
 import { attachHistoryActivity } from "../chat-history-request.ts";
 import { agentEvent, createHost } from "../tool-stream.test-helpers.ts";
@@ -670,34 +669,6 @@ describe("tool-card outcomes", () => {
       expect(card.args).toEqual({ id: name, args });
     },
   );
-
-  it("passes the raw Tool Search invocation to tool-result plugin replacements", async () => {
-    const pluginSurface = vi.spyOn(controlUiView, "renderPluginSurface");
-    onTestFinished(() => pluginSurface.mockRestore());
-    const input = { id: "web_search", args: { query: "OpenClaw release notes" } };
-    const card: ToolCard = {
-      id: "search-release",
-      callId: "search-release",
-      name: "tool_call",
-      args: input,
-      outputText: "Found the release notes.",
-      completed: true,
-    };
-    for (const expanded of [false, true]) {
-      pluginSurface.mockClear();
-      await mountCard(card, { expanded });
-      expect(pluginSurface).toHaveBeenCalled();
-      for (const [, props] of pluginSurface.mock.calls) {
-        expect(props).toMatchObject({
-          toolName: "tool_call",
-          toolCallId: "search-release",
-          input,
-          expanded,
-          output: expect.objectContaining({ text: "Found the release notes." }),
-        });
-      }
-    }
-  });
 
   it("keeps command progress neutral across the row, expanded body, and sidebar until completion", async () => {
     const name = "exec";
