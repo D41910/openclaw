@@ -216,7 +216,7 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
     },
   );
 
-  it("keeps a saved Models route selection after initial readiness and catalog refresh", async () => {
+  it("keeps a Models route selection saved before the initial provider details arrive", async () => {
     const context = await browser.newContext({ locale: "en-US", serviceWorkers: "block" });
     const page = await context.newPage();
     const initial = { agents: { defaults: { model: "fixture/initial" } } };
@@ -268,10 +268,6 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
       const defaults = page.locator(".model-providers__defaults");
       const picker = defaults.locator("openclaw-select-picker").first();
       const trigger = picker.locator(".picker-select__trigger");
-      await expect.poll(() => page.locator(".model-providers__loading").isVisible()).toBe(true);
-      expect(await picker.count()).toBe(0);
-      await gateway.resolveDeferred("models.authStatus");
-      await waitForControlUiRoute(page, { routeId: "model-providers" });
       await trigger.click();
       await picker.locator('[role="option"][data-value="fixture/chosen"]').click();
       expect(requestRaw(await gateway.waitForRequest("config.patch"))).toMatchObject({
@@ -293,6 +289,7 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
       await expect
         .poll(() => picker.locator('[role="option"][data-value="fixture/added"]').isVisible())
         .toBe(true);
+      await gateway.resolveDeferred("models.authStatus");
       await waitForControlUiRoute(page, { routeId: "model-providers" });
       expect(await pickerValue(picker)).toBe("fixture/chosen");
       expect(await picker.locator('[role="option"][data-value="fixture/added"]').isVisible()).toBe(
@@ -303,7 +300,7 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
     }
   });
 
-  it("keeps the current Models catalog after initial readiness and later invalidation", async () => {
+  it("keeps the current Models catalog after late route data and invalidation", async () => {
     const context = await browser.newContext({ locale: "en-US", serviceWorkers: "block" });
     const page = await context.newPage();
     const initial = { agents: { defaults: { model: "fixture/initial" } } };
@@ -359,10 +356,6 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
       const defaults = page.locator(".model-providers__defaults");
       const picker = defaults.locator("openclaw-select-picker").first();
       const trigger = picker.locator(".picker-select__trigger");
-      await expect.poll(() => page.locator(".model-providers__loading").isVisible()).toBe(true);
-      expect(await picker.count()).toBe(0);
-      await gateway.resolveDeferred("models.authStatus");
-      await waitForControlUiRoute(page, { routeId: "model-providers" });
       await trigger.click();
       await picker.locator('[role="option"][data-value="fixture/chosen"]').click();
       expect(requestRaw(await gateway.waitForRequest("config.patch"))).toMatchObject({
@@ -384,6 +377,7 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
       await expect
         .poll(() => picker.locator('[role="option"][data-value="fixture/added"]').isVisible())
         .toBe(true);
+      await gateway.resolveDeferred("models.authStatus");
       await waitForControlUiRoute(page, { routeId: "model-providers" });
       expect(await pickerValue(picker)).toBe("fixture/chosen");
       expect(await picker.locator('[role="option"][data-value="fixture/added"]').isVisible()).toBe(
@@ -572,7 +566,7 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
   });
 
   it.each(["snapshot", "ordinary"] as const)(
-    "keeps %s catalog publication current after initial Models readiness and overlapping reads",
+    "opens the Models route from %s catalog publication and refreshes after overlapping reads",
     async (publicationKind) => {
       const context = await browser.newContext({ locale: "en-US", serviceWorkers: "block" });
       const page = await context.newPage();
@@ -627,10 +621,6 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
         }
         const picker = page.locator(".model-providers__defaults openclaw-select-picker").first();
         const trigger = picker.locator(".picker-select__trigger");
-        await expect.poll(() => page.locator(".model-providers__loading").isVisible()).toBe(true);
-        expect(await picker.count()).toBe(0);
-        await gateway.resolveDeferred("models.authStatus");
-        await waitForControlUiRoute(page, { routeId: "model-providers" });
         await expect.poll(() => trigger.isEnabled()).toBe(true);
         await trigger.click();
         const preparedRow = picker.locator('[role="option"][data-value="fixture/prepared"]');
@@ -639,11 +629,14 @@ describeControlUiE2e("Control UI progressive Model Providers loading", () => {
         expect(await preparedRow.isEnabled()).toBe(true);
         expect(await routeCatalogRequests()).toHaveLength(1);
 
+        await gateway.resolveDeferred("models.authStatus");
+        await waitForControlUiRoute(page, { routeId: "model-providers" });
+        expect(await trigger.getAttribute("aria-expanded")).toBe("true");
+
         if (publicationKind === "snapshot") {
           await gateway.resolveDeferred("models.list", { models: [older] });
         }
         await expect.poll(() => preparedRow.isVisible()).toBe(true);
-        expect(await trigger.getAttribute("aria-expanded")).toBe("true");
 
         const beforeRefresh = await gateway.deferNext("models.list", { refresh: true });
         await page.locator(".model-providers__refresh-button").click();
