@@ -243,6 +243,11 @@ describe("DebugOverlay", () => {
 
     try {
       await openOverlay(overlay);
+      await waitForSolid(() =>
+        expect(normalizedText(overlay.querySelector(".gateway-vital--cpu"))).toContain(
+          "1.10 cores",
+        ),
+      );
 
       const vitalUpdated = () => updateOverlayVitals(overlay);
       await vitalUpdated();
