@@ -101,6 +101,7 @@ type SessionEntryPatchStep = (
       recoverySourceRunId?: string;
       executionRunId: string;
       executionGeneration: string;
+      terminalRunId?: string;
     }
   | {
       kind: "compaction-accounting";
@@ -323,7 +324,9 @@ function reduceSessionEntryPatch(
           entry,
           recordTerminalSource: true,
           terminalSourceRunId: operation.recoverySourceRunId,
-          terminalRunId: entry.restartRecoveryDeliveryRunId ? undefined : operation.executionRunId,
+          terminalRunId:
+            operation.terminalRunId ??
+            (entry.restartRecoveryDeliveryRunId ? undefined : operation.executionRunId),
         }),
         restartRecoveryRuns: remainingRuns?.length ? remainingRuns : undefined,
         ...(terminalPending ? { pendingFinalDelivery: undefined } : {}),
