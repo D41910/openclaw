@@ -1,15 +1,14 @@
 /* @vitest-environment jsdom */
-import { nothing, render } from "lit";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../test/helpers/promise.js";
 import type { GatewayBrowserClient, GatewayEventFrame } from "../../api/gateway.ts";
 import { flush, waitForSolid } from "../../test-helpers/solid-settle.ts";
 import {
   createComposerContainer,
   createComposerProps,
+  renderComposerInto,
   resetComposerFixture,
 } from "./chat-composer.test-support.ts";
-import { renderChatComposer } from "./components/chat-composer-render.test-support.ts";
 
 afterEach(() => resetComposerFixture());
 const suggestion = "Show me the smaller implementation first.";
@@ -46,14 +45,8 @@ function fixture(
     },
   });
   const container = document.body.appendChild(createComposerContainer());
-  const paint = () => {
-    render(renderChatComposer(props), container);
-    flush();
-  };
+  const paint = () => renderComposerInto(container, props);
   props.onRequestUpdate = paint;
-  onTestFinished(() => {
-    render(nothing, container);
-  });
   paint();
   const input = container.querySelector("textarea")!;
   const finish = (runId = "run-a") =>
