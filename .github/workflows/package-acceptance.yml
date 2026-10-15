@@ -441,7 +441,11 @@ env:
 jobs:
   resolve_package:
     name: Resolve package candidate
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('ubuntu-24.04')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('ubuntu-24.04'))) || ('ubuntu-24.04')) }}
+    runs-on: &linux_ubuntu_runner >-
+      ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]',
+      toJSON(inputs.crabbox_runner_label), toJSON(('ubuntu-24.04')))) || (inputs.runner_group != '' &&
+      fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('ubuntu-24.04'))) ||
+      ('ubuntu-24.04')) }}
     timeout-minutes: 60
     outputs:
       tooling_sha: ${{ steps.tooling.outputs.sha }}
@@ -1184,7 +1188,7 @@ jobs:
   package_integrity:
     name: Package integrity
     needs: resolve_package
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('ubuntu-24.04')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('ubuntu-24.04'))) || ('ubuntu-24.04')) }}
+    runs-on: *linux_ubuntu_runner
     timeout-minutes: 10
     steps:
       - name: Checkout package workflow ref
@@ -1229,7 +1233,7 @@ jobs:
     name: npm 12 install.sh acceptance
     needs: [resolve_package, package_integrity]
     if: inputs.suite_profile != 'telegram'
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('ubuntu-24.04')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('ubuntu-24.04'))) || ('ubuntu-24.04')) }}
+    runs-on: *linux_ubuntu_runner
     timeout-minutes: 15
     permissions:
       actions: read
@@ -1481,7 +1485,7 @@ jobs:
         package_telegram,
       ]
     if: always()
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('ubuntu-24.04')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('ubuntu-24.04'))) || ('ubuntu-24.04')) }}
+    runs-on: *linux_ubuntu_runner
     timeout-minutes: 5
     steps:
       - name: Verify package acceptance results

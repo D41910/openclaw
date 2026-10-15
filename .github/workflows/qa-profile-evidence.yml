@@ -122,7 +122,11 @@ env:
 jobs:
   authorize_actor:
     name: Authorize workflow actor
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('blacksmith-8vcpu-ubuntu-2404')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('blacksmith-8vcpu-ubuntu-2404'))) || ('blacksmith-8vcpu-ubuntu-2404')) }}
+    runs-on: &linux_8cpu_runner >-
+      ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]',
+      toJSON(inputs.crabbox_runner_label), toJSON(('blacksmith-8vcpu-ubuntu-2404')))) || (inputs.runner_group
+      != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group),
+      toJSON('blacksmith-8vcpu-ubuntu-2404'))) || ('blacksmith-8vcpu-ubuntu-2404')) }}
     outputs:
       authorized: ${{ steps.permission.outputs.authorized }}
     steps:
@@ -172,7 +176,7 @@ jobs:
     name: Validate selected ref
     needs: authorize_actor
     if: needs.authorize_actor.outputs.authorized == 'true'
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('blacksmith-8vcpu-ubuntu-2404')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('blacksmith-8vcpu-ubuntu-2404'))) || ('blacksmith-8vcpu-ubuntu-2404')) }}
+    runs-on: *linux_8cpu_runner
     outputs:
       protocol_base_revision: ${{ steps.validate.outputs.protocol_base_revision }}
       selected_revision: ${{ steps.validate.outputs.selected_revision }}
@@ -310,7 +314,7 @@ jobs:
   plan_qa_profile:
     name: Plan QA profile shards
     needs: validate_selected_ref
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('blacksmith-8vcpu-ubuntu-2404')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('blacksmith-8vcpu-ubuntu-2404'))) || ('blacksmith-8vcpu-ubuntu-2404')) }}
+    runs-on: *linux_8cpu_runner
     # Selected-revision code requires the protected QA environment before runner allocation.
     environment: qa-live-shared
     outputs:
@@ -477,7 +481,7 @@ jobs:
   run_qa_profile_shard:
     name: Generate QA profile evidence (${{ matrix.id }})
     needs: [validate_selected_ref, plan_qa_profile]
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('blacksmith-8vcpu-ubuntu-2404')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('blacksmith-8vcpu-ubuntu-2404'))) || ('blacksmith-8vcpu-ubuntu-2404')) }}
+    runs-on: *linux_8cpu_runner
     timeout-minutes: 150
     permissions:
       contents: read
@@ -796,7 +800,7 @@ jobs:
     name: Aggregate QA profile evidence
     needs: [validate_selected_ref, plan_qa_profile, run_qa_profile_shard]
     if: ${{ always() && needs.validate_selected_ref.result == 'success' && needs.plan_qa_profile.result == 'success' }}
-    runs-on: ${{ inputs.crabbox_runner_label && fromJSON(format('["self-hosted","crabbox",{0},{1}]', toJSON(inputs.crabbox_runner_label), toJSON(('blacksmith-8vcpu-ubuntu-2404')))) || (inputs.runner_group != '' && fromJSON(format('{{"group":{0},"labels":{1}}}', toJSON(inputs.runner_group), toJSON('blacksmith-8vcpu-ubuntu-2404'))) || ('blacksmith-8vcpu-ubuntu-2404')) }}
+    runs-on: *linux_8cpu_runner
     # Selected-revision code requires the protected QA environment before runner allocation.
     environment: qa-live-shared
     timeout-minutes: 30
