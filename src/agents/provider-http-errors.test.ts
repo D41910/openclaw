@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   assertOkOrThrowProviderError,
   assertOkOrThrowHttpError,
+  createProviderCredentialMatcher,
   createProviderErrorTextRedactor,
   createProviderHttpError,
   extractProviderErrorDetail,
@@ -37,6 +38,27 @@ function createStreamingResponse(contentType: string, byte = 97) {
 }
 
 describe("provider error utils", () => {
+  it("matches only active credential values, including the redaction marker itself", () => {
+    const empty = createProviderCredentialMatcher({
+      headers: new Headers({ Accept: "application/json" }),
+      defaultAuthHeader: "Authorization",
+    });
+    expect(empty("Bearer demo application/json")).toBe(false);
+    const active = createProviderCredentialMatcher({
+      headers: new Headers({ Authorization: "Bearer ***" }),
+      defaultAuthHeader: "Authorization",
+      defaultAuthPrefix: "Bearer ",
+    });
+    expect(active("***")).toBe(true);
+    expect(active("Bearer demo")).toBe(false);
+    const basic = createProviderCredentialMatcher({
+      headers: new Headers({
+        Authorization: "Basic " + Buffer.from("fixture-user:fixture-password").toString("base64"),
+      }),
+      defaultAuthHeader: "Authorization",
+    });
+    expect(basic("fixture-password")).toBe(true);
+  });
   it("redacts canonical JSON and URL encodings after removing a custom auth prefix", () => {
     const value = 'synthetic-"quoted-token';
     const redact = createProviderErrorTextRedactor({

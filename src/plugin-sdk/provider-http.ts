@@ -10,7 +10,7 @@ export {
   assertOkOrThrowHttpError,
   assertOkOrThrowProviderError,
   assertProviderBinaryResponseContent,
-  createProviderErrorTextRedactor,
+  createProviderCredentialMatcher,
   createProviderHttpError,
   ProviderHttpError,
   extractProviderErrorDetail,

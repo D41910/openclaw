@@ -81,6 +81,7 @@ const received: Array<{ url?: string; host?: string; authorization?: string; bod
 let redirect: string | undefined;
 let responseModel: string | undefined;
 let escapeResponse = false;
+let responsePayload: object | undefined;
 let fixture: Awaited<ReturnType<typeof listen<ReturnType<typeof createServer>>>>;
 let baseUrl: string;
 let pinnedAddress = "10.123.0.5";
@@ -104,7 +105,9 @@ beforeAll(async () => {
             response.end();
           } else {
             response.setHeader("content-type", "application/json");
-            const body = JSON.stringify({ ...answer, model: responseModel ?? answer.model });
+            const body = JSON.stringify(
+              responsePayload ?? { ...answer, model: responseModel ?? answer.model },
+            );
             response.end(
               escapeResponse ? body.replaceAll("-", String.fromCharCode(92) + "u002d") : body,
             );
@@ -133,6 +136,7 @@ beforeEach(() => {
   redirect = undefined;
   responseModel = undefined;
   escapeResponse = false;
+  responsePayload = undefined;
   pinnedAddress = "10.123.0.5";
   vi.mocked(lookup).mockReset();
   vi.mocked(lookup).mockResolvedValue([{ address: "10.123.0.5", family: 4 }]);
@@ -452,5 +456,35 @@ it.each(["authorization-bearer", "header"] as const)(
     ).evaluate(batch, context());
     expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
     expect(JSON.stringify(result)).not.toContain(responseModel);
+  },
+);
+
+it.each([false, true])(
+  "preserves harmless rubric text with authenticated=%s",
+  async (authenticated) => {
+    const score = {
+      state: "synthetic",
+      questions: { q: { type: "score" as const, criteria: ["Bearer demo", "Routine"] } },
+    };
+    responsePayload = {
+      model: "nemotron-deciffusion",
+      answers: {
+        q: {
+          type: "score",
+          score: 0,
+          confidence: 1,
+          probabilities: { 0: 1, 1: 0 },
+          legend: { 0: "Bearer demo", 1: "Routine" },
+        },
+      },
+      usage: { input_tokens: 8, output_tokens: 1 },
+    };
+    const result = await provider(
+      settings(authenticated ? { apiKey: "synthetic-server-key" } : {}),
+    ).evaluate(score, context());
+    expect(result).toMatchObject({
+      status: "ok",
+      result: { answers: { q: { type: "score", score: 0, probabilities: [1, 0] } } },
+    });
   },
 );

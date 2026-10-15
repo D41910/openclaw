@@ -14,6 +14,8 @@ import { parseRetryAfterHeaderSeconds } from "../infra/retry-after.js";
 import { redactSensitiveText, redactToolPayloadText } from "../logging/redact.js";
 import type { ModelProviderRequestTransportOverrides } from "./provider-request-config.types.js";
 import {
+  collectRequestHeaderSecretValues,
+  createExactSecretValueMatcher,
   redactExactSecretValues,
   redactProviderResponseErrorText,
 } from "./provider-request-header-redaction.js";
@@ -35,32 +37,55 @@ function extractHeaderCredential(headers: Headers, headerName: string, prefix = 
   return prefix && value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 
-function extractAuthorizationPayload(headers: Headers): string {
-  const value = headers.get("Authorization") ?? "";
-  const separator = value.search(/\s/u);
-  return separator === -1 ? value : value.slice(separator).trimStart();
-}
-
-/** Builds a redactor for response text that may reflect the request's active credential. */
-export function createProviderErrorTextRedactor(params: {
+type ProviderRequestCredentialContext = {
   headers: Headers;
   request?: ModelProviderRequestTransportOverrides;
   defaultAuthHeader: string;
   defaultAuthPrefix?: string;
-}): (text: string, context?: ProviderErrorTextRedactionContext) => string {
+};
+
+function collectProviderRequestCredentialValues(
+  params: ProviderRequestCredentialContext,
+): string[] {
   const auth = params.request?.auth;
-  const credentials = [
+  const headers = new Headers();
+  const names = new Set(
+    [
+      params.defaultAuthHeader,
+      "Authorization",
+      "Proxy-Authorization",
+      ...(auth?.mode === "header" ? [auth.headerName] : []),
+    ].map((name) => name.toLowerCase()),
+  );
+  for (const name of names) {
+    const value = params.headers.get(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  }
+  return [
+    ...collectRequestHeaderSecretValues(headers),
     extractHeaderCredential(params.headers, params.defaultAuthHeader, params.defaultAuthPrefix),
     auth?.mode === "header"
       ? extractHeaderCredential(params.headers, auth.headerName, auth.prefix ?? "")
-      : auth?.mode === "authorization-bearer"
-        ? extractHeaderCredential(params.headers, "Authorization", "Bearer ")
-        : "",
-    extractAuthorizationPayload(params.headers),
+      : "",
   ]
     .filter(Boolean)
     .toSorted((left, right) => right.length - left.length);
+}
 
+/** Successful provider results must match actual credentials, not diagnostic redaction patterns. */
+export function createProviderCredentialMatcher(
+  params: ProviderRequestCredentialContext,
+): (text: string) => boolean {
+  return createExactSecretValueMatcher(collectProviderRequestCredentialValues(params));
+}
+
+/** Builds a redactor for response text that may reflect the request's active credential. */
+export function createProviderErrorTextRedactor(
+  params: ProviderRequestCredentialContext,
+): (text: string, context?: ProviderErrorTextRedactionContext) => string {
+  const credentials = collectProviderRequestCredentialValues(params);
   return (text, context) => {
     const withoutActiveCredential = redactExactSecretValues(
       text,

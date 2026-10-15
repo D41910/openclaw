@@ -51,6 +51,18 @@ function normalizePercentEscapeHexCase(value: string): string {
   return value.replace(/%[0-9A-F]{1,2}/giu, (escape) => escape.toUpperCase());
 }
 
+/** Match only active values, without diagnostic patterns or replacement-string ambiguity. */
+export function createExactSecretValueMatcher(
+  values: readonly string[],
+): (text: string) => boolean {
+  const representations = collectSecretRepresentations(values);
+  if (representations.length === 0) {
+    return () => false;
+  }
+  const pattern = new RegExp(representations.map(secretRepresentationPattern).join("|"), "u");
+  return (text) => pattern.test(text);
+}
+
 export function redactExactSecretValues(
   text: string,
   values: readonly string[],
@@ -90,7 +102,7 @@ export function redactExactSecretValues(
     : `${redacted.slice(0, -longestPartialSuffix)}${REDACTED_SECRET}`;
 }
 
-function collectRequestHeaderSecretValues(headers: HeadersInit): string[] {
+export function collectRequestHeaderSecretValues(headers: HeadersInit): string[] {
   // Arbitrary configured headers can carry credentials. Authorization intermediaries
   // can also reflect the credential without its scheme, so redact both scoped forms.
   const entries =

@@ -5,8 +5,7 @@ import {
   withTrustedEnvProxyGuardedFetchMode,
 } from "openclaw/plugin-sdk/fetch-runtime";
 import {
-  createProviderErrorTextRedactor,
-  redactProviderResponseErrorText,
+  createProviderCredentialMatcher,
   resolveProviderHttpRequestConfigWithOriginTrust,
   resolveProviderTransportSsrFPolicy,
   sanitizeConfiguredModelProviderRequest,
@@ -148,7 +147,7 @@ export async function requestEvaluation(params: {
       "credentials-unavailable",
     );
   }
-  const redactAuth = createProviderErrorTextRedactor({
+  const reflectsCredential = createProviderCredentialMatcher({
     headers: resolved.headers,
     request: configuredRequest,
     defaultAuthHeader: "Authorization",
@@ -244,9 +243,6 @@ export async function requestEvaluation(params: {
       // JSON escapes can conceal a credential in raw text; check its decoded
       // representation too. Custom header prefixes may be absent in reflections.
       const decodedText = JSON.stringify(payload);
-      const reflectsCredential = (value: string) =>
-        redactProviderResponseErrorText(value, resolved.headers) !== value ||
-        redactAuth(value) !== value;
       if (reflectsCredential(text) || (decodedText !== text && reflectsCredential(decodedText))) {
         throw new EvaluationError(
           "TypeSafe evaluation failed or returned an invalid response.",
