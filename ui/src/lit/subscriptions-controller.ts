@@ -1,23 +1,23 @@
-import type { SolidController, SolidControllerHost } from "./solid-controller-host.ts";
+import type { ReactiveController, ReactiveControllerHost } from "lit";
 
 type Cleanup = () => void;
 type Listener = () => void;
 
 /** Keeps existing synchronous page controllers alive while Solid owns their DOM. */
-export class ControllerHost implements SolidControllerHost {
-  private readonly controllers = new Set<SolidController>();
+export class ControllerHost implements ReactiveControllerHost {
+  private readonly controllers = new Set<ReactiveController>();
   private readonly listeners = new Set<Listener>();
   private pendingUpdate: Promise<boolean> | null = null;
   isConnected = false;
 
-  addController(controller: SolidController): void {
+  addController(controller: ReactiveController): void {
     this.controllers.add(controller);
     if (this.isConnected) {
       controller.hostConnected?.();
     }
   }
 
-  removeController(controller: SolidController): void {
+  removeController(controller: ReactiveController): void {
     this.controllers.delete(controller);
   }
 
@@ -113,11 +113,11 @@ type SourceEntry<T> = {
  * Source identity is checked before every render and all cleanup follows the
  * host lifecycle, so consumers do not need connected/updated retry loops.
  */
-export class SubscriptionsController implements SolidController {
+export class SubscriptionsController implements ReactiveController {
   private readonly entries: SourceEntry<unknown>[] = [];
   private connected = false;
 
-  constructor(private readonly host: SolidControllerHost) {
+  constructor(private readonly host: ReactiveControllerHost) {
     host.addController(this);
   }
 
