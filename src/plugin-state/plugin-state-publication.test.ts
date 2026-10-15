@@ -59,40 +59,33 @@ function observe() {
 describe("plugin state committed facts", () => {
   it("shares committed facts and invalidation across SQLite text-key aliases", async () => {
     await withOpenClawTestState({ label: "plugin-state-key-aliases" }, async ({ env }) => {
-      const store = createPluginStateKeyedStore<{ count: number }>("receipt-test", {
+      const store = createPluginStateKeyedStore<number>("receipt-test", {
         namespace: "aliases",
         maxEntries: 10,
         env,
       });
       for (const rawKey of ["high-\ud800", "low-\udc00"]) {
         const normalizedKey = rawKey.startsWith("high") ? "high-\ufffd" : "low-\ufffd";
-        await store.register(rawKey, { count: 1 });
+        await store.register(rawKey, 1);
         const raw = await capturePluginStateReadDependencies(() => store.observe(rawKey));
         const normalized = await capturePluginStateReadDependencies(() =>
           store.observe(normalizedKey),
         );
         const unrelated = await capturePluginStateReadDependencies(() => store.observe("other"));
-        const dispatch = vi.spyOn(stateWorker, "runOpenClawStateWorkerOperation");
-        const read = async (count: number | undefined) => {
-          const expected = count === undefined ? undefined : { count };
-          dispatch.mockClear();
+        const read = async (expected: number | undefined) => {
           for (const key of [rawKey, normalizedKey]) {
-            expect(await store.lookup(key)).toEqual(expected);
-            expect((await store.observe(key)).value).toEqual(expected);
+            expect(await store.lookup(key)).toBe(expected);
+            expect((await store.observe(key)).value).toBe(expected);
           }
           expect(await store.lookupMany([rawKey, normalizedKey])).toEqual([
             { ok: true, value: expected },
             { ok: true, value: expected },
           ]);
-          expect(dispatch).not.toHaveBeenCalled();
         };
         try {
-          expect(raw.value.value).toEqual({ count: 1 });
-          expect(normalized.value.value).toEqual({ count: 1 });
-          const first = await store.lookup(rawKey);
-          first!.count = 99;
-          await read(1);
-          await store.register(rawKey, { count: 2 });
+          expect(raw.value.value).toBe(1);
+          expect(normalized.value.value).toBe(1);
+          await store.register(rawKey, 2);
           await read(2);
           expect(raw.isCurrent()).toBe(false);
           expect(normalized.isCurrent()).toBe(false);
@@ -100,7 +93,7 @@ describe("plugin state committed facts", () => {
           await store.delete(normalizedKey);
           await read(undefined);
           expect(await store.entries()).toEqual([]);
-          await store.register(normalizedKey, { count: 3 });
+          await store.register(normalizedKey, 3);
           await read(3);
           const observation = await store.observe(rawKey);
           const alias = await store.observe(normalizedKey);
@@ -214,6 +207,58 @@ describe("plugin state committed facts", () => {
       }
       expect(await store.entries()).toEqual([]);
       expect(dispatch).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("serves warm keyed reads from committed receipts across worker and native writes", async () => {
+    await withOpenClawTestState({ label: "plugin-state-keyed-read-receipts" }, async ({ env }) => {
+      const options = { namespace: "receipts", maxEntries: 10, env };
+      const store = createPluginStateKeyedStore<{ count: number }>("receipt-test", options);
+      const native = createPluginStateSyncKeyedStore<{ count: number }>("receipt-test", options);
+      await store.register("key", { count: 1 });
+      const dispatch = vi.spyOn(stateWorker, "runOpenClawStateWorkerOperation");
+      const read = async (expected: { count: number } | undefined) => {
+        dispatch.mockClear();
+        expect(await store.lookup("key")).toEqual(expected);
+        expect(await store.lookupMany(["key", "key"])).toEqual([
+          { ok: true, value: expected },
+          { ok: true, value: expected },
+        ]);
+        expect(dispatch).not.toHaveBeenCalled();
+      };
+      await read({ count: 1 });
+      const first = await store.lookup("key");
+      first!.count = 99;
+      await read({ count: 1 });
+      native.register("key", { count: 2 });
+      await read({ count: 2 });
+      await store.register("key", { count: 3 });
+      await read({ count: 3 });
+      await store.delete("key");
+      await read(undefined);
+      native.register("key", { count: 4 });
+      await read({ count: 4 });
+      await store.clear();
+      await read(undefined);
+    });
+  });
+
+  it("publishes fixture cleanup to warm observations and ownership reads", async () => {
+    await withOpenClawTestState({ label: "plugin-state-clear-publication" }, async ({ env }) => {
+      const store = createPluginStateKeyedStore("receipt-test", {
+        namespace: "bindings",
+        maxEntries: 10,
+        env,
+      });
+      await store.register("session", { model: "first" });
+      const captured = await capturePluginStateReadDependencies(() => store.observe("session"));
+      try {
+        clearPluginStateStoreForTests();
+        expect(captured.isCurrent()).toBe(false);
+        expect((await store.observe("session")).value).toBeUndefined();
+      } finally {
+        captured.release();
+      }
     });
   });
 
