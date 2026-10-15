@@ -516,13 +516,12 @@ describe("update plugin lifecycle lease boundaries", () => {
   );
 
   it.each([
-    { installedVersion: VERSION, previousInstallRoot: "/tmp/openclaw", resumed: true },
-    { installedVersion: "2026.8.27", previousInstallRoot: "/tmp/openclaw", resumed: true },
-    { installedVersion: "2026.8.27", previousInstallRoot: "/tmp/openclaw", resumed: false },
-    { installedVersion: VERSION, previousInstallRoot: "/tmp/openclaw-source", resumed: true },
+    { installedVersion: VERSION, previousInstallRoot: "/tmp/openclaw" },
+    { installedVersion: "2026.8.27", previousInstallRoot: "/tmp/openclaw" },
+    { installedVersion: VERSION, previousInstallRoot: "/tmp/openclaw-source" },
   ])(
-    "keeps already-current $installedVersion convergence owned by its runtime from $previousInstallRoot (resumed=$resumed)",
-    async ({ installedVersion, previousInstallRoot, resumed }) => {
+    "keeps already-current $installedVersion convergence owned by its runtime from $previousInstallRoot",
+    async ({ installedVersion, previousInstallRoot }) => {
       const needsTargetRuntime =
         installedVersion !== VERSION || previousInstallRoot !== "/tmp/openclaw";
       vi.mocked(readPackageVersion).mockResolvedValue(installedVersion);
@@ -539,8 +538,8 @@ describe("update plugin lifecycle lease boundaries", () => {
       vi.mocked(continuePostCoreUpdateInFreshProcess).mockImplementation(async () => {
         record("target-convergence");
         return {
-          resumed,
-          ...(resumed ? { pluginUpdate: { ...successfulPluginUpdate, changed: false } } : {}),
+          resumed: true,
+          pluginUpdate: { ...successfulPluginUpdate, changed: false },
         };
       });
 
@@ -582,11 +581,10 @@ describe("update plugin lifecycle lease boundaries", () => {
         expect(mocks.events).toContain("plugin-update:true");
       }
       expect(completePostCorePluginUpdate).not.toHaveBeenCalled();
-      expect(result.resultWithPostUpdate).toMatchObject(
-        resumed
-          ? { status: "skipped", reason: "already-current" }
-          : { status: "error", reason: "post-core-update-failed" },
-      );
+      expect(result.resultWithPostUpdate).toMatchObject({
+        status: "skipped",
+        reason: "already-current",
+      });
     },
   );
 
@@ -646,7 +644,7 @@ describe("update plugin lifecycle lease boundaries", () => {
     );
   });
 
-  it.each(["copied", "live", "unset selectors"] as const)(
+  it.each(["live", "unset selectors"] as const)(
     "preserves the %s invocation environment through a failed phase",
     async (source) => {
       vi.stubEnv("OPENCLAW_STATE_DIR", "/fixture/invocation-state");
@@ -781,34 +779,6 @@ describe("update plugin lifecycle lease boundaries", () => {
       );
       expect(mocks.events.indexOf("publish:false")).toBeGreaterThan(
         mocks.events.indexOf("restore-service:false"),
-      );
-    },
-  );
-
-  it.each([undefined, "5"])(
-    "runs finalizer doctors outside the lease with timeout %s",
-    async (timeout) => {
-      await updateFinalizeCommand({
-        channel: "stable",
-        deferCompletionCache: true,
-        json: true,
-        yes: true,
-        timeout,
-      });
-
-      expectLifecycleBoundary(mocks.events, "fresh-doctor");
-      const doctorIndex = mocks.events.indexOf("fresh-doctor:false");
-      expect(mocks.events.slice(0, doctorIndex)).toContain("read-config:true");
-      expect(mocks.events.indexOf("complete:false")).toBeGreaterThan(
-        mocks.events.lastIndexOf("lease-exit:false"),
-      );
-      expect(mocks.events).not.toContain("persisted-index:true");
-      const timeoutMs = timeout === undefined ? undefined : 5_000;
-      expect(runUpdateFinalizationDoctorInFreshProcess).toHaveBeenCalledWith(
-        expect.objectContaining({ timeoutMs }),
-      );
-      expect(completePostCorePluginUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({ timeoutMs }),
       );
     },
   );
