@@ -12,8 +12,8 @@ import { bindingStoreKey } from "../app-server/session-binding-record.js";
 const sessionStore = vi.hoisted(() => ({
   getSessionEntryByIdAsync: vi.fn(),
 }));
-// The migration reads an independently supplied canonical session owner; no Gateway is started.
-vi.mock("openclaw/plugin-sdk/session-store-runtime", () => ({
+vi.mock("openclaw/plugin-sdk/session-store-runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("openclaw/plugin-sdk/session-store-runtime")>()),
   ...sessionStore,
   resolveStorePath: () => "/synthetic/sessions.json",
 }));
@@ -246,8 +246,11 @@ describe("Codex native assignment Doctor repair", () => {
     unknown.params.context.readSessionIdentityEvidenceBatch = async () => [
       { agentId: identity.agentId, sessionId: identity.sessionId, state: "unknown" },
     ];
-    await migration.migrateLegacyState(unknown.params);
+    expect(await migration.detectLegacyState(unknown.params)).not.toBeNull();
+    const unresolved = await migration.migrateLegacyState(unknown.params);
     expect(unknown.read()).toEqual(unknown.original);
+    expect(unresolved.warningDisposition).toBe("recoverable");
+    expect(unresolved.warnings.join(" ")).toContain("unknown requester evidence");
   });
 
   it("leaves changed bindings untouched when the maintenance owner rejects the repair", async () => {

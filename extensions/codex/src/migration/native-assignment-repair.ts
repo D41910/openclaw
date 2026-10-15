@@ -108,6 +108,10 @@ async function normalizeRow(entry: BindingRow, params: Params, warnings: string[
             `Preserved Codex assignments with unknown lifecycle evidence in ${entry.key}.`,
           );
         }
+      } else {
+        warnings.push(
+          `Preserved Codex assignments with unknown requester evidence in ${entry.key}.`,
+        );
       }
     } catch {
       warnings.push(

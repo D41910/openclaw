@@ -132,7 +132,7 @@ describe("native subagent submission receipts in the binding store", () => {
         currentAuthority,
       );
       const row = state.lookup(bindingStoreKey(identity));
-      assert(row);
+      assert(row?.state === "active");
       state.register(bindingStoreKey(identity), {
         ...row,
         nativeSubagentAssignments: { version: 1, assignments: [first, first, second] },

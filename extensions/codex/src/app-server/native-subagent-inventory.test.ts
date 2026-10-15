@@ -576,20 +576,21 @@ describe("native pending assignment inventory through registered monitor admissi
         ...(assignment === "blocked" ? { recoveryBlocked: true as const } : {}),
       });
       await parent.unregister();
-      await vi.advanceTimersByTimeAsync(600_000);
+      // Stop at exhaustion so fake time cannot expire the real transcript worker write.
+      await vi.advanceTimersByTimeAsync(530_000);
       const attempts = f.deliver.mock.calls.length;
       if (assignment === "empty") {
         expect(attempts).toBe(0);
       } else if (assignment === "blocked") {
         expect(attempts).toBe(1);
       } else {
-        expect(attempts).toBeGreaterThan(1);
+        expect(attempts).toBe(7);
       }
-      await vi.advanceTimersByTimeAsync(600_000);
-      expect(f.deliver).toHaveBeenCalledTimes(attempts);
       const settled = await f.register(client);
       await settled.ready;
       await settled.unregister();
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(f.deliver).toHaveBeenCalledTimes(attempts);
       const saved = await f.store.readNativeSubagentAssignments?.(f.identity, f.historyOwner());
       expect(saved).toEqual([]);
       expect(await f.store.readNativeSubagentSubmissions(f.identity, f.historyOwner())).toEqual([]);
