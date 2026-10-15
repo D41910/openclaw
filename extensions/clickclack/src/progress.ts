@@ -228,7 +228,10 @@ export function createClickClackAgentProgressPublisher(params: {
         return false;
       }
       const id = resolveLineId(payload);
-      if (payload.hideFromChannelProgress) {
+      if (
+        payload.hideFromChannelProgress ||
+        (payload.kind === "model-wait" && payload.phase === "end")
+      ) {
         if (seenLines.delete(id)) {
           enqueueLine(id, { op: "update", line: { id, kind: normalizedKind(payload), text: "" } });
         }
