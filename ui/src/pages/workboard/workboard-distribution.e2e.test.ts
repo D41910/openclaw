@@ -91,6 +91,8 @@ suite.define(() => {
       url.hostname = "ui.example";
       url.hash = new URLSearchParams({ gatewayUrl }).toString();
       const navigation = await page.goto(url.href);
+      expect(navigation?.status()).toBe(200);
+      expect(errors).toEqual([]);
       try {
         await page.getByRole("button", { name: "Switch to gateway.example", exact: true }).click();
       } catch (error) {
