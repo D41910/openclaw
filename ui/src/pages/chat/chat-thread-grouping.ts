@@ -18,7 +18,7 @@ import {
   resolveAssistantReplyPhase,
 } from "./chat-assistant-reply.ts";
 import { prepareMessagesForGrouping } from "./chat-thread-duplicates.ts";
-import { userTurnRunId } from "./chat-thread-items.ts";
+import { readChatThreadMessageIdentity, userTurnRunId } from "./chat-thread-items.ts";
 import { transcriptRunId } from "./chat-thread-run-identity.ts";
 import {
   assistantGroupIsForwardedBoundary,
@@ -29,6 +29,7 @@ import {
   readAutomationRun,
 } from "./chat-turn-boundary.ts";
 import { persistedSteerTargetRunId } from "./stream-causal-boundary.ts";
+import type { ChatReasoning } from "./tool-stream-contract.ts";
 
 const TERMINAL_WORK_STATUSES = new Set(["done", "failed", "timeout", "killed"]);
 
@@ -186,21 +187,25 @@ export type ReplyAttributionContext = {
   people?: readonly string[];
   /** Key of the signed-in viewer, who authors local user messages without a sender. */
   localPerson?: string;
-  /** Keep assistant reasoning visible between tool iterations when enabled. */
-  showReasoning?: boolean;
 };
 
 export function groupMessages(
   items: ChatItem[],
   replyContext: ReplyAttributionContext = {},
+  reasoning?: ChatReasoning | null,
 ): Array<ChatItem | MessageGroup> {
+  const visibleReasoning = new Set(
+    reasoning?.items.flatMap(({ receipt }) =>
+      receipt?.persisted ? [JSON.stringify([receipt.runId, receipt.messageId])] : [],
+    ),
+  );
   const result = groupChatItems(
     items,
+    visibleReasoning,
     replyContext.items && rowsAfterHiddenTurns(items, replyContext.items),
-    replyContext.showReasoning,
   );
   const context = replyContext.items
-    ? groupChatItems(replyContext.items, undefined, replyContext.showReasoning)
+    ? groupChatItems(replyContext.items, visibleReasoning)
     : result;
   return stampReplyAttribution(result, context, replyContext);
 }
@@ -223,8 +228,8 @@ function rowsAfterHiddenTurns(items: ChatItem[], context: ChatItem[]): Set<strin
 
 function groupChatItems(
   items: ChatItem[],
+  visibleReasoning: ReadonlySet<string>,
   rowsAfterHiddenTurn?: ReadonlySet<string>,
-  showReasoning = false,
 ): Array<ChatItem | MessageGroup> {
   const result: Array<ChatItem | MessageGroup> = [];
   let currentGroup: MessageGroup | null = null;
@@ -243,16 +248,20 @@ function groupChatItems(
 
     const { item, normalized } = prepared;
     const record = asRecord(item.message);
+    const identity = visibleReasoning.size ? readChatThreadMessageIdentity(item.message) : null;
+    const hasVisibleReasoning =
+      identity?.role === "assistant" &&
+      !identity.isImported &&
+      visibleReasoning.has(JSON.stringify([identity.runId, identity.id])) &&
+      Boolean(extractThinkingCached(item.message));
     const hasAssistantText =
       record?.role === "assistant" &&
       record.stopReason === "toolUse" &&
       Boolean(resolveMessageDisplayMarkdown(item.message, normalized).trim());
-    const hasAssistantReasoning =
-      showReasoning && record?.role === "assistant" && Boolean(extractThinkingCached(item.message));
-    // Tool-use narration and enabled reasoning stay visible between iterations.
-    // Other mixed rows retain their tool grouping and forwarded file-link attribution.
+    // Saved reasoning stays visible until its live owner retires the receipts.
+    // Legacy mixed rows retain their tool grouping and file-link attribution.
     const role =
-      hasAssistantText || hasAssistantReasoning
+      hasAssistantText || hasVisibleReasoning
         ? "assistant"
         : normalizeRoleForGrouping(normalized.role);
     // Classify after content projection and keep the fact with its group; later
@@ -264,7 +273,7 @@ function groupChatItems(
       duplicateCount: item.duplicateCount,
       ...(normalized.replyTarget ? { replyTarget: normalized.replyTarget } : {}),
       hasVisibleContent:
-        hasAssistantReasoning ||
+        hasVisibleReasoning ||
         visibleContent === "non-text" ||
         Boolean(resolveMessageDisplayMarkdown(item.message, normalized).trim()),
     };
