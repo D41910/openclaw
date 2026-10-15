@@ -66,6 +66,7 @@ function buildMemoryArtifactIssueNote(
 async function runMemoryRecallHealth(
   cfg: OpenClawConfig,
   prompter?: DoctorPrompter,
+  deep = true,
 ): Promise<void> {
   const scopes = resolveMemoryDoctorAgentScopes(cfg);
   const labelAgents = scopes.length > 1;
@@ -92,7 +93,7 @@ async function runMemoryRecallHealth(
       });
     }
     try {
-      const workspaceDir = await resolveRuntimeMemoryWorkspaceDir(cfg, scope.agentId);
+      const workspaceDir = deep && (await resolveRuntimeMemoryWorkspaceDir(cfg, scope.agentId));
       if (!workspaceDir) {
         continue;
       }
@@ -186,8 +187,8 @@ async function runMemoryRecallHealth(
   }
 }
 
-export async function noteMemoryRecallHealth(cfg: OpenClawConfig): Promise<void> {
-  return runMemoryRecallHealth(cfg);
+export async function noteMemoryRecallHealth(cfg: OpenClawConfig, deep = true): Promise<void> {
+  return runMemoryRecallHealth(cfg, undefined, deep);
 }
 
 export async function maybeRepairMemoryRecallHealth(params: {
