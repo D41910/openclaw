@@ -165,7 +165,7 @@ automatic compaction requires the complete replacement to fit the estimated targ
 Early required preflight runs before those request facts are available and still
 uses history-based sizing; it does not guarantee this preferred headroom.
 
-If fixed instructions, tools, and pending input already exceed the model window,
+If fixed instructions and tools alone exceed the model window,
 or no further history can be compacted while the prepared request is still too
 large, OpenClaw reports the estimated budget components instead of treating the
 result as a harmless skip. Use `/context detail` to identify large contributors,
