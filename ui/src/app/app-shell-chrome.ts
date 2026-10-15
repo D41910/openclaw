@@ -10,6 +10,7 @@ import {
   type CommandPaletteElement,
   type CommandPaletteTargetDetail,
 } from "../components/command-palette-contract.ts";
+import { registryFor } from "../components/overlay-registry.ts";
 import {
   BROWSER_PANEL_TOGGLE_EVENT,
   LINK_READER_PANEL_TOGGLE_EVENT,
@@ -73,7 +74,6 @@ import {
   moveToastToNavDrawer,
   navDrawerFocusableElements,
   restoreToastFromNavDrawer,
-  shouldIgnoreSettingsEscape,
   visibleNavDrawerToggle,
 } from "./navigation-surface.ts";
 import { isHomePanelAvailable } from "./panel-availability.ts";
@@ -384,12 +384,12 @@ export class ShellChromeOwner {
     if (event.defaultPrevented || !matchesShortcutCombo(KEYBOARD_SHORTCUT_COMBOS.escape, event)) {
       return;
     }
-    if (host.navDrawerOpen && isMobileNavLayout() && !shouldIgnoreSettingsEscape(host, event)) {
+    if (host.navDrawerOpen && isMobileNavLayout() && !this.shouldIgnoreSettingsEscape(event)) {
       event.preventDefault();
       host.closeNavDrawer({ restoreFocus: true });
     } else if (
       isSettingsTakeover(host.routeState.routeId) &&
-      !shouldIgnoreSettingsEscape(host, event)
+      !this.shouldIgnoreSettingsEscape(event)
     ) {
       event.preventDefault();
       host.exitSettings();
@@ -479,12 +479,12 @@ export class ShellChromeOwner {
       matchesShortcutCombo(KEYBOARD_SHORTCUT_COMBOS.escape, event) &&
       isSettingsTakeover(host.routeState.routeId)
     ) {
-      if (host.navDrawerOpen && !shouldIgnoreSettingsEscape(host, event)) {
+      if (host.navDrawerOpen && !this.shouldIgnoreSettingsEscape(event)) {
         event.preventDefault();
         host.closeNavDrawer({ restoreFocus: true });
         return;
       }
-      if (event.eventPhase === Event.CAPTURING_PHASE || shouldIgnoreSettingsEscape(host, event)) {
+      if (event.eventPhase === Event.CAPTURING_PHASE || this.shouldIgnoreSettingsEscape(event)) {
         return;
       }
       event.preventDefault();
@@ -598,6 +598,33 @@ export class ShellChromeOwner {
     }
     this.requestLazyElement(KEYBOARD_SHORTCUTS_ELEMENT, descriptor);
   };
+
+  // Open controls own Escape. Slotted items hide their menu/listbox in shadow DOM,
+  // so recognize the open control host before Settings can consume the key.
+  shouldIgnoreSettingsEscape(event: KeyboardEvent): boolean {
+    const host = this.host;
+    const overlaySnapshot = host.context?.overlays.snapshot;
+    if (
+      host.commandPalette?.isOpen ||
+      host.querySelector<KeyboardShortcutsDialogElement>(KEYBOARD_SHORTCUTS_ELEMENT.tagName)
+        ?.isOpen ||
+      overlaySnapshot?.devicePairSetupOpen ||
+      host.approvalOverlay?.dialogOpen === true ||
+      document.openClawModalLayers?.size ||
+      registryFor(document).stack.at(-1)?.open
+    ) {
+      return true;
+    }
+    const target = event.target;
+    const control =
+      target instanceof Element
+        ? target.closest(
+            "input, textarea, select, wa-select[open], wa-dropdown[open], [contenteditable], dialog, [role='dialog'], [role='menu'], [role='listbox']",
+          )
+        : null;
+    // The drawer owns Escape; its own dialog role is not a nested modal.
+    return control !== null && control !== host.querySelector(".shell-nav");
+  }
 
   get commandPaletteLoading() {
     return this.palette.loading;

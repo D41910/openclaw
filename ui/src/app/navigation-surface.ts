@@ -1,14 +1,11 @@
 import { html, nothing } from "lit";
 import { isCommandPaletteShortcut } from "../components/command-palette-contract.ts";
-import { registryFor } from "../components/overlay-registry.ts";
 import { isTerminalPanelShortcut } from "../components/panel-toggle-contract.ts";
 import {
   KEYBOARD_SHORTCUT_COMBOS,
-  type KeyboardShortcutsDialogElement,
   matchesShortcutCombo,
 } from "../lib/keyboard-shortcut-contract.ts";
 import type { ApplicationContext } from "./context.ts";
-import { KEYBOARD_SHORTCUTS_ELEMENT } from "./lazy-custom-element.ts";
 
 export const NAVIGATION_RAIL_WIDTH = 52;
 
@@ -17,39 +14,6 @@ const NAV_DRAWER_FOCUSABLE_SELECTOR =
 
 type AppSidebarElement = HTMLElement & { dismissTransientMenus(): boolean };
 type SidebarAttentionElement = HTMLElement & { dismissPanel(): boolean };
-
-// Open controls own Escape. Slotted items hide their menu/listbox in shadow DOM,
-// so recognize the open control host before Settings can consume the key.
-export function shouldIgnoreSettingsEscape(
-  host: Pick<HTMLElement, "querySelector"> & {
-    context: ApplicationContext | undefined;
-    commandPalette: { isOpen: boolean } | undefined;
-    approvalOverlay: { dialogOpen?: boolean } | undefined;
-  },
-  event: KeyboardEvent,
-): boolean {
-  const overlaySnapshot = host.context?.overlays.snapshot;
-  if (
-    host.commandPalette?.isOpen ||
-    host.querySelector<KeyboardShortcutsDialogElement>(KEYBOARD_SHORTCUTS_ELEMENT.tagName)
-      ?.isOpen ||
-    overlaySnapshot?.devicePairSetupOpen ||
-    host.approvalOverlay?.dialogOpen === true ||
-    document.openClawModalLayers?.size ||
-    registryFor(document).stack.at(-1)?.open
-  ) {
-    return true;
-  }
-  const target = event.target;
-  const control =
-    target instanceof Element
-      ? target.closest(
-          "input, textarea, select, wa-select[open], wa-dropdown[open], [contenteditable], dialog, [role='dialog'], [role='menu'], [role='listbox']",
-        )
-      : null;
-  // The drawer owns Escape; its own dialog role is not a nested modal.
-  return control !== null && control !== host.querySelector(".shell-nav");
-}
 
 export function navDrawerFocusableElements(drawer: HTMLElement): HTMLElement[] {
   return [...drawer.querySelectorAll<HTMLElement>(NAV_DRAWER_FOCUSABLE_SELECTOR)].filter(

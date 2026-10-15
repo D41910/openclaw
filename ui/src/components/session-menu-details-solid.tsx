@@ -59,12 +59,11 @@ export function useSessionMenuDetails(
         ]
       : [];
   };
-  const [search, setSearch] = createSignal({
-    generation: actions.ownerMenu.snapshot.searchGeneration,
-    query: "",
+  const searchGeneration = createMemo(() => ownerSnapshot().searchGeneration);
+  const [query, setQuery] = createSignal(() => {
+    searchGeneration();
+    return "";
   });
-  const query = () =>
-    search().generation === ownerSnapshot().searchGeneration ? search().query : "";
   const owners = () => {
     const state = ownerSnapshot();
     const options = [...state.owners];
@@ -105,12 +104,7 @@ export function useSessionMenuDetails(
         aria-label={t("sessionsView.searchPeople")}
         placeholder={t("sessionsView.searchPeople")}
         value={query()}
-        onInput={(event) =>
-          setSearch({
-            generation: ownerSnapshot().searchGeneration,
-            query: event.currentTarget.value,
-          })
-        }
+        onInput={(event) => setQuery(event.currentTarget.value)}
       />
     </div>
   );
