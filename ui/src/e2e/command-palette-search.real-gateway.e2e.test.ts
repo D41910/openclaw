@@ -66,6 +66,15 @@ type RpcObservation = {
   archivedTranscriptsExcluded?: number;
 };
 
+type HandshakeObservation = {
+  sockets: number;
+  challenges: number;
+  requests: number;
+  accepted: number;
+  rejected: Array<{ code: string | null; detailCode: string | null }>;
+  closed: number;
+};
+
 type QueryObservation = {
   query: string;
   elapsedMs: number;
@@ -275,8 +284,10 @@ const suite = createControlUiE2eSuite({
   },
 });
 
-function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
+function observeSearchTraffic(page: Page, rpc: RpcObservation[], handshake: HandshakeObservation) {
   page.on("websocket", (socket) => {
+    handshake.sockets++;
+    let connectId: string | undefined;
     const pending = new Map<string, RpcObservation>();
     socket.on("framesent", ({ payload }) => {
       const frame = requireRecord(JSON.parse(payload.toString()));
@@ -285,6 +296,11 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
         typeof frame.id !== "string" ||
         typeof frame.method !== "string"
       ) {
+        return;
+      }
+      if (frame.method === "connect") {
+        handshake.requests++;
+        connectId = frame.id;
         return;
       }
       // Never retain connect/auth frames or unrelated RPC payloads.
@@ -310,6 +326,21 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
     });
     socket.on("framereceived", ({ payload }) => {
       const frame = requireRecord(JSON.parse(payload.toString()));
+      if (frame.type === "event" && frame.event === "connect.challenge") {
+        handshake.challenges++;
+      }
+      if (frame.type === "res" && frame.id === connectId) {
+        if (frame.ok === true) {
+          handshake.accepted++;
+        } else {
+          const error = isRecord(frame.error) ? frame.error : {};
+          const details = isRecord(error.details) ? error.details : {};
+          handshake.rejected.push({
+            code: typeof error.code === "string" ? error.code : null,
+            detailCode: typeof details.code === "string" ? details.code : null,
+          });
+        }
+      }
       const metric =
         frame.type === "res" && typeof frame.id === "string" ? pending.get(frame.id) : undefined;
       if (!metric) {
@@ -334,7 +365,10 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
         pending.delete(frame.id);
       }
     });
-    socket.on("close", () => pending.clear());
+    socket.on("close", () => {
+      handshake.closed++;
+      pending.clear();
+    });
   });
 }
 
@@ -345,6 +379,14 @@ suite.define(() => {
     }
     const owner = instance;
     const rpc: RpcObservation[] = [];
+    const handshake: HandshakeObservation = {
+      sockets: 0,
+      challenges: 0,
+      requests: 0,
+      accepted: 0,
+      rejected: [],
+      closed: 0,
+    };
     const queries: QueryObservation[] = [];
     const assets: Array<{ path: string; servedSha256: string; builtSha256: string }> = [];
     const screenshots: string[] = [];
@@ -384,10 +426,15 @@ suite.define(() => {
           await page.addInitScript((key) => {
             localStorage.setItem(key, JSON.stringify({ dismissedAtMs: 1770000000000 }));
           }, COMMUNITY_INVITE_KEY);
-          observeSearchTraffic(page, rpc);
+          observeSearchTraffic(page, rpc, handshake);
           expect((await page.goto(url.href))?.status()).toBe(404);
           await enterControlUiSession(page);
-          await waitForControlUiGatewayReady(page);
+          try {
+            await waitForControlUiGatewayReady(page);
+          } catch (error) {
+            console.error("[search-proof] Gateway handshake", JSON.stringify(handshake));
+            throw error;
+          }
           await page.locator(".shell").waitFor({ state: "visible" });
           await expect
             .poll(() =>
