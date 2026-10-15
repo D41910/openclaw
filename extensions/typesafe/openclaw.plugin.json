@@ -22,6 +22,11 @@
           "path": "apiKey",
           "expected": "string",
           "ownerKind": "capability"
+        },
+        {
+          "path": "endpointAuth",
+          "expected": "string",
+          "ownerKind": "capability"
         }
       ]
     }
@@ -29,7 +34,7 @@
   "uiHints": {
     "apiKey": {
       "label": "TypeSafe API credential",
-      "help": "Hosted Jev only. Select a SecretRef in Settings \u2192 Secrets. Ignored for a local baseUrl. Never paste credentials in chat.",
+      "help": "Hosted Jev only. Select a SecretRef in Settings → Secrets. Never read for any configured baseUrl. Never paste credentials in chat.",
       "sensitive": true
     },
     "timeoutMs": {
@@ -37,14 +42,73 @@
       "advanced": true
     },
     "baseUrl": {
-      "label": "Local System One origin",
-      "help": "Optional loopback origin, such as http://127.0.0.1:8009, for a running Kev server. Omit for hosted Jev. Local requests do not use the TypeSafe credential; the server chooses the loaded checkpoint."
+      "label": "System One origin",
+      "help": "Optional exact loopback origin, or an explicitly opted-in HTTPS origin, for a separately running server. Omit for hosted Jev. Sends evaluation state and rubrics to this endpoint."
+    },
+    "allowNonLoopback": {
+      "label": "Allow non-loopback HTTPS",
+      "help": "Explicitly trust the configured HTTPS origin with evaluation state (user content). Does not enable remote HTTP or trust other origins.",
+      "advanced": true
+    },
+    "endpointAuth": {
+      "label": "System One endpoint credential",
+      "help": "Optional bearer SecretRef for baseUrl only, never hosted Jev. This authenticates to the endpoint; it does not establish trust in that server.",
+      "sensitive": true
     }
   },
   "configSchema": {
     "type": "object",
     "properties": {
+      "baseUrl": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "allowNonLoopback": {
+        "type": "boolean",
+        "default": false
+      },
       "apiKey": {
+        "type": "object",
+        "required": [
+          "source",
+          "provider",
+          "id"
+        ],
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "env"
+              },
+              {
+                "type": "string",
+                "const": "store"
+              },
+              {
+                "type": "string",
+                "const": "file"
+              },
+              {
+                "type": "string",
+                "const": "exec"
+              }
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "additionalProperties": false
+      },
+      "endpointAuth": {
         "type": "object",
         "required": [
           "source",
@@ -90,14 +154,31 @@
         "minimum": 1000,
         "maximum": 60000,
         "default": 30000
-      },
-      "baseUrl": {
-        "type": "string",
-        "maxLength": 128,
-        "pattern": "^https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{1,5})?/?$"
       }
     },
-    "additionalProperties": false
+    "additionalProperties": false,
+    "anyOf": [
+      {
+        "properties": {
+          "baseUrl": {
+            "pattern": "^https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{1,5})?/?$"
+          }
+        }
+      },
+      {
+        "required": [
+          "allowNonLoopback"
+        ],
+        "properties": {
+          "allowNonLoopback": {
+            "const": true
+          },
+          "baseUrl": {
+            "pattern": "^https://(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])(?::[0-9]{1,5})?/?$"
+          }
+        }
+      }
+    ]
   },
   "decisionModels": [
     {

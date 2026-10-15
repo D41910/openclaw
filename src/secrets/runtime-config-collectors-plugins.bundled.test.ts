@@ -211,6 +211,54 @@ describe("collectPluginConfigAssignments bundled plugin manifests", () => {
     });
   });
 
+  it("prepares the separate TypeSafe endpoint credential from its capability manifest", async () => {
+    const sourceConfig: OpenClawConfig = {
+      agents: explicitMainRoster,
+      plugins: {
+        entries: {
+          typesafe: {
+            enabled: true,
+            config: {
+              baseUrl: "https://decision.example.com",
+              allowNonLoopback: true,
+              endpointAuth: envRef("SYNTHETIC_SYSTEM_ONE_TOKEN"),
+            },
+          },
+        },
+      },
+    };
+    const runtimeConfig = structuredClone(sourceConfig);
+    const env = { ...isolatedEnv, SYNTHETIC_SYSTEM_ONE_TOKEN: "synthetic-prepared-endpoint-key" };
+    const context = createResolverContext({ sourceConfig, env });
+    collectPluginConfigAssignments({
+      config: runtimeConfig,
+      defaults: undefined,
+      context,
+      loadablePluginOrigins: new Map([["typesafe", "bundled"]]),
+    });
+    expect(context.assignments).toMatchObject([
+      {
+        path: "plugins.entries.typesafe.config.endpointAuth",
+        ownerKind: "capability",
+        ownerId: "plugins.entries.typesafe.config.endpointAuth",
+        requiredForGateway: false,
+        disposition: "isolate",
+      },
+    ]);
+    expect(context.assignments).toHaveLength(1);
+    const resolved = await resolveSecretRefValues(
+      context.assignments.map((assignment) => assignment.ref),
+      { config: sourceConfig, env, cache: context.cache },
+    );
+    applyResolvedAssignments({ assignments: context.assignments, resolved });
+    expect(runtimeConfig.plugins?.entries?.typesafe?.config?.endpointAuth).toBe(
+      "synthetic-prepared-endpoint-key",
+    );
+    expect(sourceConfig.plugins?.entries?.typesafe?.config?.endpointAuth).toEqual(
+      envRef("SYNTHETIC_SYSTEM_ONE_TOKEN"),
+    );
+  });
+
   it("collects voice-call SecretRef assignments from bundled manifest contracts", () => {
     expect(
       findBundledPluginMetadataById("voice-call", {

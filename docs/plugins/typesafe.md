@@ -10,7 +10,7 @@ read_when:
 # TypeSafe AI
 
 The official external `typesafe` plugin connects OpenClaw's optional decision
-model role to TypeSafe AI's hosted Jev models or an explicitly configured local
+model role to TypeSafe AI's hosted Jev models or an explicitly configured
 System One server such as [Kev](https://github.com/jaredpalmer/kev). Its models appear in the separate
 **Decision** picker, never in the conversational model picker.
 
@@ -172,9 +172,10 @@ the hosted TypeSafe endpoint.
 
 `baseUrl` accepts HTTP or HTTPS on `localhost`, `127.0.0.1`, or `[::1]`, with an
 optional port and trailing slash. Supply the origin, without `/v1`, credentials,
-query, or fragment; the plugin appends `/v1/systemone`. LAN and remote hosts are
-not accepted. Ordinary ambient HTTP proxy variables are not used for these
-requests; explicitly enabled managed proxy policy still applies.
+query, or fragment; the plugin appends `/v1/systemone`. Other origins require
+the explicit HTTPS opt-in described below. Ordinary ambient HTTP proxy variables
+are not used for configured endpoints; explicitly enabled managed proxy policy
+still applies. `localhost` remains pinned to loopback, independently of system DNS.
 
 Kev runs one checkpoint per server process. Its request model label does not
 load or switch weights. Choose the checkpoint when starting the server and
@@ -200,6 +201,69 @@ that transmitted rubric before the original level descriptions are restored in
 decision results. Kev's optional nonnegative `latency_ms` field is validated and
 removed; all answer types, labels, probabilities, and rubric bounds retain the
 same validation as hosted results.
+
+## Remote HTTPS System One server
+
+To use a self-hosted server on another machine or behind an HTTPS reverse proxy,
+set an exact `baseUrl` and explicitly opt in with `allowNonLoopback: true`:
+
+```json5
+{
+  plugins: {
+    allow: ["typesafe"],
+    entries: {
+      typesafe: {
+        enabled: true,
+        config: {
+          baseUrl: "https://decision.example.com:8009",
+          allowNonLoopback: true,
+          // Optional: omit when the endpoint does not require bearer authentication.
+          endpointAuth: { source: "store", provider: "default", id: "SYSTEM_ONE_TOKEN" },
+        },
+      },
+    },
+  },
+  agents: {
+    defaults: { decisionModel: "typesafe/nemotron-deciffusion" },
+  },
+}
+```
+
+Merge this example with existing settings. Without `allowNonLoopback: true`,
+only the existing loopback origins are accepted. Non-loopback HTTP is never
+supported. TLS certificate and hostname verification remain enabled; configure
+normal host certificate trust for a private CA rather than disabling verification.
+The exact configured origin may resolve to a private address. This grants no
+permission to other origins, and redirects are rejected rather than followed.
+Existing DNS protections against loopback rebinding, link-local, and cloud
+metadata addresses still apply to non-loopback hostnames.
+Supply no path, credentials, query, fragment, or wildcard in `baseUrl`.
+
+**Trust and egress:** Every configured-endpoint evaluation sends its state,
+questions, and rubrics to that server. Evaluation state is user content; with a
+remote endpoint it leaves the Gateway host. Only choose an operator-controlled
+origin you trust with that content. Request content and model output cannot
+select the destination. `allowNonLoopback` acknowledges this destination trust;
+`endpointAuth` only authenticates OpenClaw to the server and does not establish
+that the server is trustworthy.
+
+`apiKey` remains hosted-only and is never read for any configured `baseUrl`,
+loopback or remote. The optional `endpointAuth` is a separate bearer SecretRef,
+read only for a configured endpoint and never sent to the hosted TypeSafe origin.
+Omit `baseUrl` to use hosted Jev; the hosted origin cannot be repurposed as a
+configured endpoint. The host prepares SecretRefs through the normal secret
+lifecycle. If a configured endpoint credential is unavailable, decisions fail
+closed rather than sending an unauthenticated request or falling back to hosted
+Jev. Remove unused references if the host should stop preparing them. Endpoint
+and credential authority are checked again immediately before the request leaves.
+
+Use your server's routing model ID, such as `typesafe/nemotron-deciffusion`, in
+`decisionModel`. The model portion is sent unchanged to `/v1/systemone`. Unlike
+Kev's single-checkpoint server, routers such as Llama swap may reject
+`kev-latest` if no route has that name. Custom IDs can be configured even when
+not among the plugin's declared picker presets. This endpoint support does not
+relax response validation or guarantee compatibility with every System One
+implementation's additional response fields.
 
 ## Decision contract
 
@@ -228,7 +292,7 @@ not demonstrated accuracy guarantees or permission to act.
 The host owns concurrency, circuit health, deadlines, cancellation, and provider
 lifecycle. Native decisions have a 30-second maximum; shorter consumer or
 plugin timeouts still apply. Requests use the fixed TypeSafe HTTPS endpoint unless
-`baseUrl` selects a local server. Both paths reject
+`baseUrl` selects a self-hosted server. Both paths reject
 redirects, and do not retry automatically. Consumers decide what to do with
 unavailable decisions; caller cancellation must not start fallback work.
 
@@ -245,7 +309,7 @@ The tool accepts explicit shared `state` and independent `boolean`, `choice`, an
 `score` questions. The calling agent's trusted identity selects its inherited or
 per-agent `decisionModel`; there is no per-call provider or model override. With a
 TypeSafe selection, the adapter translates Boolean questions to Noul and sends
-only the supplied evidence to hosted Jev or the configured local endpoint.
+only the supplied evidence to hosted Jev or the configured endpoint.
 
 A temporary credential or provider failure returns an actionable unavailable
 result and leaves the configured tool available. Clearing the agent's effective

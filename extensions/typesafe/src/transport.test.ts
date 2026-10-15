@@ -209,3 +209,39 @@ it.each([
     }
   },
 );
+
+it("keeps endpoint and hosted credentials separate at the final transport boundary", async () => {
+  const fetch = mockFetch(async () => new Response("{}"));
+  await requestEvaluation({ ...request, endpointAuth: "synthetic-endpoint-key" });
+  expect(fetch.mock.calls[0]?.[0]).toBe("https://api.typesafe.ai/v1/systemone");
+  expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).get("authorization")).toBe(
+    "Bearer synthetic-key",
+  );
+  await requestEvaluation({
+    ...request,
+    baseUrl: "https://decision.example.com",
+    allowNonLoopback: true,
+    endpointAuth: "synthetic-endpoint-key",
+  });
+  expect(fetch.mock.calls[1]?.[0]).toBe("https://decision.example.com/v1/systemone");
+  expect(new Headers(fetch.mock.calls[1]?.[1]?.headers).get("authorization")).toBe(
+    "Bearer synthetic-endpoint-key",
+  );
+  await requestEvaluation({
+    ...request,
+    baseUrl: "https://decision.example.com",
+    allowNonLoopback: true,
+  });
+  expect(new Headers(fetch.mock.calls[2]?.[1]?.headers).has("authorization")).toBe(false);
+  for (const baseUrl of ["https://api.typesafe.ai", "http://decision.example.com"]) {
+    await expect(
+      requestEvaluation({
+        ...request,
+        baseUrl,
+        allowNonLoopback: true,
+        endpointAuth: "synthetic-endpoint-key",
+      }),
+    ).rejects.toThrow("baseUrl");
+  }
+  expect(fetch).toHaveBeenCalledTimes(3);
+});

@@ -26,6 +26,13 @@ server's loopback origin, such as `http://127.0.0.1:8009`, omit `apiKey`, and se
 Start the server separately with your chosen checkpoint; the decision-model
 selection labels requests and does not download or load a model.
 
+For a separate inference host or HTTPS reverse proxy, set an exact HTTPS
+`baseUrl` and `allowNonLoopback: true`. Use a separate optional `endpointAuth`
+SecretRef for its bearer token; `apiKey` remains hosted-only. Evaluations send
+user content to the selected server. Remote HTTP is not supported, and TLS
+verification, redirect restrictions, and managed proxy policy remain in force.
+Use the server's routing model ID (for example `typesafe/nemotron-deciffusion`).
+
 See the [TypeSafe AI setup guide](https://docs.openclaw.ai/plugins/typesafe) and
 [decision-model documentation](https://docs.openclaw.ai/concepts/decision-models)
 for configuration, rubrics, and API semantics.

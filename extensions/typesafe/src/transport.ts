@@ -6,11 +6,11 @@ import {
 } from "openclaw/plugin-sdk/fetch-runtime";
 import { parseRetryAfterHeaderSeconds } from "openclaw/plugin-sdk/retry-runtime";
 import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
-import { localBaseUrl } from "./config.js";
+import { configuredBaseUrl, HOSTED_ORIGIN } from "./config.js";
 import { EvaluationError } from "./errors.js";
 import { MAX_JSON_BYTES, type EvaluationInput } from "./schema.js";
 
-const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+const ENDPOINT = `${HOSTED_ORIGIN}/v1/systemone`;
 
 function httpError(response: Response): EvaluationError {
   if (response.status === 401 || response.status === 403) {
@@ -86,13 +86,16 @@ export async function requestEvaluation(params: {
   body: EvaluationInput & { model: string };
   apiKey?: string;
   baseUrl?: string;
+  allowNonLoopback?: boolean;
+  endpointAuth?: string;
   timeoutMs: number;
   signal?: AbortSignal;
   deadlineMonotonicMs?: number;
   isAdmissible?: () => boolean;
 }): Promise<unknown> {
-  const baseUrl = localBaseUrl(params.baseUrl);
+  const baseUrl = configuredBaseUrl(params.baseUrl, params.allowNonLoopback);
   const endpoint = baseUrl ? `${baseUrl}/v1/systemone` : ENDPOINT;
+  const credential = baseUrl ? params.endpointAuth : params.apiKey;
   const body = JSON.stringify(params.body);
   if (Buffer.byteLength(body) > MAX_JSON_BYTES) {
     throw new EvaluationError("TypeSafe request exceeds its limit.", "unsupported-input");
@@ -127,7 +130,7 @@ export async function requestEvaluation(params: {
     const request = {
       url: endpoint,
       fetchImpl: globalThis.fetch,
-      requireHttps: !baseUrl,
+      requireHttps: !baseUrl || new URL(baseUrl).protocol === "https:",
       ...(baseUrl ? { policy: { allowedOrigins: [baseUrl] } } : {}),
       ...(baseUrl && new URL(baseUrl).hostname === "localhost"
         ? {
@@ -144,7 +147,7 @@ export async function requestEvaluation(params: {
       init: {
         method: "POST",
         headers: {
-          ...(!baseUrl ? { Authorization: `Bearer ${params.apiKey}` } : {}),
+          ...(credential ? { Authorization: `Bearer ${credential}` } : {}),
           Accept: "application/json",
           "Content-Type": "application/json",
         },

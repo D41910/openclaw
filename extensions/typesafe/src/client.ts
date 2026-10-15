@@ -1,4 +1,4 @@
-import type { RuntimeConfig } from "./config.js";
+import { hasCredentials, type RuntimeConfig } from "./config.js";
 import { EvaluationError, evaluationError } from "./errors.js";
 import { localInput, parseLocalResult } from "./local.js";
 import { parseInput, parseResult } from "./schema.js";
@@ -26,7 +26,7 @@ export async function evaluate(
       "unsupported-input",
     );
   }
-  if (!config.baseUrl && !config.apiKey) {
+  if (!hasCredentials(config)) {
     throw new Error("TypeSafe API key is missing. Configure a SecretRef in plugin Settings.");
   }
   try {
@@ -35,6 +35,8 @@ export async function evaluate(
       body: { ...wireInput, model },
       apiKey: config.baseUrl ? undefined : config.apiKey,
       baseUrl: config.baseUrl,
+      allowNonLoopback: config.allowNonLoopback,
+      endpointAuth: config.baseUrl ? config.endpointAuth : undefined,
       timeoutMs: config.timeoutMs,
       signal,
       deadlineMonotonicMs,
@@ -44,7 +46,8 @@ export async function evaluate(
     const evaluation = config.baseUrl
       ? parseLocalResult(response, wireInput, parsed)
       : parseResult(response, parsed);
-    if (!config.baseUrl && config.apiKey && JSON.stringify(evaluation).includes(config.apiKey)) {
+    const credential = config.baseUrl ? config.endpointAuth : config.apiKey;
+    if (credential && JSON.stringify(evaluation).includes(credential)) {
       throw new Error("Invalid TypeSafe response.");
     }
     return { evaluation };

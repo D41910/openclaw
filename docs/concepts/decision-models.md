@@ -51,10 +51,13 @@ Configure the provider plugin before selecting its model:
   and the OpenAI Platform Decisions API. Configure an OpenAI API key;
   ChatGPT/Codex subscription credentials do not authorize this endpoint.
   Evaluations send the supplied evidence to OpenAI and incur Platform usage charges.
-- [TypeSafe AI](/plugins/typesafe) connects to hosted Jev or a local System One
+- [TypeSafe AI](/plugins/typesafe) connects to hosted Jev or a self-hosted System One
   server such as Kev. Install and enable the external plugin, then configure a
-  protected hosted credential or an explicit loopback `baseUrl`. Hosted
-  evaluations send the selected evidence to TypeSafe and incur its normal usage charges.
+  protected hosted credential, an explicit loopback `baseUrl`, or an
+  [opted-in remote HTTPS origin](/plugins/typesafe#remote-https-system-one-server).
+  Evaluations send user content to that endpoint; hosted calls incur TypeSafe's
+  normal usage charges. Router-backed servers use their own model ID, such as
+  `typesafe/nemotron-deciffusion`, rather than necessarily `kev-latest`.
 
 The current plugins declare these model references:
 
