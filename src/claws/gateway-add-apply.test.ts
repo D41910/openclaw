@@ -57,6 +57,7 @@ vi.mock("./add-stateless.js", () => ({ applyClawAddPlanStateless: mocks.apply })
 
 const coordinate = { packageName: "@openclaw/workflow-operator", version: "1.0.0" };
 const source = {
+  manifest: { agent: { id: "workflow-operator" } },
   source: { packageRoot: "/tmp/extracted" },
 } as Extract<ClawReadResult, { ok: true }>;
 const persistedSource = {
@@ -162,6 +163,98 @@ beforeEach(() => {
 });
 
 describe("Gateway Claw Add application", () => {
+  it("allocates distinct numbered agents for concurrent direct Adds", async () => {
+    let currentConfig: OpenClawConfig = config;
+    const pendingLeases = new Map<string, Promise<void>>();
+    mocks.lease.mockImplementation(
+      async (
+        options: { scope: string; key: string },
+        run: (lease: { assertOwned: () => void }) => Promise<unknown>,
+      ) => {
+        const key = `${options.scope}:${options.key}`;
+        const previous = pendingLeases.get(key) ?? Promise.resolve();
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        pendingLeases.set(
+          key,
+          previous.then(() => held),
+        );
+        await previous;
+        try {
+          return await run({ assertOwned: mocks.owned });
+        } finally {
+          release();
+        }
+      },
+    );
+    mocks.policyReader.mockImplementation(
+      async (
+        _options: unknown,
+        run: (getCurrentConfig: () => OpenClawConfig) => Promise<unknown>,
+      ) => await run(() => currentConfig),
+    );
+    mocks.build.mockImplementation(async (_source: unknown, context: { agentId?: string }) => {
+      const finalId =
+        context.agentId ??
+        (currentConfig.agents?.entries?.["workflow-operator"]
+          ? "workflow-operator-2"
+          : "workflow-operator");
+      return {
+        ...plan,
+        agent: { finalId, config: { id: finalId } },
+        blockers: currentConfig.agents?.entries?.[finalId] ? [{ code: "agent_id_collision" }] : [],
+      };
+    });
+    mocks.project.mockImplementation((currentPlan: ClawAddPlan) => ({
+      ...projected,
+      planIntegrity: `sha256:${currentPlan.agent.finalId}`,
+      target: { agentId: currentPlan.agent.finalId },
+      blockers: currentPlan.blockers,
+    }));
+    mocks.apply.mockImplementation(async (currentPlan: ClawAddPlan) => {
+      const agentId = currentPlan.agent.finalId;
+      currentConfig = {
+        ...currentConfig,
+        agents: {
+          ...currentConfig.agents,
+          entries: {
+            ...currentConfig.agents?.entries,
+            [agentId]: {},
+          },
+        },
+      };
+      return { agent: { finalId: agentId }, status: "complete" };
+    });
+    const input = () => ({
+      source: coordinate,
+      getPlanningContext: async () => ({ config: currentConfig, sourceMcpServers: {} }),
+      policyConfig: { configPath: "/tmp/openclaw.json", env: {} },
+      assertCurrent: vi.fn(),
+    });
+
+    const results = await Promise.all([
+      applyClawAddForGateway(input()),
+      applyClawAddForGateway(input()),
+    ]);
+
+    expect(results.map((result) => result.agentId)).toEqual([
+      "workflow-operator",
+      "workflow-operator-2",
+    ]);
+    expect(Object.keys(currentConfig.agents?.entries ?? {})).toEqual([
+      "workflow-operator",
+      "workflow-operator-2",
+    ]);
+    expect(mocks.lease.mock.calls.map(([options]) => [options.scope, options.key])).toEqual([
+      ["core:claw-add-allocation", "workflow-operator"],
+      ["core:claw-add-allocation", "workflow-operator"],
+      ["core:agent-deletion", "workflow-operator"],
+      ["core:agent-deletion", "workflow-operator-2"],
+    ]);
+  });
+
   it("pins a direct install to the current plan and grants clean plugin consent", async () => {
     const { planIntegrity: _planIntegrity, ...input } = applyInput();
     await applyClawAddForGateway(input);
@@ -385,7 +478,9 @@ describe("Gateway Claw Add application", () => {
     await expect(applyClawAddForGateway(applyInput())).rejects.toBeInstanceOf(
       ClawGatewayPlanChangedError,
     );
-    expect(mocks.lease).not.toHaveBeenCalled();
+    expect(
+      mocks.lease.mock.calls.filter(([options]) => options.scope === "core:agent-deletion"),
+    ).toHaveLength(0);
     expect(mocks.persist).not.toHaveBeenCalled();
     expect(mocks.apply).not.toHaveBeenCalled();
   });
@@ -416,7 +511,9 @@ describe("Gateway Claw Add application", () => {
     await expect(applyClawAddForGateway(applyInput())).rejects.toThrow(
       "A required skill is unavailable from ClawHub",
     );
-    expect(mocks.lease).not.toHaveBeenCalled();
+    expect(
+      mocks.lease.mock.calls.filter(([options]) => options.scope === "core:agent-deletion"),
+    ).toHaveLength(0);
     expect(mocks.persist).not.toHaveBeenCalled();
   });
 
@@ -443,7 +540,9 @@ describe("Gateway Claw Add application", () => {
     await expect(applyClawAddForGateway(applyInput())).rejects.toBeInstanceOf(
       ClawGatewayPlanChangedError,
     );
-    expect(mocks.lease).not.toHaveBeenCalled();
+    expect(
+      mocks.lease.mock.calls.filter(([options]) => options.scope === "core:agent-deletion"),
+    ).toHaveLength(0);
     expect(mocks.persist).not.toHaveBeenCalled();
     expect(mocks.apply).not.toHaveBeenCalled();
   });
