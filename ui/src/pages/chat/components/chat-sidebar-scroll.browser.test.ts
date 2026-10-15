@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import "../../../styles.css";
 import "../../../styles/chat.ts";
 import "../../../styles/chat/side-panel.css";
+import type { ChatDetailPanel } from "./chat-detail-panel.tsx";
 import type { ChatDetailPanelContent } from "./chat-sidebar-content-types.ts";
 import { createChatSidebarContainer } from "./chat-sidebar.test-support.ts";
 import "./chat-files-panel.tsx";
@@ -9,16 +10,11 @@ import "./chat-detail-panel.tsx";
 
 const browserMode = "__vitest_browser__" in globalThis;
 
-type DetailPanel = HTMLElement & {
-  content: ChatDetailPanelContent;
-  updateComplete: Promise<unknown>;
-};
-
 async function mountDetailPanel(
   host: "Review" | "Files",
   content: ChatDetailPanelContent,
 ): Promise<{
-  panel: DetailPanel;
+  panel: ChatDetailPanel;
   hideAndReselect: () => Promise<void>;
   release: () => void;
 }> {
@@ -29,21 +25,22 @@ async function mountDetailPanel(
   detailPanel.className = "chat-sidebar";
   detailPanel.embedded = true;
   detailPanel.content = content;
+  const renderDetail = () => detailPanel;
   const files = host === "Files" ? document.createElement("openclaw-chat-files-panel") : null;
   if (files) {
     files.previews = [{ id: "preview", label: "Long preview", content }];
     files.activeId = "preview";
-    files.renderDetail = () => detailPanel;
+    files.renderDetail = renderDetail;
     files.onSelect = (id) => {
       files.activeId = id;
     };
     container.append(files);
   } else {
-    container.append(detailPanel);
+    container.append(renderDetail());
   }
   document.body.append(container);
   await files?.updateComplete;
-  const panel = container.querySelector<DetailPanel>("openclaw-chat-detail-panel")!;
+  const panel = container.querySelector<ChatDetailPanel>("openclaw-chat-detail-panel")!;
   await panel.updateComplete;
 
   return {

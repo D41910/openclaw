@@ -25,7 +25,7 @@ import {
 } from "./chat-session-workspace.ts";
 import type { SidebarContent, SidebarSelection } from "./chat-sidebar-content-types.ts";
 
-function mountWorkspaceRail(state: SessionWorkspaceHost, container: HTMLElement) {
+function mountWorkspaceRail(container: HTMLElement, state: SessionWorkspaceHost) {
   const [workspace, setWorkspace] = createSignal(
     createSessionWorkspaceProps(state, { expanded: true }),
   );
@@ -106,7 +106,7 @@ describe("session workspace state", () => {
     } as unknown as SessionWorkspaceHost;
     const mount = document.createElement("div");
 
-    const updateRail = mountWorkspaceRail(state, mount);
+    const updateRail = mountWorkspaceRail(mount, state);
 
     expect(listFiles).toHaveBeenCalledOnce();
     expect(request).toHaveBeenCalledExactlyOnceWith("artifacts.list", {
@@ -696,7 +696,7 @@ describe("openSessionWorkspaceFile", () => {
       await vi.waitFor(() => expect(createSessionWorkspaceProps(state).list).not.toBeNull());
 
       const container = document.createElement("div");
-      const updateRail = mountWorkspaceRail(state, container);
+      const updateRail = mountWorkspaceRail(container, state);
       const row = container.querySelector<HTMLButtonElement>(
         ".chat-workspace-rail__list--browser .chat-workspace-rail__file-open",
       );

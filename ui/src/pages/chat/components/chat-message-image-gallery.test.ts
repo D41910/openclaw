@@ -1,74 +1,47 @@
 /* @vitest-environment jsdom */
 
-import { createComponent, createSignal, getOwner } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../../test/helpers/promise.js";
 import { ImageLightboxGalleryController } from "../../../components/image-lightbox-gallery.ts";
 import type { ImageLightboxItem } from "../../../components/image-lightbox.types.ts";
-import { mountSolid } from "../../../test-helpers/mount-solid.ts";
-import { flush } from "../../../test-helpers/solid-settle.ts";
+import { cleanupSolid } from "../../../test-helpers/mount-solid.ts";
+import { mountSolid } from "../../../test-helpers/solid-render.tsx";
+import { MessageGroup } from "./chat-message-group-view.tsx";
 import { MessageImages, type MessageImagesProps } from "./chat-message-images-solid.tsx";
-import { releaseChatMediaResourceSubscriber } from "./chat-message-media.ts";
-import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
+import {
+  releaseChatMediaResourceSubscriber,
+  type ImageBlock,
+  type ImageRenderOptions,
+} from "./chat-message-media.ts";
 import { createMessageGroup, createUserMessage } from "./chat-message.test-support.ts";
 
-function createMessageImagesHarness(container: HTMLElement) {
-  let root: ReturnType<typeof mountSolid> | undefined;
-  let update: (props: MessageImagesProps) => void;
-  return {
-    render(images: MessageImagesProps["images"], options?: MessageImagesProps["options"]) {
-      const next = { images, options };
-      if (root) {
-        update(next);
-      } else {
-        root = mountSolid(
-          () => {
-            const [props, setProps] = createSignal<MessageImagesProps>(next, { ownedWrite: true });
-            update = setProps;
-            return createComponent(MessageImages, {
-              get images() {
-                return props().images;
-              },
-              get options() {
-                return props().options;
-              },
-            });
-          },
-          { container },
-        );
-      }
-      if (!getOwner()) {
-        flush();
-      }
-    },
-    unmount() {
-      root?.unmount();
-      root = undefined;
-    },
-  };
-}
-
 let container: HTMLDivElement;
-let groupView: ReturnType<typeof createMessageGroupHarness>;
-let imagesView: ReturnType<typeof createMessageImagesHarness>;
 let onRequestUpdate: () => void;
+let imageView: ReturnType<typeof mountSolid<MessageImagesProps>> | undefined;
 
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
-  groupView = createMessageGroupHarness(container);
-  imagesView = createMessageImagesHarness(container);
   onRequestUpdate = vi.fn();
+  imageView = undefined;
 });
 
 afterEach(() => {
-  groupView.unmount();
-  imagesView.unmount();
+  cleanupSolid();
   releaseChatMediaResourceSubscriber(onRequestUpdate);
   container.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+function renderImages(images: ImageBlock[], options: ImageRenderOptions) {
+  const props = { images, options };
+  if (imageView) {
+    imageView.update(props);
+  } else {
+    imageView = mountSolid(MessageImages, props, container);
+  }
+}
 
 function stubImageDecoding(blobPrefix: string, decode: () => Promise<void>) {
   let blobIndex = 0;
@@ -137,16 +110,23 @@ describe("message image gallery loading", () => {
     });
     const group = createMessageGroup(message, "user");
     const draw = () =>
-      groupView.render(group, {
-        showReasoning: true,
-        showToolCalls: false,
-        assistantName: "OpenClaw",
-        assistantAvatar: null,
-        resourceBasePath: "/openclaw",
-        assistantAttachmentAuthToken: "test-auth-token",
-        onRequestUpdate,
-        onOpenImage,
-      });
+      mountSolid(
+        MessageGroup,
+        {
+          group,
+          options: {
+            showReasoning: true,
+            showToolCalls: false,
+            assistantName: "OpenClaw",
+            assistantAvatar: null,
+            resourceBasePath: "/openclaw",
+            assistantAttachmentAuthToken: "test-auth-token",
+            onRequestUpdate,
+            onOpenImage,
+          },
+        },
+        container,
+      );
     const observer = new MutationObserver(() => {
       if (container.querySelector(".chat-message-image")) {
         available.resolve();
@@ -192,7 +172,7 @@ describe("message image gallery loading", () => {
     vi.stubGlobal("fetch", fetch);
     const { controller, onOpenImage, dispose } = createGallery();
     try {
-      imagesView.render([{ url: source, alt: "Detailed screenshot" }], {
+      renderImages([{ url: source, alt: "Detailed screenshot" }], {
         onOpenImage,
         onRequestUpdate,
       });
@@ -232,7 +212,7 @@ describe("message image gallery loading", () => {
     vi.stubGlobal("fetch", fetch);
     const { controller, onOpenImage, dispose } = createGallery();
     try {
-      imagesView.render([{ url: source, alt: "Original in unsupported format" }], {
+      renderImages([{ url: source, alt: "Original in unsupported format" }], {
         onOpenImage,
         onRequestUpdate,
       });
@@ -269,7 +249,7 @@ describe("message image gallery loading", () => {
       const onOpenImage = vi.fn((item: ImageLightboxItem) => controller.reset(item.gallery, item));
       try {
         const draw = () =>
-          imagesView.render(
+          renderImages(
             [
               { url: "data:image/png;base64,cG5n", alt: "First image" },
               { url: source, alt: "Managed neighbor", fileName: "neighbor.png" },
@@ -332,7 +312,7 @@ describe("message image gallery loading", () => {
       vi.stubGlobal("fetch", fetchMetadata);
       const localSource = `/home/node/.openclaw/media/outbound/${crypto.randomUUID()}.png`;
       const onOpenImage = vi.fn<(item: ImageLightboxItem) => void>();
-      imagesView.render(
+      renderImages(
         [
           { url: "data:image/png;base64,cG5n", alt: "First image" },
           { url: localSource, fileName: "Local neighbor.png" },
@@ -359,7 +339,7 @@ describe("message image gallery loading", () => {
       expect(fetchMetadata).toHaveBeenCalledOnce();
 
       if (removeOwner) {
-        imagesView.unmount();
+        imageView?.dispose();
         releaseChatMediaResourceSubscriber(onRequestUpdate);
       }
       metadata.resolve(

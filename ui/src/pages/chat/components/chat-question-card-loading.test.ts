@@ -30,12 +30,12 @@ it("defers the question controls, retries failed loading, and mounts only the cu
     return importOriginal();
   });
   const container = document.body.appendChild(document.createElement("div"));
-  const [activePanel, setActivePanel] = createSignal<QuestionPanelProps | null>(null);
+  const [panelProps, setPanelProps] = createSignal<QuestionPanelProps | null>(null);
   mountSolid(
     () =>
       createComponent(ComposerQuestionDock, {
         get panel() {
-          return activePanel();
+          return panelProps();
         },
       }),
     { container },
@@ -57,7 +57,7 @@ it("defers the question controls, retries failed loading, and mounts only the cu
     },
     onSubmit,
   };
-  setActivePanel(props);
+  setPanelProps(props);
   flush();
   const card = container.querySelector<ChatQuestionCard>("openclaw-chat-question-card")!;
   await card.updateComplete;
@@ -98,7 +98,7 @@ it("defers the question controls, retries failed loading, and mounts only the cu
       drafts: new Map(),
     },
   };
-  setActivePanel(current);
+  setPanelProps(current);
   flush();
   await card.updateComplete;
   const removed = document.body.appendChild(document.createElement("div"));

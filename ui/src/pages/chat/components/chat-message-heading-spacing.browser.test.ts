@@ -1,18 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { cleanupSolid } from "../../../test-helpers/mount-solid.ts";
+import { mountSolid } from "../../../test-helpers/solid-render.tsx";
+import { GroupedMessage } from "./chat-message-bubble-view.tsx";
 import { prepareChatMessageRender } from "./chat-message-markdown.ts";
-import { createGroupedMessageHarness } from "./chat-message-native.test-support.tsx";
 import baseCss from "../../../styles/base.css?inline";
 import layoutCss from "../../../styles/chat/layout.css?inline";
 import messageCss from "../../../styles/chat/message-layout.css?inline";
 import textCss from "../../../styles/chat/text.css?inline";
 
 const container = document.createElement("section");
-let view: ReturnType<typeof createGroupedMessageHarness> | undefined;
 const originalTheme = document.documentElement.getAttribute("data-theme-mode");
 const originalTextSize = document.documentElement.style.getPropertyValue("--chat-text-size");
 
 afterEach(() => {
-  view?.unmount();
+  cleanupSolid();
   container.remove();
   document.documentElement.style.setProperty("--chat-text-size", originalTextSize);
   if (originalTheme === null) {
@@ -33,12 +34,12 @@ describe("chat Markdown heading spacing", () => {
       document.body.append(container);
       container.style.width = `${width}px`;
       document.documentElement.dataset.themeMode = theme;
-      const stylesheet = document.createElement("style");
-      stylesheet.textContent = baseCss + layoutCss + messageCss + textCss;
+      const style = document.createElement("style");
+      style.textContent = baseCss + layoutCss + messageCss + textCss;
       const group = document.createElement("div");
       group.className = `chat-group ${role}`;
-      container.replaceChildren(stylesheet, group);
-      view = createGroupedMessageHarness(group);
+      container.replaceChildren(style, group);
+      let view: ReturnType<typeof mountSolid<Parameters<typeof GroupedMessage>[0]>> | undefined;
       for (const textSize of [14, 20]) {
         document.documentElement.style.setProperty("--chat-text-size", `${textSize}px`);
         for (const level of [1, 2, 3, 4]) {
@@ -53,10 +54,16 @@ describe("chat Markdown heading spacing", () => {
             "> Quoted paragraph.",
             "```text\nSample code\n```",
           ].join("\n\n");
-          view.render(prepareChatMessageRender({ role, content: markdown }), `heading-${level}`, {
-            isStreaming: false,
-            showReasoning: false,
-          });
+          const props = {
+            preparation: prepareChatMessageRender({ role, content: markdown }),
+            messageKey: `heading-${level}`,
+            options: { isStreaming: false, showReasoning: false },
+          };
+          if (view) {
+            view.update(props);
+          } else {
+            view = mountSolid(GroupedMessage, props, group);
+          }
           const root = container.querySelector(".chat-text")!;
           const headings = root.querySelectorAll(`h${level}`);
           expect(headings).toHaveLength(2);

@@ -4,19 +4,14 @@ import type { TtsSpeakResult } from "@openclaw/gateway-protocol";
 import { expectDefined } from "@openclaw/normalization-core/expect";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../../test/helpers/promise.ts";
-import { mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { cleanupSolid, mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { createSolidApplicationContextProvider } from "../../../test-helpers/solid-application-context.tsx";
 import { flush, waitForSolid } from "../../../test-helpers/solid-settle.ts";
 import {
   createContext,
   createRuntimeConfigStub,
 } from "../../skill-workshop/skill-workshop-page.test-support.ts";
-import {
-  createTestTranscript,
-  disposeChatView,
-  renderChatInto,
-  renderChatView,
-} from "../chat-view.test-helpers.ts";
+import { createTestTranscript, renderChatInto, renderChatView } from "../chat-view.test-helpers.ts";
 import {
   MessageActions,
   prepareChatMessageRender,
@@ -202,7 +197,8 @@ it("keeps native transcript speech with its current application context", async 
   ).click();
   await waitForSolid(() => expect(replacementRequest).toHaveBeenCalledOnce());
   expect(request).toHaveBeenCalledOnce();
-  disposeChatView(container);
+  transcript.hostDisconnected();
+  cleanupSolid();
   // Retained transcript roots retire after the pane disconnection microtask.
   await Promise.resolve();
   flush();

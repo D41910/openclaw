@@ -3,7 +3,9 @@
 import { expectDefined } from "@openclaw/normalization-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ImageLightboxItem } from "../../../components/image-lightbox.types.ts";
-import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
+import { cleanupSolid } from "../../../test-helpers/mount-solid.ts";
+import { mountSolid } from "../../../test-helpers/solid-render.tsx";
+import { MessageGroup } from "./chat-message-group-view.tsx";
 import {
   createAssistantMessage,
   createAttachmentBlock,
@@ -11,30 +13,36 @@ import {
 } from "./chat-message.test-support.ts";
 
 let container: HTMLDivElement;
-let root: ReturnType<typeof createMessageGroupHarness>;
 
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
-  root = createMessageGroupHarness(container);
 });
 
 afterEach(() => {
-  root.unmount();
+  cleanupSolid();
   container.remove();
 });
 
 function renderAssistantMessage(
+  target: HTMLElement,
   message: unknown,
-  options: Partial<Parameters<typeof root.render>[1]>,
+  options: Partial<Parameters<typeof MessageGroup>[0]["options"]>,
 ) {
-  root.render(createMessageGroup(message, "assistant"), {
-    showReasoning: false,
-    showToolCalls: false,
-    assistantName: "OpenClaw",
-    assistantAvatar: null,
-    ...options,
-  });
+  mountSolid(
+    MessageGroup,
+    {
+      group: createMessageGroup(message, "assistant"),
+      options: {
+        showReasoning: false,
+        showToolCalls: false,
+        assistantName: "OpenClaw",
+        assistantAvatar: null,
+        ...options,
+      },
+    },
+    target,
+  );
 }
 
 describe("message attachment image gallery projection", () => {
@@ -64,6 +72,7 @@ describe("message attachment image gallery projection", () => {
     async ({ content }) => {
       const onOpenImage = vi.fn<(item: ImageLightboxItem) => void>();
       renderAssistantMessage(
+        container,
         createAssistantMessage(content, {
           timestamp: 1000,
         }),
@@ -134,7 +143,7 @@ describe("message attachment image gallery projection", () => {
     },
   ])("projects $name into the gallery", ({ message, index }) => {
     const onOpenImage = vi.fn<(item: ImageLightboxItem) => void>();
-    renderAssistantMessage(message, { onOpenImage });
+    renderAssistantMessage(container, message, { onOpenImage });
     const tiles = container.querySelectorAll<HTMLButtonElement>(".chat-message-image-button");
     expect(tiles).toHaveLength(2);
     tiles[index]?.click();

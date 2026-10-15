@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MessageReactionSummary } from "../../../../../packages/gateway-protocol/src/index.js";
 /* @vitest-environment jsdom */
 import type { SolidBridgeElement } from "../../../lit/solid-bridge.ts";
+import { cleanupSolid } from "../../../test-helpers/mount-solid.ts";
+import { mountSolid } from "../../../test-helpers/solid-render.tsx";
 import { flush } from "../../../test-helpers/solid-settle.ts";
-import { createMessageGroupHarness } from "./chat-message-native.test-support.tsx";
+import { MessageGroup } from "./chat-message-group-view.tsx";
 import { createMessageGroup } from "./chat-message.test-support.ts";
 
 const reactions: MessageReactionSummary[] = [
@@ -28,10 +30,9 @@ const reactions: MessageReactionSummary[] = [
   },
 ];
 let host: HTMLDivElement;
-let view: ReturnType<typeof createMessageGroupHarness>;
 afterEach(() => {
   if (host) {
-    view.unmount();
+    cleanupSolid();
     host.remove();
   }
 });
@@ -40,7 +41,6 @@ function show(
   options: { role?: string; persisted?: boolean; streaming?: boolean; writable?: boolean } = {},
 ) {
   host = document.body.appendChild(document.createElement("div"));
-  view = createMessageGroupHarness(host);
   const role = options.role ?? "user";
   const onReact = vi.fn();
   const message = {
@@ -49,12 +49,19 @@ function show(
     timestamp: 1,
     ...(options.persisted === false ? {} : { __openclaw: { id: "message-1" } }),
   };
-  view.render(createMessageGroup(message, role, { isStreaming: options.streaming ?? false }), {
-    showReasoning: false,
-    userId: "self",
-    messageReactions: new Map([["message-1", reactions]]),
-    onReact: options.writable === false ? undefined : onReact,
-  });
+  mountSolid(
+    MessageGroup,
+    {
+      group: createMessageGroup(message, role, { isStreaming: options.streaming ?? false }),
+      options: {
+        showReasoning: false,
+        userId: "self",
+        messageReactions: new Map([["message-1", reactions]]),
+        onReact: options.writable === false ? undefined : onReact,
+      },
+    },
+    host,
+  );
   return {
     onReact,
     pickers: [

@@ -1,25 +1,26 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { en } from "../../../i18n/locales/en.ts";
+import { cleanupSolid } from "../../../test-helpers/mount-solid.ts";
+import { mountSolid } from "../../../test-helpers/solid-render.tsx";
+import { GroupedMessage } from "./chat-message-bubble-view.tsx";
 import { prepareChatMessageRender } from "./chat-message-markdown.ts";
-import { createGroupedMessageHarness } from "./chat-message-native.test-support.tsx";
 import baseCss from "../../../styles/base.css?inline";
 import layoutCss from "../../../styles/chat/layout.css?inline";
 import messageCss from "../../../styles/chat/message-layout.css?inline";
 import textCss from "../../../styles/chat/text.css?inline";
 
-const views = new Map<HTMLElement, ReturnType<typeof createGroupedMessageHarness>>();
+const containers: HTMLElement[] = [];
 const originalCopy = en.chat.pairingQrExpired;
 afterEach(() => {
+  cleanupSolid();
   if (originalCopy === undefined) {
     delete en.chat.pairingQrExpired;
   } else {
     en.chat.pairingQrExpired = originalCopy;
   }
-  for (const [container, view] of views) {
-    view.unmount();
+  for (const container of containers.splice(0)) {
     container.remove();
   }
-  views.clear();
 });
 
 describe("expired pairing QR layout", () => {
@@ -39,6 +40,7 @@ describe("expired pairing QR layout", () => {
         };
       }
       const container = document.body.appendChild(document.createElement("section"));
+      containers.push(container);
       container.style.width = width + "px";
       container.dir = direction;
       container.style.setProperty("--control-ui-text-scale", String(scale));
@@ -49,17 +51,20 @@ describe("expired pairing QR layout", () => {
           expiresAtMs: 1,
         })),
       };
-      const stylesheet = document.createElement("style");
-      stylesheet.textContent = baseCss + layoutCss + messageCss + textCss;
+      const style = document.createElement("style");
+      style.textContent = baseCss + layoutCss + messageCss + textCss;
       const group = document.createElement("div");
       group.className = "chat-group assistant";
-      container.append(stylesheet, group);
-      const view = createGroupedMessageHarness(group);
-      views.set(container, view);
-      view.render(prepareChatMessageRender(message), "expired-qr", {
-        isStreaming: false,
-        showReasoning: false,
-      });
+      container.append(style, group);
+      mountSolid(
+        GroupedMessage,
+        {
+          preparation: prepareChatMessageRender(message),
+          messageKey: "expired-qr",
+          options: { isStreaming: false, showReasoning: false },
+        },
+        group,
+      );
       const cards = [...container.querySelectorAll<HTMLElement>(".chat-pairing-qr-expired")];
       expect(cards).toHaveLength(2);
       for (const card of cards) {
