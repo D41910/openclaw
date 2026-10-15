@@ -647,9 +647,8 @@ extensions/policy/src/policy-state-tools.ts	1
 extensions/qa-channel/src/bus-client.ts	3
 extensions/qa-channel/src/channel-actions.ts	2
 extensions/qa-channel/src/channel-base.ts	6
-extensions/qa-channel/src/channel.ts	5
+extensions/qa-channel/src/channel.ts	3
 extensions/qa-channel/src/gateway.ts	2
-extensions/qa-channel/src/inbound.ts	1
 extensions/qa-channel/src/setup.ts	2
 extensions/qa-lab/src/auth-profile.fixture.ts	3
 extensions/qa-lab/src/browser-runtime.ts	2
@@ -1193,7 +1192,6 @@ src/agents/cli-runner/bundle-mcp-runtime.ts	1
 src/agents/cli-runner/bundle-mcp.ts	5
 src/agents/cli-runner/cli-backend-auth-policy.ts	1
 src/agents/cli-runner/cli-run-transcript.ts	1
-src/agents/cli-runner/delivery-evidence.ts	2
 src/agents/cli-runner/execute-node-claude.ts	5
 src/agents/cli-runner/execute.ts	2
 src/agents/cli-runner/prepare.ts	1
@@ -1494,7 +1492,6 @@ src/auto-reply/reply/commands-acp/diagnostics.ts	2
 src/auto-reply/reply/commands-allowlist.ts	6
 src/auto-reply/reply/commands-context-report.ts	1
 src/auto-reply/reply/commands-context.ts	1
-src/auto-reply/reply/commands-login.ts	1
 src/auto-reply/reply/commands-mcp.ts	2
 src/auto-reply/reply/commands-plugin.ts	1
 src/auto-reply/reply/commands-plugins.ts	1
@@ -1506,7 +1503,7 @@ src/auto-reply/reply/conversation-turn-capture.ts	1
 src/auto-reply/reply/directive-handling.levels.ts	9
 src/auto-reply/reply/directive-handling.parse.ts	2
 src/auto-reply/reply/directives.ts	2
-src/auto-reply/reply/dispatch-acp.ts	2
+src/auto-reply/reply/dispatch-acp.ts	1
 src/auto-reply/reply/dispatch-from-config.events.ts	1
 src/auto-reply/reply/dispatch-from-config.prepare-execution.ts	1
 src/auto-reply/reply/elevated-allowlist-matcher.ts	2
@@ -1518,10 +1515,8 @@ src/auto-reply/reply/get-reply-run-execute.ts	3
 src/auto-reply/reply/inbound-context.ts	8
 src/auto-reply/reply/mentions.ts	1
 src/auto-reply/reply/queue/drain.ts	1
-src/auto-reply/reply/queue/enqueue.ts	1
 src/auto-reply/reply/reply-config-runtime-mode.ts	2
 src/auto-reply/reply/reply-operation-run-state.ts	1
-src/auto-reply/reply/reply-run-registry.registry.ts	1
 src/auto-reply/reply/reply-threading.ts	2
 src/auto-reply/reply/reply-timing-tracker.ts	2
 src/auto-reply/reply/session-delivery.ts	1
@@ -1680,7 +1675,7 @@ src/cli/update-cli/update-command-config.ts	5
 src/cli/update-cli/update-command-plugins.ts	1
 src/cli/users-cli.ts	1
 src/commands/agent-exec.ts	1
-src/commands/agent-via-gateway.ts	5
+src/commands/agent-via-gateway.ts	2
 src/commands/agents.commands.identity.ts	1
 src/commands/agents.config.ts	1
 src/commands/agents.providers.ts	4
@@ -1721,7 +1716,6 @@ src/commands/doctor-session-transcripts.ts	1
 src/commands/doctor-skills.ts	1
 src/commands/doctor-sqlite-compact.ts	1
 src/commands/doctor-sqlite-maintenance-lock.ts	1
-src/commands/doctor-state-integrity.ts	1
 src/commands/doctor-telegram-general-topic-conversations.ts	2
 src/commands/doctor-tools-md-migration.ts	5
 src/commands/doctor-workspace.ts	2
@@ -1730,7 +1724,6 @@ src/commands/doctor/cron/legacy-repair.ts	4
 src/commands/doctor/cron/store-migration.ts	2
 src/commands/doctor/cron/warnings.ts	1
 src/commands/doctor/shared/allowfrom-fallback-migration.ts	1
-src/commands/doctor/shared/channel-doctor.ts	2
 src/commands/doctor/shared/codex-native-assets.ts	1
 src/commands/doctor/shared/codex-route-session-repair.ts	1
 src/commands/doctor/shared/configured-channel-ids.ts	1
@@ -1756,7 +1749,7 @@ src/commands/gateway-status/helpers.ts	11
 src/commands/message-format.ts	15
 src/commands/models/list.probe.ts	1
 src/commands/onboard-agent.ts	1
-src/commands/onboard-config.ts	3
+src/commands/onboard-config.ts	2
 src/commands/onboard-helpers.ts	2
 src/commands/onboard-non-interactive/local.ts	1
 src/commands/onboard-non-interactive/local/auth-choice-inference.ts	1
