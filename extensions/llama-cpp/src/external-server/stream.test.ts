@@ -113,6 +113,8 @@ describe("llama-server held request status", () => {
     const notify = vi.fn();
     const source = createAssistantMessageEventStream();
     const wrapped = wrapLlamaServerStream({
+      provider: "llama-cpp",
+      modelId: "local",
       streamFn: async (model, _context, options) => {
         await options?.onPayload?.({}, model);
         return Object.freeze({
@@ -120,7 +122,7 @@ describe("llama-server held request status", () => {
           result: () => source.result(),
         });
       },
-    } as ProviderWrapStreamFnContext);
+    });
     const stream = await wrapped(
       { provider: "llama-cpp" } as never,
       { messages: [] },
@@ -145,11 +147,13 @@ describe("llama-server held request status", () => {
     const controller = new AbortController();
     const pending = Promise.withResolvers<ReturnType<typeof createAssistantMessageEventStream>>();
     const wrapped = wrapLlamaServerStream({
+      provider: "llama-cpp",
+      modelId: "local",
       streamFn: async (model, _context, options) => {
         await options?.onPayload?.({}, model);
         return pending.promise;
       },
-    } as ProviderWrapStreamFnContext);
+    });
     const result = Promise.resolve(
       wrapped(
         { provider: "llama-cpp" } as never,
@@ -176,11 +180,13 @@ describe("llama-server held request status", () => {
     vi.useFakeTimers();
     const notify = vi.fn();
     const wrapped = wrapLlamaServerStream({
+      provider: "llama-cpp",
+      modelId: "local",
       streamFn: (model, _context, options) => {
         void options?.onPayload?.({}, model);
         throw new Error("request stopped");
       },
-    } as ProviderWrapStreamFnContext);
+    });
     expect(() =>
       wrapped({ provider: "llama-cpp" } as never, { messages: [] }, { onProviderWait: notify }),
     ).toThrow("request stopped");
