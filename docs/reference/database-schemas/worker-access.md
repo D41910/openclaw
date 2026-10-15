@@ -4683,8 +4683,10 @@ retention, durability, and update behavior are unchanged.
 Placement turn claims and releases execute through the shared-state writer,
 including their coordinator acquisition. Local turns retain durable claims:
 cloud dispatch closes admission and joins their settlement before preparing the
-workspace. Claim admission rechecks the live caller before mutation and commit;
-conditional release compares the exact claim inside the transaction. Commit
+workspace. Local claims without a remote environment admit the live caller once
+before their conditional DML and use SQLite autocommit for claim and release.
+Remote placement keeps transaction and commit admission; conditional release
+compares the exact claim in its write. Commit
 receipts publish claim authority and release observers before callers continue,
 including when ordinary reply delivery fails. Local forced completion and final
 cleanup join the same pending release. Restart recovery, schemas, persisted
@@ -5641,9 +5643,14 @@ existing session reclamation worker. The host retains live descendant, media,
 and lifecycle authority; the worker compares the durable descendant rows after
 that grant and before committing. Registry preparation preserves unpublished
 intent and current live objects without treating a stale resident snapshot as
-fresh durable state. Reaper maintenance uses the existing compact subagent
-projection and owner-published changes at its final host grant. It does not repeat
-the registry scan inside the session worker.
+fresh durable state. Reaper maintenance admits one complete compact subagent
+protection snapshot, supplied by registry restore or one cold worker read.
+Committed registry postimages, deletions, and replacements maintain that snapshot;
+later maintenance passes do not reload unchanged rows. The final host grant still
+captures current protection and checks cleanup authority. Cold reads keep the
+SQL projection that excludes retained task and reply payloads. Maintenance reads
+bypass inspection snapshots, and database retirement invalidates resident facts.
+The session worker does not repeat the registry scan.
 The batch keeps one synchronous transaction and the existing archive,
 publication, rollback, and uncertain-outcome owners. Native harness mutation
 objects remain with their process-held owner. No cross-database atomicity,

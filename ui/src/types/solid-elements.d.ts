@@ -51,6 +51,7 @@ declare module "@solidjs/web" {
       "openclaw-chat-ci-details": HTMLAttributes<HTMLElement> & ElementProperties<ChatCiProperties>;
       "openclaw-chat-ci-automation": HTMLAttributes<HTMLElement> &
         ElementProperties<ChatCiProperties & { sessionId: string }>;
+      "openclaw-modal-actions": HTMLAttributes<HTMLElement>;
       "openclaw-github-identity": HTMLAttributes<HTMLElement>;
       "openclaw-plugins-page": HTMLAttributes<HTMLElement>;
       "openclaw-dashboards-page": HTMLAttributes<HTMLElement>;
