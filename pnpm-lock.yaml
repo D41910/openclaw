@@ -213,7 +213,6 @@ packageExtensionsChecksum: sha256-Y7vhONQzlz51oZN7TTGWCJABkDu/F4SuqtCdf5qYwZ0=
 
 patchedDependencies:
   '@awesome.me/webawesome@3.13.0': 9b35bfc2e23b45e47ac3e6a669b8bf7df0c4ca89423e8a78d6fb921faa686208
-  '@clawdbot/lobster@2026.9.16': f90bfee3189c8886ad643e7e372745284c8a853ba8695e04ba0815c37764beeb
   '@novnc/novnc@1.7.0': bfde0e1bda172da3525f9f5014d85ad28073325b74f09609084598a65d2f412d
   baileys@7.0.0-rc14: c3c4601486630c689ffd1a0e7a34f4b8cf8e7231e41c312ad33afdf4487d8ded
   chrome-devtools-mcp@1.10.1: d31d6e7e187ea9fd4dad87ed3ad08073c77ffcfddd52bc4761b39a2dfce0ac1e
@@ -1528,7 +1527,7 @@ importers:
     dependencies:
       '@clawdbot/lobster':
         specifier: 2026.9.16
-        version: 2026.9.16(patch_hash=f90bfee3189c8886ad643e7e372745284c8a853ba8695e04ba0815c37764beeb)
+        version: 2026.9.16
       typebox:
         specifier: 1.3.35
         version: 1.3.35
@@ -12021,7 +12020,7 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@clawdbot/lobster@2026.9.16(patch_hash=f90bfee3189c8886ad643e7e372745284c8a853ba8695e04ba0815c37764beeb)':
+  '@clawdbot/lobster@2026.9.16':
     dependencies:
       ajv: 8.20.0
       yaml: 2.9.1

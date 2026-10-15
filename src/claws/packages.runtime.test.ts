@@ -348,10 +348,10 @@ describe("Claw committed plugin requirement handoff", () => {
 });
 
 describe("Claw source-host plugin collision", () => {
-  const pinnedLobster = {
+  const pinnedBundledPlugin = {
     kind: "plugin",
     source: "clawhub",
-    ref: "@openclaw/lobster",
+    ref: "@openclaw/memory-core",
     version: "2026.7.1",
     integrity,
   } as const;
@@ -362,21 +362,21 @@ describe("Claw source-host plugin collision", () => {
   }));
   const probePlugin = vi.fn(async (request: Parameters<typeof installPluginFromClawHub>[0]) => {
     await request.onPluginArtifactInspect?.({
-      pluginId: "lobster",
-      stagedArtifactDir: path.join(process.cwd(), "extensions", "lobster"),
+      pluginId: "memory-core",
+      stagedArtifactDir: path.join(process.cwd(), "extensions", "memory-core"),
       mode: "install",
     });
     return {
       ok: true as const,
-      pluginId: "lobster",
-      packageName: pinnedLobster.ref,
-      targetDir: "/tmp/lobster",
+      pluginId: "memory-core",
+      packageName: pinnedBundledPlugin.ref,
+      targetDir: "/tmp/memory-core",
       extensions: [],
       artifactInspection: { format: "openclaw" as const, mapped: ["plugin"], unavailable: [] },
       clawhub: {
         source: "clawhub" as const,
         clawhubUrl: "https://clawhub.ai",
-        clawhubPackage: pinnedLobster.ref,
+        clawhubPackage: pinnedBundledPlugin.ref,
         clawhubFamily: "code-plugin" as const,
         integrity,
       },
@@ -397,7 +397,7 @@ describe("Claw source-host plugin collision", () => {
     await fs.writeFile(env.OPENCLAW_CONFIG_PATH!, "{}");
     await withEnvAsync(env, async () => {
       await expect(
-        preflightClawPackage(pinnedLobster, path.join(root, "workspace"), {
+        preflightClawPackage(pinnedBundledPlugin, path.join(root, "workspace"), {
           config: {},
           env,
           deps: {
@@ -412,7 +412,7 @@ describe("Claw source-host plugin collision", () => {
       ).resolves.toMatchObject({
         ok: false,
         code: "plugin_source_host_conflict",
-        message: expect.stringContaining("bundled plugin lobster"),
+        message: expect.stringContaining("bundled plugin memory-core"),
       });
     });
   });
@@ -425,7 +425,7 @@ describe("Claw source-host plugin collision", () => {
     await fs.writeFile(env.OPENCLAW_CONFIG_PATH!, "{}");
     await withEnvAsync(env, async () => {
       await expect(
-        preflightClawPackage(pinnedLobster, path.join(root, "workspace"), {
+        preflightClawPackage(pinnedBundledPlugin, path.join(root, "workspace"), {
           config: { plugins: { load: { paths: [extensionsDir] } } },
           env,
           deps: {
@@ -447,7 +447,7 @@ describe("Claw source-host plugin collision", () => {
     await fs.writeFile(env.OPENCLAW_CONFIG_PATH!, "{}");
     await withEnvAsync(env, async () => {
       await expect(
-        preflightClawPackage(pinnedLobster, path.join(root, "workspace"), {
+        preflightClawPackage(pinnedBundledPlugin, path.join(root, "workspace"), {
           config: {},
           env,
           deps: {
@@ -456,7 +456,7 @@ describe("Claw source-host plugin collision", () => {
               code: "plugin_version_conflict",
               request: {} as never,
               installedVersion: "2026.6.1",
-              expectedVersion: pinnedLobster.version,
+              expectedVersion: pinnedBundledPlugin.version,
             }),
             probePlugin,
             inspectPluginCapabilities: (_rootDir, pluginId) => ({
@@ -479,7 +479,7 @@ describe("Claw source-host plugin collision", () => {
       const installPlugin = vi.fn(async () => {});
       const onExternalMutation = vi.fn();
       await expect(
-        installClawPackages(packageInstallPlan([pinnedLobster]), {
+        installClawPackages(packageInstallPlan([pinnedBundledPlugin]), {
           env,
           config: {},
           pluginConsent: {

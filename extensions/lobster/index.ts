@@ -11,7 +11,7 @@ export default definePluginEntry({
         if (ctx.sandboxed) {
           return null;
         }
-        return createLobsterTool(api, { context: ctx });
+        return createLobsterTool(api);
       },
       { optional: true, workspaceAccess: "execute" },
     );
