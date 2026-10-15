@@ -492,7 +492,7 @@ export function PluginCredentialEditor(props: PluginCredentialEditorProps) {
                   {failure()}
                 </p>
               ) : null}
-              <footer>
+              <openclaw-modal-actions>
                 <button
                   class="btn"
                   disabled={saving() || cancelling()}
@@ -514,7 +514,7 @@ export function PluginCredentialEditor(props: PluginCredentialEditorProps) {
                     {saving() ? t("common.saving") : t("common.save")}
                   </button>
                 ) : null}
-              </footer>
+              </openclaw-modal-actions>
             </section>
           </openclaw-modal-dialog>
         ) : null}
