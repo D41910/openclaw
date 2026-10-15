@@ -2,9 +2,8 @@ import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { BoardView } from "../components/board/board-view.tsx";
 import type { BoardOp, BoardSnapshot } from "../lib/board/types.ts";
-// The fixture page renders outside the app shell, so it must load the app
-// stylesheet itself (Web Awesome theme included) or dropdown menus render
-// theme-less: dark item text on the fixture's dark panels.
+import type { BoardViewCallbacks } from "../lib/board/view-types.ts";
+// The standalone fixture loads the app stylesheet for its board surfaces and menus.
 import "../styles.css";
 
 const initialSnapshot: BoardSnapshot = {
@@ -252,6 +251,21 @@ export function applyBoardFixtureOps(
 function BoardFixture() {
   const [snapshot, setSnapshot] = createSignal(structuredClone(initialSnapshot));
   const [activeTabId, setActiveTabId] = createSignal("overview");
+  const callbacks: BoardViewCallbacks = {
+    applyOps: async (ops) => {
+      setSnapshot((previous) => applyBoardFixtureOps(previous, ops));
+    },
+    grant: async (name, decision) => {
+      setSnapshot((previous) => ({
+        ...previous,
+        revision: previous.revision + 1,
+        widgets: previous.widgets.map((widget) =>
+          widget.name === name ? { ...widget, grantState: decision } : widget,
+        ),
+      }));
+    },
+    selectTab: setActiveTabId,
+  };
   return (
     <main class="board-fixture-shell">
       <header class="board-fixture-header">
@@ -260,28 +274,14 @@ function BoardFixture() {
           <h1>Launch control</h1>
         </div>
         <div class="board-fixture-status">
-          <i /> fixture online
+          <i></i> fixture online
         </div>
       </header>
       <BoardView
         snapshot={snapshot()}
         activeTabId={activeTabId()}
         widgetFrameUrl={frameUrl}
-        callbacks={{
-          applyOps: async (ops) => {
-            setSnapshot((current) => applyBoardFixtureOps(current, ops));
-          },
-          grant: async (name, decision) => {
-            setSnapshot((current) => ({
-              ...current,
-              revision: current.revision + 1,
-              widgets: current.widgets.map((widget) =>
-                widget.name === name ? { ...widget, grantState: decision } : widget,
-              ),
-            }));
-          },
-          selectTab: setActiveTabId,
-        }}
+        callbacks={callbacks}
       />
     </main>
   );

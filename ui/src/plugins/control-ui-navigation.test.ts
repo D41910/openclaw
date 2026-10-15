@@ -217,18 +217,18 @@ it("shows the active plugin section's ordered children and leaves pinned childre
   const children = [...parent.querySelectorAll<HTMLAnchorElement>(".nav-item--child")];
   expect(children.map((child) => child.textContent?.trim())).toEqual(["Alpha", "Beta", "Zulu"]);
   expect(children.map((child) => child.getAttribute("aria-current"))).toEqual(["page", null, null]);
-  const activityIcon = mountSolid(() => createComponent(Icon, { name: "activity" }));
+  const activityIcon = mountSolid(() => createComponent(Icon, { name: "activity" }), {
+    container: document.createElement("div"),
+  }).container;
   expect(
     [...children[0]!.querySelectorAll("svg path")].map((path) => path.getAttribute("d")),
-  ).toEqual(
-    [...activityIcon.container.querySelectorAll("svg path")].map((path) => path.getAttribute("d")),
-  );
-  const fallbackIcon = mountSolid(() => createComponent(Icon, { name: "layers" }));
+  ).toEqual([...activityIcon.querySelectorAll("svg path")].map((path) => path.getAttribute("d")));
+  const layersIcon = mountSolid(() => createComponent(Icon, { name: "layers" }), {
+    container: document.createElement("div"),
+  }).container;
   expect(
     [...children[1]!.querySelectorAll("svg path")].map((path) => path.getAttribute("d")),
-  ).toEqual(
-    [...fallbackIcon.container.querySelectorAll("svg path")].map((path) => path.getAttribute("d")),
-  );
+  ).toEqual([...layersIcon.querySelectorAll("svg path")].map((path) => path.getAttribute("d")));
   expect(pinned.querySelectorAll("a")).toHaveLength(1);
   expect(pinned.querySelector(".nav-item--child")).toBeNull();
   expect(pinned.querySelector("a")?.getAttribute("aria-current")).toBe("page");

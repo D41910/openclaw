@@ -4,6 +4,7 @@ import type { ControlUiNavigationItem } from "../../../../src/plugin-sdk/control
 import { readStyleSheet } from "../../../../test/helpers/ui-style-fixtures.js";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import { Icon } from "../../components/solid/icon.tsx";
+import type { SolidBridgeElement } from "../../lit/solid-bridge.ts";
 import { selectSidebarView } from "../app-sidebar-setup.ts";
 import {
   createGateway,
@@ -216,7 +217,11 @@ describe("AppSidebar interleaved zone", () => {
       ...pages.querySelectorAll<HTMLElement>('[data-sidebar-entry^="plugin:example/"]'),
     ];
     await Promise.all(
-      entries.map((entry) => entry.querySelector("openclaw-plugin-contributions")!.updateComplete),
+      entries.map(
+        (entry) =>
+          entry.querySelector<SolidBridgeElement<object>>("openclaw-plugin-contributions")!
+            .updateComplete,
+      ),
     );
     expect(entries.map((entry) => entry.dataset.sidebarEntry)).toEqual([
       "plugin:example/boards",
@@ -260,7 +265,8 @@ describe("AppSidebar interleaved zone", () => {
       const railEntry = sidebar.querySelector<HTMLElement>(
         `.sidebar-rail [data-sidebar-entry="plugin:example/${id}"]`,
       )!;
-      await railEntry.querySelector("openclaw-plugin-contributions")!.updateComplete;
+      await railEntry.querySelector<SolidBridgeElement<object>>("openclaw-plugin-contributions")!
+        .updateComplete;
       expect(railEntry.querySelectorAll("a")).toHaveLength(1);
       expect(railEntry.querySelector(".nav-item__children")).toBeNull();
       expect(railEntry.querySelector("a")?.getAttribute("aria-label")).toBe(id);
@@ -295,12 +301,14 @@ describe("AppSidebar interleaved zone", () => {
       ["review", "activity"],
       ["notes", "plug"],
     ] as const) {
-      const icon = mountSolid(() => createComponent(Icon, { name: expectedIcon }));
+      const icon = mountSolid(() => createComponent(Icon, { name: expectedIcon }), {
+        container: document.createElement("div"),
+      }).container;
       const paths = sidebar.querySelectorAll(
         `.sidebar-pages [data-sidebar-entry="plugin:example/${id}"] .nav-item__icon svg path`,
       );
       expect([...paths].map((path) => path.getAttribute("d"))).toEqual(
-        [...icon.container.querySelectorAll("svg path")].map((path) => path.getAttribute("d")),
+        [...icon.querySelectorAll("svg path")].map((path) => path.getAttribute("d")),
       );
     }
     const review = sidebar.querySelector(
