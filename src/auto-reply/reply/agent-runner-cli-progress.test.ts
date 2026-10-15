@@ -17,7 +17,10 @@ import { resetAgentEventsForTest } from "../../infra/agent-events.js";
 import { runCliAgentWithLifecycle } from "./agent-runner-cli-dispatch.js";
 
 const runCliAgentMock = vi.hoisted(() => vi.fn());
-vi.mock("../../agents/cli-runner.js", () => ({ runCliAgent: runCliAgentMock }));
+vi.mock("../../agents/cli-runner.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../agents/cli-runner.js")>()),
+  runCliAgent: runCliAgentMock,
+}));
 
 afterEach(() => {
   resetAgentEventsForTest();

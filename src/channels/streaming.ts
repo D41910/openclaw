@@ -631,20 +631,16 @@ export function createChannelProgressDraftGate(params: {
           return params.onStart();
         }
       })
-      .then(() => {
-        if (disposed) {
-          started = false;
-        }
-        if (startPromise === nextStart) {
-          startPromise = undefined;
-        }
-      })
       .catch((error: unknown) => {
         if (startPromise === nextStart) {
-          startPromise = undefined;
           started = false;
         }
         throw error;
+      })
+      .finally(() => {
+        if (startPromise === nextStart) {
+          startPromise = undefined;
+        }
       });
     // Hold one startup promise so timer and explicit starts cannot race into
     // duplicate draft creation.

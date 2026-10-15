@@ -244,7 +244,6 @@ export function createTeamsReplyStreamController(params: {
     }
   };
 
-  // Teams cannot delete an empty interim card; final delivery settles it.
   const progressDraft = createChannelProgressDraftCompositor({
     preparedItems: true,
     // Informative Teams activities are already plain text, unlike Markdown draft transports.
@@ -259,7 +258,7 @@ export function createTeamsReplyStreamController(params: {
         return updateInformativeProgress(progressDraft.getText());
       }
       if (!stream) {
-        return;
+        return false;
       }
       try {
         if (nativeDispatchStarted || options.text) {
@@ -285,6 +284,7 @@ export function createTeamsReplyStreamController(params: {
       } finally {
         resetFinalization();
       }
+      return true;
     },
   });
 
