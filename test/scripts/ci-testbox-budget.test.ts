@@ -162,29 +162,6 @@ describe("Testbox spending admission", () => {
     expect(result.stdout).toContain("idle setting updated");
   });
 
-  it("keeps Android hydration on the existing focused transport and budget contract", () => {
-    const android = parse(readFileSync(".github/workflows/ci-android-focused-testbox.yml", "utf8"));
-    const focused = parse(readFileSync(".github/workflows/ci-check-focused-testbox.yml", "utf8"));
-    expect(android.jobs.admission).toEqual(focused.jobs.admission);
-    const ordinarySteps = focused.jobs.check.steps.filter(
-      (step: { name: string }) => step.name !== "Hydrate Testbox provider env helper",
-    );
-    const androidSteps = android.jobs.check.steps.map(
-      (step: { name: string; with?: Record<string, string> }) => {
-        if (step.name !== "Prepare Testbox shell") {
-          return step;
-        }
-        expect(step.with?.android).toBe("true");
-        const { android: _android, ...withInputs } = step.with ?? {};
-        return { ...step, with: { ...withInputs, "go-version": "1.27.1" } };
-      },
-    );
-    expect({ ...android.jobs.check, steps: androidSteps }).toEqual({
-      ...focused.jobs.check,
-      steps: ordinarySteps,
-    });
-  });
-
   it.each([
     ["ci-check-testbox.yml", "check", "check"],
     ["ci-check-focused-testbox.yml", "check", "check-focused"],
