@@ -11,6 +11,7 @@ import {
   defaultControlUiFeatureMethods,
   installMockGateway,
   startBuiltControlUiE2eServer,
+  waitForConfirmModal,
 } from "../../test-helpers/control-ui-e2e.ts";
 import { workboardUi } from "../../test-helpers/control-ui-workboard-fixture.ts";
 
@@ -49,14 +50,8 @@ suite.define(() => {
     const board = { id: "ops", name: "Operations", total: 0, active: 0, archived: 0, byStatus: {} };
     await suite.withPage({ viewport: { width: 1280, height: 900 } }, async ({ page }) => {
       const errors: string[] = [];
-      const consoleErrors: string[] = [];
       const requests: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
-      page.on("console", (message) => {
-        if (message.type() === "error") {
-          consoleErrors.push(message.text());
-        }
-      });
       page.on("request", (request) => requests.push(request.url()));
       const gateway = await installMockGateway(page, {
         controlUiTabs: workboardUi.controlUiTabs,
@@ -90,32 +85,13 @@ suite.define(() => {
       const url = new URL("workboard/ops", suite.server.baseUrl);
       url.hostname = "ui.example";
       url.hash = new URLSearchParams({ gatewayUrl }).toString();
-      const navigation = await page.goto(url.href);
-      expect(navigation?.status()).toBe(200);
+      const response = await page.goto(url.href);
+      expect(response?.status()).toBe(200);
       expect(errors).toEqual([]);
-      try {
-        await page.getByRole("button", { name: "Switch to gateway.example", exact: true }).click();
-      } catch (error) {
-        const startup = await page
-          .evaluate(() => ({
-            readyState: document.readyState,
-            appPresent: Boolean(document.querySelector("openclaw-app")),
-            confirmationPresent: Boolean(
-              document.querySelector("openclaw-gateway-url-confirmation"),
-            ),
-            bodyText: document.body.textContent?.slice(0, 1_000) ?? "",
-          }))
-          .catch((captureError: unknown) => ({
-            captureError: String(captureError).slice(0, 1_000),
-          }));
-        console.error("Workboard startup failure", {
-          navigationStatus: navigation?.status(),
-          errors: errors.slice(-10).map((message) => message.slice(0, 1_000)),
-          consoleErrors: consoleErrors.slice(-10).map((message) => message.slice(0, 1_000)),
-          startup,
-        });
-        throw error;
-      }
+      const confirmation = await waitForConfirmModal(page);
+      await confirmation
+        .getByRole("button", { name: "Switch to gateway.example", exact: true })
+        .click();
       await page.locator(".workboard-page-title").filter({ hasText: "Operations" }).waitFor();
       expect(await page.evaluate(() => window.isSecureContext)).toBe(false);
       expect((await gateway.getSocketUrls()).at(-1)).toBe(gatewayUrl);

@@ -211,21 +211,9 @@ suite.define(() => {
         const call = async (method: string, params: Record<string, unknown>) => {
           const args = ["gateway", "call", method, "--json", "--params", JSON.stringify(params)];
           const result = await instance.cli(args);
-          if (result.code !== 0) {
-            const redact = (text: string) =>
-              text
-                .replaceAll(instance.gatewayToken, "[fixture token]")
-                .replaceAll(instance.hookToken, "[fixture token]")
-                .slice(-4000);
-            console.error("[stop-finished-run] Gateway CLI failed", {
-              method,
-              code: result.code,
-              signal: result.signal,
-              stdout: redact(result.stdout),
-              stderr: redact(result.stderr),
-            });
-          }
-          expect(result.code, result.stderr).toBe(0);
+          expect(result.code, `${method}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(
+            0,
+          );
           return JSON.parse(result.stdout);
         };
         const sessionRow = async () => {
