@@ -30,7 +30,10 @@ export async function readSessionCatalogJsonlActivity(params: {
     if (hasErrnoCode(error, "ENOENT")) {
       return { kind: "missing", sessionKey: probe.sessionKey };
     }
-    log.warn(`Upstream transcript open failed for ${probe.sessionKey}: ${String(error)}`);
+    log.warn(
+      `Upstream activity monitoring is temporarily unavailable for ${probe.sessionKey}: ${String(error)}. ` +
+        "Check the transcript path and Gateway read access; probing is automatically retried.",
+    );
     return undefined;
   }
   try {

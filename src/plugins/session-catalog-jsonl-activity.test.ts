@@ -64,6 +64,8 @@ describe("session catalog JSONL activity", () => {
       await expect(readActivity("transcript.jsonl")).resolves.toBeUndefined();
       expect(mocks.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(probe.sessionKey));
       expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining(code));
+      expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining("Check the transcript path"));
+      expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining("automatically retried"));
     },
   );
 
