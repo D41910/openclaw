@@ -685,6 +685,22 @@ describe("prepared runtime snapshots", () => {
       },
       emits: true,
     },
+    {
+      name: "publishes original values after the live snapshot was edited in place",
+      next: (published: OpenClawConfig) => {
+        published.gateway = { ...published.gateway, port: 19001 };
+        return withTokenFacts(tokenConfig(), ["gateway.auth.token"]);
+      },
+      emits: true,
+    },
+    {
+      name: "publishes original provenance after the live snapshot was edited in place",
+      next: (published: OpenClawConfig) => {
+        setConfigResolutionFacts(published, createConfigResolutionFacts([]));
+        return withTokenFacts(tokenConfig(), ["gateway.auth.token"]);
+      },
+      emits: true,
+    },
   ])("$name", ({ initial, next, followup, emits }) => {
     const changes = vi.fn();
     unregister.push(sessionChanges.subscribe(changes));
@@ -694,11 +710,13 @@ describe("prepared runtime snapshots", () => {
     expect(changes).toHaveBeenCalledExactlyOnceWith({ all: true, scope: "config" });
     changes.mockClear();
 
-    setRuntimeConfigSnapshot(next(published));
+    const nextConfig = next(published);
+    setRuntimeConfigSnapshot(nextConfig);
     // a same-value publication is a full no-op; revision is internal and keys caches
     expect(getRuntimeConfigSnapshotMetadata()?.revision).toBe(emits ? 2 : 1);
     expect(changes).toHaveBeenCalledTimes(emits ? 1 : 0);
     if (emits) {
+      expect(getRuntimeConfigSnapshot()).toBe(nextConfig);
       expect(changes).toHaveBeenCalledExactlyOnceWith({ all: true, scope: "config" });
     } else {
       expect(getRuntimeConfigSnapshot()).toBe(published);

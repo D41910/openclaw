@@ -189,13 +189,23 @@ function publishRuntimeConfigSnapshot(
 ): void {
   const configFact = prepareRuntimeConfigValueFact(config, runtimeConfigValueFact);
   const facts = configFact.facts;
+  // A no-op must match the live publication as well as its recorded value. Provenance can
+  // change in place without changing the value hash; either kind of edit needs broad invalidation.
+  const previousEditedInPlace =
+    runtimeConfigSnapshot !== null &&
+    runtimeConfigValueFact !== null &&
+    (!matchesRuntimeConfigValueFact(runtimeConfigSnapshot, runtimeConfigValueFact) ||
+      !isDeepStrictEqual(
+        serializeConfigResolutionFacts(runtimeConfigSnapshot),
+        runtimeConfigValueFact.facts,
+      ));
   // Compare with what the previous publication recorded, since its object may have been edited
   // in place; withhold only a distinct object matching that record, or a proven no-op.
   const matchesPublished =
     runtimeConfigSnapshot !== config &&
     runtimeConfigSnapshotMetadata?.fingerprint === configFact.fingerprint &&
     isDeepStrictEqual(runtimeConfigValueFact?.facts, facts);
-  if (valuesUnchanged || matchesPublished) {
+  if (!previousEditedInPlace && (valuesUnchanged || matchesPublished)) {
     return;
   }
   const sourceFact =
@@ -208,21 +218,6 @@ function publishRuntimeConfigSnapshot(
     sourceFingerprint: sourceConfig ? sourceFact.fingerprint : null,
     updatedAtMs: Date.now(),
   };
-  // The live previous object may have been edited in place since it was published, so it cannot
-  // classify the scope either: a narrow scope read from an edited object would leave rows built
-  // from the earlier publication stale. Compare both what the previous publication recorded as
-  // values and as resolution provenance, and fall back to the full `config` scope on either
-  // drift. A provenance-only in-place edit leaves the value hash unchanged, so checking values
-  // alone would let the edited object select a presentation-only scope against a distinct next
-  // object that carries the same facts.
-  const previousEditedInPlace =
-    runtimeConfigSnapshot !== null &&
-    runtimeConfigValueFact !== null &&
-    (!matchesRuntimeConfigValueFact(runtimeConfigSnapshot, runtimeConfigValueFact) ||
-      !isDeepStrictEqual(
-        serializeConfigResolutionFacts(runtimeConfigSnapshot),
-        runtimeConfigValueFact.facts,
-      ));
   const scope = previousEditedInPlace
     ? "config"
     : runtimeSessionChangeScope(runtimeConfigSnapshot, config);
