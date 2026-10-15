@@ -22,7 +22,13 @@ async function normalizeRow(entry: BindingRow, params: Params, warnings: string[
     return undefined;
   }
   const stored = readStoredCodexAppServerBinding(raw);
-  if (stored?.state !== "active") {
+  if (!stored) {
+    warnings.push(
+      `Preserved Codex native assignments in ${entry.key}; the binding could not be decoded. Inspect it before retrying Doctor.`,
+    );
+    return undefined;
+  }
+  if (stored.state !== "active") {
     return undefined;
   }
   let inventory;

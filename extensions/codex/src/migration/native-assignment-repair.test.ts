@@ -119,6 +119,31 @@ beforeEach(() => {
 });
 
 describe("Codex native assignment Doctor repair", () => {
+  it("warns and preserves an active assignment row missing binding.cwd", async () => {
+    const state = fixture([assignment, { ...assignment }], {
+      binding: { threadId: binding.threadId },
+    });
+
+    expect(await migration.detectLegacyState(state.params)).not.toBeNull();
+    const repaired = await migration.migrateLegacyState(state.params);
+
+    expect(state.read()).toEqual(state.original);
+    expect(repaired.changes).toEqual([]);
+    expect(repaired.warningDisposition).toBe("recoverable");
+    expect(repaired.warnings).toEqual([expect.stringContaining("binding could not be decoded")]);
+  });
+
+  it("skips valid cleared bindings without warnings", async () => {
+    const state = fixture([assignment, { ...assignment }], {
+      state: "cleared",
+      binding: undefined,
+    });
+
+    expect(await migration.detectLegacyState(state.params)).toBeNull();
+    expect(await migration.migrateLegacyState(state.params)).toEqual({ changes: [], warnings: [] });
+    expect(state.read()).toEqual(state.original);
+  });
+
   it.each(["assignment", "session"])("preserves missing %s lifecycle evidence", async (missing) => {
     const legacy =
       missing === "assignment"
