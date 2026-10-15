@@ -121,15 +121,16 @@ describe("WizardStepControls", () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
-  it("preserves model setup message spacing and non-string single-choice answers", () => {
+  it("preserves model setup paragraphs, cancellation, and non-string single-choice answers", () => {
     const answer = vi.fn();
+    const cancel = vi.fn();
     const selected = { preset: "synthetic" };
     const { container } = mountSolid(() => (
       <WizardStepControls
         step={{
           id: "choice",
           type: "select",
-          message: "Choose a preset",
+          message: "Choose a preset\n\nSynthetic preset details",
           options: [
             { label: "One", value: selected },
             { label: "Two", value: 2 },
@@ -141,10 +142,23 @@ describe("WizardStepControls", () => {
         inputId="wizard-choice"
         onValueChange={vi.fn()}
         onAnswer={answer}
+        leadingAction={
+          <button type="button" class="cancel" onClick={cancel}>
+            Cancel
+          </button>
+        }
       />
     ));
-    expect(container.querySelector(".wizard-step__message")?.textContent).toBe("Choose a preset");
-    container.querySelector<HTMLButtonElement>(".wizard-step__actions button")?.click();
+    expect(
+      Array.from(container.querySelectorAll(".wizard-step__message p"), (p) => p.textContent),
+    ).toEqual(["Choose a preset", "Synthetic preset details"]);
+    const choices = container.querySelector('[role="group"]')!;
+    expect(container.querySelectorAll(".cancel")).toHaveLength(1);
+    choices.querySelector<HTMLButtonElement>(".cancel")?.click();
+    expect(cancel).toHaveBeenCalledOnce();
+    const firstChoice = choices.querySelector<HTMLButtonElement>("button.primary")!;
+    expect(firstChoice.hasAttribute("autofocus")).toBe(true);
+    firstChoice.click();
     expect(answer).toHaveBeenCalledWith(selected);
   });
 

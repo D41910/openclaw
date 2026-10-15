@@ -52,9 +52,20 @@ function Message(props: WizardStepControlsProps) {
   return (
     <Show when={props.step.message}>
       <div class={stepClass(props, "message")}>
-        {props.presentation === "model-setup" ? "" : "\n        "}
-        {formatUiExternalText(props.step.message!)}
-        {props.presentation === "model-setup" ? "" : "\n      "}
+        <Show
+          when={props.presentation === "model-setup"}
+          fallback={
+            <>
+              {"\n        "}
+              {formatUiExternalText(props.step.message!)}
+              {"\n      "}
+            </>
+          }
+        >
+          <For each={formatUiExternalText(props.step.message!).split("\n\n")} keyed={false}>
+            {(paragraph, index) => <p class={index === 0 ? undefined : "muted"}>{paragraph()}</p>}
+          </For>
+        </Show>
       </div>
     </Show>
   );
@@ -84,7 +95,7 @@ function OptionBody(props: { option: WizardStepOption; channels?: boolean; selec
   );
 }
 
-function SignIn(props: { step: WizardStep }) {
+function SignIn(props: Pick<WizardStepControlsProps, "step" | "presentation">) {
   const code = createMemo(() => props.step.deviceCode);
   const copyLabel = () => t(code() ? "modelSetup.wizard.copyCode" : "modelSetup.wizard.copyLink");
   const copyValue = createMemo(() => code()?.code ?? props.step.externalUrl);
@@ -99,6 +110,7 @@ function SignIn(props: { step: WizardStep }) {
           <Show when={props.step.externalUrl}>
             <a
               class="btn primary wizard-step__external-link"
+              autofocus={props.presentation === "model-setup"}
               data-link-reader-external
               href={props.step.externalUrl}
               target="_blank"
@@ -119,8 +131,18 @@ function SignIn(props: { step: WizardStep }) {
             )}
           </Show>
         </div>
-        <div class="muted" role="status" aria-live="polite">
-          {t("modelSetup.wizard.waiting")}
+        <div
+          class={["muted", { "wizard-step__waiting": props.presentation === "model-setup" }]}
+          role="status"
+          aria-live="polite"
+          aria-busy={props.presentation === "model-setup" ? "true" : undefined}
+        >
+          <Show when={props.presentation === "model-setup"}>
+            <span class="wizard-step__spinner" aria-hidden="true" />
+          </Show>
+          {props.presentation === "model-setup"
+            ? (props.step.progressMessage ?? t("modelSetup.waitingForApproval"))
+            : t("modelSetup.wizard.waiting")}
         </div>
         <Show when={code()?.expiresInMinutes}>
           <div class="muted">
@@ -153,6 +175,7 @@ function Answer(props: WizardStepControlsProps & { label: string; onClick?: () =
     <button
       type={props.onClick ? "button" : "submit"}
       class="btn primary"
+      autofocus={props.presentation === "model-setup"}
       disabled={props.busy}
       onClick={() => props.onClick?.()}
     >
@@ -214,7 +237,7 @@ function TextForm(props: WizardStepControlsProps) {
         </div>
       </Show>
       <Show when={!props.externalAuthInput}>
-        <SignIn step={props.step} />
+        <SignIn step={props.step} presentation={props.presentation} />
       </Show>
       <Show
         when={props.step.sensitive && props.onToggleSensitiveVisibility}
@@ -270,7 +293,7 @@ function TextForm(props: WizardStepControlsProps) {
 function TextStep(props: WizardStepControlsProps) {
   return (
     <Show when={props.externalAuthInput} fallback={<TextForm {...props} />}>
-      <SignIn step={props.step} />
+      <SignIn step={props.step} presentation={props.presentation} />
       <details class="wizard-step__manual-entry">
         <summary class="muted">{t("modelSetup.wizard.manualEntry")}</summary>
         <TextForm {...props} />
@@ -323,16 +346,24 @@ function SingleChoice(props: WizardStepControlsProps & { options: WizardStepOpti
       }
     >
       <div
-        class="wizard-step__actions"
+        class={[
+          "wizard-step__actions",
+          {
+            "wizard-step__actions--split":
+              props.presentation === "model-setup" && Boolean(props.leadingAction),
+          },
+        ]}
         role="group"
         aria-label={label()}
         aria-describedby={props.validationErrorId}
       >
+        <Show when={props.presentation === "model-setup"}>{props.leadingAction}</Show>
         <For each={props.options} keyed={false}>
           {(option, index) => (
             <button
               type="button"
               class={index === 0 ? "btn primary" : "btn"}
+              autofocus={props.presentation === "model-setup" && index === 0}
               disabled={props.busy}
               onClick={() => props.onAnswer(option().value)}
             >
@@ -425,13 +456,12 @@ function OptionsStep(props: WizardStepControlsProps) {
               when={props.presentation !== "channels"}
               fallback={props.busy && <Answer {...props} label={t("modelSetup.wizard.continue")} />}
             >
-              <Show
-                when={props.presentation === "model-setup" && props.leadingAction}
-                fallback={props.leadingAction}
-              >
-                <openclaw-modal-actions class="wizard-step__actions wizard-step__actions--split">
-                  {props.leadingAction}
-                </openclaw-modal-actions>
+              <Show when={props.presentation === "model-setup"} fallback={props.leadingAction}>
+                <Show when={options().length > 2 && props.leadingAction}>
+                  <openclaw-modal-actions class="wizard-step__actions wizard-step__actions--split">
+                    {props.leadingAction}
+                  </openclaw-modal-actions>
+                </Show>
               </Show>
             </Show>
           </>
@@ -486,7 +516,7 @@ function ContinueStep(props: WizardStepControlsProps) {
   return (
     <>
       <Message {...props} />
-      <SignIn step={props.step} />
+      <SignIn step={props.step} presentation={props.presentation} />
       <Answer
         {...props}
         label={t("modelSetup.wizard.continue")}
@@ -505,7 +535,7 @@ function ProgressStep(props: WizardStepControlsProps) {
           <Message {...props} />
         </div>
       </Show>
-      <SignIn step={props.step} />
+      <SignIn step={props.step} presentation={props.presentation} />
       <Show when={props.leadingAction}>
         <ActionRow
           modal={props.presentation === "model-setup"}
