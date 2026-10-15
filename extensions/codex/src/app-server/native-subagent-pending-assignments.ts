@@ -168,5 +168,6 @@ export function mutateNativePendingAssignments(params: {
   return {
     applied: true,
     next: remaining.length ? { version: 1 as const, assignments: remaining } : undefined,
+    consumed: params.consume ? existing : undefined,
   };
 }

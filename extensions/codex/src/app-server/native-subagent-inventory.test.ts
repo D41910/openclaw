@@ -602,7 +602,9 @@ describe("native pending assignment inventory through registered monitor admissi
           display: true,
           content: expect.stringContaining("status succeeded"),
         });
-        expect(notes[0]?.message.content).toContain("child session key: codex-thread:child-thread");
+        expect(notes[0]?.message).toMatchObject({
+          content: expect.stringContaining("child session key: codex-thread:child-thread"),
+        });
       }
       parent.closeCaller();
       client.close();

@@ -69,48 +69,62 @@ export function mutateNativeSubagentBinding({
   ) {
     return { result: false };
   }
-  const field = isAssignment ? "nativeSubagentAssignments" : "nativeSubagentSubmissions";
-  const changed = isAssignment
-    ? mutateNativePendingAssignments({
-        current: current.nativeSubagentAssignments,
-        owner: mutation.owner,
-        assignment: mutation.assignment,
-        consume: mutation.kind === "consume-native-subagent-assignment",
-      })
-    : mutateCodexNativeSubagentSubmissions({
-        current: current.nativeSubagentSubmissions,
-        owner: mutation.owner,
-        receipt: mutation.receipt,
-        consume: mutation.kind === "consume-native-subagent-submission",
-      });
+  if (isAssignment) {
+    const changed = mutateNativePendingAssignments({
+      current: current.nativeSubagentAssignments,
+      owner: mutation.owner,
+      assignment: mutation.assignment,
+      consume: mutation.kind === "consume-native-subagent-assignment",
+    });
+    if (!changed.applied) {
+      return { result: false };
+    }
+    const { nativeSubagentAssignments: _previous, ...bindingOwner } = current;
+    const retired = changed.consumed;
+    if (retired && mutation.kind === "consume-native-subagent-assignment" && mutation.undelivered) {
+      const submissions = readCodexNativeSubagentSubmissions(
+        bindingOwner.nativeSubagentSubmissions,
+      );
+      if (
+        submissions &&
+        matchesCodexNativeSubagentSubmissionOwner(submissions.owner, mutation.owner)
+      ) {
+        const receipts = submissions.receipts.filter(
+          (receipt) =>
+            receipt.childThreadId !== retired.childThreadId ||
+            (receipt.submissionId !== retired.nativeTurnId &&
+              codexNativeSubagentRunId(receipt.childThreadId, receipt.submissionId) !==
+                retired.runId),
+        );
+        delete bindingOwner.nativeSubagentSubmissions;
+        if (receipts.length) {
+          bindingOwner.nativeSubagentSubmissions = { ...submissions, receipts };
+        }
+      }
+    }
+    return {
+      result: true,
+      next: {
+        ...bindingOwner,
+        ...(changed.next ? { nativeSubagentAssignments: changed.next } : {}),
+      },
+    };
+  }
+  const changed = mutateCodexNativeSubagentSubmissions({
+    current: current.nativeSubagentSubmissions,
+    owner: mutation.owner,
+    receipt: mutation.receipt,
+    consume: mutation.kind === "consume-native-subagent-submission",
+  });
   if (!changed.applied) {
     return { result: false };
   }
-  const { [field]: _previous, ...bindingOwner } = current;
-  if (mutation.kind === "consume-native-subagent-assignment" && mutation.undelivered) {
-    const submissions = readCodexNativeSubagentSubmissions(bindingOwner.nativeSubagentSubmissions);
-    if (
-      submissions &&
-      matchesCodexNativeSubagentSubmissionOwner(submissions.owner, mutation.owner)
-    ) {
-      const receipts = submissions.receipts.filter(
-        (receipt) =>
-          receipt.childThreadId !== mutation.assignment.childThreadId ||
-          (receipt.submissionId !== mutation.assignment.nativeTurnId &&
-            codexNativeSubagentRunId(receipt.childThreadId, receipt.submissionId) !==
-              mutation.assignment.runId),
-      );
-      delete bindingOwner.nativeSubagentSubmissions;
-      if (receipts.length) {
-        bindingOwner.nativeSubagentSubmissions = { ...submissions, receipts };
-      }
-    }
-  }
+  const { nativeSubagentSubmissions: _previous, ...bindingOwner } = current;
   return {
     result: true,
     next: {
       ...bindingOwner,
-      ...(changed.next ? { [field]: changed.next } : {}),
+      ...(changed.next ? { nativeSubagentSubmissions: changed.next } : {}),
     },
   };
 }

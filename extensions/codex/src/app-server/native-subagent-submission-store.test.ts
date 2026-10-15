@@ -155,7 +155,7 @@ describe("native subagent submission receipts in the binding store", () => {
       const retirement = {
         kind: "consume-native-subagent-assignment" as const,
         owner,
-        assignment: first,
+        assignment: { ...first, runId: "codex-thread:child-thread" },
         undelivered: true as const,
       };
       await expect(store.mutate(identity, retirement, currentAuthority)).resolves.toBe(true);
