@@ -62,17 +62,10 @@ async function createStartupFailureFixture(
       "} else {",
       '  if (mode === "refusal") fs.writeSync(2, "startup diagnostic: inspection probe\\n");',
       "  const lines = readline.createInterface({ input: process.stdin });",
-      "  let threadLoaded = true;",
       '  lines.on("line", (line) => {',
       "    const message = JSON.parse(line);",
       "    if (message.id === undefined) return;",
       "    fs.appendFileSync(requestLogPath, `${message.method}\\n`);",
-      '    if (message.method === "thread/unsubscribe") {',
-      "      threadLoaded = false;",
-      '      process.stdout.write(`${JSON.stringify({ id: message.id, result: { status: "unsubscribed" } })}\\n`);',
-      '      process.stdout.write(`${JSON.stringify({ method: "thread/status/changed", params: { threadId: "thread-recovered", status: { type: "notLoaded" } } })}\\n`);',
-      "      return;",
-      "    }",
       '    if (mode === "overload" && message.method === "thread/resume") {',
       '      process.stdout.write(`${JSON.stringify({ id: message.id, error: { code: -32001, message: "Server overloaded; retry later." } })}\\n`);',
       "      return;",
@@ -86,7 +79,8 @@ async function createStartupFailureFixture(
       '          : message.method === "skills/list"',
       "            ? { data: [] }",
       `            : ${JSON.stringify(threadStartResult("thread-recovered", "/repo"))};`,
-      '    if (message.method === "thread/read" && !threadLoaded) result.thread.status = { type: "notLoaded" };',
+      // Managed resume requires an unloaded thread before it can reach the overload rejection.
+      '    if (message.method === "thread/read") result.thread.status = { type: "notLoaded" };',
       "    process.stdout.write(`${JSON.stringify({ id: message.id, result })}\\n`);",
       "  });",
       "}",
@@ -399,7 +393,6 @@ describe("Codex app-server startup retry", () => {
     };
     try {
       const binding = testCodexAppServerBindingStore.read(identity);
-      await sibling.client.request("thread/unsubscribe", { threadId: "thread-recovered" });
       expect(binding?.threadId).toBe("thread-recovered");
       const requestsBeforeResume = await fs.readFile(fixture.requestLogPath, "utf8");
 
