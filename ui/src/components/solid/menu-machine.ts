@@ -149,8 +149,8 @@ export function useMenuMachine(
         trackInteractOutside() {},
         scrollToHighlightedItem() {},
         waitForCloseDelay(params) {
-          // SAFETY: the pinned menu effect returns its timer cleanup; Zag's shared type also permits watch effects.
           const wait = () =>
+            // SAFETY: the pinned menu effect returns its timer cleanup; Zag's shared type also permits watch effects.
             machine.implementations!.effects!.waitForCloseDelay!(params) as VoidFunction;
           let cancel = wait();
           const keepMoving = () => {
@@ -251,11 +251,11 @@ export function useMenuMachine(
     "aria-label": overlay.id,
     onOpenChange({ open }) {
       const restore = !open && containsComposed(overlay.surface, service.scope.getActiveElement());
-      // Native sibling dismissal must not leave focus behind in the retired branch.
+      // A retired sibling can still own focus through its return trigger.
       const handoff =
         open &&
         [...(overlay.parent?.children ?? [])].some(
-          (sibling) => sibling !== overlay && sibling.open && sibling.containsFocus(),
+          (sibling) => sibling !== overlay && sibling.containsFocus(),
         );
       if (
         !overlay.request(
@@ -579,6 +579,14 @@ export function useMenuMachine(
             );
             e.preventDefault();
             first?.focus({ preventScroll: true });
+            return;
+          }
+          if (
+            target instanceof HTMLButtonElement &&
+            target.hasAttribute("data-form-control") &&
+            (e.key === "ArrowDown" || e.key === "ArrowUp")
+          ) {
+            keydown(e);
             return;
           }
           if (e.key === "Tab" || target.matches("input,textarea,select,[data-form-control]")) {
