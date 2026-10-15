@@ -125,15 +125,13 @@ export function useSessionMenuEntries(
     ) : undefined,
   });
   const submenu = (entry: SubmenuOptions): MenuItem => {
-    const shortcut =
-      entry.view === "archive" ? "a" : !state.compact && entry.view === "icon" ? "i" : undefined;
+    const shortcut = !state.compact && entry.view === "icon" ? "i" : undefined;
     return {
       id: state.compact ? `compact:open-${entry.view}` : `submenu:${entry.view}`,
       label: entry.label,
       labelClass: "session-menu__text",
       class: [
         "session-menu__item",
-        state.compact && entry.view === "archive" ? "session-menu__item--compact-details" : "",
         !state.compact && entry.view === "assign-owner" ? "people-menu__submenu" : "",
         !state.compact && entry.view === "advanced" ? "session-menu__advanced" : "",
       ]
@@ -148,12 +146,7 @@ export function useSessionMenuEntries(
       icon: icon(entry.icon),
       details: (
         <>
-          {shortcut ? (
-            <SessionMenuShortcut
-              shortcut={shortcut}
-              alias={state.compact ? sessionArchiveShortcut(state) : undefined}
-            />
-          ) : undefined}
+          {shortcut ? <SessionMenuShortcut shortcut={shortcut} /> : undefined}
           {state.compact ? (
             <span class="session-menu__icon session-menu__chevron" aria-hidden="true">
               <Icon name="chevronRight" />
@@ -166,36 +159,24 @@ export function useSessionMenuEntries(
       onBeforeShow: entry.view === "icon" ? appearance.prepare : undefined,
     };
   };
-  const archive = (choice = false): MenuItem =>
-    !choice && !batch() && state.session.hasChildren && !state.session.archived
-      ? submenu({
-          view: "archive",
-          label: t(
-            state.session.archiving ? "sessionsView.archiving" : "sessionsView.archiveSession",
-          ),
-          icon: "archive",
-          disabled: disabled("toggle-archived"),
-          title: state.actionDisabledReasons["toggle-archived"],
-        })
-      : item({
-          kind: "toggle-archived",
-          label: t(
-            state.session.archiving
-              ? "sessionsView.archiving"
-              : batch()
-                ? state.session.archived
-                  ? "sessionsView.restoreSessionCount"
-                  : "sessionsView.archiveSessionCount"
-                : state.session.archived
-                  ? "sessionsView.restoreSession"
-                  : choice
-                    ? "sessionsView.archiveSessionOnly"
-                    : "sessionsView.archiveSession",
-            { count: count() },
-          ),
-          icon: state.session.archived ? "archiveRestore" : "archive",
-          shortcut: "a",
-        });
+  const archive = (): MenuItem =>
+    item({
+      kind: "toggle-archived",
+      label: t(
+        state.session.archiving
+          ? "sessionsView.archiving"
+          : batch()
+            ? state.session.archived
+              ? "sessionsView.restoreSessionCount"
+              : "sessionsView.archiveSessionCount"
+            : state.session.archived
+              ? "sessionsView.restoreSession"
+              : "sessionsView.archiveSession",
+        { count: count() },
+      ),
+      icon: state.session.archived ? "archiveRestore" : "archive",
+      shortcut: "a",
+    });
   const involvement = (): MenuEntry[] =>
     involvementAvailable() && !batch() && state.session.hiddenFromInvolvingMe !== undefined
       ? [
@@ -350,15 +331,6 @@ export function useSessionMenuEntries(
     switch (view) {
       case "advanced":
         return advancedBody();
-      case "archive":
-        return [
-          archive(true),
-          item({
-            kind: "archive-tree",
-            label: t("sessionsView.archiveSessionTree"),
-            icon: "archive",
-          }),
-        ];
       case "snooze":
         snoozeEntries ??= runWithOwner(owner, () => useSessionSnoozeEntries(actions, readState));
         return snoozeEntries();

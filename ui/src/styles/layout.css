@@ -2248,11 +2248,6 @@ openclaw-settings-save-indicator:empty {
   color: inherit;
 }
 
-.nav-section__items {
-  display: grid;
-  gap: 2px;
-}
-
 .sidebar-online {
   gap: 4px;
   padding-top: 12px;
