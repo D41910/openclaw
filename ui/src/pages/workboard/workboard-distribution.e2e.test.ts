@@ -90,7 +90,9 @@ suite.define(() => {
       const url = new URL("workboard/ops", suite.server.baseUrl);
       url.hostname = "ui.example";
       url.hash = new URLSearchParams({ gatewayUrl }).toString();
-      const navigation = await page.goto(url.href);
+      const response = await page.goto(url.href);
+      expect(response?.status()).toBe(200);
+      expect(errors).toEqual([]);
       try {
         await page.getByRole("button", { name: "Switch to gateway.example", exact: true }).click();
       } catch (error) {
@@ -107,7 +109,7 @@ suite.define(() => {
             captureError: String(captureError).slice(0, 1_000),
           }));
         console.error("Workboard startup failure", {
-          navigationStatus: navigation?.status(),
+          navigationStatus: response?.status(),
           errors: errors.slice(-10).map((message) => message.slice(0, 1_000)),
           consoleErrors: consoleErrors.slice(-10).map((message) => message.slice(0, 1_000)),
           startup,
