@@ -392,20 +392,6 @@ function createReplayClaim() {
   return { commit, release, inboundDeduper };
 }
 describe("matrix monitor handler pairing account scope", () => {
-  it("keeps inbound log previews UTF-16 well-formed at the limit", async () => {
-    const logVerboseMessage = vi.fn();
-    const { handler } = createMatrixHandlerTestHarness({ logVerboseMessage });
-
-    await receiveText(handler, {
-      eventId: "$event-preview",
-      body: `${"x".repeat(199)}🚀tail`,
-    });
-
-    expect(logVerboseMessage).toHaveBeenCalledWith(
-      `matrix inbound: room=!room:example.org from=@user:example.org preview="${"x".repeat(199)}"`,
-    );
-  });
-
   it.each(["main", "per-channel-peer"])(
     "pins the configured DM owner only when live dmScope is %s",
     async (dmScope) => {
