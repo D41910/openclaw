@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { subscribeNativeOverlayOcclusion } from "../lib/native-overlay-occlusion.ts";
 import "@awesome.me/webawesome/dist/styles/themes/default.css";
-import { renderComposerLibraryMenuSolid } from "../pages/chat/components/chat-composer-library-menu.tsx";
+import { composerLibraryMenuItems } from "../pages/chat/components/chat-composer-library-menu.tsx";
 import { renderComposerMenuOption as ComposerMenuOption } from "../pages/chat/components/chat-composer-menu.tsx";
 import "../pages/chat/components/browser-tab-card.tsx";
 import { ChatComposerPlusMenu } from "../pages/chat/components/chat-composer-plus-menu.tsx";
@@ -357,9 +357,9 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
         { container: host },
       );
       const { page } = await import("vitest/browser");
-      await page.elementLocator(host.querySelector<HTMLElement>('[slot="trigger"]')!).click();
-      const photo = host.querySelector<HTMLElement>('wa-dropdown-item[value="photo"]')!;
-      const skills = host.querySelector<HTMLElement>('wa-dropdown-item[value="open-skills"]')!;
+      await page.elementLocator(host.querySelector<HTMLElement>('[aria-haspopup="menu"]')!).click();
+      const photo = host.querySelector<HTMLElement>('[data-value="photo"]')!;
+      const skills = host.querySelector<HTMLElement>('[data-value="open-skills"]')!;
       await hoverBackground(photo, highlight);
       const attachmentHover = getComputedStyle(photo).backgroundColor;
       await hoverBackground(skills, attachmentHover);
@@ -376,9 +376,10 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
       const { page } = await import("vitest/browser");
       mountSolid(
         () => (
-          <wa-dropdown>
-            <button slot="trigger">Library</button>
-            {renderComposerLibraryMenuSolid({
+          <Menu
+            id="library-menu-test"
+            label="Library"
+            items={composerLibraryMenuItems({
               result: null,
               loading: false,
               busy: false,
@@ -389,13 +390,13 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
               onRead: () => {},
               onActivate: () => {},
             })}
-          </wa-dropdown>
+          />
         ),
         { container: host },
       );
-      await page.elementLocator(host.querySelector<HTMLElement>('[slot="trigger"]')!).click();
+      await page.elementLocator(host.querySelector<HTMLElement>('[aria-haspopup="menu"]')!).click();
       await hoverBackground(
-        host.querySelector<HTMLElement>('[value="library-reload"]')!,
+        host.querySelector<HTMLElement>('[data-value="library-reload"]')!,
         highlight,
       );
     },
