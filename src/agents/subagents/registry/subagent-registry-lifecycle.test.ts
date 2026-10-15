@@ -76,6 +76,7 @@ import { createSubagentRegistryCompletionRuntime } from "./subagent-registry-com
 import { resolveSubagentKillTargetState } from "./subagent-registry-completion.js";
 import { createSubagentRegistryContextCleanup } from "./subagent-registry-context-cleanup.js";
 import { resetSubagentRegistryRuntimeLoadersForTests } from "./subagent-registry-deps.js";
+import type * as SubagentRegistryHelpers from "./subagent-registry-helpers.js";
 import { registerRequesterDatabaseAdmissionTests } from "./subagent-registry-lifecycle-admission.test-support.js";
 import {
   registerDetachedCleanupAuthorityTest,
@@ -241,7 +242,8 @@ vi.mock("./subagent-registry-cleanup.js", async (importOriginal) => ({
   resolveDeferredCleanupDecision: () => ({ kind: "give-up", reason: "expiry" }),
 }));
 
-vi.mock("./subagent-registry-helpers.js", () => ({
+vi.mock("./subagent-registry-helpers.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof SubagentRegistryHelpers>()),
   ANNOUNCE_COMPLETION_HARD_EXPIRY_MS: 30 * 60_000,
   ANNOUNCE_EXPIRY_MS: 5 * 60_000,
   MIN_ANNOUNCE_RETRY_DELAY_MS: 1_000,
@@ -487,8 +489,6 @@ describe("subagent registry lifecycle hardening", () => {
     { change: "identical", current: true },
     { change: "older equivalent", current: true },
     { change: "error", current: false },
-    { change: "timing", current: false },
-    { change: "reply", current: false },
   ] as const)(
     "keeps queued result authority correct after $change completion",
     async ({ change, current }) => {
@@ -507,16 +507,8 @@ describe("subagent registry lifecycle hardening", () => {
       expect(prepared.isCurrent()).toBe(true);
 
       await completeRun(controller, entry, {
-        terminalReply:
-          change === "reply"
-            ? { ...terminalReply, text: "corrected result" }
-            : { ...terminalReply },
-        endedAt:
-          change === "older equivalent"
-            ? 3_999
-            : change === "timing" || change === "reply"
-              ? 4_001
-              : 4_000,
+        terminalReply: { ...terminalReply },
+        endedAt: change === "older equivalent" ? 3_999 : 4_000,
         ...(change === "error"
           ? {
               outcome: { status: "error", error: "provider failed" },

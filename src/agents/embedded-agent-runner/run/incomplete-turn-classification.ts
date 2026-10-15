@@ -25,6 +25,7 @@ export type IncompleteTurnAttempt = Pick<
   EmbeddedRunAttemptResult,
   | "assistantTexts"
   | "preparedTerminalReply"
+  | "textToolCallAttempt"
   | "clientToolCalls"
   | "currentAttemptAssistant"
   | "currentAttemptCompletedAssistant"
@@ -236,9 +237,10 @@ export function classifyAssistantTurn(params: {
   attempt: Pick<
     IncompleteTurnAttempt,
     | "assistantTexts"
+    | "preparedTerminalReply"
+    | "textToolCallAttempt"
     | "currentAttemptAssistant"
     | "currentAttemptCompletedAssistant"
-    | "preparedTerminalReply"
   >;
 }) {
   const assistant = resolveCurrentAttemptAssistant(params.attempt);
@@ -258,6 +260,7 @@ export function classifyAssistantTurn(params: {
     assistant && assessLastAssistantMessage(assistant) === "incomplete-text",
   );
   const nonVisibleEligibleForSilentReply =
+    !params.attempt.textToolCallAttempt &&
     params.payloadCount === 0 &&
     visibleText.length === 0 &&
     assistant?.stopReason !== "error" &&

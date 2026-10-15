@@ -1,7 +1,9 @@
+import { isPlainTextToolCallAttempt } from "../../../../packages/tool-call-repair/src/index.js";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import { freezeDiagnosticTraceContext } from "../../../infra/diagnostic-trace-context.js";
 import { isTransientNetworkError } from "../../../infra/retryable-network-errors.js";
 import { resolveRawAssistantAnswerText } from "../../../shared/assistant-answer-text.js";
+import { extractAssistantTranscriptSourceText } from "../../../shared/chat-message-content.js";
 import { projectAgentRunAttemptTerminal } from "../../agent-run-terminal-outcome.js";
 import {
   prepareAgentRunTerminalReply,
@@ -29,7 +31,10 @@ import type { settleEmbeddedAttemptStream } from "./attempt-stream-settle.js";
 import {
   buildAttemptReplayMetadata,
   hasAttemptTerminalState,
+  resolveCurrentAttemptAssistant,
 } from "./attempt-terminal-evidence.js";
+import { isRunnerToolCallBlock } from "./attempt-tool-call-block-type.js";
+import { resolveToolCallName } from "./attempt-tool-call-name-resolution.js";
 import { hasComposedVisibleAnswerAfterSettledTools } from "./incomplete-turn-classification.js";
 import { shouldTreatEmptyAssistantReplyAsSilent } from "./incomplete-turn-recovery.js";
 import { readSubscriptionCompletionEvidence } from "./subscription-completion-evidence.js";
@@ -294,7 +299,22 @@ export function completeEmbeddedAttemptResult(
   });
   const keptAnswer = evidence.keptAnswer;
   const keptReply = keptAnswer ? prepareTerminalAssistantReply(keptAnswer.assistant) : closingReply;
+  const assistant = resolveCurrentAttemptAssistant(state);
+  let textToolCallAttempt = false;
+  if (
+    state.terminal.kind === "ok" &&
+    assistant?.stopReason === "stop" &&
+    !assistant.content.some(isRunnerToolCallBlock)
+  ) {
+    const allowedToolNames = input.prepared.toolCatalog.toolSearchRunPlan.liveAllowedToolNames;
+    textToolCallAttempt =
+      allowedToolNames.size > 0 &&
+      isPlainTextToolCallAttempt(extractAssistantTranscriptSourceText(assistant) ?? "", (name) =>
+        Boolean(resolveToolCallName(name, allowedToolNames, undefined, true)),
+      );
+  }
   const result: EmbeddedRunAttemptWithReceiptEvidence = {
+    ...(textToolCallAttempt ? { textToolCallAttempt: true } : {}),
     ...state,
     ...evidence,
     preparedTerminalReply: keptReply,

@@ -407,6 +407,8 @@ export type CronToolsAllowProvenance =
 
 /** Persisted row shape; public Gateway and wire contracts use CronJob. */
 export type CronStoredJob = CronJob & {
+  /** Captured inference owner; private and independent of scheduled tool authority. */
+  inferenceBinding?: import("./inference-binding.js").CronInferenceBinding;
   /** Creation-bound destination for isolated results when no external route exists. */
   sourceConversation?: {
     sessionKey: string;
@@ -439,6 +441,7 @@ type CronJobStateInput = Partial<
     | "autoDisabled"
     | "scheduleActivatedAtMs"
     | "streamSourceIdentity"
+    | "sourceIdentity"
     | "runningReceiptId"
     | "runningScheduleChangeId"
   >

@@ -116,6 +116,7 @@ export function resolveReplyFailureSummary(params: {
             reason: params.reason,
             attempts,
             provider: failoverError?.provider,
+            rateLimitRetriesExhausted: failoverError?.rateLimitRetriesExhausted,
             cooldownExpiry: failoverError?.soonestCooldownExpiry,
             sanitizeText: (rawText) => sanitizeUserFacingText(rawText, { errorContext: true }),
           });
@@ -337,6 +338,17 @@ export function buildExternalRunFailureReply(
   });
   if (cliBackendTimeoutFailure) {
     return { text: cliBackendTimeoutFailure, isGenericRunnerFailure: false };
+  }
+  if (isFailoverError(error) && error.rateLimitRetriesExhausted !== undefined) {
+    const summary = resolveReplyFailureSummary({
+      error,
+      message,
+      reason: failoverFacts.reason,
+      attempts: error.attempts,
+    });
+    if (summary) {
+      return { text: summary.text, isGenericRunnerFailure: false };
+    }
   }
   const providerRequestError = failoverFacts.providerRequestError;
   if (providerRequestError) {

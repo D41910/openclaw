@@ -14,10 +14,12 @@ How the chat pane behaves: the session rail, the composer, and how the transcrip
 
 When the visible conversation does not fill the chat pane, including when the
 latest history page is empty or tool activity is hidden, earlier history loads
-automatically after the layout settles. Loading stops when the pane is filled,
-history ends, or a request fails. Scroll upward or select **Show earlier** to
-load more or retry. Hidden panes and programmatic scroll placement do not trigger
-automatic loading. An incomplete history page does not show the new-chat welcome
+automatically after the layout settles. Filling stops once the prefetch margin
+is filled, after three automatic pages per open, when history ends, or when a
+request fails. A first page that already fills the viewport does not start this
+automatic loading. Scroll upward or select **Show earlier** to load more or retry.
+Hidden panes, background tabs, and programmatic or maintenance scrolling do not
+trigger automatic loading. An incomplete history page does not show the new-chat welcome
 screen.
 
 Enable **Settings → Labs → Speech bubbles** to try the experimental view (off by default).
@@ -237,9 +239,11 @@ Session observation is enabled by default. Safe preamble headlines do not requir
 
 Session links in messages open inside the Control UI. This includes `agent:` keys,
 root-relative chat URLs, and URLs on the current origin or the Gateway's public origin
-when its applied configuration is loaded. Hovering a link shows the session card
-when the session is known locally. Unknown or ambiguous session references remain
-navigable without a card; links to other origins keep normal browser behavior.
+when its applied configuration is loaded. Links show the session's title, and hovering
+one shows its session card. Session URLs that are not in the loaded sidebar are
+resolved through the Gateway, including shortened IDs, using the same access rules as
+opening them. Missing, inaccessible, or ambiguous references stay plain navigable links
+without a card; links to other origins keep normal browser behavior.
 Document-relative hrefs are never session links; file references such as
 `src/utils/foo.ts` and `qa-café/index.md` retain workspace file handling, including
 Unicode names and percent-encoded Markdown link destinations. Explicit Markdown
@@ -274,6 +278,36 @@ repository with a commit. If it is not, the card keeps the prompt and lets you
 select a registered project or enter the correct repository path. Select
 **Start in a new worktree** again to continue; no child session is started for
 an invalid source folder.
+
+## Composer predictions
+
+Enable **Settings → Labs → Composer predictions** to try optional next-message
+suggestions. The experiment is off by default. After a reply finishes in the
+active conversation, OpenClaw can make one additional model request and show a
+possible follow-up as muted text in an empty composer. It may show no suggestion.
+It does not predict on every keystroke. Each active browser tab can make its own
+prediction request. Read-only, imported, and incognito conversations do not show
+predictions.
+
+Press **Tab** or select **Use suggestion** to copy the suggestion into your draft.
+This never sends it: you can edit or undo it before sending normally. **Escape**,
+**Dismiss suggestion**, or typing your own message dismisses it. Suggestions are
+not saved as messages or collaborator drafts until you accept them. Switching
+conversations, hiding the page, or starting another turn discards pending results.
+
+The Labs model selector offers:
+
+- **Utility model** (default): use the agent's configured utility model. A fast,
+  inexpensive model is usually the best fit for this short, optional task.
+- **Conversation model**: use the model selected for this conversation.
+- **Default model**: use the agent's configured default model, ignoring the
+  conversation's model override.
+
+Predictions use bounded recent text from the current conversation in an isolated,
+tool-free request. They cannot run tools, retrieve memory, or send messages. An
+unavailable selected model skips the suggestion rather than silently switching
+to another model. Enabling the experiment can add model usage and cost; existing
+model configuration, provider credentials, and session access rules still apply.
 
 ## Composer capability menu
 

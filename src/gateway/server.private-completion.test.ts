@@ -189,6 +189,7 @@ describe("private subagent completion processing receipts", () => {
       const command = input as AgentCommandOpts;
       expect(command.inputProvenance?.sourceSessionKey).toBe(sourceSessionKeys[1]);
       expect(command.trustedInternalHandoff?.sourceSessionKey).toBe(sourceSessionKeys[1]);
+      expect(command.replyExpectation).toBe("optional");
       await recorder(input).persistApproved();
       return { payloads: [], meta: { durationMs: 1, terminalReply: { disposition: "empty" } } };
     });
@@ -203,6 +204,7 @@ describe("private subagent completion processing receipts", () => {
           },
         },
         privateCompletion: true,
+        replyExpectation: "optional",
         expectFinal: true,
         settleWakeSourceSessionKeys: sourceSessionKeys,
         delegatedToolPolicyHandoff: {

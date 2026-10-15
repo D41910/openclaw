@@ -337,6 +337,7 @@ export async function handleReplyAgentRunError(
     resolveVisibleReplyDelivery: () => Promise<boolean>;
     isHeartbeat: boolean;
     replyExpectation: ReplyExpectation;
+    userTurnAccepted?: boolean;
     isRestartRecoveryArmed: () => Promise<boolean>;
     replyOperation: ReplyOperation;
     resolvedVerboseLevel: VerboseLevel;
@@ -410,7 +411,11 @@ export async function handleReplyAgentRunError(
     return returnWithQueuedFollowupDrain(knownFailurePayload);
   }
   const visibleReplyDelivered = await resolveVisibleReplyDelivery();
-  if (!isHeartbeat && visibleReplyDelivered && !replyOperation.abortSignal.aborted) {
+  if (
+    !isHeartbeat &&
+    (visibleReplyDelivered || context.userTurnAccepted) &&
+    !replyOperation.abortSignal.aborted
+  ) {
     replyOperation.fail("run_failed", error);
     return returnWithQueuedFollowupDrain(
       buildTerminalAgentRunFailureReplyPayload({ replyExpectation, visibleReplyDelivered }),

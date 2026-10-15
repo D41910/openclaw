@@ -74,6 +74,7 @@ export function prepareEmbeddedRunTerminal(input: {
   contextRecoveryState: EmbeddedRunContextRecoveryState;
   resolvedToolResultFormat: NonNullable<RunEmbeddedAgentParams["toolResultFormat"]>;
   terminalState: EmbeddedRunTerminalState;
+  rateLimitRetriesExhausted?: number;
 }) {
   const { runParams, attempt } = input;
   const replyDeliveryState =
@@ -228,6 +229,7 @@ export function prepareEmbeddedRunTerminal(input: {
       ? attempt.lastAssistant
       : input.currentAttemptCompletedAssistant;
   const payloads = buildEmbeddedRunPayloads({
+    rateLimitRetriesExhausted: input.rateLimitRetriesExhausted,
     ...attempt,
     preparedTerminalReply,
     assistantMessageIndex: attempt.lastAssistantTextMessageIndex,

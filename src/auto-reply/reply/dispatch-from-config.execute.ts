@@ -200,9 +200,9 @@ export async function executeDispatch(state: PrepareDispatchExecutionReadyState)
                       await waitForReplyDispatcherIdle(dispatcher, getDispatchAbortSignal());
                     },
                     onVisible: (payload) => {
-                      if (hasOutboundReplyContent(payload, { trimText: true })) {
-                        didDeliverVisiblePartialReply = true;
-                      }
+                      didDeliverVisiblePartialReply ||= hasOutboundReplyContent(payload, {
+                        trimText: true,
+                      });
                     },
                   }),
               onReasoningStream,

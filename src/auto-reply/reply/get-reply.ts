@@ -779,25 +779,15 @@ async function resolveReplyFromConfig(
   }
   const {
     command,
-    allowTextCommands,
-    skillCommands,
-    elevatedEnabled,
-    elevatedAllowed,
-    elevatedFailures,
     defaultActivation,
-    resolvedVerboseLevel,
-    resolvedElevatedLevel,
-    blockReplyChunking,
-    resolvedBlockStreamingBreak,
     provider: resolvedProvider,
     model: resolvedModel,
     requestedRouteResolution,
     modelState,
     resolveModelLevels,
     inlineStatusRequested,
-    directiveAck,
   } = directiveResult.result;
-  let { directives, cleanedBody } = directiveResult.result;
+  let { directives } = directiveResult.result;
   provider = resolvedProvider;
   model = resolvedModel;
 
@@ -849,6 +839,7 @@ async function resolveReplyFromConfig(
 
   const inlineActionResult = await traceGetReplyPhase("reply.handle_inline_actions", () =>
     handleInlineActions({
+      ...directiveResult.result,
       ctx,
       sessionCtx,
       ...replyContext,
@@ -861,29 +852,13 @@ async function resolveReplyFromConfig(
       isGroup,
       opts: withExtractedFileImages(resolvedOpts, extractedFileImages),
       typing,
-      allowTextCommands,
-      inlineStatusRequested,
-      inlineCommand: directiveResult.result.inlineCommand,
-      command,
-      skillCommands,
-      directives,
-      cleanedBody,
-      elevatedEnabled,
-      elevatedAllowed,
-      elevatedFailures,
       defaultActivation: () => defaultActivation,
       thinkingCatalog: statusThinkingCatalog,
-      resolveModelLevels,
-      resolvedVerboseLevel,
-      resolvedElevatedLevel,
-      blockReplyChunking,
-      resolvedBlockStreamingBreak,
       resolveDefaultThinkingLevel: modelState.resolveDefaultThinkingLevel,
       provider,
       model,
-      contextTokens: directiveResult.result.contextTokens,
-      contextTokenProjection: directiveResult.result.contextTokenProjection,
-      directiveAck,
+      // Inline commands do not inherit the full turn's exec overrides.
+      execOverrides: undefined,
       abortedLastRun,
       skillFilter: mergedSkillFilter,
     }),
@@ -894,7 +869,6 @@ async function resolveReplyFromConfig(
     return finishCommandTurn({ opts, ctx: finalized, cfg, reply: inlineActionResult.reply });
   }
   directives = inlineActionResult.directives;
-  cleanedBody = inlineActionResult.cleanedBody;
   const explicitSkillSelections = inlineActionResult.explicitSkillSelections;
   const queueModeOverride = inlineActionResult.queueModeOverride;
   const preparedReplyOpts = withExtractedFileImages(resolvedOpts, extractedFileImages);
@@ -956,7 +930,7 @@ async function resolveReplyFromConfig(
         agentEntry?.reasoningDefault != null || agentCfg?.reasoningDefault != null,
     });
   }
-  const { resolvedThinkLevel, resolvedReasoningLevel } = await resolveRunModelLevels();
+  const modelLevels = await resolveRunModelLevels();
 
   let stagedAttachmentPaths: ReadonlyMap<number, string> = hasStagedMediaFacts(finalized.media)
     ? new Map(
@@ -1091,8 +1065,7 @@ async function resolveReplyFromConfig(
       sessionCfg,
       commandAuthorized,
       directives,
-      resolvedThinkLevel,
-      resolvedReasoningLevel,
+      ...modelLevels,
       modelState: runModelState,
       provider: runProvider,
       model: runModel,

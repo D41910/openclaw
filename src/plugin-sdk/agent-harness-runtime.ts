@@ -75,7 +75,7 @@ export const execPolicy = Object.freeze({ resolveExecModePolicy, minSecurity, ma
  * Harness runtimes that assemble their own instruction layers (e.g. Codex)
  * must surface the same watched-session facts as the embedded prompt, or the
  * model keeps refusing cross-session questions on those runtimes (openclaw#114797).
- * @deprecated Await prepareWatchedSessionsHarnessContext with current host authority.
+ * @deprecated Await prepareWatchedSessionsHarnessContext with current host authority. Final compatibility day: 2026-12-31.
  */
 export function buildWatchedSessionsHarnessContext(params: {
   config?: OpenClawConfig;
@@ -172,6 +172,7 @@ export type { AgentHarnessUserInputPromptOptions } from "../agents/harness/user-
 export type { AgentHarnessQuestionGatewayCall } from "../agents/harness/gateway-question-dispatch.js";
 type EmbeddedRunAttemptParamsBase = Omit<
   CoreEmbeddedRunAttemptParams,
+  | "thinkingExplicit"
   | "admittedRunContext"
   | "disableToolSearch"
   | "sessionReadScopeKey"

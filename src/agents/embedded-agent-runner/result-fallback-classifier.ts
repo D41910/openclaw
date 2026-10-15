@@ -246,6 +246,7 @@ export function classifyEmbeddedAgentRunResultForModelFallback(params: {
       reason: failoverReason,
       code: "embedded_error_payload",
       rawError,
+      rateLimitRetriesExhausted: providerFailure?.rateLimitRetriesExhausted,
     };
   }
 
