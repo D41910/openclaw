@@ -208,10 +208,17 @@ suite.define(() => {
         await expect
           .poll(profile)
           .toMatchObject({ type: "api_key", profileId: `${loginProvider}:default` });
-        await expect.poll(() => page.locator("openclaw-modal-dialog").count()).toBe(0);
+        const completed = page.locator("openclaw-modal-dialog").filter({
+          has: page.locator(".model-setup-wizard--done"),
+        });
+        await completed
+          .getByRole("heading", { name: "Fixture browser sign-in is connected", exact: true })
+          .waitFor();
         await page
           .getByText("Fixture browser sign-in: Provider credentials saved.", { exact: true })
           .waitFor();
+        await completed.getByRole("button", { name: "Close", exact: true }).click();
+        await expect.poll(() => page.locator("openclaw-modal-dialog").count()).toBe(0);
         await page.screenshot({ path: path.join(suite.artifactDir, "login-completed.png") });
         await readback.client.stopAndWait();
         await fixture.instance.stopGateway();
