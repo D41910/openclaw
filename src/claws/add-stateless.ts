@@ -31,11 +31,13 @@ import { digestClawValue } from "./digest.js";
 import {
   ClawMcpInstallError,
   installClawMcpServersStateless,
+  rollbackStatelessClawMcpServers,
   type PersistedClawMcpServerRef,
 } from "./mcp.js";
 import {
   ClawPackageInstallError,
   installClawPackages,
+  rollbackStatelessClawPackages,
   type ClawPluginInstallConsent,
   type ClawSkillInstallConsent,
 } from "./packages.js";
@@ -65,7 +67,9 @@ export type StatelessClawAddOptions = {
   commitConfig?: ConfigCommit;
   rollbackNewAgent?: (plan: ClawAddPlan, cronJobs: PersistedClawCronRef[]) => Promise<void>;
   installPackages?: typeof installClawPackages;
+  rollbackPackages?: typeof rollbackStatelessClawPackages;
   installMcpServers?: typeof installClawMcpServersStateless;
+  rollbackMcpServers?: typeof rollbackStatelessClawMcpServers;
   installCronJobs?: typeof installClawCronJobsStateless;
   createWorkspaceFiles?: typeof createClawWorkspaceFiles;
   seedPackageBootstrap?: typeof seedClawPackageBootstrap;
@@ -283,10 +287,21 @@ export async function stageClawAddHostRequirementsStateless(
   };
   const fail = async (error: unknown, code: string): Promise<StatelessClawAddResult> => {
     const cleanupErrors = await rollback();
+    if (!workspaceExposed && !configCommitted) {
+      cleanupErrors.push(
+        ...(await (options.rollbackMcpServers ?? rollbackStatelessClawMcpServers)(
+          mcpServers,
+          options,
+        )),
+        ...(await (options.rollbackPackages ?? rollbackStatelessClawPackages)(packages, options)),
+      );
+    }
     const message = coerceErrorMessage(error);
     const sharedRetained =
-      packages.some((pkg) => pkg.kind === "plugin" && pkg.origin === "claw-introduced") ||
-      mcpServers.some((server) => server.origin === "claw-introduced");
+      packages.some(
+        (pkg) =>
+          pkg.kind === "plugin" && pkg.origin === "claw-introduced" && pkg.status !== "rolled_back",
+      ) || mcpServers.some((server) => server.origin === "claw-introduced");
     const retainedMessage = sharedRetained
       ? " Shared plugins or MCP servers already added were kept; remove them separately if unused."
       : "";
