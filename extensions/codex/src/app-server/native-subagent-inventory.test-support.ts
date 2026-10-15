@@ -12,6 +12,7 @@ import {
   createNativeSubagentAssignmentStore,
   createNativeSubagentSessionAuthority,
 } from "./native-subagent-assignment-store.js";
+import type { CodexNativeSubagentHistoryOwner } from "./native-subagent-history-owner.js";
 import { defaultNativeSubagentMonitorRuntime } from "./native-subagent-monitor-runtime.js";
 import { codexNativeSubagentMonitorRuntime } from "./native-subagent-monitor.js";
 import {
@@ -54,7 +55,7 @@ export async function fixture() {
     vi.useRealTimers();
   });
   const lifecycleRevision = entry.lifecycleRevision;
-  const historyOwner = (parentThreadId = "parent-thread") => ({
+  const historyOwner = (parentThreadId = "parent-thread"): CodexNativeSubagentHistoryOwner => ({
     ...nativeHistoryOwner(parentThreadId),
     sessionId: identity.sessionId,
     lifecycleRevision,
