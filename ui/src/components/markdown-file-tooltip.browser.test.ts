@@ -131,8 +131,8 @@ describe("file path tooltip", () => {
       } else {
         await userEvent.keyboard("{Escape}");
       }
+      await expect.poll(card).toBeNull();
       if (dismissal === "reopen") {
-        await expect.poll(card).toBeNull();
         await page.getByRole("button", { name: "Outside", exact: true }).hover();
         const reopened = waitForReopen(tooltip);
         await page.elementLocator(anchor()).hover();
