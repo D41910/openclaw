@@ -35,7 +35,9 @@ export function ModelPicker(props: ModelPickerParams) {
             ? {
                 id: option.provider,
                 label: providerDisplayLabel(option.provider),
-                leading: providerIcon(option.provider),
+                get leading() {
+                  return providerIcon(this.id);
+                },
               }
             : undefined
       : undefined,
