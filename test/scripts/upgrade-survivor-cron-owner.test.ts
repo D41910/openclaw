@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
@@ -42,6 +42,11 @@ function fixture(candidateProjection = false, baselineVersion = "2026.9.4") {
       payload_kind TEXT NOT NULL, job_json TEXT NOT NULL, state_json TEXT NOT NULL DEFAULT '{}',
       runtime_updated_at_ms INTEGER, schedule_identity TEXT, sort_order INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL, PRIMARY KEY (store_key, job_id)
+    ) STRICT`);
+    db.exec(`CREATE TABLE diagnostic_events (
+      scope TEXT NOT NULL, event_key TEXT NOT NULL, payload_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL, sequence INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (scope, event_key)
     ) STRICT`);
     if (candidateProjection) {
       db.exec("ALTER TABLE cron_jobs ADD COLUMN grant_definition_generation INTEGER");
@@ -114,10 +119,13 @@ it.each([
       const saved = JSON.parse(readFileSync(f.configPath, "utf8"));
       expect(saved.agents).not.toHaveProperty("ownership");
       expect(saved.agents.entries.ops.default).toBe(true);
-      const legacy = JSON.parse(readFileSync(saved.cron.store, "utf8"));
-      expect(legacy.jobs).toHaveLength(1);
-      expect(legacy.jobs[0].id).toBe("owner-proof-json-import");
-      expect(legacy.jobs[0]).not.toHaveProperty("agentId");
+      expect(existsSync(saved.cron.store)).toBe(false);
+      const specimen = JSON.parse(
+        readFileSync(path.join(f.artifacts, "cron-owner-fixture.json"), "utf8"),
+      );
+      expect(specimen.definitions).toHaveLength(rows.length);
+      expect(specimen.before.legacySourceSha256).toBe(null);
+      expect(specimen.before.quarantinedJobs).toBe(0);
     } finally {
       db.close();
     }
