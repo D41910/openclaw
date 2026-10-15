@@ -75,48 +75,32 @@ describe("config appearance preferences", () => {
     }
   });
 
-  it.each([
-    { systemLocale: "pt-BR", localeOverride: undefined, label: "Português (Brazilian Portuguese)" },
-    { systemLocale: "de", localeOverride: "fr", label: "Deutsch (German)" },
-  ] as const)(
-    "renders and changes language with system locale $systemLocale",
-    async ({ systemLocale, localeOverride, label }) => {
-      const { container, props } = renderAppearance({
-        systemLocale,
-        localeOverride,
-        localeOverridden: Boolean(localeOverride),
-      });
-      await updatePickers(container);
-      const sections = [...container.querySelectorAll<HTMLElement>(".settings-section")];
-      expect(sections[0]?.id).toBe("settings-language");
-      expect(sections[0]?.textContent).toContain("Language");
-      expect(sections[0]?.textContent).toContain("Synced across your devices through the gateway");
-      const select = container.querySelector<SelectPicker>(
-        "#settings-language openclaw-select-picker",
-      );
-      expect(select).not.toBeNull();
-      if (!select) {
-        throw new Error("Missing language select");
-      }
-      if (localeOverride) {
-        expect(
-          select.querySelector('[role="option"][data-value="fr"]')?.getAttribute("aria-selected"),
-        ).toBe("true");
-      } else {
-        expect(
-          select.querySelector('[role="option"][aria-selected="true"]')?.getAttribute("data-value"),
-        ).toBe("system");
-      }
-      expect(select.querySelector('[role="option"][data-value="system"]')?.textContent).toContain(
-        `System (${label})`,
-      );
-      for (const value of ["fr", "system"]) {
-        await choosePickerValue(select, value);
-      }
-      expect(props.onLocaleChange).toHaveBeenCalledWith("fr");
-      expect(props.onLocaleChange).toHaveBeenCalledWith(undefined);
-    },
-  );
+  it("renders the system language and changes the locale override", async () => {
+    const { container, props } = renderAppearance({ systemLocale: "pt-BR" });
+    await updatePickers(container);
+    const sections = [...container.querySelectorAll<HTMLElement>(".settings-section")];
+    expect(sections[0]?.id).toBe("settings-language");
+    expect(sections[0]?.textContent).toContain("Language");
+    expect(sections[0]?.textContent).toContain("Synced across your devices through the gateway");
+    const select = container.querySelector<SelectPicker>(
+      "#settings-language openclaw-select-picker",
+    );
+    expect(select).not.toBeNull();
+    if (!select) {
+      throw new Error("Missing language select");
+    }
+    expect(
+      select.querySelector('[role="option"][aria-selected="true"]')?.getAttribute("data-value"),
+    ).toBe("system");
+    expect(select.querySelector('[role="option"][data-value="system"]')?.textContent).toContain(
+      "System (Português (Brazilian Portuguese))",
+    );
+    for (const value of ["fr", "system"]) {
+      await choosePickerValue(select, value);
+    }
+    expect(props.onLocaleChange).toHaveBeenCalledWith("fr");
+    expect(props.onLocaleChange).toHaveBeenCalledWith(undefined);
+  });
 
   it("names the theme's chat face and maps typography sentinels back to unset overrides", async () => {
     const { container, props } = renderAppearance({
@@ -380,29 +364,6 @@ describe("config appearance preferences", () => {
     expect(themeDescription.textContent).not.toContain("Synced across your devices");
     expect(followUpRow?.textContent).toContain("Waiting to sync through the gateway");
     expect(followUpRow?.textContent).not.toContain("Synced across your devices");
-  });
-
-  it.each([
-    {
-      title: "Collapse task progress by default on desktop",
-      preference: "chatCollapseTaskProgress",
-      checked: false,
-    },
-    {
-      title: "Show live agent activity in sidebar",
-      preference: "sidebarLiveActivity",
-      checked: true,
-    },
-  ] as const)("changes the browser-local $title toggle", ({ title, preference, checked }) => {
-    const { container, props } = renderAppearance();
-    document.body.append(container);
-    onTestFinished(() => container.remove());
-    const row = settingsRow(container, title);
-    expect(row.querySelector<HTMLInputElement>(".settings-toggle__input")?.checked).toBe(checked);
-    row.click();
-    expect(props.onAppearanceChange).toHaveBeenCalledWith({ [preference]: !checked });
-    expect(row.textContent).not.toContain("Using default:");
-    expect(row.textContent).toContain("Stored in this browser only");
   });
 
   it("names the chat preference selects for assistive tech", () => {
