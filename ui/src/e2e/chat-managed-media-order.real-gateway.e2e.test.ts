@@ -217,17 +217,19 @@ async function runCli(args: string[]) {
 
 async function capture(page: Page, bubble: Locator, name: string) {
   const body = (await page.locator("body").textContent()) ?? "";
-  for (const privateValue of [
-    instance.gatewayToken,
-    instance.hookToken,
-    instance.stateDir,
-    instance.homeDir,
-    process.cwd(),
-    fixtureKey,
-  ]) {
-    expect(body.includes(privateValue), "Capture must contain only synthetic public content").toBe(
-      false,
-    );
+  const visibleText = await page.locator("body").innerText();
+  for (const [category, privateValue] of [
+    ["gatewayToken", instance.gatewayToken],
+    ["hookToken", instance.hookToken],
+    ["stateDir", instance.stateDir],
+    ["homeDir", instance.homeDir],
+    ["cwd", process.cwd()],
+    ["fixtureKey", fixtureKey],
+  ] as const) {
+    expect(
+      body.includes(privateValue),
+      `${category}: visible-text-match=${visibleText.includes(privateValue)}`,
+    ).toBe(false);
   }
   expect(new URL(page.url()).hash).toBe("");
   const content = [
