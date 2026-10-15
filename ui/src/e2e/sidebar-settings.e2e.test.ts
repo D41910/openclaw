@@ -474,6 +474,9 @@ suite.define(() => {
       viewport: { height: 900, width: 1440 },
     });
     const page = await context.newPage();
+    await page.addInitScript(() => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    });
     const gateway = await installMockGateway(page, {
       featureMethods: ["system.info"],
       methodResponses: { "system.info": deviceSystemInfo },
@@ -481,6 +484,7 @@ suite.define(() => {
 
     try {
       await page.goto(`${suite.server.baseUrl}settings/connection`);
+      await gateway.waitForRequest("system.info");
 
       const gatewayUrl = page.getByLabel("Gateway URL", { exact: true });
       const credential = page.getByLabel("Gateway secret", { exact: true });
@@ -504,7 +508,6 @@ suite.define(() => {
       expect(await credential.inputValue()).toBe("browser-proof-secret");
       expect(await credential.isEditable()).toBe(true);
 
-      await gateway.waitForRequest("system.info");
       const reads = (await gateway.getRequests("system.info")).length;
       const connections = (await gateway.getRequests("connect")).length;
       await gateway.deferNext("connect");
