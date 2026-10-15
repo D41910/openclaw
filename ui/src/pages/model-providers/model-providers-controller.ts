@@ -106,6 +106,7 @@ export class ModelProvidersController extends ModelPageController {
   };
   private logoutConfirmation: AbortController | null = null;
   private pendingConnection = false;
+  private pendingCredentialInvalidation = false;
 
   setState<Key extends keyof ModelProvidersState>(key: Key, value: ModelProvidersState[Key]) {
     if (!Object.is(this.state[key], value)) {
@@ -239,13 +240,20 @@ export class ModelProvidersController extends ModelPageController {
       this.setMessage("add", null);
     },
     canContinue: () => this.mutationBlockedReason() === null,
-    refresh: () => this.refresh("replacement"),
+    refresh: (providerId) => this.refresh("replacement", providerId),
   });
   private readonly subscriptions = new SubscriptionsController(this)
     .effect(
       () => this.context?.gateway,
       (gateway) =>
-        modelCatalog.subscribeModelCatalogChanges(gateway, () => void this.refresh("publication")),
+        modelCatalog.subscribeModelCatalogChanges(gateway, () => {
+          // A picker can outlive other clients' credential writes, even without signing in.
+          if (this.login.busy) {
+            this.pendingCredentialInvalidation = true;
+          } else {
+            void this.refresh("publication");
+          }
+        }),
     )
     .effect(
       () => this.context?.gateway,
@@ -309,7 +317,7 @@ export class ModelProvidersController extends ModelPageController {
     const loaderChanged = this.loaderPending !== this.previousLoaderPending;
     this.previousRouteData = data;
     this.previousLoaderPending = this.loaderPending;
-    if ((routeChanged || loaderChanged) && data) {
+    if (routeChanged && data) {
       if (data.connect && !previous?.connect) {
         this.pendingConnection = true;
       }
@@ -333,6 +341,9 @@ export class ModelProvidersController extends ModelPageController {
       }
       this.ensureInitialData();
     }
+    if (loaderChanged && !this.loaderPending) {
+      this.supplemental.resume();
+    }
   }
 
   override afterUpdate() {
@@ -343,6 +354,9 @@ export class ModelProvidersController extends ModelPageController {
     if (this.pendingConnection && this.state.data && this.canMutate() && !this.core.loading) {
       this.pendingConnection = false;
       void this.login.open();
+    }
+    if (this.pendingCredentialInvalidation && !this.login.busy) {
+      void this.refresh("replacement");
     }
   }
 
@@ -407,6 +421,7 @@ export class ModelProvidersController extends ModelPageController {
   }
 
   private resetAgentScopeState() {
+    this.pendingCredentialInvalidation = false;
     this.login.reset();
     this.setState("busy", {});
     this.setState("messages", {});
@@ -444,7 +459,7 @@ export class ModelProvidersController extends ModelPageController {
     this.ensureInitialData();
   }
 
-  private refresh(reason: ModelProviderRefreshReason): Promise<void> {
+  private refresh(reason: ModelProviderRefreshReason, providerId?: string): Promise<void> {
     if (!this.state.selectedAgentId) {
       return Promise.resolve();
     }
@@ -453,7 +468,20 @@ export class ModelProvidersController extends ModelPageController {
       this.refreshPolicy.markLoadDeferred();
       return Promise.resolve();
     }
-    return this.core.refresh(client, this.state.selectedAgentId, reason);
+    // Another client's write is outside the selected owner, so reconcile every provider.
+    const crossClient = this.pendingCredentialInvalidation;
+    this.pendingCredentialInvalidation = false;
+    const reconcile = providerId !== undefined || crossClient;
+    const target = reconcile && this.state.data ? this.state.data : undefined;
+    return this.core.refresh(
+      client,
+      this.state.selectedAgentId,
+      reason,
+      target && {
+        providerId: crossClient ? undefined : providerId,
+        data: target,
+      },
+    );
   }
 
   private setBusy = (key: string, value: boolean) =>
@@ -683,7 +711,7 @@ export class ModelProvidersController extends ModelPageController {
           ? this.context.agents.refreshList()
           : Promise.all([
               this.context.runtimeConfig.refresh({ background: true }),
-              this.refresh("forced"),
+              this.refresh("forced", this.core.retryProvider),
             ])),
       onOpenKeyEditor: (provider) => {
         this.setState("keyEditorProvider", provider);
