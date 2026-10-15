@@ -1,11 +1,11 @@
-import { createSignal, flush } from "solid-js";
+import { createSignal, flush, Show } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ControlUiEnvironment } from "../../../src/gateway/control-ui-bootstrap-contract.js";
 import type { SolidBridgeElement } from "../lit/solid-bridge.ts";
 import { cleanupSolid, mountSolid } from "../test-helpers/mount-solid.ts";
 import "./app-topbar-solid.tsx";
 import { MacosTitlebarControls } from "./macos-titlebar-controls.runtime-solid.tsx";
-import { renderNewSessionLink } from "./new-session-link.ts";
+import { renderNewSessionLink } from "./solid/new-session-link.tsx";
 
 afterEach(() => {
   cleanupSolid();
@@ -16,20 +16,33 @@ describe("Solid shell chrome", () => {
   it("updates the topbar's environment and drawer state while retaining its action target", async () => {
     const [environment, setEnvironment] = createSignal<ControlUiEnvironment | null>(null);
     const [open, setOpen] = createSignal(false);
-    const [newSessionAction, setNewSessionAction] = createSignal<unknown>(undefined);
+    const [showNewSessionAction, setShowNewSessionAction] = createSignal(false);
     const toggle = vi.fn();
     const palette = vi.fn();
     const openSession = vi.fn();
-    const view = mountSolid(() => (
-      <openclaw-app-topbar
-        prop:environment={environment()}
-        prop:navDrawerOpen={open()}
-        prop:newSessionAction={newSessionAction()}
-        prop:resourceBasePath="/control"
-        prop:onToggleDrawer={toggle}
-        prop:onOpenPalette={palette}
-      />
-    ));
+    const view = mountSolid(() => {
+      const newSessionAction = (
+        <Show when={showNewSessionAction()}>
+          {renderNewSessionLink({
+            basePath: "/control",
+            agentId: "writer",
+            className: "header-new-session",
+            label: "New conversation",
+            onOpen: openSession,
+          })}
+        </Show>
+      );
+      return (
+        <openclaw-app-topbar
+          prop:environment={environment()}
+          prop:navDrawerOpen={open()}
+          prop:newSessionAction={newSessionAction}
+          prop:resourceBasePath="/control"
+          prop:onToggleDrawer={toggle}
+          prop:onOpenPalette={palette}
+        />
+      );
+    });
     const topbar = view.container.querySelector<SolidBridgeElement<object>>("openclaw-app-topbar")!;
     await topbar.updateComplete;
     const drawer = view.container.querySelector<HTMLButtonElement>(".topbar-nav-toggle")!;
@@ -47,15 +60,7 @@ describe("Solid shell chrome", () => {
     search.click();
     expect(palette).toHaveBeenCalledOnce();
 
-    setNewSessionAction(
-      renderNewSessionLink({
-        basePath: "/control",
-        agentId: "writer",
-        className: "header-new-session",
-        label: "New conversation",
-        onOpen: openSession,
-      }),
-    );
+    setShowNewSessionAction(true);
     flush();
     await topbar.updateComplete;
     const newSession = view.container.querySelector<HTMLAnchorElement>(
@@ -65,11 +70,8 @@ describe("Solid shell chrome", () => {
     newSession.click();
     expect(openSession).toHaveBeenCalledWith("writer", undefined);
 
-    setNewSessionAction(undefined);
-    flush();
-    await topbar.updateComplete;
-    expect(view.container.querySelector(".header-new-session")).toBeNull();
-    expect(view.container.querySelector(".topbar-search")).toBe(search);
+    newSession.focus();
+    expect(document.activeElement).toBe(newSession);
 
     setEnvironment({ label: "edge", color: "amber" });
     setOpen(true);
@@ -79,6 +81,14 @@ describe("Solid shell chrome", () => {
     expect(view.container.querySelector(".topbar-nav-toggle")).toBe(drawer);
     expect(drawer.getAttribute("aria-expanded")).toBe("true");
     expect(view.container.querySelector('[slot="content"] kbd')?.textContent).toBe("⌘K");
+    expect(view.container.querySelector(".header-new-session")).toBe(newSession);
+    expect(document.activeElement).toBe(newSession);
+
+    setShowNewSessionAction(false);
+    flush();
+    await topbar.updateComplete;
+    expect(view.container.querySelector(".header-new-session")).toBeNull();
+    expect(view.container.querySelector(".topbar-search")).toBe(search);
 
     setEnvironment(null);
     flush();

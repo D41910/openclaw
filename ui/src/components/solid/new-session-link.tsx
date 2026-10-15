@@ -1,6 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import { createMemo, createSignal, createUniqueId, lazy, Loading, onSettled, Show } from "solid-js";
 import { pathForRoute } from "../../app-route-paths.ts";
+import type { ApplicationContext } from "../../app/context.ts";
 import { rosterActivityStore } from "../../lib/agents/roster-activity-store.ts";
 import { IdentityAvatarController } from "../../lib/identity-avatar-loader.ts";
 import {
@@ -11,7 +12,11 @@ import { shouldHandleNavigationClick } from "../../lib/navigation-click.ts";
 import { useApplication } from "../../lib/reactive/context.ts";
 import { projectRosterActivity } from "../../lib/reactive/domain-capabilities.ts";
 import { t } from "../../lib/reactive/i18n.ts";
-import type { SessionMethodAccess } from "../../lib/session-method-access.ts";
+import {
+  readSessionMethodAccess,
+  type SessionMethodAccess,
+} from "../../lib/session-method-access.ts";
+import { normalizeAgentId } from "../../lib/sessions/session-key.ts";
 import { defineSolidBridge } from "../../lit/solid-bridge.ts";
 import { newSessionSearch, type NewSessionTarget } from "../../pages/new-session/location.ts";
 import type { AgentIdentity } from "../identity-avatar-view.ts";
@@ -76,6 +81,65 @@ export function renderNewSessionLink(params: {
         <Icon name="plus" />
       </a>
     </openclaw-tooltip>
+  );
+}
+
+export function ContextNewSessionAction(props: {
+  context: ApplicationContext;
+  class: string;
+  agentId?: string;
+}): JSX.Element {
+  const readAccess = () =>
+    readSessionMethodAccess(props.context.gateway.snapshot, {
+      method: "sessions.create",
+      params: {},
+      sessionScope: true,
+    });
+  const access = createMemo(readAccess);
+  const onOpen = (agentId: string) => {
+    if (readAccess().allowed) {
+      props.context.navigate("new-session", { search: newSessionSearch(agentId) });
+    }
+  };
+  return (
+    <Show
+      when={props.context.theme.settings.sidebarAgentsMode === "roster"}
+      fallback={renderNewSessionLink({
+        get basePath() {
+          return props.context.basePath;
+        },
+        get agentId() {
+          return (
+            props.agentId ??
+            normalizeAgentId(
+              props.context.agentSelection.state.selectedId ??
+                props.context.gateway.snapshot.assistantAgentId,
+            )
+          );
+        },
+        get className() {
+          return props.class;
+        },
+        get label() {
+          return t("agentChip.newConversation");
+        },
+        showShortcut: true,
+        get disabledReason() {
+          const current = access();
+          return current.allowed ? undefined : current.reason;
+        },
+        onOpen,
+      })}
+    >
+      <NewSessionMenu
+        basePath={props.context.basePath}
+        access={access()}
+        triggerClass={props.class}
+        active={true}
+        snapshotCards={null}
+        onOpen={onOpen}
+      />
+    </Show>
   );
 }
 

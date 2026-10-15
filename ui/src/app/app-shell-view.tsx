@@ -1,11 +1,13 @@
 import "../lib/toast-host.ts";
 import type { JSX as SolidJSX } from "@solidjs/web";
 import { createEffect, createMemo, Show } from "solid-js";
-import { renderContextNewSessionAction } from "../components/new-session-link.ts";
 import { renderGatewayStatus } from "../components/solid/gateway-status.tsx";
 import { Icon } from "../components/solid/icon.tsx";
 import { ConnectingSplash } from "../components/solid/loading-skeleton.tsx";
-import { renderNewSessionLink } from "../components/solid/new-session-link.tsx";
+import {
+  ContextNewSessionAction,
+  renderNewSessionLink,
+} from "../components/solid/new-session-link.tsx";
 import type { ThemeModeChangeDetail } from "../components/theme-mode-toggle.ts";
 import {
   formatKeyboardShortcutCombo,
@@ -79,6 +81,25 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
       Object.assign(props.host.navigationSidebar, state.sidebarProperties);
     }
   });
+  const newSessionAction = (
+    <Show
+      when={
+        !view().nativeEmbed &&
+        view().mobileNavLayout &&
+        !view().mergedChatChrome &&
+        !view().navDrawerOpen &&
+        !view().onboarding &&
+        !view().nativeWebChrome &&
+        !document.documentElement.classList.contains("openclaw-native-nav")
+      }
+    >
+      <ContextNewSessionAction
+        context={view().context}
+        class="header-new-session"
+        agentId={view().selectedAgentId}
+      />
+    </Show>
+  );
   const workspace = (
     <div style={{ display: "contents" }}>
       <ShellLazyOverlays
@@ -139,20 +160,7 @@ function ApplicationShell(props: { host: ShellViewHost }): SolidJSX.Element {
             prop:resourceBasePath={view().context.resourceBasePath}
             prop:environment={view().config.environment}
             prop:navDrawerOpen={view().navDrawerOpen}
-            prop:newSessionAction={
-              view().mobileNavLayout &&
-              !view().mergedChatChrome &&
-              !view().navDrawerOpen &&
-              !view().onboarding &&
-              !view().nativeWebChrome &&
-              !document.documentElement.classList.contains("openclaw-native-nav")
-                ? renderContextNewSessionAction(
-                    view().context,
-                    "header-new-session",
-                    view().selectedAgentId,
-                  )
-                : undefined
-            }
+            prop:newSessionAction={newSessionAction}
             prop:onOpenPalette={props.host.openPalette}
             prop:onToggleDrawer={props.host.toggleNavigationSurface}
           />
