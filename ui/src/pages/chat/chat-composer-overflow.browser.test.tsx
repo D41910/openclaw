@@ -1,16 +1,20 @@
-import { html, nothing, render } from "lit";
 import { createSignal } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, server, userEvent } from "vitest/browser";
 import type { SessionGoal } from "../../api/types.ts";
 import "@awesome.me/webawesome/dist/styles/themes/default.css";
+import { SolidContentPresentation } from "../../lit/solid-content.tsx";
 import { cleanupSolid, mountSolid } from "../../test-helpers/mount-solid.ts";
 import { flush } from "../../test-helpers/solid-settle.ts";
-import { createComposerContainer, createComposerProps } from "./chat-composer.test-support.ts";
-import { renderAttachmentPreview } from "./components/chat-attachments.test-support.ts";
+import {
+  createComposerContainer,
+  createComposerProps,
+  disposeComposer,
+  renderComposerInto,
+} from "./chat-composer.test-support.ts";
+import { AttachmentPreview } from "./components/chat-attachments.tsx";
 import { ChatGoal } from "./components/chat-composer-goal.tsx";
 import { ComposerMenu } from "./components/chat-composer-menu.tsx";
-import { renderChatComposer } from "./components/chat-composer-render.test-support.ts";
 import { resetChatComposerState } from "./components/chat-composer-state.ts";
 import { subscribeTranscriptScroll } from "./components/chat-transcript-scroll-events.ts";
 import baseStyles from "../../styles/base.css?inline";
@@ -52,8 +56,8 @@ describe("composer overflow presentation", () => {
   });
 
   afterEach(() => {
+    disposeComposer(container);
     cleanupSolid();
-    render(nothing, container);
     container.remove();
     styles.remove();
     resetChatComposerState();
@@ -66,7 +70,7 @@ describe("composer overflow presentation", () => {
       container.className = "";
       container.style.cssText = `position: fixed; bottom: 24px; left: 16px; width: ${Math.min(width - 32, 760)}px`;
       const props = createComposerProps({
-        onRequestUpdate: () => render(renderChatComposer(props), container),
+        onRequestUpdate: () => renderComposerInto(container, props),
         capabilityMenu: {
           basePath: "",
           skills: [
@@ -98,7 +102,7 @@ describe("composer overflow presentation", () => {
           onNavigate: vi.fn(),
         },
       });
-      render(renderChatComposer(props), container);
+      renderComposerInto(container, props);
       await page
         .elementLocator(
           container.querySelector<HTMLElement>(
@@ -137,8 +141,28 @@ describe("composer overflow presentation", () => {
     },
   );
 
-  function drawAttachments(count: number) {
-    return render(renderAttachmentPreview({ attachments: attachments.slice(0, count) }), container);
+  function drawAttachments(count = 1) {
+    const [currentCount, setCount] = createSignal(count);
+    const [presented, setPresented] = createSignal(true);
+    mountSolid(
+      () => (
+        <SolidContentPresentation value={presented}>
+          <AttachmentPreview attachments={attachments.slice(0, currentCount())} />
+        </SolidContentPresentation>
+      ),
+      { container },
+    );
+    flush();
+    return {
+      update: (nextCount: number) => {
+        setCount(nextCount);
+        flush();
+      },
+      setPresented: (active: boolean) => {
+        setPresented(active);
+        flush();
+      },
+    };
   }
 
   function rail() {
@@ -151,18 +175,16 @@ describe("composer overflow presentation", () => {
       await page.viewport(width, 900);
       container.className = "";
       container.style.width = `${Math.min(width - 32, 760)}px`;
-      render(
-        renderChatComposer(
-          createComposerProps({
-            goalDraftMode: { action: "start" },
-            replyTarget: {
-              messageId: "context-strip-reply",
-              senderLabel: "A very long sender name ".repeat(12),
-              text: "A long message excerpt that must leave room for cancellation. ".repeat(8),
-            },
-          }),
-        ),
+      renderComposerInto(
         container,
+        createComposerProps({
+          goalDraftMode: { action: "start" },
+          replyTarget: {
+            messageId: "context-strip-reply",
+            senderLabel: "A very long sender name ".repeat(12),
+            text: "A long message excerpt that must leave room for cancellation. ".repeat(8),
+          },
+        }),
       );
       await afterLayout();
 
@@ -205,17 +227,15 @@ describe("composer overflow presentation", () => {
     container.className = "";
     container.dir = "rtl";
     container.style.width = "358px";
-    render(
-      renderChatComposer(
-        createComposerProps({
-          draft: "@Jordan Rivera\nReview the attached file.\nKeep this third line.",
-          attachments: attachments.slice(0, 1),
-          replyTarget: { messageId: "order-reply", text: "Original message" },
-          goalDraftMode: { action: "start" },
-          mentions: [{ profileId: "jordan", start: 0, end: 14 }],
-        }),
-      ),
+    renderComposerInto(
       container,
+      createComposerProps({
+        draft: "@Jordan Rivera\nReview the attached file.\nKeep this third line.",
+        attachments: attachments.slice(0, 1),
+        replyTarget: { messageId: "order-reply", text: "Original message" },
+        goalDraftMode: { action: "start" },
+        mentions: [{ profileId: "jordan", start: 0, end: 14 }],
+      }),
     );
     await afterLayout();
     const strips = container.querySelectorAll<HTMLElement>(".composer-context-strip");
@@ -246,19 +266,17 @@ describe("composer overflow presentation", () => {
     const onClearReply = vi.fn();
     const onGoalDraftModeChange = vi.fn();
     const onDraftChange = vi.fn();
-    render(
-      renderChatComposer(
-        createComposerProps({
-          draft: "@Jordan Rivera Review this file.",
-          mentions: [{ profileId: "jordan", start: 0, end: 14 }],
-          replyTarget: { messageId: "touch-reply", text: "Original message" },
-          goalDraftMode: { action: "start" },
-          onClearReply,
-          onGoalDraftModeChange,
-          onDraftChange,
-        }),
-      ),
+    renderComposerInto(
       container,
+      createComposerProps({
+        draft: "@Jordan Rivera Review this file.",
+        mentions: [{ profileId: "jordan", start: 0, end: 14 }],
+        replyTarget: { messageId: "touch-reply", text: "Original message" },
+        goalDraftMode: { action: "start" },
+        onClearReply,
+        onGoalDraftModeChange,
+        onDraftChange,
+      }),
     );
     await afterLayout();
 
@@ -326,7 +344,7 @@ describe("composer overflow presentation", () => {
         { profileId: "morgan", start: 15, end: 31 },
       ],
     });
-    const part = render(renderChatComposer(props), container);
+    renderComposerInto(container, props);
     let strip = container.querySelector<HTMLElement>('[role="status"]')!;
     const visibleNames = () =>
       [...strip.querySelectorAll<HTMLElement>(".composer-context-strip__person")]
@@ -350,7 +368,7 @@ describe("composer overflow presentation", () => {
       characterData: true,
     });
     try {
-      render(renderChatComposer({ ...props, draft: props.draft + " please review" }), container);
+      renderComposerInto(container, { ...props, draft: props.draft + " please review" });
       await afterLayout();
       expect(mutations).not.toHaveBeenCalled();
     } finally {
@@ -363,23 +381,22 @@ describe("composer overflow presentation", () => {
     expect(more.textContent).toBe("+1");
     expect(more.title).toBe("@Morgan Williams");
     expect(strip.getBoundingClientRect().height).toBeCloseTo(41, 0);
-    part.setConnected(false);
+    container.remove();
     container.style.width = "760px";
-    part.setConnected(true);
+    await afterLayout();
+    expect(visibleNames()).toEqual(["@Jordan Rivera"]);
+    document.body.append(container);
     strip = container.querySelector<HTMLElement>('[role="status"]')!;
     more = strip.querySelector<HTMLElement>(".composer-context-strip__more")!;
     await expect.poll(visibleNames).toEqual(["@Jordan Rivera", "@Morgan Williams"]);
     expect(more.hidden).toBe(true);
     const longName = "Morgan Alexandra Penelope Williams ".repeat(3).trim();
     const draft = "@Jordan Rivera @" + longName;
-    render(
-      renderChatComposer({
-        ...props,
-        draft,
-        mentions: [props.mentions![0]!, { profileId: "morgan", start: 15, end: draft.length }],
-      }),
-      container,
-    );
+    renderComposerInto(container, {
+      ...props,
+      draft,
+      mentions: [props.mentions![0]!, { profileId: "morgan", start: 15, end: draft.length }],
+    });
     await expect.poll(visibleNames).toEqual(["@Jordan Rivera"]);
     expect(more.hidden).toBe(false);
     expect(more.title).toBe("@" + longName);
@@ -421,13 +438,11 @@ describe("composer overflow presentation", () => {
           draw();
         },
       });
-      const draw = () =>
-        render(
-          html`<div class="chat-thread"></div>
-            ${renderChatComposer(props)}`,
-          container,
-        );
+      const draw = () => renderComposerInto(container, props);
       draw();
+      const thread = document.createElement("div");
+      thread.className = "chat-thread";
+      container.prepend(thread);
       const textarea = container.querySelector<HTMLTextAreaElement>(
         ".agent-chat__composer-combobox > textarea",
       )!;
@@ -510,19 +525,19 @@ describe("composer overflow presentation", () => {
   it.each([false, true])(
     "updates attachment edges after resizing (reconnect=%s)",
     async (reconnect) => {
-      const part = drawAttachments(3);
+      const view = drawAttachments(3);
       const element = rail();
       await afterLayout();
       await expectEdges(element, false);
 
       if (reconnect) {
-        part.setConnected(false);
+        view.setPresented(false);
       }
       container.style.width = "400px";
       if (reconnect) {
         await afterLayout();
         await expectEdges(element, false);
-        part.setConnected(true);
+        view.setPresented(true);
       }
       expect(rail()).toBe(element);
       expect(element.scrollWidth).toBeGreaterThan(element.clientWidth);
@@ -652,7 +667,7 @@ describe("composer overflow presentation", () => {
 
   it("lets native textarea sizing grow and cap multiline drafts", async () => {
     await page.viewport(1440, 900);
-    render(renderChatComposer(createComposerProps()), container);
+    renderComposerInto(container, createComposerProps());
     const textarea = container.querySelector<HTMLTextAreaElement>("textarea")!;
     expect(getComputedStyle(textarea).fieldSizing).toBe("content");
 
@@ -702,6 +717,7 @@ describe("composer overflow presentation", () => {
       const [currentGoal, setGoal] = createSignal(goal, { equals: false });
       let goalView: ReturnType<typeof mountSolid> | undefined;
       let menuView: ReturnType<typeof mountSolid> | undefined;
+      let attachmentView: ReturnType<typeof drawAttachments> | undefined;
       const [menuExpanded, setMenuExpanded] = createSignal(false);
       const draw = (expanded: boolean) => {
         goal.objective = expanded ? "Fixture objective\n".repeat(30) : "Short objective";
@@ -731,10 +747,8 @@ describe("composer overflow presentation", () => {
           flush();
           return;
         }
-        render(
-          renderAttachmentPreview({ attachments: attachments.slice(0, expanded ? 7 : 1) }),
-          container,
-        );
+        attachmentView ??= drawAttachments();
+        attachmentView.update(expanded ? 7 : 1);
       };
       draw(false);
       const element = container.querySelector<HTMLElement>(selector)!;

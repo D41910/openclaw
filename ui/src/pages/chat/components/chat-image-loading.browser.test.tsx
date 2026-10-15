@@ -1,29 +1,21 @@
-import { html, nothing, render } from "lit";
+import { createSignal } from "solid-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeferred } from "../../../../../test/helpers/promise.js";
-import { solidContent } from "../../../lit/solid-content.tsx";
+import { cleanupSolid, mountSolid } from "../../../test-helpers/mount-solid.ts";
+import { flush } from "../../../test-helpers/solid-settle.ts";
 import { waitForFast } from "../../../test-helpers/wait-for.ts";
 import { CompactAttachmentCard } from "./chat-attachment-card-solid.tsx";
-import { renderMessageImages } from "./chat-message-images.ts";
-import {
-  projectMessageMedia,
-  releaseChatMediaResourceSubscriber,
-  type ImageRenderOptions,
-} from "./chat-message-media.ts";
+import { MessageImages } from "./chat-message-images-solid.tsx";
+import { projectMessageMedia, type ImageRenderOptions } from "./chat-message-media.ts";
 import "../../../test-helpers/load-styles.ts";
-import "@awesome.me/webawesome/dist/components/dropdown/dropdown.js";
 import "../../activity/session-activity-media.css";
 
 const browserMode = "__vitest_browser__" in globalThis;
 const containers: HTMLElement[] = [];
-const subscribers: (() => void)[] = [];
 
 afterEach(() => {
-  for (const subscriber of subscribers.splice(0)) {
-    releaseChatMediaResourceSubscriber(subscriber);
-  }
+  cleanupSolid();
   for (const container of containers.splice(0)) {
-    render(nothing, container);
     container.remove();
   }
   vi.unstubAllGlobals();
@@ -103,10 +95,8 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
       alt,
     }));
     const onOpenImage = vi.fn<NonNullable<ImageRenderOptions["onOpenImage"]>>();
-    const draw = () =>
-      render(renderMessageImages(images, { onRequestUpdate: draw, onOpenImage }), container);
-    subscribers.push(draw);
-    draw();
+    mountSolid(() => <MessageImages images={images} options={{ onOpenImage }} />, { container });
+    flush();
     await vi.waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(1));
     expect(fetch).toHaveBeenCalledOnce();
     const frames = container.querySelectorAll<HTMLElement>(".chat-image-frame");
@@ -160,16 +150,26 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
           height: sized ? height : undefined,
         },
       ];
-      const draw = () =>
-        render(
-          html`<div class="chat-group ${role}" style=${`--chat-message-max-width: ${pane}px`}>
-            <div class="chat-group-messages">
-              ${renderMessageImages(images)}
-              <p data-next-message>Next message</p>
-            </div>
-          </div>`,
-          container,
-        );
+      const [currentImages, setImages] = createSignal(images);
+      let view: ReturnType<typeof mountSolid> | undefined;
+      const draw = () => {
+        if (view) {
+          setImages([...images]);
+        } else {
+          view = mountSolid(
+            () => (
+              <div class={`chat-group ${role}`} style={{ "--chat-message-max-width": `${pane}px` }}>
+                <div class="chat-group-messages">
+                  <MessageImages images={currentImages()} />
+                  <p data-next-message>Next message</p>
+                </div>
+              </div>
+            ),
+            { container },
+          );
+        }
+        flush();
+      };
       draw();
       const originalFrame = frame(container);
       const before = geometry(container);
@@ -194,7 +194,8 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
       draw();
       expect(container.querySelector("img")).toBe(image);
       expect(geometry(container)).toEqual(decoded);
-      render(nothing, container);
+      view!.unmount();
+      view = undefined;
       draw();
       const remounted = await admittedImage(container);
       expect(remounted.getAttribute("src")).toBe(image.getAttribute("src"));
@@ -214,36 +215,38 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
         vi.fn(() => response.promise),
       );
       const source = `/tmp/openclaw/${crypto.randomUUID()}.png`;
-      const draw = () =>
-        render(
-          html`${
-              kind === "attachment"
-                ? renderMessageImages(
-                    projectMessageMedia({}, [
-                      {
-                        type: "attachment",
-                        attachment: {
-                          kind: "image",
-                          url: source,
-                          label: "Local image",
-                          width: 1200,
-                          height: 800,
-                        },
-                      },
-                    ]).images,
-                    { sessionKey: "image-proof", agentId: "main", onRequestUpdate: draw },
-                  )
-                : renderMessageImages(
-                    [{ url: source, alt: "Local image", width: 1200, height: 800 }],
-                    { sessionKey: "image-proof", agentId: "main", onRequestUpdate: draw },
-                  )
-            }
-
-            <p data-next-message>Next message</p>`,
-          container,
+      const images =
+        kind === "attachment"
+          ? projectMessageMedia({}, [
+              {
+                type: "attachment",
+                attachment: {
+                  kind: "image",
+                  url: source,
+                  label: "Local image",
+                  width: 1200,
+                  height: 800,
+                },
+              },
+            ]).images
+          : [{ url: source, alt: "Local image", width: 1200, height: 800 }];
+      const draw = () => {
+        const view = mountSolid(
+          () => (
+            <>
+              <MessageImages
+                images={images}
+                options={{ sessionKey: "image-proof", agentId: "main", onRequestUpdate: vi.fn() }}
+              />
+              <p data-next-message>Next message</p>
+            </>
+          ),
+          { container },
         );
-      subscribers.push(draw);
-      draw();
+        flush();
+        return view;
+      };
+      const view = draw();
       const before = geometry(container);
       expect(before.height).toBeCloseTo(400 / 1.5, 1);
       expect(frame(container).textContent?.trim()).toBe("");
@@ -261,7 +264,7 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
       expect(loadable.height).toBeCloseTo(400 / 1.5, 1);
       const sourceUrl = container.querySelector("img")!.getAttribute("src");
       expect(container.querySelector("img")!.getAttribute("width")).toBe("1200");
-      render(nothing, container);
+      view.unmount();
       draw();
       expect((await admittedImage(container)).getAttribute("src")).toBe(sourceUrl);
       expect(geometry(container)).toEqual(loadable);
@@ -292,15 +295,18 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
         width: 1200,
         height: 800,
       }));
-      render(
-        html`<div class="chat-group user">
-          <div class="chat-group-messages">
-            ${renderMessageImages(images)}
-            <p data-next-message>Next message</p>
+      mountSolid(
+        () => (
+          <div class="chat-group user">
+            <div class="chat-group-messages">
+              <MessageImages images={images} />
+              <p data-next-message>Next message</p>
+            </div>
           </div>
-        </div>`,
-        container,
+        ),
+        { container },
       );
+      flush();
       const rectangles = () =>
         [...container.querySelectorAll(".chat-image-frame")].map((element) => {
           const { x, y, width, height } = element.getBoundingClientRect();
@@ -379,12 +385,17 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
           alt: "Tiny image without dimensions",
         },
       ];
-      render(
-        html`<div class="chat-group assistant">
-          <div class="chat-group-messages">${renderMessageImages(images)}</div>
-        </div>`,
-        container,
+      mountSolid(
+        () => (
+          <div class="chat-group assistant">
+            <div class="chat-group-messages">
+              <MessageImages images={images} />
+            </div>
+          </div>
+        ),
+        { container },
       );
+      flush();
       await waitForFast(() =>
         expect(container.querySelectorAll("img")).toHaveLength(images.length),
       );
@@ -467,19 +478,26 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
         width: imageWidth,
         height: imageHeight,
       }));
-      const draw = () =>
-        render(
-          html`<div class="chat-group ${role}">
+      mountSolid(
+        () => (
+          <div class={`chat-group ${role}`}>
             <div class="chat-group-messages">
-              ${renderMessageImages(images, { sessionKey: "unavailable-geometry", agentId: "main", onRequestUpdate: draw })}
-              ${withDocument ? solidContent(CompactAttachmentCard, { kind: "document", label: "notes.pdf" }) : nothing}
+              <MessageImages
+                images={images}
+                options={{
+                  sessionKey: "unavailable-geometry",
+                  agentId: "main",
+                  onRequestUpdate: vi.fn(),
+                }}
+              />
+              {withDocument && <CompactAttachmentCard kind="document" label="notes.pdf" />}
               <p data-next-message>Next message</p>
             </div>
-          </div>`,
-          container,
-        );
-      subscribers.push(draw);
-      draw();
+          </div>
+        ),
+        { container },
+      );
+      flush();
       await waitForFast(() =>
         expect(
           container.querySelectorAll(".chat-assistant-attachment-card--blocked button"),
@@ -488,10 +506,10 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
       await Promise.all([...container.querySelectorAll("img")].map((image) => image.decode()));
       const reference = withDocument ? container : mount(400);
       if (!withDocument) {
-        render(
-          solidContent(CompactAttachmentCard, { kind: "document", label: "notes.pdf" }),
-          reference,
-        );
+        mountSolid(() => <CompactAttachmentCard kind="document" label="notes.pdf" />, {
+          container: reference,
+        });
+        flush();
       }
       const file = reference.querySelector<HTMLElement>(
         ".chat-assistant-attachment-card--compact",
@@ -605,11 +623,20 @@ describe.runIf(browserMode)("chat image loading geometry", () => {
         .mockResolvedValueOnce(svgResponse(1200, 800));
       vi.stubGlobal("fetch", fetchMock);
       const source = `/api/chat/media/outgoing/agent%3Amain%3Amain/${crypto.randomUUID()}/full`;
-      render(
-        html`${renderMessageImages([{ url: source, width: sized ? 1200 : undefined, height: sized ? 800 : undefined }])}
-          <p data-next-message>Next message</p>`,
-        container,
+      mountSolid(
+        () => (
+          <>
+            <MessageImages
+              images={[
+                { url: source, width: sized ? 1200 : undefined, height: sized ? 800 : undefined },
+              ]}
+            />
+            <p data-next-message>Next message</p>
+          </>
+        ),
+        { container },
       );
+      flush();
       const before = geometry(container);
       response.resolve(new Response(null, { status: 404 }));
       await waitForFast(() => expect(frame(container).getAttribute("aria-busy")).toBe("false"));
