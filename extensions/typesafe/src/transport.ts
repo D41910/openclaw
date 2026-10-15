@@ -5,6 +5,7 @@ import {
   withTrustedEnvProxyGuardedFetchMode,
 } from "openclaw/plugin-sdk/fetch-runtime";
 import {
+  createProviderErrorTextRedactor,
   redactProviderResponseErrorText,
   resolveProviderHttpRequestConfigWithOriginTrust,
   resolveProviderTransportSsrFPolicy,
@@ -109,7 +110,9 @@ export async function requestEvaluation(params: {
     : localBaseUrl(params.baseUrl);
   const apiBaseUrl = params.providerConfig ? baseUrl : baseUrl ? `${baseUrl}/v1` : API_BASE_URL;
   let resolved: ReturnType<typeof resolveProviderHttpRequestConfigWithOriginTrust>;
+  let configuredRequest: ReturnType<typeof sanitizeConfiguredModelProviderRequest>;
   try {
+    configuredRequest = sanitizeConfiguredModelProviderRequest(params.providerConfig?.request);
     const headers: Record<string, string> = {};
     for (const [name, value] of Object.entries(params.providerConfig?.headers ?? {})) {
       const headerValue = normalizeResolvedSecretInputString({
@@ -137,7 +140,7 @@ export async function requestEvaluation(params: {
         "Content-Type": "application/json",
       },
       headers,
-      request: sanitizeConfiguredModelProviderRequest(params.providerConfig?.request),
+      request: configuredRequest,
     });
   } catch {
     throw new EvaluationError(
@@ -145,6 +148,12 @@ export async function requestEvaluation(params: {
       "credentials-unavailable",
     );
   }
+  const redactAuth = createProviderErrorTextRedactor({
+    headers: resolved.headers,
+    request: configuredRequest,
+    defaultAuthHeader: "Authorization",
+    defaultAuthPrefix: "Bearer ",
+  });
   const endpoint = `${resolved.baseUrl}/systemone`;
   const policy = baseUrl
     ? resolveProviderTransportSsrFPolicy({
@@ -232,7 +241,11 @@ export async function requestEvaluation(params: {
       } catch {
         throw new EvaluationError("TypeSafe returned invalid JSON.", "invalid-response");
       }
-      if (redactProviderResponseErrorText(text, resolved.headers) !== text) {
+      // A server may reflect a custom auth value without its configured prefix.
+      if (
+        redactProviderResponseErrorText(text, resolved.headers) !== text ||
+        redactAuth(text) !== text
+      ) {
         throw new EvaluationError(
           "TypeSafe evaluation failed or returned an invalid response.",
           "invalid-response",

@@ -398,19 +398,25 @@ it.each(["127.0.0.1", "169.254.169.254", "0.0.0.0"])(
   },
 );
 
-it("rejects reflected shared request credentials without returning them", async () => {
-  responseModel = "synthetic-request-token";
-  const result = await provider(
-    settings({
-      request: {
-        tls: { ca: PROXY_FIXTURE_CERTIFICATE },
-        auth: { mode: "authorization-bearer", token: responseModel },
-      },
-    }),
-  ).evaluate(batch, context());
-  expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
-  expect(JSON.stringify(result)).not.toContain(responseModel);
-});
+it.each(["authorization-bearer", "header"] as const)(
+  "rejects reflected shared %s credentials without returning them",
+  async (mode) => {
+    responseModel = "synthetic-request-token";
+    const result = await provider(
+      settings({
+        request: {
+          tls: { ca: PROXY_FIXTURE_CERTIFICATE },
+          auth:
+            mode === "authorization-bearer"
+              ? { mode, token: responseModel }
+              : { mode, headerName: "X-Server-Key", value: responseModel, prefix: "Token " },
+        },
+      }),
+    ).evaluate(batch, context());
+    expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
+    expect(JSON.stringify(result)).not.toContain(responseModel);
+  },
+);
 
 it.each(["authorization-bearer", "header"] as const)(
   "fails closed instead of sending anonymous requests for empty %s auth",
