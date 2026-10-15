@@ -474,9 +474,6 @@ suite.define(() => {
       viewport: { height: 900, width: 1440 },
     });
     const page = await context.newPage();
-    await page.addInitScript(() => {
-      Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
-    });
     const gateway = await installMockGateway(page, {
       featureMethods: ["system.info"],
       methodResponses: { "system.info": deviceSystemInfo },
@@ -484,6 +481,8 @@ suite.define(() => {
 
     try {
       await page.goto(`${suite.server.baseUrl}settings/connection`);
+      await page.bringToFront();
+      await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("visible");
       await gateway.waitForRequest("system.info");
 
       const gatewayUrl = page.getByLabel("Gateway URL", { exact: true });
