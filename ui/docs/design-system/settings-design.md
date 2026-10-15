@@ -1,6 +1,6 @@
 # Settings Design Language
 
-Every settings surface (the `/settings` takeover pages plus the Plugins/Skills hubs) uses one structural pattern. Workspace styles live in `ui/src/styles/settings.css`, while controls shared with startup surfaces live in `ui/src/styles/settings-controls.css` and `settings-native-controls.css`. Views use the shared components in `ui/src/components/solid/settings-ui.tsx`.
+Every settings surface (the `/settings` takeover pages plus the Plugins/Skills hubs) uses one structural pattern. Workspace styles live in `ui/src/styles/settings.css`, while controls shared with startup surfaces live in `ui/src/styles/settings-controls.css` and `settings-native-controls.css`. Views use `ui/src/components/solid/settings-ui.tsx`. The remaining Lit picker fixture uses `renderSettingsRow` from `ui/src/components/settings-ui.ts`.
 
 ## Anatomy
 
@@ -27,7 +27,7 @@ Every settings surface (the `/settings` takeover pages plus the Plugins/Skills h
 - **Spacing uses `--space-*` tokens** (`base.css`); no hardcoded paddings/gaps.
 - **Motion budget:** color/background transitions only. No enter animations, staggered reveals, or hover glows.
 - **Buttons:** default `.btn` (quiet). `--accent` primary at most once per view. Danger actions live in a `danger: true` section at the page bottom.
-- **One control set.** Use `SettingsToggleRow` (preferred: label-wrapped, whole row clickable, accessible name for free) or `SettingsToggle` with a required `ariaLabel`, `SettingsSegmented`, `.settings-select`, `.settings-input`. Do not add another toggle or badge variant.
+- **One control set.** Use `SettingsToggleRow` (preferred: whole row clickable, accessible name from its title) or `SettingsToggle` with a required `ariaLabel`, `SettingsSegmented`, `.settings-select`, `.settings-input`. Do not add another toggle or badge variant.
 - **Disabled state follows the current form.** Switches and segmented radios use native inputs. A disabled fieldset suppresses activation; controls recover when it is enabled again, while explicitly disabled groups and options stay disabled. Read the input's effective `:disabled` state rather than copying fieldset state into component properties.
 - **Every control needs an accessible name.** Row titles are plain text, not `<label>`s — selects/inputs in a control slot must carry `aria-label` (usually the row title string).
 - **No new page CSS files for settings surfaces.** Page-specific styles belong in `settings.css` only when a primitive is genuinely missing — extend the system, don't fork it.
@@ -35,27 +35,33 @@ Every settings surface (the `/settings` takeover pages plus the Plugins/Skills h
 ## Helpers
 
 ```tsx
+import { createSignal } from "solid-js";
 import {
   SettingsPage,
   SettingsSection,
   SettingsToggleRow,
 } from "../../components/solid/settings-ui.tsx";
 
-<SettingsPage>
-  <SettingsSection title={t("settings.notifications")}>
-    <SettingsToggleRow
-      title={t("settings.systemNotifications")}
-      description={t("settings.systemNotificationsDesc")}
-      checked={checked}
-      onChange={onChange}
-    />
-  </SettingsSection>
-</SettingsPage>;
+function NotificationSettings() {
+  const [checked, setChecked] = createSignal(false);
+  return (
+    <SettingsPage>
+      <SettingsSection title="Notifications">
+        <SettingsToggleRow
+          title="System notifications"
+          description="Show desktop notifications."
+          checked={checked()}
+          onChange={(value) => setChecked(value)}
+        />
+      </SettingsSection>
+    </SettingsPage>
+  );
+}
 ```
 
 Custom content inside a group (tables, meters) is allowed as an escape hatch — keep it inside one `.settings-group` and match row paddings (`--space-3 --space-4`).
 
-Views use `SettingsPage`, `SettingsSection`, `SettingsRow`,
+Solid views use `SettingsPage`, `SettingsSection`, `SettingsRow`,
 `SettingsToggleRow`, and `SettingsSegmented` components. Their children and control
 props accept JSX; selection stays with the caller. Returning `false` from a
 control's `onChange` restores the accepted value synchronously. The shared native
@@ -65,7 +71,12 @@ Mount settings views inside `ShellLayoutProvider` from
 `ui/src/app/shell-layout-traits-solid.tsx`, passing the shell's `ShellLayoutOwner`
 and the connected route host. Settings layout boundaries publish their traits
 before evaluating descendant content, so measurements see the correct shell
-classes.
+classes. Keep this owner shared with the Lit shell adapter during migration.
+When a page body loads asynchronously, publish its column trait at the page-shell
+boundary, outside the loading branch. The Models shell reserves the narrow
+settings column before provider data arrives, keeping its heading in place.
+The settings footer reserves one line for connection status and applies the
+build chip's `display: contents` layout before the custom element upgrades.
 
 ## Phone and native embed layouts
 
