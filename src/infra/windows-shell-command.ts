@@ -174,8 +174,7 @@ export function isWindowsPlatform(platform?: string | null): boolean {
   return normalized.startsWith("win");
 }
 
-// Mirrors WINDOWS_ALWAYS_UNSAFE_TOKENS: quoting cannot neutralise these, so a
-// token carrying one must fail the renderer instead of being wrapped in quotes.
+// Keep renderer argument policy aligned with Windows shell analysis.
 const WINDOWS_UNSAFE_CMD_META = /[%\n\r`]|\$(?=[A-Za-z_{(?$])/;
 
 export function windowsEscapeArg(value: string): { ok: true; escaped: string } | { ok: false } {
