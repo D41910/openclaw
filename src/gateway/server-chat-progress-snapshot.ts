@@ -133,7 +133,16 @@ export function updateChatRunProgressSnapshot(
       "preparing_context",
       "memory_flushing",
       "starting_model",
+      "waiting_for_model",
     ].includes(phase);
+  const isModelWait =
+    event.stream === "run_status" &&
+    (phase === "waiting_for_model" ||
+      (phase === "starting_model" &&
+        snapshot?.events.some(
+          (candidate) =>
+            candidate.stream === "run_status" && candidate.data.phase === "waiting_for_model",
+        )));
   const isRetryStatus = event.stream === "run_status" && phase === "retrying";
   const isFallbackStatus = event.stream === "lifecycle" && phase === "fallback_step";
   const isFinishing = event.stream === "lifecycle" && phase === "finishing";
@@ -189,6 +198,7 @@ export function updateChatRunProgressSnapshot(
         candidate.data.reviewId === data.reviewId,
     );
   const isSummaryProgress =
+    isModelWait ||
     isTool ||
     isItem ||
     isUsage ||
@@ -248,6 +258,7 @@ export function updateChatRunProgressSnapshot(
 
   if (
     isStartupStatus &&
+    !isModelWait &&
     next.events.some((candidate) => candidate.stream === "tool" || candidate.stream === "item")
   ) {
     return next;

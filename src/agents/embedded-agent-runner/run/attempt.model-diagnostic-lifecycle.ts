@@ -5,6 +5,7 @@ import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
 import { fireAndForgetBoundedHook } from "../../../hooks/fire-and-forget.js";
+import { emitAgentEvent } from "../../../infra/agent-events.js";
 import {
   diagnosticErrorCategory,
   diagnosticErrorFailureKind,
@@ -37,7 +38,10 @@ import type {
   PluginHookModelCallEndedEvent,
   PluginHookModelCallStartedEvent,
 } from "../../../plugins/hook-types.js";
+import { captureAsyncWorkTracker } from "../../../shared/async-work-scope.js";
+import type { EmbeddedAgentEvent } from "../../embedded-agent-subscribe.shared-types.js";
 import type { StreamFn } from "../../runtime/index.js";
+import { log } from "../logger.js";
 import type {
   createModelObserver,
   ModelCallEventBase,
@@ -57,6 +61,7 @@ export type ModelCallDiagnosticContext = Omit<PluginHookModelCallStartedEvent, "
   onOutputDelta?: () => void;
   onTerminal?: () => void;
   onSucceeded?: (startedAt: number) => void;
+  onAgentEvent?: (event: EmbeddedAgentEvent) => void | Promise<void>;
   suppressPluginHooks?: boolean;
   requestTimeoutMs?: number;
 };
@@ -297,11 +302,50 @@ export function createModelLifecycle(params: {
     callId,
     params.ctx,
   );
+  let waitReason: "response" | "slot" | null = null;
+  let firstEventObserved = false;
+  const trackStatusDelivery = captureAsyncWorkTracker();
+  let statusDelivery = Promise.resolve();
+  const signal = params.options?.signal;
+  const reportWait: NonNullable<NonNullable<ModelCallStreamOptions>["onProviderWait"]> = (
+    reason,
+  ) => {
+    if (
+      reason === waitReason ||
+      (reason !== null &&
+        (firstEventObserved || signal?.aborted || observer.state.terminalEventEmitted))
+    ) {
+      return;
+    }
+    waitReason = reason;
+    const event = {
+      stream: "run_status" as const,
+      data: reason ? { phase: "waiting_for_model", reason } : { phase: "starting_model" },
+    };
+    emitAgentEvent({
+      runId: params.ctx.runId,
+      sessionKey: params.ctx.sessionKey,
+      ...event,
+    });
+    if (params.ctx.onAgentEvent) {
+      statusDelivery = trackStatusDelivery(() =>
+        statusDelivery
+          .then(() => params.ctx.onAgentEvent?.(event))
+          .catch(() => log.warn("Provider wait status delivery failed")),
+      );
+    }
+    params.options?.onProviderWait?.(reason);
+  };
+  const clearWait = () => reportWait(null);
+  propagatedOptions.onProviderWait = reportWait;
+  signal?.addEventListener("abort", clearWait, { once: true });
   function emitModelCallEnded(failure: { error: unknown } | undefined): void {
     const { ownerGeneration, config } = params.ctx;
     if (observer.state.terminalEventEmitted) {
       return;
     }
+    clearWait();
+    signal?.removeEventListener("abort", clearWait);
     observer.state.terminalEventEmitted = true;
     const terminalAtMs = Date.now();
     const durationMs = terminalAtMs - startedAt;
@@ -386,6 +430,8 @@ export function createModelLifecycle(params: {
   const notifyFinished = () => {
     if (!finishedNotified) {
       finishedNotified = true;
+      clearWait();
+      signal?.removeEventListener("abort", clearWait);
       params.ctx.onFinished?.(callId);
     }
   };
@@ -404,6 +450,8 @@ export function createModelLifecycle(params: {
     },
     startedAt,
     observeChunk(chunk: unknown) {
+      firstEventObserved = true;
+      clearWait();
       observer.observeResponseChunk(startedAt, chunk);
       observer.maybeEmitStreamProgress(eventBase);
       if (params.ctx.onOutputDelta && isModelOutputDelta(chunk)) {
