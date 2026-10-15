@@ -266,11 +266,11 @@ function isStructuredCall(
     );
   if (action) {
     const input = action[2]?.trim() ?? "";
-    // Multiline input must be a complete value, not a narrated ReAct transcript.
+    // JSON-shaped input must be complete; multiline prose is not a ReAct call.
     return (
       hasToolName(action[1] ?? "") &&
       Boolean(input) &&
-      (!/[\r\n]/.test(input) || safeParseJson(input) !== undefined)
+      (!/^[{["]|[\r\n]/.test(input) || safeParseJson(input) !== undefined)
     );
   }
   const legacy =
