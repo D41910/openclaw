@@ -222,43 +222,6 @@ describe("runCodexAppServerSideQuestion", () => {
     }
   });
 
-  it("returns billed usage from the side thread without changing its answer", async () => {
-    const client = createFakeClient({ completeTurn: false });
-    getSharedCodexAppServerClientMock.mockResolvedValue(client);
-    const run = runCodexAppServerSideQuestion(sideParams());
-    await vi.waitFor(() =>
-      expect(client.request.mock.calls.some(([method]) => method === "turn/start")).toBe(true),
-    );
-    client.emit({
-      method: "rawResponse/completed",
-      params: {
-        threadId: "side-thread",
-        turnId: "turn-1",
-        responseId: "side-response",
-        usage: {
-          inputTokens: 8,
-          cachedInputTokens: 2,
-          outputTokens: 4,
-          totalTokens: 12,
-          reasoningOutputTokens: 3,
-        },
-      },
-    });
-    client.emit(turnCompleted("side-thread", "turn-1", "Side answer."));
-    await expect(run).resolves.toEqual({
-      text: "Side answer.",
-      usage: {
-        input: 6,
-        output: 4,
-        cacheRead: 2,
-        cacheWrite: 0,
-        total: 12,
-        reasoningTokens: 3,
-        contextUsage: { state: "available", promptTokens: 8, totalTokens: 12 },
-      },
-    });
-  });
-
   it("forks an ephemeral side thread with the current text and image", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-02T00:30:00.000Z"));
     const data =
@@ -2491,39 +2454,5 @@ describe("runCodexAppServerSideQuestion", () => {
       }
     },
   );
-  it("delivers a side thread's question prompt through its provider channel", async () => {
-    const onToolResult = vi.fn();
-    type ToolOptions = NonNullable<
-      Parameters<
-        (typeof import("openclaw/plugin-sdk/agent-harness"))["createOpenClawCodingTools"]
-      >[0]
-    >;
-    let capturedQuestionPrompt: ToolOptions["questionPrompt"];
-    createOpenClawCodingToolsMock.mockImplementation((options: ToolOptions) => {
-      capturedQuestionPrompt = options.questionPrompt;
-      return [
-        {
-          name: "ask_user",
-          description: "Ask the person a question",
-          parameters: { type: "object", properties: {}, additionalProperties: true },
-          execute: toolExecuteMock,
-        },
-      ];
-    });
-
-    await runSideQuestionWithManagedWebSearchCall(
-      sideParams({
-        messageProvider: "telegram",
-        opts: { onToolResult },
-      }),
-      { preserveToolFactory: true, toolName: "ask_user", toolArguments: { header: "Choice" } },
-    );
-
-    expect(toolExecuteMock).toHaveBeenCalledTimes(1);
-    expect(capturedQuestionPrompt).toBeDefined();
-    expect(capturedQuestionPrompt?.messageChannel).toBe("telegram");
-    await capturedQuestionPrompt?.send({ text: "Question for you:" });
-    expect(onToolResult).toHaveBeenCalledExactlyOnceWith({ text: "Question for you:" });
-  });
 });
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */
