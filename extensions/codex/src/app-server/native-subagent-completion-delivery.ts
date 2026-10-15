@@ -254,12 +254,20 @@ export class CodexNativeSubagentCompletionDelivery {
     child.completionDeliveryAbandoned = true;
     try {
       await this.dependencies.abandon(state, child, () => {
-        if (!this.isCurrent(state, child) || !this.claim(state, child)) {
-          throw new Error("Native completion retirement owner changed.");
+        if (
+          child.nativeCompletionDelivered ||
+          !this.isCurrent(state, child) ||
+          !this.claim(state, child)
+        ) {
+          throw new Error("Native completion retirement is no longer current.");
         }
       });
       this.dependencies.unregisterChild(child);
     } catch (error) {
+      if (this.isCurrent(state, child) && child.nativeCompletionDelivered) {
+        this.prepareDelivery(state, child);
+        return;
+      }
       embeddedAgentLog.warn("Native completion retirement remains pending", {
         childThreadId: child.childThreadId,
         error: formatErrorMessage(error),
