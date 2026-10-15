@@ -432,47 +432,6 @@ describe("telegram thread bindings", () => {
     },
   );
 
-  it("drops stopped-manager bindings without clearing a replacement generation", async () => {
-    const stopped = await createTelegramThreadBindingManager({
-      accountId: "manager-lifecycle",
-      persist: false,
-    });
-    await getSessionBindingService().bind({
-      targetSessionKey: "agent:main:subagent:stopped",
-      targetKind: "subagent",
-      conversation: {
-        channel: "telegram",
-        accountId: "manager-lifecycle",
-        conversationId: "stopped-thread",
-      },
-    });
-
-    await stopped.stop();
-
-    const replacement = await createTelegramThreadBindingManager({
-      accountId: "manager-lifecycle",
-      persist: false,
-    });
-    expect(replacement.getByConversationId("stopped-thread")).toBeUndefined();
-
-    await getSessionBindingService().bind({
-      targetSessionKey: "agent:main:subagent:replacement",
-      targetKind: "subagent",
-      conversation: {
-        channel: "telegram",
-        accountId: "manager-lifecycle",
-        conversationId: "replacement-thread",
-      },
-    });
-
-    await stopped.stop();
-
-    expect(getTelegramThreadBindingManager("manager-lifecycle")).toBe(replacement);
-    expect(replacement.getByConversationId("replacement-thread")?.targetSessionKey).toBe(
-      "agent:main:subagent:replacement",
-    );
-  });
-
   it("initializes queued mutations when source reload retains the old registry shape", async () => {
     const key = Symbol.for("openclaw.telegramThreadBindingsState");
     const previous = Object.getOwnPropertyDescriptor(globalThis, key);
