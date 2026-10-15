@@ -192,6 +192,20 @@ describe("program routes", () => {
     });
   });
 
+  it("routes local runtime intent with config and plugin startup disabled", async () => {
+    await expect(
+      tryRouteCli(routeArgv("gateway status --runtime-intent-only --json")),
+    ).resolves.toBe(true);
+    expect(runDaemonStatusMock).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeIntentOnly: true, json: true }),
+    );
+    expect(ensureCliExecutionBootstrap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupPolicy: expect.objectContaining({ skipConfigGuard: true, loadPlugins: false }),
+      }),
+    );
+  });
+
   it.each([
     { path: ["health"], argv: routeArgv("health --wat") },
     {
