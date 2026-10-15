@@ -77,7 +77,13 @@ const answer = {
   answers: { q: { type: "noul", noul: 0.75 } },
   usage: { input_tokens: 8, output_tokens: 1 },
 };
-const received: Array<{ url?: string; host?: string; authorization?: string; body: unknown }> = [];
+const received: Array<{
+  url?: string;
+  host?: string;
+  authorization?: string;
+  apiKey?: string | string[];
+  body: unknown;
+}> = [];
 let redirect: string | undefined;
 let responseModel: string | undefined;
 let escapeResponse = false;
@@ -98,6 +104,7 @@ beforeAll(async () => {
             url: request.url,
             host: request.headers.host,
             authorization: request.headers.authorization,
+            apiKey: request.headers["x-api-key"],
             body: JSON.parse(Buffer.concat(chunks).toString("utf8")),
           });
           if (redirect) {
@@ -422,6 +429,26 @@ it.each(["authorization-bearer", "header"] as const)(
         },
       }),
     ).evaluate(batch, context());
+    expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
+    expect(JSON.stringify(result)).not.toContain(responseModel);
+  },
+);
+
+it.each(["provider", "request"] as const)(
+  "rejects credentials reflected from configured %s headers",
+  async (owner) => {
+    responseModel = "synthetic-configured-header-key";
+    escapeResponse = true;
+    const headers = { "X-API-Key": responseModel };
+    const result = await provider(
+      settings(
+        owner === "provider"
+          ? { headers }
+          : { request: { tls: { ca: PROXY_FIXTURE_CERTIFICATE }, headers } },
+      ),
+    ).evaluate(batch, context());
+    expect(received).toHaveLength(1);
+    expect(received[0]?.apiKey).toBe(responseModel);
     expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
     expect(JSON.stringify(result)).not.toContain(responseModel);
   },

@@ -150,6 +150,7 @@ export async function requestEvaluation(params: {
   const reflectsCredential = createProviderCredentialMatcher({
     headers: resolved.headers,
     request: configuredRequest,
+    configuredHeaderNames: Object.keys(params.providerConfig?.headers ?? {}),
     defaultAuthHeader: "Authorization",
     defaultAuthPrefix: "Bearer ",
   });

@@ -59,6 +59,21 @@ describe("provider error utils", () => {
     });
     expect(basic("fixture-password")).toBe(true);
   });
+  it("matches the active values of configured headers without matching transport defaults", () => {
+    const matches = createProviderCredentialMatcher({
+      headers: new Headers({
+        Accept: "application/json",
+        "X-API-Key": "active-key",
+        "X-Request-Key": "request-key",
+      }),
+      configuredHeaderNames: ["X-API-Key"],
+      request: { headers: { "X-Request-Key": "overridden-key" } },
+      defaultAuthHeader: "Authorization",
+    });
+    expect(matches("active-key")).toBe(true);
+    expect(matches("request-key")).toBe(true);
+    expect(matches("overridden-key application/json Bearer demo")).toBe(false);
+  });
   it("redacts canonical JSON and URL encodings after removing a custom auth prefix", () => {
     const value = 'synthetic-"quoted-token';
     const redact = createProviderErrorTextRedactor({

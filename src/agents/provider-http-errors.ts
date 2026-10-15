@@ -40,6 +40,8 @@ function extractHeaderCredential(headers: Headers, headerName: string, prefix = 
 type ProviderRequestCredentialContext = {
   headers: Headers;
   request?: ModelProviderRequestTransportOverrides;
+  /** Configured header names, excluding automatic transport defaults. Values come from headers. */
+  configuredHeaderNames?: readonly string[];
   defaultAuthHeader: string;
   defaultAuthPrefix?: string;
 };
@@ -54,6 +56,8 @@ function collectProviderRequestCredentialValues(
       params.defaultAuthHeader,
       "Authorization",
       "Proxy-Authorization",
+      ...(params.configuredHeaderNames ?? []),
+      ...Object.keys(params.request?.headers ?? {}),
       ...(auth?.mode === "header" ? [auth.headerName] : []),
     ].map((name) => name.toLowerCase()),
   );
