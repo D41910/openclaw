@@ -89,6 +89,7 @@ describe("Memory observation lifecycle", () => {
       for (const entry of observer.observations) {
         expect(entry.options.mode).toBe(poll === "true" ? "poll" : "auto");
         expect(entry.options.pollIntervalMs).toBe(expected);
+        expect(entry.options.intervalMs).toBe(5 * 60_000);
         entry.health({ state: "ready", mode: "poll" });
       }
       expect(watcher.health()).toEqual(

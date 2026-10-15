@@ -1,5 +1,6 @@
 import {
   watch,
+  FS_RECONCILE_MS,
   resolveFsObservationMode,
   resolveFsObservationIntervalMs,
   ObservationSampleCloseError,
@@ -178,6 +179,7 @@ export class MemoryFileWatcher {
                 scopes,
                 mode,
                 pollIntervalMs,
+                intervalMs: FS_RECONCILE_MS,
                 maxDirectories: 1_000_000,
                 maxEntries: 1_000_000,
                 maxPendingPaths: MEMORY_WATCH_MAX_PATHS,
