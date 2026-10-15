@@ -6,7 +6,7 @@ import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts"
 const suite = createControlUiE2eSuite({ name: "Live chat preferences" });
 
 suite.define(() => {
-  it("saves model and reasoning while the admitted reply continues", async () => {
+  it("saves model, reasoning, and speed while the admitted reply continues", async () => {
     await suite.withPage({ viewport: { width: 1200, height: 853 } }, async ({ page }) => {
       const key = "agent:main:live-preferences";
       const levels = [
@@ -106,10 +106,14 @@ suite.define(() => {
       // The mounted slider is enabled before the popup can receive keyboard focus.
       await expect.poll(() => slider.isVisible()).toBe(true);
       await expect.poll(() => slider.isEnabled()).toBe(true);
-      expect(await main.locator("[data-chat-speed-option=on]").isDisabled()).toBe(true);
+      const speed = main.locator("[data-chat-speed-option=on]");
+      expect(await speed.isDisabled()).toBe(false);
       await slider.press("End");
       const thinking = await gateway.waitForRequest("sessions.patch", { after: 1 });
       expect(thinking.params).toMatchObject({ key, thinkingLevel: "high" });
+      await speed.click();
+      const speedPatch = await gateway.waitForRequest("sessions.patch", { after: 2 });
+      expect(speedPatch.params).toMatchObject({ key, fastMode: true });
       await emitText(
         "The first reply is still running. Its next chunk arrived after the settings changed.",
       );
