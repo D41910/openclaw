@@ -95,6 +95,7 @@ async function focusNextOption(select: HTMLElement) {
   const control = select as HTMLElementTagNameMap["wa-select"];
   await control.show();
   const { userEvent } = await import("vitest/browser");
+  await userEvent.unhover(select);
   control.focus();
   await userEvent.keyboard("{ArrowDown}");
   const current = control.querySelector<HTMLElement>("wa-option:state(current)");
