@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { getEnvironmentData } from "node:worker_threads";
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
-import "./database-suite-workers.test-support.js";
+import "./backup-worker.test-support.js";
 import { createBackupResourcePlan } from "../../commands/backup-resource-inventory.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { resolveActivatedPluginBackupInventory } from "../../plugins/manifest-backup-resources.js";
@@ -28,7 +28,8 @@ import {
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { createBackupSqliteSnapshotPlan } from "../backup-sqlite-snapshot.js";
 import { openNodeSqliteDatabase } from "../node-sqlite.js";
-import { createUpdateDatabaseBackup } from "../update-database-backup.js";
+import { discoverUpdateStateSchemaInspectionInProcess } from "../update-candidate-state.js";
+import { createUpdateDatabaseBackupInProcess } from "../update-database-backup.js";
 import { restoreUpdateDatabaseBackup } from "../update-database-restore.js";
 import { loadDatabasePortDescriptor } from "./port-provider-descriptor.js";
 import { materializeDatabasePort, type PortDescriptor } from "./port.worker.js";
@@ -249,12 +250,20 @@ describe.skipIf(!connection)("matched PostgreSQL backup and update recovery", ()
             );
             expect(capture()).toEqual(before);
           }
-          const backup = await createUpdateDatabaseBackup({
+          const input = {
             backupRoot: state.path("candidate"),
+            stagingRoot: state.path("snapshot-scratch"),
             stateDir: state.stateDir,
             config,
             env: state.env,
             stopped: true,
+            additionalPaths: [anchorPath],
+          };
+          await fs.mkdir(`${input.backupRoot}.databases`, { mode: 0o700 });
+          await fs.mkdir(input.stagingRoot, { mode: 0o700 });
+          const backup = await createUpdateDatabaseBackupInProcess({
+            ...input,
+            inspectionPlan: await discoverUpdateStateSchemaInspectionInProcess(input),
           });
           const entry = backup.databases.find((item) => item.path === anchorPath);
           expect(entry).toMatchObject({ engine: "postgres", namespace, storeId });
