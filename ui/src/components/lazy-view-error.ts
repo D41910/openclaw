@@ -9,11 +9,7 @@ type LazyElementState =
   | { status: "loading"; element: { label: string } }
   | { status: "error"; element: { label: string }; error: unknown; stale: boolean };
 
-export function renderLazyElementState(
-  state: LazyElementState,
-  onRetry: () => void,
-  onClose: () => void,
-) {
+function renderLazyElementState(state: LazyElementState, onRetry: () => void, onClose: () => void) {
   return state.status === "loading"
     ? renderLoadingState()
     : renderLazyViewError({
