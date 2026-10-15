@@ -44,7 +44,6 @@ import {
   recordCommandProcessFailure,
   resolveProcessExitCode,
   TIMEOUT_EXIT_CODE,
-  waitForWindowsShimExitState,
   type SpawnResult,
 } from "./exec-result.js";
 import {
@@ -621,15 +620,6 @@ async function runCommandWithOutputEncoding(
     !result.isCanceled &&
     !result.isMaxBuffer &&
     !result.isTerminated;
-  if (isCauseLessWindowsShimResult) {
-    await waitForWindowsShimExitState(
-      () =>
-        childExitState?.code != null ||
-        childExitState?.signal != null ||
-        nodeChild.exitCode != null ||
-        nodeChild.signalCode != null,
-    );
-  }
   if (
     result.failed &&
     !termination &&
