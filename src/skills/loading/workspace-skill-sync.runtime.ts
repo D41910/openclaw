@@ -39,6 +39,7 @@ const skillsLogger = createSubsystemLogger("skills");
 const skillsSyncQueue = new KeyedAsyncQueue();
 
 const SYNCED_SKILLS_MANIFEST_NAME = ".openclaw-sync.json";
+const SYNCED_SKILLS_IGNORE_NAME = ".gitignore";
 
 type SyncedSkillsManifest = {
   entryKeys: string[];
@@ -221,6 +222,9 @@ export async function syncWorkspaceSkills(params: {
     assertCurrent?.();
     const target = await root(targetSkillsDir, { assertBeforeMutation: assertCurrent });
     assertCurrent?.();
+    // These generated instruction packages must not enter ordinary Git discovery.
+    await target.write(SYNCED_SKILLS_IGNORE_NAME, "*\n", { durable: false });
+    assertCurrent?.();
     const manifest = parseSyncedSkillsManifest(await tryReadJson<unknown>(manifestPath));
     assertCurrent?.();
     const sourceVersion = getSkillsResourceVersion(sourceWorkspace, sourceScope);
@@ -329,7 +333,7 @@ export async function syncWorkspaceSkills(params: {
     const children = await fsp.readdir(targetSkillsDir);
     assertCurrent?.();
     for (const child of children) {
-      if (!preservedDestinations.has(child)) {
+      if (child !== SYNCED_SKILLS_IGNORE_NAME && !preservedDestinations.has(child)) {
         const stat = await fsp.lstat(path.join(targetSkillsDir, child));
         assertCurrent?.();
         if (stat.isDirectory()) {

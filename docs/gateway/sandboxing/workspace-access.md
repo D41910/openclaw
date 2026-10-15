@@ -57,7 +57,9 @@ Host recovery snapshots retain host data under their existing rules, but
 restoration does not admit that data to the guest. Use the
 session's managed GitHub publication action to publish accepted changes; host credentials are not
 copied into the sandbox. The runtime-owned `.openclaw/sandbox-skills` subtree
-is excluded from workspace reconciliation and publication; other project content
+is excluded from workspace reconciliation and publication. Generated skill packages
+also carry a local Git ignore rule so they do not appear as untracked project
+changes; tracked files and unrelated untracked content remain visible. Other project content
 under `.openclaw` is retained. Its empty mount targets are created by the host
 workspace owner before container allocation, while the skill mounts remain
 read-only. This also keeps normal retention cleanup independent of container
