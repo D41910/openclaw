@@ -185,6 +185,18 @@ async function withControlUiSessionPreview(
     consume(null);
     return;
   }
+  const cfg = context.getRuntimeConfig();
+  const owner = resolveRequestedGlobalAgentId(cfg, sessionKey);
+  const preview = owner.ok
+    ? projection.readPreview({ key: sessionKey, agentId: owner.agentId })
+    : null;
+  if (preview !== undefined) {
+    const entryFilter = createSessionListEntryFilter({ client, cfg });
+    consume(
+      preview && (!entryFilter || entryFilter(preview.sessionKey, preview.entry)) ? preview : null,
+    );
+    return;
+  }
   await withReadySessionRows(
     projection,
     (cfg) => {
