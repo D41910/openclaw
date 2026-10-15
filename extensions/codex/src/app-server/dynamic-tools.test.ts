@@ -391,13 +391,14 @@ describe("createCodexDynamicToolBridge", () => {
           }
 
           const started = createDeferred<AbortSignal>();
+          const cancellation = new Error("Decision caller cancelled");
           tool.execute = vi.fn(async (_id, _args, signal) => {
             if (!signal) {
               throw new Error("Decision call requires a cancellation signal");
             }
             started.resolve(signal);
             await new Promise<never>((_resolve, reject) => {
-              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+              signal.addEventListener("abort", () => reject(cancellation), { once: true });
             });
             throw new Error("Cancelled Decision must not return a result");
           });
@@ -409,7 +410,7 @@ describe("createCodexDynamicToolBridge", () => {
             },
           );
           const signal = await started.promise;
-          call.abort(new Error("Decision caller cancelled"));
+          call.abort(cancellation);
           expect(signal.aborted).toBe(true);
           expect((await pending).success).toBe(false);
           expect(tool.execute).toHaveBeenCalledOnce();
