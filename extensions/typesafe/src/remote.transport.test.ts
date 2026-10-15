@@ -80,6 +80,7 @@ const answer = {
 const received: Array<{ url?: string; host?: string; authorization?: string; body: unknown }> = [];
 let redirect: string | undefined;
 let responseModel: string | undefined;
+let escapeResponse = false;
 let fixture: Awaited<ReturnType<typeof listen<ReturnType<typeof createServer>>>>;
 let baseUrl: string;
 let pinnedAddress = "10.123.0.5";
@@ -103,7 +104,10 @@ beforeAll(async () => {
             response.end();
           } else {
             response.setHeader("content-type", "application/json");
-            response.end(JSON.stringify({ ...answer, model: responseModel ?? answer.model }));
+            const body = JSON.stringify({ ...answer, model: responseModel ?? answer.model });
+            response.end(
+              escapeResponse ? body.replaceAll("-", String.fromCharCode(92) + "u002d") : body,
+            );
           }
         });
       },
@@ -128,6 +132,7 @@ beforeEach(() => {
   received.length = 0;
   redirect = undefined;
   responseModel = undefined;
+  escapeResponse = false;
   pinnedAddress = "10.123.0.5";
   vi.mocked(lookup).mockReset();
   vi.mocked(lookup).mockResolvedValue([{ address: "10.123.0.5", family: 4 }]);
@@ -430,5 +435,22 @@ it.each(["authorization-bearer", "header"] as const)(
     ).resolves.toEqual({ status: "unavailable", reason: "credentials-unavailable" });
     expect(received).toHaveLength(0);
     expect(lookup).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["authorization-bearer", "header"] as const)(
+  "rejects JSON-escaped reflected %s credentials after decoding",
+  async (mode) => {
+    responseModel = "synthetic-request-token";
+    escapeResponse = true;
+    const auth =
+      mode === "authorization-bearer"
+        ? { mode, token: responseModel }
+        : { mode, headerName: "X-Server-Key", value: responseModel, prefix: "Token " };
+    const result = await provider(
+      settings({ request: { tls: { ca: PROXY_FIXTURE_CERTIFICATE }, auth } }),
+    ).evaluate(batch, context());
+    expect(result).toEqual({ status: "unavailable", reason: "invalid-response" });
+    expect(JSON.stringify(result)).not.toContain(responseModel);
   },
 );

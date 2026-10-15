@@ -51,7 +51,7 @@ function normalizePercentEscapeHexCase(value: string): string {
   return value.replace(/%[0-9A-F]{1,2}/giu, (escape) => escape.toUpperCase());
 }
 
-function redactExactSecretValues(
+export function redactExactSecretValues(
   text: string,
   values: readonly string[],
   sourceTruncated: boolean,

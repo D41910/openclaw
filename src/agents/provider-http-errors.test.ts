@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   assertOkOrThrowProviderError,
   assertOkOrThrowHttpError,
+  createProviderErrorTextRedactor,
   createProviderHttpError,
   extractProviderErrorDetail,
   extractProviderRequestId,
@@ -36,6 +37,17 @@ function createStreamingResponse(contentType: string, byte = 97) {
 }
 
 describe("provider error utils", () => {
+  it("redacts canonical JSON and URL encodings after removing a custom auth prefix", () => {
+    const value = 'synthetic-"quoted-token';
+    const redact = createProviderErrorTextRedactor({
+      headers: new Headers({ "X-Server-Key": "Token " + value }),
+      request: { auth: { mode: "header", headerName: "X-Server-Key", prefix: "Token ", value } },
+      defaultAuthHeader: "Authorization",
+    });
+    expect(redact(JSON.stringify({ model: value }))).toBe('{"model":"***"}');
+    expect(redact(encodeURIComponent(value))).toBe("***");
+    expect(redact(value.slice(0, -3), { truncated: true })).toBe("***");
+  });
   it.each([
     ["string", "provider failure", undefined],
     ["empty object", {}, undefined],

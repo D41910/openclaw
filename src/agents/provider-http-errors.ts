@@ -13,7 +13,10 @@ import {
 import { parseRetryAfterHeaderSeconds } from "../infra/retry-after.js";
 import { redactSensitiveText, redactToolPayloadText } from "../logging/redact.js";
 import type { ModelProviderRequestTransportOverrides } from "./provider-request-config.types.js";
-import { redactProviderResponseErrorText } from "./provider-request-header-redaction.js";
+import {
+  redactExactSecretValues,
+  redactProviderResponseErrorText,
+} from "./provider-request-header-redaction.js";
 export { asFiniteNumber } from "../../packages/normalization-core/src/number-coercion.js";
 export { asBoolean } from "../utils/boolean.js";
 export { normalizeOptionalString as trimToUndefined } from "../../packages/normalization-core/src/string-coerce.js";
@@ -59,24 +62,11 @@ export function createProviderErrorTextRedactor(params: {
     .toSorted((left, right) => right.length - left.length);
 
   return (text, context) => {
-    let withoutActiveCredential = credentials.reduce(
-      (redacted, credential) => redacted.split(credential).join("***"),
+    const withoutActiveCredential = redactExactSecretValues(
       text,
+      credentials,
+      context?.truncated === true,
     );
-    if (context?.truncated) {
-      const partialCredentialLength = credentials.reduce((longest, credential) => {
-        const maxLength = Math.min(credential.length - 1, withoutActiveCredential.length);
-        for (let length = maxLength; length > longest; length -= 1) {
-          if (withoutActiveCredential.endsWith(credential.slice(0, length))) {
-            return length;
-          }
-        }
-        return longest;
-      }, 0);
-      if (partialCredentialLength > 0) {
-        withoutActiveCredential = `${withoutActiveCredential.slice(0, -partialCredentialLength)}***`;
-      }
-    }
     return redactToolPayloadText(withoutActiveCredential).replace(
       SHORT_BEARER_TOKEN_PATTERN,
       "$1 ***",

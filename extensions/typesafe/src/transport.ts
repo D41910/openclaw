@@ -241,11 +241,13 @@ export async function requestEvaluation(params: {
       } catch {
         throw new EvaluationError("TypeSafe returned invalid JSON.", "invalid-response");
       }
-      // A server may reflect a custom auth value without its configured prefix.
-      if (
-        redactProviderResponseErrorText(text, resolved.headers) !== text ||
-        redactAuth(text) !== text
-      ) {
+      // JSON escapes can conceal a credential in raw text; check its decoded
+      // representation too. Custom header prefixes may be absent in reflections.
+      const decodedText = JSON.stringify(payload);
+      const reflectsCredential = (value: string) =>
+        redactProviderResponseErrorText(value, resolved.headers) !== value ||
+        redactAuth(value) !== value;
+      if (reflectsCredential(text) || (decodedText !== text && reflectsCredential(decodedText))) {
         throw new EvaluationError(
           "TypeSafe evaluation failed or returned an invalid response.",
           "invalid-response",
