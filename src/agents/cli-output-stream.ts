@@ -199,7 +199,6 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       : assistantText.slice(currentMessageStart).trim());
 
   const handleCustomJsonlEvent = (event: CliBackendParsedJsonlEvent) => {
-    const previousOutput = output;
     const state: CliEventProjectionState = {
       assistantText,
       customThinkingText,
@@ -214,17 +213,13 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       state,
       texts,
       toolTracker,
+      finalStreamedMessageText,
     });
     ({ assistantText, customThinkingText, sessionId, usage, output, sawCustomJsonlEvent } = state);
     // Custom events carry no message boundaries: a tool start begins the next
     // final-message segment, so pre-tool narration is never the final message.
     if (event.kind === "toolStart") {
       currentMessageStart = assistantText.length;
-    } else if (event.kind === "result" && output && !output.errorText) {
-      // A metadata-only result keeps the earlier result's final message.
-      const prior = previousOutput?.rawFinalText ?? previousOutput?.text.trim();
-      const finalText = event.text?.trim() || (prior ?? finalStreamedMessageText());
-      output = withCliRawFinalText(output, finalText);
     }
   };
 
@@ -500,13 +495,22 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       };
       // The result envelope carries the final message when present.
       output = withCliRawFinalText(output, result.text?.trim() || finalStreamedMessageText());
-      if (
-        parsed.openclaw_interim_result === true &&
-        completedText &&
-        !output.errorText &&
-        !output.terminalFailure
-      ) {
-        params.onCompletedReply?.(completedText, textParts.length - 1);
+      if (parsed.openclaw_interim_result === true && !output.errorText && !output.terminalFailure) {
+        if (
+          !completedText ||
+          params.onCompletedReply?.(completedText, textParts.length - 1) === true
+        ) {
+          assistantText = assistantText.slice(0, segmentStart);
+          if (!completedText) {
+            params.onAssistantDelta({
+              text: assistantText,
+              delta: "",
+              replace: true,
+              sessionId,
+              usage,
+            });
+          }
+        }
       }
       // An interim result commits its segment. Rebase boundary state so later
       // text is judged on its own, while delta snapshots stay cumulative.

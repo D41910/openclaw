@@ -24,6 +24,7 @@ import {
   isGeminiStreamJsonDialect,
   supportsCliJsonlToolEvents,
 } from "./cli-output-records.js";
+import { withCliRawFinalText } from "./cli-output-results.js";
 import {
   updateLiveEditDiffProgressFromInput,
   type LiveEditDiffProgressState,
@@ -108,6 +109,7 @@ export function projectCliBackendEvent(params: {
   state: CliEventProjectionState;
   texts: string[];
   toolTracker: ToolUseTracker;
+  finalStreamedMessageText: () => string;
   onAssistantDelta: (delta: CliStreamingDelta) => void;
   onThinkingDelta?: (delta: CliThinkingDelta) => void;
   onDisplayToolUseStart?: (delta: CliToolUseStartDelta) => void;
@@ -197,6 +199,7 @@ export function projectCliBackendEvent(params: {
     params.texts.join("\n").trim() ||
     state.assistantText.trim();
   const errorText = existingErrorText || event.errorText;
+  const previousFinalText = state.output?.rawFinalText ?? state.output?.text.trim();
   state.output = {
     ...state.output,
     text: resultText,
@@ -204,6 +207,12 @@ export function projectCliBackendEvent(params: {
     usage: state.usage,
     ...(errorText ? { errorText } : {}),
   };
+  if (!errorText) {
+    // A metadata-only result keeps the earlier result's final message.
+    const finalText =
+      event.text?.trim() || (previousFinalText ?? params.finalStreamedMessageText());
+    state.output = withCliRawFinalText(state.output, finalText);
+  }
 }
 
 export function projectCliTaggedReasoning(params: {

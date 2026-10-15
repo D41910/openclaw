@@ -139,7 +139,8 @@ export type CliJsonlStreamingParserOptions = {
   parseJsonlEvent?: CliBackendParseJsonlEvent;
   parseJsonlLifecycleEvent?: CliBackendParseJsonlLifecycleEvent;
   onAssistantDelta: (delta: CliStreamingDelta) => void;
-  onCompletedReply?: (text: string, assistantMessageIndex: number) => void;
+  /** Returning true retires an accepted silent segment from subsequent previews. */
+  onCompletedReply?: (text: string, assistantMessageIndex: number) => boolean | void;
   onThinkingDelta?: (delta: CliThinkingDelta) => void;
   onThinkingProgress?: (progress: CliThinkingProgress) => void;
   onCompaction?: (delta: CliCompactionDelta) => void;

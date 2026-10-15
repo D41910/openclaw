@@ -432,6 +432,7 @@ export function createCliEventHandlers(params: {
       acceptedReplyText = [acceptedReplyText, parsed.text].filter(Boolean).join("\n");
       emitLiveEvent("assistant", () => ({ assistantMessageIndex, completedText }));
     }
+    return parsed.hasSilentIntent;
   };
 
   // Emit-always: thinking reaches the event bus and session archive like the

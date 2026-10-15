@@ -675,7 +675,11 @@ it.each([
 
 it("does not redeliver repeated or empty held result acknowledgments", () => {
   const completed: string[] = [];
-  const parser = createClaudeParser({ onCompletedReply: (text) => completed.push(text) });
+  const parser = createClaudeParser({
+    onCompletedReply: (text) => {
+      completed.push(text);
+    },
+  });
   for (const text of [
     "First answer.",
     "",
@@ -710,7 +714,11 @@ it.each([
   { subtype: "success", result: "", terminal_reason: "hook_stopped", stop_reason: "tool_use" },
 ])("does not dispatch failed held results: $subtype $terminal_reason", (fields) => {
   const completed: string[] = [];
-  const parser = createClaudeParser({ onCompletedReply: (text) => completed.push(text) });
+  const parser = createClaudeParser({
+    onCompletedReply: (text) => {
+      completed.push(text);
+    },
+  });
   finishFrames(parser, { type: "result", ...fields, openclaw_interim_result: true });
   expect(completed).toEqual([]);
   expect(parser.getOutput()?.errorText).toBeTruthy();
