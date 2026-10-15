@@ -1,5 +1,5 @@
 import { coerceErrorMessage } from "@openclaw/normalization-core";
-import { setConfiguredMcpServer } from "../agents/mcp-config-mutation.js";
+import { setConfiguredMcpServer, unsetConfiguredMcpServer } from "../agents/mcp-config-mutation.js";
 import { withClawMcpLifecycleLease } from "../agents/mcp-lifecycle-lease.js";
 import { canonicalizeConfiguredMcpServer } from "../config/mcp-config-normalize.js";
 import { listConfiguredMcpServers } from "../config/mcp-config.js";
@@ -92,10 +92,11 @@ export async function installClawMcpServersStateless(
             skipLifecycleLease: true,
             assertCurrent,
           });
-          assertCurrent();
           if (!result.ok) {
             throw new ClawMcpInstallError("mcp_install_failed", result.error, refs);
           }
+          refs.push(ref);
+          assertCurrent();
         } catch (error) {
           if (error instanceof ClawMcpInstallError) {
             throw error;
@@ -103,8 +104,65 @@ export async function installClawMcpServersStateless(
           throw new ClawMcpInstallError("mcp_install_uncertain", coerceErrorMessage(error), refs);
         }
       }
-      refs.push(ref);
+      if (configured) {
+        refs.push(ref);
+      }
     });
   }
   return refs;
+}
+
+/** Remove unchanged MCP entries introduced before a failed Add published its agent. */
+export async function rollbackStatelessClawMcpServers(
+  refs: PersistedClawMcpServerRef[],
+  options: ClawMutationStateOptions & {
+    listMcpServers?: typeof listConfiguredMcpServers;
+    unsetMcpServer?: typeof unsetConfiguredMcpServer;
+  } = {},
+): Promise<string[]> {
+  const errors: string[] = [];
+  for (const ref of refs.toReversed()) {
+    if (ref.origin !== "claw-introduced" || ref.status !== "complete") {
+      continue;
+    }
+    try {
+      await withClawMcpLifecycleLease(ref.name, options, async (assertOwned) => {
+        const assertCurrent = () => {
+          assertOwned();
+          options.assertCurrent?.();
+        };
+        const listed = await (options.listMcpServers ?? listConfiguredMcpServers)();
+        assertCurrent();
+        if (!listed.ok) {
+          throw new Error(listed.error);
+        }
+        const configured = listed.mcpServers[ref.name];
+        if (!configured) {
+          refs.splice(refs.indexOf(ref), 1);
+          return;
+        }
+        if (digestClawMcpServer(configured) !== ref.configDigest) {
+          return;
+        }
+        const removed = await (options.unsetMcpServer ?? unsetConfiguredMcpServer)({
+          name: ref.name,
+          expectedServer: configured,
+          skipLifecycleLease: true,
+          assertCurrent,
+        });
+        assertCurrent();
+        if (!removed.ok) {
+          // A concurrent change is not ours to remove.
+          if (removed.error.includes("changed and was not removed")) {
+            return;
+          }
+          throw new Error(removed.error);
+        }
+        refs.splice(refs.indexOf(ref), 1);
+      });
+    } catch (error) {
+      errors.push(`MCP server ${ref.name} cleanup failed: ${coerceErrorMessage(error)}`);
+    }
+  }
+  return errors;
 }

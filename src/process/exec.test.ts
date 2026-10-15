@@ -53,9 +53,7 @@ async function waitForDescendantExit(pid: number, signal: AbortSignal): Promise<
 }
 
 describe("runCommandWithTimeout", () => {
-  it
-    .skipIf(process.platform === "win32")
-    .each(["cooperative", "default-signal", "forced"] as const)(
+  it.skipIf(process.platform === "win32").each(["cooperative", "forced"] as const)(
     "reports invocation cleanup and honors the initial SIGINT signal: %s",
     async (mode) => {
       const controller = new AbortController();

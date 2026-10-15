@@ -10,7 +10,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GATEWAY_CLIENT_CAPS } from "../../../packages/gateway-protocol/src/client-info.js";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../../config/config.js";
 import { clearSessionStoreCacheForTest } from "../../config/sessions/store-writer-state.js";
@@ -51,7 +51,7 @@ describe("plugin.approval.request delivery routing (real gateway)", () => {
   let approvalClient: Awaited<ReturnType<typeof connectGatewayClient>> | undefined;
   let connectApprovalClient: () => Promise<Awaited<ReturnType<typeof connectGatewayClient>>>;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     envSnapshot = captureEnv(TEST_ENV_KEYS);
     deleteTestEnvValue("OPENCLAW_CONFIG_PATH");
     deleteTestEnvValue("OPENCLAW_GATEWAY_URL");
@@ -190,12 +190,14 @@ describe("plugin.approval.request delivery routing (real gateway)", () => {
       });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     if (approvalClient) {
       await disconnectGatewayClient(approvalClient).catch(() => undefined);
+      approvalClient = undefined;
     }
     if (toolCaller) {
       await disconnectGatewayClient(toolCaller).catch(() => undefined);
+      toolCaller = undefined;
     }
     await disconnectGatewayClient(requester).catch(() => undefined);
     await server?.close();
@@ -206,6 +208,7 @@ describe("plugin.approval.request delivery routing (real gateway)", () => {
     clearSessionStoreCacheForTest();
   });
 
+  // The E2E setup retires active plugins after each `it`, so each test owns a fresh Gateway.
   it("expires with decision:null when no turn-source route and no approval client", async () => {
     // This is the bug: without turn-source fields, the gateway expires the record
     // immediately (decision: null) because there is no delivery route.
