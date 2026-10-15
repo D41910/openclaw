@@ -107,13 +107,14 @@ suite.define(() => {
       await expect.poll(() => slider.isVisible()).toBe(true);
       await expect.poll(() => slider.isEnabled()).toBe(true);
       const speed = main.locator("[data-chat-speed-option=on]");
-      expect(await speed.isDisabled()).toBe(false);
-      await slider.press("End");
-      const thinking = await gateway.waitForRequest("sessions.patch", { after: 1 });
-      expect(thinking.params).toMatchObject({ key, thinkingLevel: "high" });
+      expect(await speed.isEnabled()).toBe(true);
       await speed.click();
-      const speedPatch = await gateway.waitForRequest("sessions.patch", { after: 2 });
+      const speedPatch = await gateway.waitForRequest("sessions.patch", { after: 1 });
       expect(speedPatch.params).toMatchObject({ key, fastMode: true });
+      await speed.and(main.locator('[aria-checked="true"]')).waitFor({ state: "visible" });
+      await slider.press("End");
+      const thinking = await gateway.waitForRequest("sessions.patch", { after: 2 });
+      expect(thinking.params).toMatchObject({ key, thinkingLevel: "high" });
       await emitText(
         "The first reply is still running. Its next chunk arrived after the settings changed.",
       );
@@ -123,6 +124,11 @@ suite.define(() => {
         .waitFor();
       await expect.poll(() => model.textContent()).toContain("Example B");
       await expect.poll(() => effort.textContent()).toContain("High");
+      expect(await gateway.getSessionRow(key)).toMatchObject({
+        model: "example/example-b",
+        thinkingLevel: "high",
+        fastMode: true,
+      });
       expect(await gateway.getRequests("chat.abort")).toHaveLength(0);
       expect(await gateway.getRequests("chat.send")).toHaveLength(1);
       expect(await page.getByRole("button", { name: "Stop generating", exact: true }).count()).toBe(
