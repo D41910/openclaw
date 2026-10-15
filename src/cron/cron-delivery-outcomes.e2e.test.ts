@@ -5,7 +5,17 @@ import {
   sendGatewayCronFailureAlert,
   sendGatewayCronWebhook,
 } from "../gateway/server-cron-notifications.js";
-import { getActiveGatewayRootWorkCount } from "../process/gateway-work-admission.js";
+import {
+  drainSystemEvents,
+  enqueueSystemEvent as enqueueOwnerSystemEvent,
+  peekSystemEvents,
+} from "../infra/system-events.js";
+import {
+  getActiveGatewayRootWorkCount,
+  markGatewayRestartDraining,
+  resetGatewayWorkAdmission,
+  runOutsideGatewayRootWorkAdmission,
+} from "../process/gateway-work-admission.js";
 import { createTestGatewayScheduler } from "../test-utils/gateway-scheduler-clock.js";
 import { withOpenClawTestState } from "../test-utils/openclaw-test-state.js";
 import { reserveTestPortListener } from "../test-utils/port-claims.js";
@@ -731,6 +741,94 @@ describe("cron delivery outcomes", { concurrent: false }, () => {
         }
       },
     );
+  });
+
+  it("records admission-refused failure alerts and queues the real owner fallback", async () => {
+    const receiver = await createWebhookReceiver();
+    const sessionKey = "agent:work:cron:admission-fallback";
+    resetGatewayWorkAdmission();
+    try {
+      await withOpenClawTestState(
+        { layout: "state-only", prefix: "openclaw-cron-admission-fallback-" },
+        async (state) => {
+          const storePath = state.path("cron", "jobs.json");
+          let delivery: Promise<void> | undefined;
+          const cron = new CronService({
+            scheduler: createTestGatewayScheduler(),
+            nowMs: Date.now,
+            storePath,
+            cronEnabled: true,
+            log: createNoopLogger(),
+            enqueueSystemEvent: (text, options) => {
+              if (!options?.sessionKey) {
+                throw new Error("Expected an exact fallback owner session");
+              }
+              enqueueOwnerSystemEvent(text, { ...options, sessionKey: options.sessionKey });
+            },
+            requestHeartbeat: vi.fn(),
+            runCommandJob: commandRunner(),
+            runIsolatedAgentJob: async () => {
+              throw new Error("This command job must not invoke an agent");
+            },
+            sendCronFailureAlert: (params) => {
+              // Model a detached alert without a live admitted parent when restart closes admission.
+              markGatewayRestartDraining();
+              delivery = runOutsideGatewayRootWorkAdmission(() =>
+                sendGatewayCronFailureAlert({
+                  ...params,
+                  deps: {} as never,
+                  logger: createNoopLogger(),
+                  resolveCronAgent: () => ({ agentId: "work", cfg: {} as never }),
+                  ssrfPolicy: { allowedHostnames: ["127.0.0.1"] },
+                }),
+              );
+              return delivery;
+            },
+          });
+          try {
+            await cron.start();
+            const job = await cron.add({
+              name: "admission fallback",
+              enabled: true,
+              agentId: "work",
+              sessionKey,
+              schedule: { kind: "every", everyMs: 60_000 },
+              sessionTarget: "isolated",
+              wakeMode: "now",
+              payload: { kind: "command", argv: [process.execPath, "-e", "process.exit(17)"] },
+              delivery: { mode: "none" },
+              failureAlert: { after: 1, mode: "webhook", to: receiver.url },
+            });
+            await expect(cron.run(job.id, "force")).resolves.toEqual({ ok: true, ran: true });
+            if (!delivery) {
+              throw new Error("Expected the failed command to dispatch a failure alert");
+            }
+            await expect(delivery).rejects.toThrow("Gateway is restarting");
+            expect(await persistedJob(storePath, job.id)).toMatchObject({
+              state: {
+                lastRunStatus: "error",
+                lastError: "command exited with code 17",
+                lastFailureNotificationDelivered: false,
+                lastFailureNotificationDeliveryStatus: "not-delivered",
+                lastFailureNotificationDeliveryError:
+                  expect.stringContaining("Gateway is restarting"),
+              },
+            });
+            expect(peekSystemEvents(sessionKey)).toEqual([
+              expect.stringContaining('Automation "admission fallback" failed 1 times'),
+            ]);
+            expect(receiver.requests).toHaveLength(0);
+            expect(getActiveGatewayRootWorkCount()).toBe(0);
+          } finally {
+            cron.stop();
+          }
+        },
+      );
+    } finally {
+      resetGatewayWorkAdmission();
+      drainSystemEvents(sessionKey);
+      await receiver.close();
+    }
   });
 
   it("sends skipped-run alerts through the real webhook path and persists alert state", async () => {
