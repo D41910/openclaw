@@ -526,6 +526,42 @@ suite.define(() => {
     );
   });
 
+  it("creates a draft atomically from the multi-person new-session flow", async () => {
+    const context = await createSessionOwnershipProofContext(suite, "drafts-ux");
+    const currentPage = await context.newPage();
+    page = currentPage;
+    const gateway = await installMockGateway(currentPage, {
+      allowedSessionVisibilities: ["shared", "draft"],
+      featureMethods: ["chat.metadata", "chat.startup", "sessions.create"],
+      hasMultipleSessionSharingIdentities: true,
+      methodResponses: {
+        "sessions.list": sessionsList(["profile-ada", "profile-bob"]),
+        "sessions.create": { key: "agent:main:new-draft", runStarted: true },
+      },
+    });
+
+    await currentPage.goto(`${suite.server?.baseUrl ?? ""}new`);
+    // Playwright check()/isChecked() support role="switch" buttons via aria-checked.
+    const draftToggle = currentPage.getByRole("switch", { name: "Draft", exact: true });
+    await currentPage.locator(".new-session-page__composer .agent-chat__composer-footer").hover();
+    await draftToggle.waitFor();
+    await captureUiProof(suite, draftToggle, "02-create-draft-available.png", [draftToggle]);
+    await draftToggle.check();
+    await expectBrowser(draftToggle).toBeChecked();
+    await currentPage.locator(".new-session-page__message").fill("work privately first");
+    await captureUiProof(suite, draftToggle, "03-create-draft-selected.png", [
+      currentPage.locator(".new-session-page__message"),
+    ]);
+    await currentPage.getByRole("button", { name: "Start session" }).click();
+
+    const create = await gateway.waitForRequest("sessions.create");
+    expect(create.params).toMatchObject({
+      agentId: "main",
+      message: "work privately first",
+      visibility: "draft",
+    });
+  });
+
   it("keeps rejected visibility-only sharing changes visible after the menu closes", async () => {
     const context = await suite.browser.newContext({ viewport: { height: 800, width: 1200 } });
     const currentPage = await context.newPage();
