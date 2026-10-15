@@ -305,7 +305,6 @@ export function createModelLifecycle(params: {
   let waitReason: "response" | "slot" | null = null;
   let firstEventObserved = false;
   const trackStatusDelivery = captureAsyncWorkTracker();
-  let statusDelivery = Promise.resolve();
   const signal = params.options?.signal;
   const reportWait: NonNullable<NonNullable<ModelCallStreamOptions>["onProviderWait"]> = (
     reason,
@@ -328,11 +327,13 @@ export function createModelLifecycle(params: {
       ...event,
     });
     if (params.ctx.onAgentEvent) {
-      statusDelivery = trackStatusDelivery(() =>
-        statusDelivery
-          .then(() => params.ctx.onAgentEvent?.(event))
-          .catch(() => log.warn("Provider wait status delivery failed")),
-      );
+      void trackStatusDelivery(async () => {
+        try {
+          await params.ctx.onAgentEvent?.(event);
+        } catch {
+          log.warn("Provider wait status delivery failed");
+        }
+      });
     }
     params.options?.onProviderWait?.(reason);
   };
