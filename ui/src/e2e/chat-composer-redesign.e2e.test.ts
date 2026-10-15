@@ -787,6 +787,7 @@ suite.define(() => {
         message: {
           content: [{ text: "Working on it.", type: "text" }],
           role: "assistant",
+          phase: "commentary",
           timestamp: Date.now(),
         },
         runId,
