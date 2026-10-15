@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import { Show, onCleanup } from "solid-js";
+import { For, Show, onCleanup } from "solid-js";
 import { observeScrollState } from "../../../components/scroll-state-observer.ts";
 import { Icon } from "../../../components/solid/icon.tsx";
 import "../../../components/tooltip.ts";
@@ -101,11 +101,19 @@ export function CommentPreviewChip(props: ChipProps) {
   );
 }
 
-function LegacyCommentRow(props: { comment: CommentPreview; content: unknown }) {
+function LegacyCommentRows(props: {
+  rows: ReadonlyArray<{ comment: CommentPreview; actions?: unknown }>;
+}) {
   return (
-    <CommentPreviewRow comment={props.comment}>
-      <LitContent value={props.content} />
-    </CommentPreviewRow>
+    <ol class="chat-comment-preview__list" role="list">
+      <For each={props.rows} keyed={false}>
+        {(row) => (
+          <CommentPreviewRow comment={row().comment}>
+            <LitContent value={row().actions} />
+          </CommentPreviewRow>
+        )}
+      </For>
+    </ol>
   );
 }
 
@@ -122,8 +130,10 @@ function LegacyCommentChip(props: ChipProps & { content: unknown }) {
   );
 }
 
-export function renderCommentPreviewRow(comment: CommentPreview, actions?: unknown) {
-  return solidContent(LegacyCommentRow, { comment, content: actions });
+export function renderCommentPreviewRows(
+  rows: ReadonlyArray<{ comment: CommentPreview; actions?: unknown }>,
+) {
+  return solidContent(LegacyCommentRows, { rows });
 }
 
 export function renderCommentPreviewChip(
