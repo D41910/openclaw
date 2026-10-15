@@ -63,7 +63,7 @@ describe("session catalog JSONL activity", () => {
       vi.spyOn(fs, "open").mockRejectedValueOnce(error);
       await expect(readActivity("transcript.jsonl")).resolves.toBeUndefined();
       expect(mocks.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(probe.sessionKey));
-      expect(mocks.warn.mock.calls[0][0]).toContain(code);
+      expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining(code));
     },
   );
 
@@ -78,7 +78,7 @@ describe("session catalog JSONL activity", () => {
         await expect(fs.open(filePath, "r")).rejects.toMatchObject({ code: "EACCES" });
         await expect(readActivity(filePath)).resolves.toBeUndefined();
         expect(mocks.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("EACCES"));
-        expect(mocks.warn.mock.calls[0][0]).toContain(probe.sessionKey);
+        expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining(probe.sessionKey));
       } finally {
         await fs.chmod(filePath, 0o600);
       }
