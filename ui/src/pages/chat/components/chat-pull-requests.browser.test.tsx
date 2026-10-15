@@ -220,7 +220,8 @@ it.each(["openclaw", "a-very-long-repository-name-that-must-remain-readable"])(
                   owner: "example",
                   repo,
                   branch: "fix/layout",
-                  title: "Keep long pull request titles readable in the narrow session Details panel",
+                  title:
+                    "Keep long pull request titles readable in the narrow session Details panel",
                   url: `https://github.com/example/${repo}/pull/42`,
                   state: "open",
                   checks: { state: "passing", passed: 4, failed: 0, skipped: 0, running: 0 },
