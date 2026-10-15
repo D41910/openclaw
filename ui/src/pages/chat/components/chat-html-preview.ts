@@ -3,13 +3,13 @@ import { isStaleChunkImportError } from "../../../app/stale-chunk-reload.ts";
 import { registerFilePreviewEnglish } from "../../../i18n/locales/en-file-preview.ts";
 import type { EmbedSandboxMode } from "../../../lib/chat/tool-display.ts";
 import { registerEnglishCatalog, t } from "../../../lib/reactive/i18n.ts";
-import { emptyLegacyContent } from "../../../lit/solid-content.tsx";
+import { emptyLegacyContent, type LegacyDirectiveResult } from "../../../lit/solid-content.tsx";
 import { renderHtmlPreview, renderHtmlPreviewSourceFallback } from "./chat-html-preview-view.tsx";
 import type { SidebarContent, AttachmentSidebarRuntime } from "./chat-sidebar-content-types.ts";
 export type FileHtmlPreviewControls = {
   source: boolean;
-  presentation: ReturnType<typeof renderHtmlPreview> | typeof emptyLegacyContent;
-  sourceFallback?: ReturnType<typeof renderHtmlPreviewSourceFallback>;
+  presentation: LegacyDirectiveResult | typeof emptyLegacyContent;
+  sourceFallback?: LegacyDirectiveResult;
   onToggle: () => void;
 };
 

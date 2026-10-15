@@ -2,7 +2,7 @@ import type { LazyCustomElementRequestController } from "../../../app/lazy-custo
 import { LazyViewError } from "../../../components/solid/lazy-view-error.tsx";
 import type { EmbedSandboxMode } from "../../../lib/chat/tool-display.ts";
 import { t } from "../../../lib/reactive/i18n.ts";
-import { solidContent } from "../../../lit/solid-content.tsx";
+import { solidContent, type LegacyDirectiveResult } from "../../../lit/solid-content.tsx";
 import type { SessionFileSource } from "./chat-sidebar-content-types.ts";
 
 type PreviewProps = {
@@ -54,10 +54,10 @@ function HtmlPreviewSourceFallback(props: SourceFallbackProps) {
   );
 }
 
-export function renderHtmlPreview(props: PreviewProps) {
+export function renderHtmlPreview(props: PreviewProps): LegacyDirectiveResult {
   return solidContent(HtmlPreview, props);
 }
 
-export function renderHtmlPreviewSourceFallback(props: SourceFallbackProps) {
+export function renderHtmlPreviewSourceFallback(props: SourceFallbackProps): LegacyDirectiveResult {
   return solidContent(HtmlPreviewSourceFallback, props);
 }
