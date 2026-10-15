@@ -22,7 +22,6 @@ import {
 import { resolveSessionStorePathCore } from "../config/sessions/paths.js";
 import { listKnownSessionStoreAgentIdsAsync } from "../config/sessions/targets-runtime.js";
 import { listConfiguredSessionStoreAgentIds } from "../config/sessions/targets.js";
-import type { AgentDefaultsConfig } from "../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveCronJobEffectiveAgentId } from "../cron/agent-id.js";
 import { redactCronCommandSummaryForExternalDelivery } from "../cron/command-output-summary.js";
@@ -45,6 +44,7 @@ import type { GatewayScheduler } from "../infra/gateway-scheduler.js";
 import {
   resolveHeartbeatForWake,
   resolveHeartbeatTimeoutOverrideSeconds,
+  sanitizeCronHeartbeatOverride,
 } from "../infra/heartbeat-config.js";
 import {
   requestHeartbeat,
@@ -137,14 +137,6 @@ export type GatewayCronExitWatcherHandoff = {
   adopt: (watchers: CronExitWatchers) => Promise<void> | void;
   stopOwner: () => Promise<void>;
 };
-
-function sanitizeCronHeartbeatOverride(
-  heartbeat: AgentDefaultsConfig["heartbeat"] | undefined,
-): AgentDefaultsConfig["heartbeat"] | undefined {
-  return heartbeat?.target === "last"
-    ? { ...heartbeat, to: undefined, accountId: undefined }
-    : heartbeat;
-}
 
 export function buildGatewayCronService(params: {
   scheduler: GatewayScheduler;
