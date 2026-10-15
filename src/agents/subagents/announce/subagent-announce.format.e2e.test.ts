@@ -1177,6 +1177,99 @@ describe("subagent announce formatting", () => {
     expect(new Set(idempotencyKeys).size).toBe(2);
   });
 
+  it("falls back to internal requester-session injection when completion route is missing", async () => {
+    sessionStore = {
+      "agent:main:main": {
+        sessionId: "requester-session-no-route",
+      },
+    };
+    agentSpy.mockImplementationOnce(async (req: AgentCallRequest) => {
+      const deliver = req.params?.deliver;
+      const channel = req.params?.channel;
+      if (deliver === true && typeof channel !== "string") {
+        throw new Error("Channel is required when deliver=true");
+      }
+      return visibleAgentResponse();
+    });
+
+    const didAnnounce = await announceCompletion({
+      requesterOrigin: undefined,
+      childSessionKey: "agent:main:subagent:worker",
+      childRunId: "run-completion-missing-route",
+      requesterSessionKey: "main",
+    });
+
+    expect(didAnnounce).toBe("delivered");
+    expect(sendSpy).toHaveBeenCalledTimes(0);
+    expect(agentSpy).toHaveBeenCalledTimes(1);
+    expectAgentCallFields(getAgentCall(), {
+      sessionKey: "agent:main:main",
+      deliver: false,
+    });
+  });
+
+  it("returns failure for completion-mode when direct delivery fails and steering fallback is unavailable", async () => {
+    sessionStore = {
+      "agent:main:main": {
+        sessionId: "session-direct-only",
+        lastChannel: "whatsapp",
+        lastTo: "+1555",
+      },
+    };
+    agentSpy.mockRejectedValueOnce(new Error("direct delivery unavailable"));
+
+    const didAnnounce = await announceCompletion({
+      requesterOrigin: undefined,
+      childSessionKey: "agent:main:subagent:worker",
+      childRunId: "run-completion-direct-fail",
+      requesterSessionKey: "main",
+    });
+
+    expect(didAnnounce).toBe("retryable");
+    expectParentAnnounce();
+  });
+
+  it.each([
+    {
+      name: "uses assistant output ahead of older tool output",
+      messages: [
+        { role: "toolResult", content: [{ type: "text", text: "old tool output" }] },
+        textAssistant("assistant completion text"),
+      ],
+      expected: "assistant completion text",
+      excluded: "old tool output",
+    },
+    {
+      name: "does not use trailing tool output after an empty assistant reply",
+      messages: [
+        textAssistant(""),
+        { role: "toolResult", content: [{ type: "text", text: "tool output only" }] },
+      ],
+      expected: "(no output)",
+      excluded: "tool output only",
+    },
+    {
+      name: "does not use user text as fallback completion output",
+      messages: [
+        { role: "user", content: [{ type: "text", text: "user prompt should not be announced" }] },
+      ],
+      expected: "(no output)",
+      excluded: "user prompt should not be announced",
+    },
+  ])("completion output: $name", async ({ messages, expected, excluded }) => {
+    chatHistoryMock.mockResolvedValueOnce({ messages });
+    readLatestAssistantReplyMock.mockResolvedValue("");
+    const didAnnounce = await announceCompletion({
+      childSessionKey: "agent:main:subagent:worker",
+      childRunId: "run-completion-output",
+    });
+    expect(didAnnounce).toBe("delivered");
+    expectParentAnnounce();
+    const message = getAgentCallContext();
+    expect(message).toContain(expected);
+    expect(message).not.toContain(excluded);
+  });
+
   it.each([
     {
       testName: "includes threadId when origin has an active topic/thread",
