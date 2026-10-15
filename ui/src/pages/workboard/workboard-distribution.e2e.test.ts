@@ -6,6 +6,7 @@ import {
   readPluginControlUiAssets,
 } from "../../../../src/plugins/control-ui-assets.ts";
 import { loadPluginManifest } from "../../../../src/plugins/manifest.ts";
+import { normalizeControlUiBuildInfo } from "../../build-info-normalizers.ts";
 import { createControlUiE2eSuite } from "../../e2e/control-ui-e2e-suite.test-support.ts";
 import {
   defaultControlUiFeatureMethods,
@@ -44,6 +45,9 @@ suite.define(() => {
     });
     const revision = pluginControlUiRevision(controlUi, uiCapabilities, build.assets);
     const pkg = JSON.parse(await fs.readFile(path.join(pluginRoot, "package.json"), "utf8"));
+    const { buildId } = normalizeControlUiBuildInfo(
+      JSON.parse(await fs.readFile(path.join(repoRoot, "dist/build-info.json"), "utf8")),
+    );
     const gatewayUrl = "ws://gateway.example/ws";
     const gatewayPrefix = `http://gateway.example/__openclaw__/plugins/control-ui/workboard/${revision}/`;
     const board = { id: "ops", name: "Operations", total: 0, active: 0, archived: 0, byStatus: {} };
@@ -53,6 +57,7 @@ suite.define(() => {
       page.on("pageerror", (error) => errors.push(error.message));
       page.on("request", (request) => requests.push(request.url()));
       const gateway = await installMockGateway(page, {
+        serverBuildId: buildId,
         controlUiTabs: workboardUi.controlUiTabs,
         pluginAssetsRequireAuth: true,
         featureMethods: [
