@@ -12,21 +12,26 @@ const mocks = vi.hoisted(() => ({
 const cfg = { channels: { matrix: { encryption: true } } };
 const client = {};
 
-vi.mock("./runtime.js", () => ({
+vi.mock("./runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./runtime.js")>()),
   getMatrixRuntime: () => ({ config: { current: () => cfg } }),
 }));
-vi.mock("./matrix/account-config.js", () => ({
+vi.mock("./matrix/account-config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./matrix/account-config.js")>()),
   resolveMatrixAccountConfig: () => ({ encryption: true }),
 }));
-vi.mock("./matrix/actions/client.js", () => ({
+vi.mock("./matrix/actions/client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./matrix/actions/client.js")>()),
   withResolvedActionClient: mocks.resolved,
   withStartedActionClient: mocks.started,
 }));
-vi.mock("./matrix/direct-management.js", () => ({
+vi.mock("./matrix/direct-management.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./matrix/direct-management.js")>()),
   inspectMatrixDirectRooms: mocks.inspect,
   repairMatrixDirectRooms: mocks.repair,
 }));
-vi.mock("./cli-shared.js", () => ({
+vi.mock("./cli-shared.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./cli-shared.js")>()),
   resolveMatrixCliAccountContext: (accountId: string) => ({ accountId }),
   runMatrixCliCommand: async (
     options: { verbose?: boolean; json?: boolean },

@@ -12,7 +12,6 @@ vi.mock("./send-runtime.js", () => ({
   loadTelegramSendModule: async () => ({ createForumTopicTelegram: createForumTopicMock }),
 }));
 
-import type { TelegramThreadBindingManager } from "./thread-bindings-store.js";
 import {
   TELEGRAM_THREAD_BINDINGS_TEST_CFG,
   useTelegramThreadBindingsFixture,
