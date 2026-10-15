@@ -10,11 +10,20 @@ import {
   PluginInstallRuntimeBatch,
   type PluginInstallBatchReload,
 } from "../plugins/install-runtime-batch.js";
+import type { uninstallPluginWithPolicy } from "../plugins/management-uninstall.js";
 import { preflightPluginInstall } from "../plugins/plugin-install-preflight.js";
-import { hasPluginLifecycleLease } from "../plugins/plugin-lifecycle-lease.js";
+import {
+  hasPluginLifecycleLease,
+  withPluginLifecycleLease,
+} from "../plugins/plugin-lifecycle-lease.js";
 import { closeOpenClawStateDatabaseForTest } from "../state/openclaw-state-db.js";
 import { withEnvAsync } from "../test-utils/env.js";
-import { installClawPackages, preflightClawPackage } from "./packages.js";
+import { stageClawAddHostRequirementsStateless } from "./add-stateless.js";
+import {
+  installClawPackages,
+  preflightClawPackage,
+  rollbackStatelessClawPackages,
+} from "./packages.js";
 import { emptyPluginCapabilityEvidence, packageInstallPlan } from "./packages.test-support.js";
 import { runClawPluginBatch } from "./plugin-runtime.js";
 
@@ -97,6 +106,68 @@ function packageDeps(
 }
 
 describe("Claw committed plugin requirement handoff", () => {
+  it("rolls back an unpublished plugin after runtime batch preparation fails", async () => {
+    const root = dirs.make("openclaw-claw-batch-rollback-");
+    const env = {
+      OPENCLAW_STATE_DIR: root,
+      OPENCLAW_CONFIG_PATH: path.join(root, "openclaw.json"),
+    };
+    await fs.writeFile(env.OPENCLAW_CONFIG_PATH, "{}");
+    await withEnvAsync(env, async () => {
+      const batch = new PluginInstallRuntimeBatch({ env }, vi.fn());
+      const uninstallPlugin = vi.fn(
+        async (_params: Parameters<typeof uninstallPluginWithPolicy>[0]) => {},
+      );
+      const deps: NonNullable<InstallOptions["deps"]> = {
+        ...packageDeps(root, async () => ({})),
+        preflightPlugin: vi.fn().mockResolvedValue({ ok: true, action: "install" }),
+        acquirePackageLease: async () => testPackageLease(),
+        readPackageRefs: vi.fn().mockResolvedValue([]),
+        installPlugin: vi.fn(async () => {}),
+        uninstallPlugin,
+        resolvePlugin: vi.fn().mockResolvedValue({
+          status: "found",
+          pluginId: "demo",
+          installedVersion: "1.0.0",
+          record: { source: "clawhub", integrity, installedAt: "2026-10-14T01:00:00.000Z" },
+        }),
+      };
+      const plan = packageInstallPlan([
+        { kind: "plugin", source: "clawhub", ref: "@owner/demo", version: "1.0.0", integrity },
+      ]);
+      const stage = await stageClawAddHostRequirementsStateless(plan, {
+        consentPlanIntegrity: plan.planIntegrity,
+        runtimeBatch: batch,
+        pluginConsent: {
+          onCapabilityConsent: async (review) => ({ reviewToken: review.reviewToken }),
+        },
+        installPackages: (currentPlan, options) =>
+          installClawPackages(currentPlan, { ...options, env, deps }),
+        rollbackPackages: (refs, options) =>
+          rollbackStatelessClawPackages(refs, { ...options, env, deps }),
+      });
+      expect(stage.kind).toBe("ready");
+      if (stage.kind !== "ready") {
+        return;
+      }
+
+      batch.retain("missing-plugin");
+      await withPluginLifecycleLease({ env }, async (lease) => {
+        await expect(batch.prepare(lease)).rejects.toThrow("no longer installed");
+      });
+      batch.close();
+      const result = await stage.failBeforeContinue(
+        new Error("batch preparation failed"),
+        "package_runtime_failed",
+      );
+
+      expect(result.error).toMatchObject({ code: "package_runtime_failed" });
+      expect(uninstallPlugin).toHaveBeenCalledWith(expect.objectContaining({ pluginId: "demo" }));
+      expect(uninstallPlugin.mock.calls[0]?.[0]).not.toHaveProperty("deferRuntime");
+      expect(result.packages[0]?.status).toBe("rolled_back");
+    });
+  });
+
   it("rejects an oversized external runtime batch before starting package work", async () => {
     const run = vi.fn(async () => "mutated");
     const batch = new PluginInstallRuntimeBatch({}, vi.fn());

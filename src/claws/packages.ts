@@ -167,7 +167,7 @@ export async function rollbackStatelessClawPackages(
   packages: PersistedClawPackageRef[],
   options: Pick<
     InstallClawPackagesOptions,
-    "assertCurrent" | "deps" | "env" | "path" | "runtime" | "runtimeBatch"
+    "assertCurrent" | "deps" | "env" | "path" | "runtime"
   > = {},
 ): Promise<string[]> {
   const errors: string[] = [];
@@ -218,6 +218,7 @@ export async function rollbackStatelessClawPackages(
         continue;
       }
       const activeLease = lease;
+      // The Add batch may be closed; CLI uninstall schedules its own runtime restart.
       const params: Parameters<typeof uninstallPluginWithPolicy>[0] = {
         pluginId: installed.pluginId,
         caller: "cli",
@@ -228,7 +229,6 @@ export async function rollbackStatelessClawPackages(
           options.assertCurrent?.();
         },
         onWarning: (warning) => runtime.log(warning),
-        deferRuntime: options.runtimeBatch?.install(),
       };
       options.assertCurrent?.();
       if (deps.uninstallPlugin) {
