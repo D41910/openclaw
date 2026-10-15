@@ -200,6 +200,27 @@ describe("Windows enforced shell command rendering", () => {
 
     expect(result.ok).toBe(false);
   });
+
+  it("fails closed when an argv token carries a newline the command text does not show", () => {
+    // The enforced command is rendered from the analysed segments, while the
+    // operator-visible command text is scanned separately. A newline that only
+    // exists in the argv therefore has to be stopped by the renderer, otherwise
+    // it lands verbatim inside the rebuilt command line.
+    const analysis = analyzeArgvCommand({
+      argv: ["node", "tool.js", "first\nsecond"],
+      platform: "win32",
+    });
+
+    expect(analysis.ok).toBe(true);
+    const result = buildEnforcedShellCommand({
+      command: "node tool.js",
+      segments: analysis.segments,
+      platform: "win32",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.command).toBeUndefined();
+  });
 });
 
 describe("windowsEscapeArg", () => {
@@ -220,6 +241,14 @@ describe("windowsEscapeArg", () => {
     expect(windowsEscapeArg("$(whoami)")).toEqual({ ok: false });
     expect(windowsEscapeArg("$?")).toEqual({ ok: false });
     expect(windowsEscapeArg("$$")).toEqual({ ok: false });
+  });
+
+  it("rejects newline-bearing values that quoting cannot neutralise", () => {
+    // findWindowsUnsupportedToken classifies \n and \r as unsafe even inside
+    // double quotes, so wrapping them in quotes is not an acceptable render.
+    expect(windowsEscapeArg("a\nb")).toEqual({ ok: false });
+    expect(windowsEscapeArg("a\r\nb")).toEqual({ ok: false });
+    expect(windowsEscapeArg("first\nsecond\nthird")).toEqual({ ok: false });
   });
 });
 
