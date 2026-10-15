@@ -19,7 +19,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vite
 import plugin from "../index.js";
 import type { ModelProviderConfig } from "./config.js";
 
-vi.mock("openclaw/plugin-sdk/secret-input-runtime", () => ({
+vi.mock("openclaw/plugin-sdk/secret-input-runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("openclaw/plugin-sdk/secret-input-runtime")>()),
   getPreparedPluginSecretInput: vi.fn(),
 }));
 const { lookup } = vi.hoisted(() => ({ lookup: vi.fn<LookupFn>() }));
