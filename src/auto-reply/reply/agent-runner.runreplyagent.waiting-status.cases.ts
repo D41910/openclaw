@@ -136,35 +136,30 @@ export function registerWaitingStatusCases({
         terminalReply: { disposition: "silent" as const },
       },
     },
-  ])(
-    "delivers one waiting status unless the turn explicitly ends silently for $label",
-    async ({ meta }) => {
-      await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
-        payloads: [],
-        meta: { durationMs: 0, ...meta },
-      });
-      const onPendingContinuation = vi.fn();
-      const { run } = createMinimalRun({ opts: { onPendingContinuation } });
+  ])("delivers only a model-authored waiting acknowledgment for $label", async ({ meta }) => {
+    await mockAcceptedWaitingStatusRun(runEmbeddedAgentMock, {
+      payloads: [],
+      meta: { durationMs: 0, ...meta },
+    });
+    const onPendingContinuation = vi.fn();
+    const { run } = createMinimalRun({ opts: { onPendingContinuation } });
 
-      const result = await run();
-      expect(onPendingContinuation).toHaveBeenCalledOnce();
-      if ("terminalReply" in meta) {
-        expect(result).toBeUndefined();
-      } else {
-        expect(result).toMatchObject({
-          text:
-            meta.yieldAcknowledgment ??
-            "I’m continuing this work and will send the result when it is ready.",
-          replyToId: "msg",
-        });
-        assert(result && !Array.isArray(result));
-        expect(getReplyPayloadMetadata(result)).toMatchObject({
-          continuationStatus: true,
-          deliverDespiteSourceReplySuppression: true,
-        });
-      }
-    },
-  );
+    const result = await run();
+    expect(onPendingContinuation).toHaveBeenCalledOnce();
+    if ("terminalReply" in meta || !("yieldAcknowledgment" in meta)) {
+      expect(result).toBeUndefined();
+    } else {
+      expect(result).toMatchObject({
+        text: meta.yieldAcknowledgment,
+        replyToId: "msg",
+      });
+      assert(result && !Array.isArray(result));
+      expect(getReplyPayloadMetadata(result)).toMatchObject({
+        continuationStatus: true,
+        deliverDespiteSourceReplySuppression: true,
+      });
+    }
+  });
 
   it.each([
     { label: "no children", acceptedSessionSpawns: [], delivered: true },
@@ -382,7 +377,7 @@ export function registerWaitingStatusCases({
   );
 
   it.each([
-    { label: "default status" },
+    { label: "no acknowledgment", warning: true },
     { label: "explicit status", acknowledgment: "Research started; results will follow." },
     {
       label: "room event",
@@ -405,10 +400,7 @@ export function registerWaitingStatusCases({
     });
 
     await expect(run()).resolves.toMatchObject({
-      text: testCase.warning
-        ? "⚠️ Bash failed"
-        : (testCase.acknowledgment ??
-          "I’m continuing this work and will send the result when it is ready."),
+      text: testCase.warning ? "⚠️ Bash failed" : testCase.acknowledgment,
       ...(testCase.warning ? { isError: true } : {}),
       replyToId: "msg",
     });

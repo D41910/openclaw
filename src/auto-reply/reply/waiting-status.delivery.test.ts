@@ -271,11 +271,7 @@ it.each([true, false])(
     ];
 
     const payloads = await prepare("ordinary", context);
-    expect(payloads).toHaveLength(1);
-    expect(getReplyPayloadMetadata(payloads[0] ?? {})).toMatchObject({
-      continuationStatus: true,
-      deliverDespiteSourceReplySuppression: true,
-    });
+    expect(payloads).toEqual([]);
 
     expect(settleRequester).not.toHaveBeenCalled();
     expect(onPendingContinuation).toHaveBeenCalledOnce();
@@ -292,15 +288,13 @@ it.each([true, false])(
 );
 
 it.each(["ordinary", "queued"] as const)(
-  "keeps a %s waiting status while a result is required",
+  "keeps a %s unauthored waiting status silent while a result is required",
   async (lane) => {
     const context = createContext();
     context.followupRun.run.terminalReplyExpectation = "result-required";
     context.execution.result.meta = { durationMs: 0, continuationPending: true };
 
-    expect((await prepare(lane, context)).map((payload) => payload.text)).toEqual([
-      "I’m continuing this work and will send the result when it is ready.",
-    ]);
+    expect(await prepare(lane, context)).toEqual([]);
   },
 );
 

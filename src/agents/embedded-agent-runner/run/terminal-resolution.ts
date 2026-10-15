@@ -152,6 +152,7 @@ export function resolveSettledTurnFinalizationRequest(input: {
     modelId: input.activeErrorContext.model,
     modelApi: input.modelApi,
     executionContract: input.executionContract,
+    terminalReplyExpectation: resolveReplyExpectation(input.runParams),
     replyDeliveryState: input.replyDeliveryState ?? "missing",
     allowEmptyStopContinuation: true,
     payloadCount,
@@ -252,6 +253,7 @@ export async function resolveEmbeddedRunTerminal(input: {
     modelId: input.activeErrorContext.model,
     modelApi: input.modelApi,
     executionContract: input.executionContract,
+    terminalReplyExpectation: resolveReplyExpectation(runParams),
     replyDeliveryState: input.prepared.replyDeliveryState,
     ...terminalFacts,
   };

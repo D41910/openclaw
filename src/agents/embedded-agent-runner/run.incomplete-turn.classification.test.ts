@@ -20,7 +20,7 @@ import type { EmbeddedRunAttemptResult } from "./run/types.js";
 const REASONING_RETRY =
   "The previous assistant turn recorded reasoning but did not produce a user-visible answer. Continue from that partial turn and produce the visible answer now. Do not restate the reasoning or restart from scratch.";
 const EMPTY_RETRY =
-  "The previous attempt did not produce a user-visible answer. Continue from the current state and produce the visible answer now. Do not restart from scratch.";
+  "Your turn ended without a final reply. If the user still needs a reply, write it now. If your completed actions already answered the request, answer exactly NO_REPLY. Continue from the current state; do not restart from scratch.";
 const REJECTION = "Provider completed tool call with malformed JSON arguments";
 type Assistant = NonNullable<EmbeddedRunAttemptResult["lastAssistant"]>;
 type Attempt = Partial<EmbeddedRunAttemptResult>;

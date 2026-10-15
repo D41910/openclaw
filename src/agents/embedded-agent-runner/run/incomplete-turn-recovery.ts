@@ -37,7 +37,9 @@ export const DEFAULT_EMPTY_RESPONSE_RETRY_LIMIT = 1;
 const REASONING_ONLY_RETRY_INSTRUCTION =
   "The previous assistant turn recorded reasoning but did not produce a user-visible answer. Continue from that partial turn and produce the visible answer now. Do not restate the reasoning or restart from scratch.";
 const EMPTY_RESPONSE_RETRY_INSTRUCTION =
-  "The previous attempt did not produce a user-visible answer. Continue from the current state and produce the visible answer now. Do not restart from scratch.";
+  "Your turn ended without a final reply. If the user still needs a reply, write it now. If your completed actions already answered the request, answer exactly NO_REPLY. Continue from the current state; do not restart from scratch.";
+const REQUIRED_RESULT_RETRY_INSTRUCTION =
+  "Your turn ended without a final result. Continue from the current state and produce the required result now. NO_REPLY is not allowed. Do not restart from scratch.";
 const TEXT_TOOL_CALL_RETRY_INSTRUCTION =
   "You wrote a tool call as text, so nothing ran for that call. Continue from the current state and call the tool natively through the tool interface. Do not print tool-call JSON or markup as your answer.";
 const TOOL_USE_WITHOUT_CALL_RETRY_INSTRUCTION =
@@ -45,13 +47,16 @@ const TOOL_USE_WITHOUT_CALL_RETRY_INSTRUCTION =
 const REJECTED_TOOL_CALL_RETRY_INSTRUCTION =
   "The previous assistant turn's tool call was rejected before it ran because the provider returned incomplete or malformed tool-call arguments, so nothing ran for that call. Continue from the current state: re-issue the call you need through the tool interface with complete, valid JSON arguments, or produce the visible answer now. Do not repeat completed tool calls or restart from scratch.";
 const SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION =
-  "The previous assistant turn completed its tool calls but did not produce a user-visible answer. Continue from the current transcript and produce the final user-visible answer now. Do not repeat completed tool calls or restart from scratch. Tools are unavailable in this step: it is a text-only pass, so reply with plain text and do not attempt any tool call.";
+  "Your turn ended without a final reply. If the user still needs a reply, write it now. If your completed actions already answered the request, answer exactly NO_REPLY. Continue from the current transcript. Do not repeat completed tool calls or restart from scratch. Tools are unavailable in this step: it is a text-only pass, so reply with plain text and do not attempt any tool call.";
+const REQUIRED_RESULT_TOOL_TERMINAL_CONTINUATION_INSTRUCTION =
+  "Your turn ended without a final result. Continue from the current transcript and produce the required result now. NO_REPLY is not allowed. Do not repeat completed tool calls or restart from scratch. Tools are unavailable in this step: it is a text-only pass, so reply with plain text and do not attempt any tool call.";
 
 type IncompleteTurnRecoveryParams = {
   provider?: string;
   modelId?: string;
   modelApi?: string;
   executionContract?: string;
+  terminalReplyExpectation?: ReplyExpectation;
   aborted: boolean;
   timedOut: boolean;
   attempt: IncompleteTurnAttempt;
@@ -380,9 +385,13 @@ export function resolveSettledToolTerminalContinuationInstruction(
   ) {
     return null;
   }
+  const instruction =
+    params.terminalReplyExpectation === "result-required"
+      ? REQUIRED_RESULT_TOOL_TERMINAL_CONTINUATION_INSTRUCTION
+      : SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION;
   return allToolsProvenSettled && failedToolNames.size > 0
-    ? `${SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION} ${TOOL_FAILURE_INSTRUCTION}`
-    : SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION;
+    ? `${instruction} ${TOOL_FAILURE_INSTRUCTION}`
+    : instruction;
 }
 
 /**
@@ -475,7 +484,9 @@ export function resolveEmptyResponseRetryInstruction(
     }
     return toolUseWithoutCall
       ? TOOL_USE_WITHOUT_CALL_RETRY_INSTRUCTION
-      : EMPTY_RESPONSE_RETRY_INSTRUCTION;
+      : params.terminalReplyExpectation === "result-required"
+        ? REQUIRED_RESULT_RETRY_INSTRUCTION
+        : EMPTY_RESPONSE_RETRY_INSTRUCTION;
   }
 
   return null;

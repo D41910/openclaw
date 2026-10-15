@@ -18,24 +18,27 @@ import { replyRunState } from "./reply-run-registry.state.js";
 export function buildWaitingStatusPayload(params: {
   completion: ReplyCompletion;
   continuationPending?: boolean;
+  mediaContinuation?: boolean;
   yieldAcknowledgment?: string;
   yielded?: boolean;
   hasVisibleMessageDelivery: boolean;
 }): ReplyPayload | undefined {
+  const text =
+    params.yieldAcknowledgment?.trim() ||
+    (params.mediaContinuation
+      ? "I’m continuing this work and will send the result when it is ready."
+      : undefined);
   if (
     !isRequiredReplyExpectation(params.completion.expectation) ||
     params.completion.outcome !== "pending" ||
     (!params.yielded && !params.continuationPending) ||
-    params.hasVisibleMessageDelivery
+    params.hasVisibleMessageDelivery ||
+    !text
   ) {
     return undefined;
   }
   return setReplyPayloadMetadata(
-    {
-      text:
-        params.yieldAcknowledgment?.trim() ||
-        "I’m continuing this work and will send the result when it is ready.",
-    },
+    { text },
     {
       deliverDespiteSourceReplySuppression: true,
       continuationStatus: true,
@@ -91,14 +94,13 @@ export async function prepareWaitingStatusContinuation(params: {
     | "sessionKey"
   >;
   payload?: ReplyPayload;
-  explicitSilence?: boolean;
   owner?: {
     stateContext: OpenClawStateWorkerContext;
     operationKey: string;
     operationSessionId: string;
   };
 }): Promise<void> {
-  const { context, payload, owner, explicitSilence } = params;
+  const { context, payload, owner } = params;
   const {
     execution,
     followupRun,
@@ -128,7 +130,7 @@ export async function prepareWaitingStatusContinuation(params: {
     return;
   }
   const requesterSessionKey = sessionKey ?? followupRun.run.sessionKey;
-  if (!requesterSessionKey || !acceptedSessionSpawns?.length || (!payload && !explicitSilence)) {
+  if (!requesterSessionKey || !acceptedSessionSpawns?.length) {
     throw new Error("accepted continuation status could not be prepared for delivery");
   }
   const { stateContext, operationKey, operationSessionId } = owner;

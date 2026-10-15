@@ -242,7 +242,12 @@ export async function finalizeDispatchAndAudit(state: ExecuteDispatchReadyState)
         }
       }
     }
-    if (explicitSilence && !continuationSettlementRegistered) {
+    if (
+      (explicitSilence ||
+        (state.replyOperationRunState.replyCompletion?.outcome === "pending" &&
+          replies.length === 0)) &&
+      !continuationSettlementRegistered
+    ) {
       throwIfDispatchOperationAborted();
       await settleContinuation(true);
     }

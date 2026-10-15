@@ -158,22 +158,16 @@ describe("resolveFollowupDeliveryDecision", () => {
           },
         ];
       }
-      expect(
-        await resolveFollowupDeliveryDecision({
-          turn,
-          execution,
-          accounting: createAccounting(privatePartial ? [{ text: "Private partial output." }] : []),
-        }),
-      ).toMatchObject({
-        kind: "deliver",
-        payloads: [
-          {
-            text:
-              yieldAcknowledgment ??
-              "I’m continuing this work and will send the result when it is ready.",
-          },
-        ],
+      const decision = await resolveFollowupDeliveryDecision({
+        turn,
+        execution,
+        accounting: createAccounting(privatePartial ? [{ text: "Private partial output." }] : []),
       });
+      expect(decision).toMatchObject(
+        yieldAcknowledgment
+          ? { kind: "deliver", payloads: [{ text: yieldAcknowledgment }] }
+          : { kind: "suppress", reason: "silent" },
+      );
     },
   );
 

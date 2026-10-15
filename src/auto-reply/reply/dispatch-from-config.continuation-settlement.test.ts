@@ -427,7 +427,7 @@ describe("accepted continuation status delivery", () => {
     },
   );
 
-  it.each(["empty", "silent"] as const)(
+  it.each(["empty", "silent", "pending"] as const)(
     "settles an accepted continuation after a %s final without a status",
     async (outcome) => {
       const settle = vi.fn(async () => {});
@@ -452,7 +452,7 @@ describe("accepted continuation status delivery", () => {
           }),
       });
 
-      expect(settle).toHaveBeenCalledExactlyOnceWith(outcome === "silent");
+      expect(settle).toHaveBeenCalledExactlyOnceWith(outcome !== "empty");
     },
   );
 

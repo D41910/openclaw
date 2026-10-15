@@ -267,9 +267,9 @@ export async function prepareReplyAgentPayloads(state: {
           completion,
           yielded: runResult.meta?.yielded === true,
           continuationPending: implicitContinuation,
+          mediaContinuation: implicitContinuation && !continuationOwner,
           yieldAcknowledgment: runResult.meta?.yieldAcknowledgment,
-          // Child spawns are side effects, not user-visible messages. They must not
-          // suppress the explicit waiting reply for the parent turn.
+          // Child spawns do not suppress a model-authored acknowledgment.
           hasVisibleMessageDelivery:
             successfulSourceReplyDelivery ||
             committedMessagingToolSourceReplyDelivery ||
@@ -413,9 +413,9 @@ export async function prepareReplyAgentPayloads(state: {
       opts?.onAgentRunTerminalOutcome?.("failed");
     }
   };
-  // Explicit silence still transfers admitted children before the empty-reply return.
-  if (explicitSilence) {
-    await prepareWaitingStatusContinuation({ context, owner: continuationOwner, explicitSilence });
+  const quietContinuation = completion.outcome === "pending" && !waitingStatusPayload;
+  if (explicitSilence || quietContinuation) {
+    await prepareWaitingStatusContinuation({ context, owner: continuationOwner });
   }
   const finishEmptyReply = async () => {
     recordMissingReply();
@@ -677,7 +677,7 @@ export async function prepareReplyAgentPayloads(state: {
   const statusPayload = guardedReplyPayloads.find(
     (payload) => getReplyPayloadMetadata(payload)?.continuationStatus === true,
   );
-  if (!explicitSilence) {
+  if (!explicitSilence && !quietContinuation) {
     await prepareWaitingStatusContinuation({
       context,
       owner: continuationOwner,

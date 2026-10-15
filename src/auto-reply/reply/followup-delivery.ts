@@ -1,4 +1,5 @@
 import { hasOutboundReplyContent } from "openclaw/plugin-sdk/reply-payload";
+import { hasCompletionMessageSessionSpawn } from "../../agents/accepted-session-spawn.js";
 import {
   hasCommittedSourceReplyDeliveryEvidence,
   hasCompletedSourceReplyDeliveryEvidence,
@@ -326,6 +327,9 @@ export async function resolveFollowupDeliveryDecision(params: {
   const waitingStatusParams = {
     completion,
     continuationPending: result.meta?.continuationPending === true,
+    mediaContinuation:
+      result.meta?.continuationPending === true &&
+      !hasCompletionMessageSessionSpawn(result.acceptedSessionSpawns),
     yielded: result.meta?.yielded === true,
     yieldAcknowledgment: result.meta?.yieldAcknowledgment,
     // Child spawns are side effects, not user-visible messages. They must not
