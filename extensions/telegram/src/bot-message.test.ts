@@ -81,6 +81,18 @@ describe("telegram bot message processor", () => {
     resolveAmbientTranscriptWatermarkKey: unexpectedBotDependency,
     resolveInboundLastRouteSessionKey: unexpectedBotDependency,
     resolvePinnedMainDmOwnerFromAllowlist: unexpectedBotDependency,
+    recordChannelActivity: unexpectedBotDependency,
+    loadWebMedia: unexpectedBotDependency,
+    syncTelegramMenuCommands: unexpectedBotDependency,
+    resolveApproval: unexpectedBotDependency,
+    createTelegramDraftStream: unexpectedBotDependency,
+    deliverReplies: unexpectedBotDependency,
+    deliverStructuredReplies: unexpectedBotDependency,
+    deliverStructuredInboundReplyWithMessageSendContext: unexpectedBotDependency,
+    emitTelegramMessageSentHooks: unexpectedBotDependency,
+    editMessageTelegram: unexpectedBotDependency,
+    recordOutboundMessageForPromptContext: unexpectedBotDependency,
+    createChannelMessageReplyPipeline: unexpectedBotDependency,
   } satisfies TelegramBotDeps;
 
   const baseTurnContext = {

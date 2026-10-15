@@ -2,6 +2,7 @@ import path from "node:path";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { getSessionEntryAsync } from "openclaw/plugin-sdk/session-store-runtime";
 import { vi } from "vitest";
+import { telegramDirectDeliveryDepsForTest } from "./bot-delivery-deps.test-support.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import {
   holdTelegramMediaTimeouts,
@@ -32,6 +33,7 @@ export function createBotApiTransport() {
 
 export function createTelegramDeps(stateDir: string, cfg: OpenClawConfig): TelegramBotDeps {
   return {
+    ...telegramDirectDeliveryDepsForTest,
     ...telegramSessionRuntime,
     getSessionEntryAsync,
     getRuntimeConfig: () => cfg,

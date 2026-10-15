@@ -333,6 +333,7 @@ export async function createTelegramBotCore(
       shouldSkipUpdate,
       telegramDeps: {
         ...telegramDeps,
+        runModelsAuthLoginFlow: defaultTelegramNativeCommandDeps.runModelsAuthLoginFlow,
         sendMessageTelegram: defaultTelegramNativeCommandDeps.sendMessageTelegram,
       },
     });

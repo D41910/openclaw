@@ -41,6 +41,7 @@ function normalizeDiscordStickerItems(value: unknown): APIStickerItem[] {
 
 export function resolveDiscordMessageStickers(message: {
   stickers?: unknown;
+  sticker_items?: unknown;
   rawData?: { sticker_items?: unknown; stickers?: unknown };
 }): APIStickerItem[] {
   const normalized = normalizeDiscordStickerItems(message.stickers);
@@ -48,12 +49,9 @@ export function resolveDiscordMessageStickers(message: {
     return normalized;
   }
   const rawData = message.rawData;
-  return normalizeDiscordStickerItems(rawData?.sticker_items ?? rawData?.stickers);
-}
-
-export function resolveDiscordSnapshotStickers(snapshot: DiscordSnapshotMessage): APIStickerItem[] {
-  const stickers = normalizeDiscordStickerItems(snapshot.stickers);
-  return stickers.length > 0 ? stickers : normalizeDiscordStickerItems(snapshot.sticker_items);
+  return normalizeDiscordStickerItems(
+    message.sticker_items ?? rawData?.sticker_items ?? rawData?.stickers,
+  );
 }
 
 export function hasDiscordMessageStickers(message: Message): boolean {

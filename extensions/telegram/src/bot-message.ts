@@ -140,9 +140,7 @@ export const createTelegramMessageProcessor = (
     token: opts.token,
     transport: deps.telegramTransport,
   });
-  const contextRuntime = telegramDeps.recordChannelActivity
-    ? { recordChannelActivity: telegramDeps.recordChannelActivity }
-    : undefined;
+  const contextRuntime = { recordChannelActivity: telegramDeps.recordChannelActivity };
 
   return async ({
     ctx: primaryCtx,

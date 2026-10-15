@@ -6,6 +6,7 @@ import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-pay
 import { createOpenClawTestState, type OpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, beforeAll, beforeEach, describe, expect, vi } from "vitest";
 import { resolveAutoTopicLabelConfig as resolveAutoTopicLabelConfigRuntime } from "./auto-topic-label-config.js";
+import { telegramDirectDeliveryDepsForTest } from "./bot-delivery-deps.test-support.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import { withTelegramTestSettledReceipt } from "./bot-message-dispatch-receipt.test-support.js";
 import { createTestDraftStream } from "./draft-stream.test-helpers.js";
@@ -303,6 +304,7 @@ function unexpectedInboundContextCall(): never {
 }
 
 export const telegramDepsForTest: TelegramBotDeps = {
+  ...telegramDirectDeliveryDepsForTest,
   buildChannelInboundEventContext: unexpectedInboundContextCall,
   readAmbientTranscriptWatermarkAsync: unexpectedInboundContextCall,
   readSessionUpdatedAtAsync: unexpectedInboundContextCall,

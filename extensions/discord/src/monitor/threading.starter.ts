@@ -4,12 +4,6 @@ import { truncateUtf16Safe } from "openclaw/plugin-sdk/text-utility-runtime";
 import { isDiscordThreadChannelType } from "../channel-type.js";
 import { ChannelType, DiscordError, getChannelMessage, type Client } from "../internal/discord.js";
 import {
-  resolveDiscordChannelIdSafe,
-  resolveDiscordChannelNameSafe,
-  resolveDiscordChannelParentIdSafe,
-  resolveDiscordChannelParentSafe,
-} from "./channel-access.js";
-import {
   resolveDiscordChannelInfo,
   resolveDiscordMessageChannelId,
 } from "./message-channel-info.js";
@@ -53,7 +47,6 @@ export function resolveDiscordThreadChannel(params: {
     id: messageChannelId,
     name: channelInfo?.name ?? undefined,
     parentId: channelInfo?.parentId ?? undefined,
-    parent: undefined,
     ownerId: channelInfo?.ownerId ?? undefined,
   };
 }
@@ -64,12 +57,7 @@ export async function resolveDiscordThreadParentInfo(params: {
   channelInfo: DiscordChannelInfo | null;
 }): Promise<DiscordThreadParentInfo> {
   const { threadChannel, channelInfo, client } = params;
-  const parent = resolveDiscordChannelParentSafe(threadChannel);
-  let parentId =
-    resolveDiscordChannelParentIdSafe(threadChannel) ??
-    resolveDiscordChannelIdSafe(parent) ??
-    channelInfo?.parentId ??
-    undefined;
+  let parentId = threadChannel.parentId ?? channelInfo?.parentId ?? undefined;
   if (!parentId && threadChannel.id) {
     const threadInfo = await resolveDiscordChannelInfo(client, threadChannel.id);
     parentId = threadInfo?.parentId ?? undefined;
@@ -77,9 +65,8 @@ export async function resolveDiscordThreadParentInfo(params: {
   if (!parentId) {
     return {};
   }
-  let parentName = resolveDiscordChannelNameSafe(parent);
   const parentInfo = await resolveDiscordChannelInfo(client, parentId);
-  parentName = parentName ?? parentInfo?.name;
+  const parentName = parentInfo?.name;
   const parentType = parentInfo?.type;
   return { id: parentId, name: parentName, type: parentType };
 }

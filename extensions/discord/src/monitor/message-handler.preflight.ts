@@ -28,7 +28,7 @@ import {
   resolveDiscordMemberAccessState,
   resolveDiscordMentionPolicy,
 } from "./allow-list.js";
-import { resolveDiscordChannelInfoSafe, resolveDiscordChannelNameSafe } from "./channel-access.js";
+import { resolveDiscordChannelNameSafe } from "./channel-access.js";
 import { resolveDiscordTextCommandAccess } from "./dm-command-auth.js";
 import { resolveDiscordSystemLocation, resolveTimestampMs } from "./format.js";
 import {
@@ -533,9 +533,7 @@ export async function preflightDiscordMessage(
     isGuildMessage,
     isThread: Boolean(threadChannel),
     botId,
-    threadOwnerId: threadChannel
-      ? (resolveDiscordChannelInfoSafe(threadChannel).ownerId ?? channelInfo?.ownerId)
-      : undefined,
+    threadOwnerId: threadChannel ? (threadChannel.ownerId ?? channelInfo?.ownerId) : undefined,
     channelConfig,
     guildInfo,
   });

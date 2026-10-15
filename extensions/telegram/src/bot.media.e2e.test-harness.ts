@@ -21,6 +21,7 @@ import {
   useSessionStoreTempDirs,
 } from "openclaw/plugin-sdk/sqlite-runtime-testing";
 import { afterAll, afterEach, beforeEach, vi, type Mock } from "vitest";
+import { telegramDirectDeliveryDepsForTest } from "./bot-delivery-deps.test-support.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import * as telegramSessionRuntime from "./bot-message-context.session.runtime.js";
 import { runTelegramChannelInboundEventWithHarness } from "./bot.test-helpers.js";
@@ -215,6 +216,7 @@ vi.mock("openclaw/plugin-sdk/channel-inbound", async (importOriginal) => {
 });
 
 export const telegramBotDepsForTest: TelegramBotDeps = {
+  ...telegramDirectDeliveryDepsForTest,
   ...telegramSessionRuntime,
   getSessionEntryAsync,
   readSessionUpdatedAtAsync: async () => undefined,

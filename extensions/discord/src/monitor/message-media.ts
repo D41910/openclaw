@@ -23,7 +23,6 @@ import {
   resolveDiscordMessageStickers,
   resolveDiscordReferencedForwardMessage,
   resolveDiscordReferencedReplyMessage,
-  resolveDiscordSnapshotStickers,
 } from "./message-forwarded.js";
 import { withAbortTimeout } from "./timeouts.js";
 
@@ -177,10 +176,7 @@ export async function resolveForwardedMediaList(
   if (snapshots.length > 0) {
     for (const snapshot of snapshots) {
       await resolveMessageMedia(
-        {
-          attachments: snapshot.message?.attachments,
-          stickers: snapshot.message ? resolveDiscordSnapshotStickers(snapshot.message) : [],
-        },
+        snapshot.message ?? {},
         operation,
         "discord: failed to download forwarded",
       );

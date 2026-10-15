@@ -691,18 +691,17 @@ describe("Slack presence monitor", () => {
   it("does not publish when cooldown persistence rejects", async () => {
     const cooldownStore = createCooldownStore();
     cooldownStore.registerIfAbsent = vi.fn().mockRejectedValue(new Error("storage unavailable"));
+    const getPresence = vi
+      .fn()
+      .mockResolvedValueOnce({ presence: "away" })
+      .mockResolvedValueOnce({ presence: "active" });
     const enqueue = vi.fn(() => true);
     const wake = vi.fn();
     const error = vi.fn();
     const monitor = createPresenceFixture({
       accountId: "default",
       accountConfig: { mode: "auto" },
-      resolveClient: () => ({
-        getPresence: vi
-          .fn()
-          .mockResolvedValueOnce({ presence: "away" })
-          .mockResolvedValueOnce({ presence: "active" }),
-      }),
+      resolveClient: () => ({ getPresence }),
       cooldownStore,
       enqueue,
       wake,

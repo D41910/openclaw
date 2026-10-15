@@ -845,12 +845,6 @@ export async function registerSlackMonitorSlashCommands(params: {
   const slashCommand = resolveSlackSlashCommandConfig(
     ctx.slashCommand ?? account.config.slashCommand,
   );
-  // App Home and argument handlers must share the registered command mode;
-  // explicit single-command mode also avoids loading inactive native runtimes.
-  let registration: SlackCommandRegistration = slashCommand.enabled
-    ? { mode: "single", name: slashCommand.name }
-    : { mode: "disabled" };
-
   const handleSlashCommand = createSlackCommandHandler({
     ctx,
     account,
@@ -891,79 +885,72 @@ export async function registerSlackMonitorSlashCommands(params: {
     });
   };
 
-  let nativeCommands: SlackNativeCommandSpec[] = [];
-  let pluginCommandRuntimeModule:
-    | typeof import("openclaw/plugin-sdk/plugin-command-runtime")
-    | null = null;
+  // Explicit single-command mode avoids preparing inactive native runtimes.
+  if (slashCommand.enabled) {
+    registerCommand(buildSlackSlashCommandMatcher(slashCommand.name));
+    return { mode: "single", name: slashCommand.name };
+  }
   if (
-    registration.mode === "disabled" &&
-    resolveNativeCommandsEnabled({
+    !resolveNativeCommandsEnabled({
       providerId: "slack",
       providerSetting: account.config.commands?.native,
       globalSetting: startupCfg.commands?.native,
     })
   ) {
-    const skillCommands = resolveNativeSkillsEnabled({
-      providerId: "slack",
-      providerSetting: account.config.commands?.nativeSkills,
-      globalSetting: startupCfg.commands?.nativeSkills,
-    })
-      ? await prepareSkillCommandsForAgents({ cfg: startupCfg })
-      : [];
-    nativeCommands = listNativeCommandSpecsForConfig(startupCfg, {
-      skillCommands,
-      provider: "slack",
-    });
-    pluginCommandRuntimeModule = await loadPluginCommandRuntime();
-    const pluginCommandRuntime = pluginCommandRuntimeModule.createPluginCommandRuntime();
-    nativeCommands = mergeNativeCommandSpecs({
-      primary: nativeCommands,
-      secondary: pluginCommandRuntime.listNativeCandidates("slack"),
-    });
-    registration = nativeCommands.length > 0 ? { mode: "native" } : { mode: "disabled" };
-  }
-
-  if (registration.mode === "single") {
-    registerCommand(buildSlackSlashCommandMatcher(registration.name));
-  } else if (registration.mode === "native") {
-    if (!pluginCommandRuntimeModule) {
-      throw new Error("Missing command runtimes for native Slack commands.");
-    }
-    for (const command of nativeCommands) {
-      const pluginCommandCandidate = "prepareDispatch" in command ? command : undefined;
-      registerCommand(`/${command.name}`, (cmd) => {
-        const commandDefinition = pluginCommandCandidate
-          ? undefined
-          : findCommandByNativeName(command.name, "slack");
-        const rawText = cmd.text?.trim() ?? "";
-        const pluginCommandDispatch =
-          pluginCommandCandidate?.prepareDispatch(rawText) ?? NON_PLUGIN_COMMAND_DISPATCH;
-        const commandArgs = commandDefinition
-          ? parseCommandArgs(commandDefinition, rawText)
-          : rawText
-            ? ({ raw: rawText } satisfies CommandArgs)
-            : undefined;
-        const prompt = commandDefinition
-          ? buildCommandTextFromArgs(commandDefinition, commandArgs)
-          : rawText
-            ? `/${command.name} ${rawText}`
-            : `/${command.name}`;
-        return {
-          prompt,
-          commandArgs,
-          commandDefinition: commandDefinition ?? undefined,
-          pluginCommandReplyOptions: {
-            [pluginCommandRuntimeModule.PLUGIN_COMMAND_DISPATCH]: pluginCommandDispatch,
-          },
-        };
-      });
-    }
-  } else {
     logVerbose("slack: slash commands disabled");
+    return { mode: "disabled" };
   }
 
-  if (registration.mode !== "native") {
-    return registration;
+  const skillCommands = resolveNativeSkillsEnabled({
+    providerId: "slack",
+    providerSetting: account.config.commands?.nativeSkills,
+    globalSetting: startupCfg.commands?.nativeSkills,
+  })
+    ? await prepareSkillCommandsForAgents({ cfg: startupCfg })
+    : [];
+  const coreCommands = listNativeCommandSpecsForConfig(startupCfg, {
+    skillCommands,
+    provider: "slack",
+  });
+  const pluginCommandRuntimeModule = await loadPluginCommandRuntime();
+  const pluginCommandRuntime = pluginCommandRuntimeModule.createPluginCommandRuntime();
+  const nativeCommands: SlackNativeCommandSpec[] = mergeNativeCommandSpecs({
+    primary: coreCommands,
+    secondary: pluginCommandRuntime.listNativeCandidates("slack"),
+  });
+  if (nativeCommands.length === 0) {
+    logVerbose("slack: slash commands disabled");
+    return { mode: "disabled" };
+  }
+
+  for (const command of nativeCommands) {
+    const pluginCommandCandidate = "prepareDispatch" in command ? command : undefined;
+    registerCommand(`/${command.name}`, (cmd) => {
+      const commandDefinition = pluginCommandCandidate
+        ? undefined
+        : findCommandByNativeName(command.name, "slack");
+      const rawText = cmd.text?.trim() ?? "";
+      const pluginCommandDispatch =
+        pluginCommandCandidate?.prepareDispatch(rawText) ?? NON_PLUGIN_COMMAND_DISPATCH;
+      const commandArgs = commandDefinition
+        ? parseCommandArgs(commandDefinition, rawText)
+        : rawText
+          ? ({ raw: rawText } satisfies CommandArgs)
+          : undefined;
+      const prompt = commandDefinition
+        ? buildCommandTextFromArgs(commandDefinition, commandArgs)
+        : rawText
+          ? `/${command.name} ${rawText}`
+          : `/${command.name}`;
+      return {
+        prompt,
+        commandArgs,
+        commandDefinition: commandDefinition ?? undefined,
+        pluginCommandReplyOptions: {
+          [pluginCommandRuntimeModule.PLUGIN_COMMAND_DISPATCH]: pluginCommandDispatch,
+        },
+      };
+    });
   }
 
   // Treat external arg-menu registration as best-effort: if Bolt's app.options()
@@ -1106,12 +1093,12 @@ export async function registerSlackMonitorSlashCommands(params: {
       prompt,
       commandArgs,
       commandDefinition: commandDefinition ?? undefined,
-      pluginCommandReplyOptions: pluginCommandRuntimeModule
-        ? { [pluginCommandRuntimeModule.PLUGIN_COMMAND_DISPATCH]: NON_PLUGIN_COMMAND_DISPATCH }
-        : undefined,
+      pluginCommandReplyOptions: {
+        [pluginCommandRuntimeModule.PLUGIN_COMMAND_DISPATCH]: NON_PLUGIN_COMMAND_DISPATCH,
+      },
     });
   });
-  return registration;
+  return { mode: "native" };
 }
 
 function createSlackSlashResponderWithFallback(params: {

@@ -12,6 +12,7 @@ import {
   setRuntimeConfigSnapshot,
 } from "openclaw/plugin-sdk/runtime-config-snapshot";
 import { afterEach, beforeEach, vi } from "vitest";
+import { telegramDirectDeliveryDepsForTest } from "./bot-delivery-deps.test-support.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import {
   readAmbientTranscriptWatermarkAsync,
@@ -396,6 +397,7 @@ const telegramBotRuntimeForTest = {
     )()) as unknown as TelegramBotRuntimeForTest["apiThrottler"],
 };
 export const telegramBotDepsForTest: TelegramBotDeps = {
+  ...telegramDirectDeliveryDepsForTest,
   getRuntimeConfig: () => {
     const config = getRuntimeConfig();
     if (getRuntimeConfigSnapshot() !== config) {
