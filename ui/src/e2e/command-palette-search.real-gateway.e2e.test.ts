@@ -71,7 +71,14 @@ type HandshakeObservation = {
   challenges: number;
   requests: number;
   accepted: number;
-  rejected: Array<{ code: string | null; detailCode: string | null }>;
+  rejected: Array<{
+    code: string | null;
+    detailCode: string | null;
+    reason: string | null;
+    retryable: boolean | null;
+    retryAfterMs: number | null;
+    bootstrapTokenUnavailable: boolean;
+  }>;
   closed: number;
 };
 
@@ -338,6 +345,13 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[], handshake: Hand
           handshake.rejected.push({
             code: typeof error.code === "string" ? error.code : null,
             detailCode: typeof details.code === "string" ? details.code : null,
+            reason:
+              ["startup-sidecars", "gateway-restarting", "gateway-suspending"].find(
+                (reason) => reason === details.reason,
+              ) ?? null,
+            retryable: typeof error.retryable === "boolean" ? error.retryable : null,
+            retryAfterMs: typeof error.retryAfterMs === "number" ? error.retryAfterMs : null,
+            bootstrapTokenUnavailable: error.message === "bootstrap token unavailable",
           });
         }
       }
