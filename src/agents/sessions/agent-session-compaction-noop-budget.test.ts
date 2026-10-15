@@ -32,6 +32,9 @@ it.each([
     const keptId = await sessionManager.appendMessageAsync(
       makeUserMessage("Retain the blue project. ".repeat(historyRows), 1),
     );
+    if (!keptId) {
+      throw new Error("Expected the retained user entry");
+    }
     await sessionManager.appendCompactionAsync(
       "Earlier project work is complete.",
       keptId,
