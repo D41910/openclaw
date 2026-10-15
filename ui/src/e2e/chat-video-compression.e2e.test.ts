@@ -120,7 +120,9 @@ suite.define(() => {
         buffer: Buffer.alloc(256 * 1024),
       });
       await page.getByRole("button", { name: "Compress to fit", exact: true }).click();
+      // The same error can appear in a toast; check the attachment's status.
       await page
+        .locator(".chat-attachment-thumb")
         .getByText("Could not compress this video. Try again or choose a smaller file.", {
           exact: true,
         })
@@ -142,6 +144,7 @@ suite.define(() => {
       });
       await page.getByRole("button", { name: "Compress to fit", exact: true }).click();
       await page
+        .locator(".chat-attachment-thumb")
         .getByText(
           "This browser cannot compress this video with its audio. Try another browser or a smaller file.",
           { exact: true },
