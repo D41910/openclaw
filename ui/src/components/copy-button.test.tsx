@@ -83,7 +83,7 @@ const surfaces = [
         onGetApps={vi.fn()}
       />
     ),
-    selector: ".device-pair-setup__actions button",
+    selector: ".device-pair-setup__actions button:has([data-copy-label])",
   },
   {
     name: "workspace conflict command",

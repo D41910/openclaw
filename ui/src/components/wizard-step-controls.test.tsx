@@ -148,6 +148,43 @@ describe("WizardStepControls", () => {
     expect(answer).toHaveBeenCalledWith(selected);
   });
 
+  it.each([false, true])(
+    "keeps model submission in its native form with manual sign-in %s",
+    (externalAuthInput) => {
+      const answer = vi.fn();
+      const cancel = vi.fn();
+      const { container } = mountSolid(() => (
+        <WizardStepControls
+          step={{ id: "token", type: "text", message: "Synthetic token" }}
+          value="synthetic-answer"
+          presentation="model-setup"
+          externalAuthInput={externalAuthInput}
+          busy={false}
+          inputId="wizard-token"
+          onValueChange={vi.fn()}
+          onAnswer={answer}
+          leadingAction={
+            <button type="button" class="cancel" onClick={cancel}>
+              Cancel
+            </button>
+          }
+        />
+      ));
+      const form = container.querySelector<HTMLFormElement>("form")!;
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      const cancelButton = container.querySelector<HTMLButtonElement>(".cancel")!;
+      expect(submit.form).toBe(form);
+      expect(Boolean(submit.closest("openclaw-modal-actions"))).toBe(!externalAuthInput);
+      expect(Boolean(submit.closest("details"))).toBe(externalAuthInput);
+      expect(cancelButton.closest("openclaw-modal-actions")).not.toBeNull();
+      expect(cancelButton.closest("details")).toBeNull();
+      submit.click();
+      expect(answer).toHaveBeenCalledExactlyOnceWith("synthetic-answer");
+      cancelButton.click();
+      expect(cancel).toHaveBeenCalledOnce();
+    },
+  );
+
   it("delegates channel multiselect toggles and submits the caller-owned selection", () => {
     const change = vi.fn();
     const answer = vi.fn();

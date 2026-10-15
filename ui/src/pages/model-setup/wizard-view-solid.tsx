@@ -102,6 +102,11 @@ export function ModelSetupWizard(props: WizardViewProps): JSX.Element {
                         {state().validationError}
                       </div>
                     </Show>
+                    <Show
+                      when={state().busy && !state().step.externalUrl && !state().step.deviceCode}
+                    >
+                      <div role="status">{t("modelSetup.wizard.working")}</div>
+                    </Show>
                     <WizardStepControls
                       presentation="model-setup"
                       step={state().step}
@@ -125,18 +130,13 @@ export function ModelSetupWizard(props: WizardViewProps): JSX.Element {
                       onValueChange={(value) => props.onValueChange(value)}
                       onAnswer={(value) => props.onAnswer(value)}
                     />
-                    <Show
-                      when={state().busy && !state().step.externalUrl && !state().step.deviceCode}
-                    >
-                      <div role="status">{t("modelSetup.wizard.working")}</div>
-                    </Show>
                   </>
                 )}
               </Match>
             </Switch>
           </div>
           <Show when={props.state.phase !== "step"}>
-            <div class="model-setup-wizard__footer">
+            <openclaw-modal-actions class="model-setup-wizard__footer">
               <button
                 type="button"
                 class="btn"
@@ -144,7 +144,7 @@ export function ModelSetupWizard(props: WizardViewProps): JSX.Element {
               >
                 {t(canCancel() ? "common.cancel" : "common.close")}
               </button>
-            </div>
+            </openclaw-modal-actions>
           </Show>
         </div>
       </openclaw-modal-dialog>

@@ -135,6 +135,18 @@ function SignIn(props: { step: WizardStep }) {
   );
 }
 
+function ActionRow(props: {
+  modal: boolean;
+  class: JSX.HTMLAttributes<HTMLDivElement>["class"];
+  children: JSX.Element;
+}) {
+  return (
+    <Show when={props.modal} fallback={<div class={props.class}>{props.children}</div>}>
+      <openclaw-modal-actions class={props.class}>{props.children}</openclaw-modal-actions>
+    </Show>
+  );
+}
+
 function Answer(props: WizardStepControlsProps & { label: string; onClick?: () => void }) {
   const label = () => props.answerLabel ?? props.label;
   const button = (
@@ -151,19 +163,28 @@ function Answer(props: WizardStepControlsProps & { label: string; onClick?: () =
     <Show
       when={props.presentation === "channels"}
       fallback={
-        <Show when={props.leadingAction} fallback={button}>
-          <div class="wizard-step__actions wizard-step__actions--split">
+        <Show
+          when={
+            (props.presentation === "model-setup" && !props.externalAuthInput) ||
+            props.leadingAction
+          }
+          fallback={button}
+        >
+          <ActionRow
+            modal={props.presentation === "model-setup" && !props.externalAuthInput}
+            class="wizard-step__actions wizard-step__actions--split"
+          >
             {props.leadingAction}
             {button}
-          </div>
+          </ActionRow>
         </Show>
       }
     >
-      <div class="channels-wizard__footer">
+      <openclaw-modal-actions class="channels-wizard__footer">
         <Show when={props.busy} fallback={button}>
           <WizardBusyButton statusLabel={props.busyLabel ?? label()} />
         </Show>
-      </div>
+      </openclaw-modal-actions>
     </Show>
   );
 }
@@ -254,7 +275,12 @@ function TextStep(props: WizardStepControlsProps) {
         <summary class="muted">{t("modelSetup.wizard.manualEntry")}</summary>
         <TextForm {...props} />
       </details>
-      <div class="wizard-step__actions wizard-step__actions--split">{props.leadingAction}</div>
+      <ActionRow
+        modal={props.presentation === "model-setup"}
+        class="wizard-step__actions wizard-step__actions--split"
+      >
+        {props.leadingAction}
+      </ActionRow>
     </Show>
   );
 }
@@ -399,7 +425,14 @@ function OptionsStep(props: WizardStepControlsProps) {
               when={props.presentation !== "channels"}
               fallback={props.busy && <Answer {...props} label={t("modelSetup.wizard.continue")} />}
             >
-              {props.leadingAction}
+              <Show
+                when={props.presentation === "model-setup" && props.leadingAction}
+                fallback={props.leadingAction}
+              >
+                <openclaw-modal-actions class="wizard-step__actions wizard-step__actions--split">
+                  {props.leadingAction}
+                </openclaw-modal-actions>
+              </Show>
             </Show>
           </>
         }
@@ -414,7 +447,8 @@ function ConfirmStep(props: WizardStepControlsProps) {
   return (
     <>
       <Message {...props} />
-      <div
+      <ActionRow
+        modal={props.presentation === "channels" || props.presentation === "model-setup"}
         class={[
           stepClass(props, props.presentation === "channels" ? "footer" : "actions"),
           {
@@ -443,7 +477,7 @@ function ConfirmStep(props: WizardStepControlsProps) {
         >
           <WizardBusyButton statusLabel={props.busyLabel ?? t("common.loading")} />
         </Show>
-      </div>
+      </ActionRow>
     </>
   );
 }
@@ -473,7 +507,12 @@ function ProgressStep(props: WizardStepControlsProps) {
       </Show>
       <SignIn step={props.step} />
       <Show when={props.leadingAction}>
-        <div class="wizard-step__actions wizard-step__actions--split">{props.leadingAction}</div>
+        <ActionRow
+          modal={props.presentation === "model-setup"}
+          class="wizard-step__actions wizard-step__actions--split"
+        >
+          {props.leadingAction}
+        </ActionRow>
       </Show>
     </>
   );

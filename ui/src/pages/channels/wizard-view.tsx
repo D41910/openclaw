@@ -88,7 +88,7 @@ function WizardStepBody(props: {
         <div class="channels-wizard__message">{props.wizard.step.title}</div>
       ) : undefined}
       {message() ? <div class={outputClass()}>{message()}</div> : undefined}
-      <div class="channels-wizard__footer">
+      <openclaw-modal-actions class="channels-wizard__footer">
         {gatewayOwned() ? renderCloseButton(props.controls, "common.cancel") : undefined}
         {gatewayOwned() || props.wizard.busy ? (
           <WizardBusyButton
@@ -99,7 +99,7 @@ function WizardStepBody(props: {
             {t("channels.setup.continue")}
           </button>
         )}
-      </div>
+      </openclaw-modal-actions>
     </Show>
   );
 }
@@ -128,7 +128,7 @@ function renderWhatsAppLinking(props: ChannelWizardViewProps) {
           <div class="channels-wizard__note">{t("channels.setup.whatsappScanHelp")}</div>
         </>
       )}
-      <div class="channels-wizard__footer">
+      <openclaw-modal-actions class="channels-wizard__footer">
         {connected() ? (
           renderCloseButton(props, "channels.setup.finish", true)
         ) : (
@@ -150,7 +150,7 @@ function renderWhatsAppLinking(props: ChannelWizardViewProps) {
             {renderCloseButton(props, "channels.setup.linkLater")}
           </>
         )}
-      </div>
+      </openclaw-modal-actions>
     </>
   );
 }
@@ -168,9 +168,9 @@ function renderDoneBody(channels: readonly string[], props: ChannelWizardViewPro
       <div class="channels-wizard__note">
         {t(changed ? "channels.setup.doneBody" : "channels.setup.doneNoChangesBody")}
       </div>
-      <div class="channels-wizard__footer">
+      <openclaw-modal-actions class="channels-wizard__footer">
         {renderCloseButton(props, changed ? "channels.setup.finish" : "common.close", true)}
-      </div>
+      </openclaw-modal-actions>
     </>
   );
 }
@@ -247,9 +247,9 @@ function WizardDialog(props: {
             )}
           </Show>
           <Show when={props.wizard.phase === "starting"}>
-            <div class="channels-wizard__footer">
+            <openclaw-modal-actions class="channels-wizard__footer">
               <WizardBusyButton statusLabel={t("channels.setup.starting")} />
-            </div>
+            </openclaw-modal-actions>
           </Show>
           <Show when={error()}>
             {(failure) => (
@@ -257,9 +257,9 @@ function WizardDialog(props: {
                 <div class="channels-wizard__error" role="alert">
                   {failure().message}
                 </div>
-                <div class="channels-wizard__footer">
+                <openclaw-modal-actions class="channels-wizard__footer">
                   {renderCloseButton(props.controls, "common.close")}
-                </div>
+                </openclaw-modal-actions>
               </>
             )}
           </Show>
