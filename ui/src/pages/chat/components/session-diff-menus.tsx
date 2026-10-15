@@ -126,10 +126,12 @@ function SessionDiffMenuContent(props: SessionDiffMenuProps) {
     let action = simple[value];
     if (
       menu.kind === "file" &&
-      (value === "collapse-code" || value === "collapse-functions" || value === "expand-code")
+      (value === "open-file" ||
+        value === "reveal-file" ||
+        value === "collapse-code" ||
+        value === "collapse-functions" ||
+        value === "expand-code")
     ) {
-      action = { kind: value, path: menu.path };
-    } else if (menu.kind === "file" && (value === "open-file" || value === "reveal-file")) {
       action = { kind: value, path: menu.path };
     } else if (value.startsWith("open-editor:") && menu.kind === "file" && menu.absolutePath) {
       const editor = EDITOR_IDS.find((candidate) => value === `open-editor:${candidate}`);
