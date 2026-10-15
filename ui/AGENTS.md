@@ -47,7 +47,6 @@ modules keep `render`. Keep page imports inside their route's `component` loader
 
 - `pnpm lint`: Solid 2 oxlint rules on `ui/**/*.tsx`; split effects + [Solid skill](../.agents/skills/solid/SKILL.md#traps-that-compile-but-break). `tools/solid-lint` isolates plugin tooling dependencies; corpus: `test/scripts/oxlint-solid.test.ts`.
 - `pnpm lint:ui:styles` (included in lint): `ui/src` stylesheets + Lit CSS templates via `config/stylelint.config.mjs`/postcss-lit. Stylelint owns error rules; oxfmt owns formatting.
-- Shared 24×24 Lucide icons: `strokeIcon()` in `src/components/icons-tools.ts` for inline stroke attributes inside shadow roots. Bodies must be `svg` template fragments, never `html` (wrong namespace).
 - `pnpm lint:ui:lit` = slow opt-in template diagnostic with existing findings, not CI gate.
 
 ## Stylesheet Policy
