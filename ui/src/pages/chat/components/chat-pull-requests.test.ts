@@ -94,7 +94,9 @@ describe("ChatPullRequests", () => {
     const warning = container.querySelector(".chat-pr__warning");
     expect(warning?.getAttribute("aria-label")).toContain("could not be refreshed");
     expect(warning?.getAttribute("aria-label")).not.toContain("rate limit");
-    expect(container.querySelector(".chat-pr__number")?.textContent).toBe("#103469");
+    expect(container.querySelector(".chat-pr__number")?.textContent).toBe(
+      "openclaw/openclaw#103469",
+    );
   });
 
   it("renders merged PRs without a redundant completed publication card", () => {
@@ -275,7 +277,9 @@ describe("ChatPullRequests", () => {
       container,
     );
     expect(container.querySelectorAll(".chat-pr")).toHaveLength(1);
-    expect(container.querySelector(".chat-pr__number")?.textContent).toBe("#103469");
+    expect(container.querySelector(".chat-pr__number")?.textContent).toBe(
+      "openclaw/openclaw#103469",
+    );
     expect(container.querySelector(".chat-pr__checks")).not.toBeNull();
     container.querySelector<HTMLButtonElement>(".chat-pr__dismiss")?.click();
     expect(onNewAction).toHaveBeenCalledOnce();

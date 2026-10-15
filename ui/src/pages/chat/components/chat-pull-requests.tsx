@@ -5,6 +5,7 @@ import type {
   ControlUiSessionPullRequestSnapshot,
 } from "../../../../../src/gateway/control-ui-contract.js";
 import type { ApplicationGateway } from "../../../app/gateway.ts";
+import { formatGitHubItemReference } from "../../../components/github-link-target.ts";
 import { Icon } from "../../../components/solid/icon.tsx";
 import "../../../components/tooltip.ts";
 import { registerGitHubEnglish } from "../../../i18n/locales/en-github.ts";
@@ -401,20 +402,20 @@ function PullRequestRow(props: {
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t("chat.pullRequests.linkLabel", {
-          number: String(props.pullRequest.number),
+          reference: formatGitHubItemReference(props.pullRequest),
           title: props.pullRequest.title,
         })}
       >
         <span class="chat-pr__icon" aria-hidden="true">
           <Icon name={props.pullRequest.state === "merged" ? "gitMerge" : "gitPullRequest"} />
         </span>
-        <span class="chat-pr__number">#{props.pullRequest.number}</span>
+        <span class="chat-pr__number">{formatGitHubItemReference(props.pullRequest)}</span>
         <span class="chat-pr__identity" title={compactDescription()}>
-          <span class="chat-pr__repo">
-            {props.owner.compact ? props.pullRequest.title : props.pullRequest.repo}
-          </span>
-          <Show when={!props.owner.compact}>
-            <span class="chat-pr__branch">{props.pullRequest.branch}</span>
+          <Show
+            when={props.owner.compact}
+            fallback={<span class="chat-pr__branch">{props.pullRequest.branch}</span>}
+          >
+            <span class="chat-pr__repo">{props.pullRequest.title}</span>
           </Show>
         </span>
       </a>
@@ -439,7 +440,9 @@ function PullRequestRow(props: {
           class="chat-pr__dismiss"
           type="button"
           disabled={props.published && props.owner.publication?.activity !== null}
-          aria-label={t("chat.pullRequests.dismiss", { number: String(props.pullRequest.number) })}
+          aria-label={t("chat.pullRequests.dismiss", {
+            reference: formatGitHubItemReference(props.pullRequest),
+          })}
           onClick={() => {
             if (props.published) {
               props.owner.publication?.onNewAction?.();
