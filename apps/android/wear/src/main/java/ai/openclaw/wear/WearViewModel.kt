@@ -404,7 +404,6 @@ internal class WearViewModel(
   private var phoneRouteGeneration = 0L
   private var agentPulsePollJob: Job? = null
   private var agentPulseVisible = false
-  private var agentPulseRequestGeneration = 0L
 
   // Session switches clear the prior bounded catalog; only the matching phone/session may refill it.
   private var modelLoadJob: Job? = null
@@ -1515,7 +1514,6 @@ internal class WearViewModel(
     val activeAgentId = initialState.activeAgentId
     val selectedSessionKey = initialState.selectedSession?.key
     val routeGeneration = phoneRouteGeneration
-    val requestGeneration = agentPulseRequestGeneration
 
     fun isCurrent(state: WearUiState = mutableState.value): Boolean =
       wearAgentPulseRouteIsCurrent(
@@ -1524,8 +1522,6 @@ internal class WearViewModel(
         requestedSessionKey = selectedSessionKey,
         requestedRouteGeneration = routeGeneration,
         currentRouteGeneration = phoneRouteGeneration,
-        requestedGeneration = requestGeneration,
-        currentGeneration = agentPulseRequestGeneration,
         pulseVisible = agentPulseVisible,
         state = state,
       )
@@ -1535,7 +1531,6 @@ internal class WearViewModel(
         try {
           while (isCurrent()) {
             mutableState.update { state ->
-              if (!isCurrent(state)) return@update state
               state.copy(
                 agentPulseLoading = showForcedLoading || state.agentPulse == null,
                 agentPulseFailure = null,
@@ -1566,9 +1561,8 @@ internal class WearViewModel(
                 loadSessions(pulse.phoneNodeId)
                 return@launch
               }
-              mutableState.update { state ->
-                if (!isCurrent(state)) return@update state
-                state.copy(
+              mutableState.update {
+                it.copy(
                   agentPulse = pulse,
                   agentPulseLoading = false,
                   agentPulseFailure = null,
@@ -1579,13 +1573,12 @@ internal class WearViewModel(
               if (
                 err is WearProxyException &&
                 err.code == "phone_changed" &&
-                requestGeneration == agentPulseRequestGeneration
+                isCurrent()
               ) {
                 reloadForPreferredPhone(nodeId = null)
                 return@launch
               }
               mutableState.update { state ->
-                if (!isCurrent(state)) return@update state
                 state.copy(
                   agentPulse = if (err.isConnectivityFailure()) null else state.agentPulse,
                   agentPulseLoading = false,
@@ -1603,7 +1596,6 @@ internal class WearViewModel(
   }
 
   private fun invalidateAgentPulse(clearSnapshot: Boolean) {
-    agentPulseRequestGeneration += 1
     agentPulsePollJob?.cancel()
     agentPulsePollJob = null
     mutableState.update {
@@ -1727,7 +1719,6 @@ internal class WearViewModel(
     sendAttemptTracker.reset()
     modelLoadJob?.cancel()
     agentPulseVisible = false
-    agentPulseRequestGeneration += 1
     agentPulsePollJob?.cancel()
     agentPulsePollJob = null
     talkStartJob?.cancel()
@@ -1752,13 +1743,10 @@ internal fun wearAgentPulseRouteIsCurrent(
   requestedSessionKey: String?,
   requestedRouteGeneration: Long,
   currentRouteGeneration: Long,
-  requestedGeneration: Long,
-  currentGeneration: Long,
   pulseVisible: Boolean,
   state: WearUiState,
 ): Boolean =
   requestedRouteGeneration == currentRouteGeneration &&
-    requestedGeneration == currentGeneration &&
     shouldPollAgentPulse(state, pulseVisible) &&
     state.phoneNodeId == requestedPhoneNodeId &&
     state.activeAgentId == requestedAgentId &&

@@ -38,16 +38,7 @@ pub(crate) async fn run_listener(
     let connection = zbus::Connection::system()
         .await
         .map_err(|error| format!("could not connect to the system bus: {error}"))?;
-    run_listener_on_connection(&connection, controller, begin_sleep_cycle, end_sleep_cycle).await
-}
-
-async fn run_listener_on_connection(
-    connection: &zbus::Connection,
-    controller: Arc<GatewaySleepCycleController>,
-    begin_sleep_cycle: BeginSleepCycleHook,
-    end_sleep_cycle: EndSleepCycleHook,
-) -> Result<(), String> {
-    let proxy = Login1ManagerProxy::new(connection)
+    let proxy = Login1ManagerProxy::new(&connection)
         .await
         .map_err(|error| format!("could not connect to systemd-logind: {error}"))?;
     let mut signals = proxy

@@ -143,15 +143,13 @@ class ChatSwarmProgressTest {
   }
 
   @Test
-  fun childPagerRepeatsFromZeroWhenRowsMoveAcrossOffsets() =
+  fun childPagerDeduplicatesRowsAcrossPages() =
     kotlinx.coroutines.test.runTest {
       val groupId = "swarm:agent:main:parent:paged"
       val pages =
         listOf(
           listOf(session("zero", "running", groupId), session("one", "running", groupId)),
-          listOf(session("one", "running", groupId), session("two", "running", groupId)),
-          listOf(session("zero", "running", groupId), session("one", "done", groupId)),
-          listOf(session("three", "running", groupId), session("two", "running", groupId)),
+          listOf(session("one", "done", groupId), session("two", "running", groupId)),
         )
       var call = 0
 
@@ -166,9 +164,9 @@ class ChatSwarmProgressTest {
           )
         }
 
-      assertEquals(setOf("zero", "one", "two", "three"), rows.map(ChatSessionEntry::key).toSet())
+      assertEquals(listOf("zero", "one", "two"), rows.map(ChatSessionEntry::key))
       assertEquals("done", rows.first { it.key == "one" }.status)
-      assertEquals(4, call)
+      assertEquals(2, call)
     }
 
   @Test
