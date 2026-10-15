@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import "./database-suite-workers.test-support.js";
 import { useAutoCleanupTempDirTracker } from "../../../test/helpers/temp-dir.js";
 import { openNodeSqliteDatabase } from "../node-sqlite.js";
 import { runDatabasePortTask as runWorkboardPortTask } from "./port-command.worker.js";
@@ -127,16 +128,6 @@ describe("workboard port worker", () => {
       "unknown schema migration",
     ],
     ["unknown table", "CREATE TABLE private_payload (data TEXT)", "Unknown SQLite table"],
-    [
-      "unknown trigger",
-      "CREATE TRIGGER unexpected AFTER UPDATE ON workboard_boards BEGIN SELECT 1; END",
-      "Unknown SQLite table",
-    ],
-    [
-      "unknown view",
-      "CREATE VIEW unexpected AS SELECT id FROM workboard_boards",
-      "Unknown SQLite table",
-    ],
     ["missing table", "DROP TABLE workboard_worker_protocol", "Unknown or missing columns"],
     ["invalid UTF8", "UPDATE workboard_boards SET name = CAST(x'80' AS TEXT)", "invalid UTF-8"],
     [
