@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { cleanupSolid } from "../../test-helpers/mount-solid.ts";
 import { resetChatViewState } from "./chat-view-state.ts";
 import {
-  disposeChatView,
   getComposerTextarea,
   inputDraft,
   renderChatView,
@@ -74,7 +73,7 @@ describe("chat composer sizing", () => {
     flushFrames();
     expect(textarea.style.overflowY).toBe("hidden");
     expect(textarea.hasAttribute("data-scroll-fade-bottom")).toBe(false);
-    disposeChatView(container);
+    cleanupSolid();
     container.remove();
   });
 
@@ -117,7 +116,7 @@ describe("chat composer sizing", () => {
       });
       onTestFinished(() => {
         unsubscribe();
-        disposeChatView(container);
+        cleanupSolid();
       });
 
       inputDraft(container, "Short draft edited");

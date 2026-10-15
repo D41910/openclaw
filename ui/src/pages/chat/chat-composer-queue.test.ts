@@ -1,15 +1,17 @@
 /* @vitest-environment jsdom */
 
-import { createComponent, createSignal, merge } from "solid-js";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { createComponent, createSignal, getOwner, merge } from "solid-js";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { i18n, t } from "../../i18n/index.ts";
 import type { HumanMention } from "../../lib/chat/chat-types.ts";
-import { cleanupSolid, mountSolid } from "../../test-helpers/mount-solid.ts";
+import { mountSolid } from "../../test-helpers/mount-solid.ts";
 import { flush } from "../../test-helpers/solid-settle.ts";
 import { renderChatQueueSolid } from "./components/chat-composer-queue.tsx";
 
+type QueueProps = Parameters<typeof renderChatQueueSolid>[0];
+const queues = new WeakMap<HTMLElement, (props: QueueProps) => void>();
+
 afterEach(async () => {
-  cleanupSolid();
   document.body.replaceChildren();
   await i18n.setLocale("en");
   vi.restoreAllMocks();
@@ -20,7 +22,7 @@ describe("chat composer steering queue", () => {
   it("keeps attempted unconfirmed messages inline while local commands retain retry and discard", () => {
     const onQueueRetry = vi.fn();
     const onQueueRemove = vi.fn();
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [
         {
           id: "message",
@@ -59,21 +61,26 @@ describe("chat composer steering queue", () => {
   });
 
   it("renders one actionable steer control without a duplicate state badge", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
     const onQueueSteer = vi.fn();
-    const { container } = renderQueue({
-      canAbort: true,
-      queue: [
-        {
-          id: "steer-1",
-          text: "change course",
-          createdAt: 1,
-          queueMode: "steer",
-          sendState: "waiting-idle",
-        },
-      ],
-      onQueueSteer,
-      onQueueRemove: vi.fn(),
-    });
+    renderQueue(
+      {
+        canAbort: true,
+        queue: [
+          {
+            id: "steer-1",
+            text: "change course",
+            createdAt: 1,
+            queueMode: "steer",
+            sendState: "waiting-idle",
+          },
+        ],
+        onQueueSteer,
+        onQueueRemove: vi.fn(),
+      },
+      container,
+    );
 
     expect(container.querySelector(".chat-queue__badge")).toBeNull();
     const steerButton = container.querySelector<HTMLButtonElement>(".chat-queue__steer");
@@ -89,25 +96,30 @@ describe("chat composer steering queue", () => {
   });
 
   it("keeps the queue identifier on failed and unconfirmed rows", () => {
-    const { container } = renderQueue({
-      queue: [
-        {
-          id: "failed-steer",
-          text: "change course",
-          createdAt: 1,
-          queueMode: "steer",
-          sendState: "failed",
-          sendError: "steer rejected",
-        },
-        {
-          id: "unconfirmed",
-          text: "review this delivery",
-          createdAt: 2,
-          sendState: "unconfirmed",
-        },
-      ],
-      onQueueRemove: vi.fn(),
-    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    renderQueue(
+      {
+        queue: [
+          {
+            id: "failed-steer",
+            text: "change course",
+            createdAt: 1,
+            queueMode: "steer",
+            sendState: "failed",
+            sendError: "steer rejected",
+          },
+          {
+            id: "unconfirmed",
+            text: "review this delivery",
+            createdAt: 2,
+            sendState: "unconfirmed",
+          },
+        ],
+        onQueueRemove: vi.fn(),
+      },
+      container,
+    );
 
     const rows = [...container.querySelectorAll(".chat-queue__item")];
     expect(rows).toHaveLength(2);
@@ -124,22 +136,31 @@ describe("chat composer steering queue", () => {
   });
 });
 
-function renderQueue(props: Parameters<typeof renderChatQueueSolid>[0]) {
-  const [current, setCurrent] = createSignal(props);
-  const { container } = mountSolid(() => createComponent(renderChatQueueSolid, merge(current)));
-  flush();
-  return {
-    container,
-    update(this: void, next: Parameters<typeof renderChatQueueSolid>[0]) {
-      setCurrent(next);
-      flush();
-    },
-  };
+function renderQueue(
+  props: QueueProps,
+  container = document.body.appendChild(document.createElement("div")),
+) {
+  const update = queues.get(container);
+  if (update) {
+    update(props);
+  } else {
+    const [current, setCurrent] = createSignal(props, { ownedWrite: true });
+    const view = mountSolid(() => createComponent(renderChatQueueSolid, merge(current)), {
+      container,
+    });
+    queues.set(container, setCurrent);
+    onTestFinished(() => {
+      queues.delete(container);
+      view.unmount();
+    });
+  }
+  if (!getOwner()) {
+    flush();
+  }
+  return container;
 }
 
-function queueEdit(
-  overrides: Partial<NonNullable<Parameters<typeof renderChatQueueSolid>[0]["queuedEdit"]>>,
-) {
+function queueEdit(overrides: Partial<NonNullable<QueueProps["queuedEdit"]>>) {
   return { editingId: null, onCancel: vi.fn(), ...overrides };
 }
 
@@ -152,7 +173,7 @@ const waiting = (id: string, createdAt: number) => ({
 
 describe("chat composer queue reordering", () => {
   it("caps long queues and records both scroll boundaries", () => {
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [waiting("a", 1), waiting("b", 2), waiting("c", 3), waiting("d", 4)],
       onQueueRemove: vi.fn(),
     });
@@ -183,7 +204,7 @@ describe("chat composer queue reordering", () => {
     const cancelFrame = vi.fn();
     vi.stubGlobal("requestAnimationFrame", requestFrame);
     vi.stubGlobal("cancelAnimationFrame", cancelFrame);
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [waiting("a", 1), waiting("b", 2), waiting("c", 3), waiting("d", 4)],
       onQueueMove: vi.fn(),
       onQueueRemove: vi.fn(),
@@ -219,7 +240,7 @@ describe("chat composer queue reordering", () => {
 
   it("leaves other keys alone on the handle", () => {
     const onQueueMove = vi.fn();
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [waiting("a", 1), waiting("b", 2)],
       onQueueMove,
       onQueueRemove: vi.fn(),
@@ -234,7 +255,7 @@ describe("chat composer queue reordering", () => {
 
   it("holds the column with an inert handle on the row being edited", () => {
     const onQueueMove = vi.fn();
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [waiting("a", 1), waiting("b", 2), waiting("c", 3)],
       queuedEdit: queueEdit({ editingId: "b" }),
       onQueueMove,
@@ -260,7 +281,7 @@ describe("chat composer queue reordering", () => {
     const onQueueEdit = vi.fn();
     const onQueueSteer = vi.fn();
     const onQueueRemove = vi.fn();
-    const { container } = renderQueue({
+    const container = renderQueue({
       canAbort: true,
       queue: [
         { id: "a", text: "a", createdAt: 1, sendState: "waiting-idle" },
@@ -312,7 +333,7 @@ describe("chat composer queue reordering", () => {
       }),
       onQueueRemove: vi.fn(),
     };
-    const { container, update } = renderQueue(props);
+    const container = renderQueue(props);
     const editor = container.querySelector<HTMLTextAreaElement>(".chat-queue__edit-input")!;
     expect(editor.value).toBe("a draft");
     editor.dispatchEvent(new FocusEvent("focus"));
@@ -322,7 +343,7 @@ describe("chat composer queue reordering", () => {
     expect(onQueueEditChange).toHaveBeenCalledWith("updated draft");
     const valueWrites = vi.spyOn(editor, "value", "set");
     const publishDraft = (editingText: string) =>
-      update({ ...props, queuedEdit: { ...props.queuedEdit, editingText } });
+      renderQueue({ ...props, queuedEdit: { ...props.queuedEdit, editingText } }, container);
     publishDraft("updated draft");
     expect(container.querySelector(".chat-queue__edit-input")).toBe(editor);
     expect(valueWrites).not.toHaveBeenCalled();
@@ -342,7 +363,7 @@ describe("chat composer queue reordering", () => {
   it("leaves queue editor shortcuts to IME confirmation until keyup", () => {
     const onQueueEditSubmit = vi.fn();
     const onQueueEditCancel = vi.fn();
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [waiting("a", 1)],
       queuedEdit: queueEdit({
         editingId: "a",
@@ -396,21 +417,27 @@ describe("chat composer queue reordering", () => {
       { profileId: "first-alex", start: 0, end: 5 },
       { profileId: "second-alex", start: 6, end: 11 },
     ];
-    const props = (): Parameters<typeof renderChatQueueSolid>[0] => ({
-      queue: [{ ...waiting("a", 1), text: "@Alex @Alex" }],
-      onQueueRemove: vi.fn(),
-      queuedEdit: queueEdit({
-        editingId: "a",
-        editingText,
-        editingMentions,
-        onEditChange: (text, mentions) => {
-          editingText = text;
-          editingMentions = mentions ?? [];
-          update(props());
+    const container = document.createElement("div");
+    document.body.append(container);
+    const draw = () =>
+      renderQueue(
+        {
+          queue: [{ ...waiting("a", 1), text: "@Alex @Alex" }],
+          onQueueRemove: vi.fn(),
+          queuedEdit: queueEdit({
+            editingId: "a",
+            editingText,
+            editingMentions,
+            onEditChange: (text, mentions) => {
+              editingText = text;
+              editingMentions = mentions ?? [];
+              draw();
+            },
+          }),
         },
-      }),
-    });
-    const { container, update } = renderQueue(props());
+        container,
+      );
+    draw();
     const editor = container.querySelector<HTMLTextAreaElement>("textarea")!;
     editor.setSelectionRange(0, 6);
     editor.dispatchEvent(
@@ -429,7 +456,7 @@ describe("chat composer queue reordering", () => {
   });
 
   it("projects one offline state on each row without a queue header", () => {
-    const { container } = renderQueue({
+    const container = renderQueue({
       offline: true,
       queue: [{ id: "a", text: "a", createdAt: 1, queueMode: "steer", sendState: "waiting-idle" }],
       onQueueRemove: vi.fn(),
@@ -446,7 +473,7 @@ describe("chat composer queue reordering", () => {
   });
 
   it("projects applying settings once and preserves the steer affordance", () => {
-    const { container } = renderQueue({
+    const container = renderQueue({
       canAbort: true,
       queue: [
         {
@@ -475,7 +502,7 @@ describe("chat composer queue reordering", () => {
 
   it("reports the drop position of the row the message was dropped on", () => {
     const onQueueMove = vi.fn();
-    const { container } = renderQueue({
+    const container = renderQueue({
       queue: [waiting("a", 1), waiting("b", 2), waiting("c", 3)],
       onQueueMove,
       onQueueRemove: vi.fn(),

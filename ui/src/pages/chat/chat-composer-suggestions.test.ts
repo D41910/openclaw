@@ -10,11 +10,11 @@ import {
   SLASH_COMMANDS,
 } from "../../lib/chat/commands.ts";
 import { createSessionsListResult } from "../../test-helpers/chat-model.ts";
+import { cleanupSolid } from "../../test-helpers/mount-solid.ts";
 import { resetChatViewState } from "./chat-view-state.ts";
 import {
   createReactiveDraftHarness,
   createSlashRerenderHarness,
-  disposeChatView,
   getComposerTextarea,
   inputDraft,
   inputDraftAtEnd,
@@ -308,6 +308,7 @@ describe("chat composer suggestion accessibility", () => {
     // Finish hooks unwind in reverse registration order.
     onTestFinished(() => verifyFinished());
     const { container } = createReactiveDraftHarness();
+    onTestFinished(cleanupSolid);
     const textarea = getComposerTextarea(container);
     verifyFinished = () => {
       try {
@@ -315,7 +316,7 @@ describe("chat composer suggestion accessibility", () => {
         textarea.dispatchEvent(new Event("select", { bubbles: true }));
         expect(container.querySelector("textarea")).toBeNull();
       } finally {
-        disposeChatView(container);
+        cleanupSolid();
         resetChatViewState();
       }
     };
