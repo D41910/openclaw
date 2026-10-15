@@ -11,7 +11,10 @@ const { note, getManager } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("../../packages/terminal-core/src/note.js", () => ({ note }));
+vi.mock("../../packages/terminal-core/src/note.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../packages/terminal-core/src/note.js")>();
+  return { ...actual, note };
+});
 vi.mock("../plugins/memory-runtime.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../plugins/memory-runtime.js")>();
   return {
