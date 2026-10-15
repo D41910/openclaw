@@ -278,13 +278,13 @@
   display: contents;
 }
 
-.chat-pane__workspace-menu {
+.chat-pane__workspace-menu,
+.chat-pane__placement-menu {
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
 }
 
-.chat-pane__placement-menu,
 .chat-pane__branches-menu,
 .chat-pane__sharing-menu {
   flex: 0 0 auto;
