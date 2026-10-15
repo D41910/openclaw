@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { createDeferred } from "openclaw/plugin-sdk/extension-shared";
 import { createAdmittedHostCapabilityTestFixture } from "openclaw/plugin-sdk/plugin-test-runtime";
 import { captureSessionEntryCurrentCheckAsync } from "openclaw/plugin-sdk/session-binding-runtime";
@@ -35,7 +36,8 @@ export async function fixture() {
   const identity = {
     kind: "session" as const,
     agentId: "main",
-    sessionId: "physical-1",
+    // Session entry cleanup preserves history, so fixtures need distinct physical transcripts.
+    sessionId: randomUUID(),
     sessionKey: "agent:main:inventory",
   };
   await seedRunSessionOwnerForTest(identity.sessionId, identity.sessionKey, {
@@ -54,6 +56,7 @@ export async function fixture() {
   const lifecycleRevision = entry.lifecycleRevision;
   const historyOwner = (parentThreadId = "parent-thread") => ({
     ...nativeHistoryOwner(parentThreadId),
+    sessionId: identity.sessionId,
     lifecycleRevision,
   });
   const binding = {

@@ -180,7 +180,7 @@ describe("native pending assignment inventory through registered monitor admissi
         childSessionKey: "codex-thread:child-thread",
         result: "Recovered initial result",
         expectedRequester: {
-          sessionId: "physical-1",
+          sessionId: f.identity.sessionId,
           lifecycleRevision: f.historyOwner().lifecycleRevision,
         },
       });
