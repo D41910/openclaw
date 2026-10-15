@@ -14,7 +14,7 @@ const grants = {
 const declared = {
   channels: [],
   providers: [],
-  tools: ["lobster.run"],
+  tools: ["sample-runner.run"],
   contracts: [],
   hooks: [],
   mcpServers: [],
@@ -24,17 +24,17 @@ const declared = {
   dangerousConfigFlags: [],
 };
 const review: ClawPluginReview = {
-  actionId: "plugin:@openclaw/lobster",
-  pluginId: "lobster",
-  ref: "@openclaw/lobster",
+  actionId: "plugin:@example/sample-runner",
+  pluginId: "sample-runner",
+  ref: "@example/sample-runner",
   version: "1.0.0",
   ownerAction: "install",
   integrity: `sha256-${Buffer.from("a".repeat(64), "hex").toString("base64")}`,
   declaredCapabilities: declared,
   capabilityGrants: grants,
   capabilityGrantsByPluginId: {
-    "lobster/index": grants,
-    "lobster/child": {
+    "sample-runner/index": grants,
+    "sample-runner/child": {
       ...grants,
       hooks: { ...grants.hooks, allowConversationAccess: { effective: true } },
     },
@@ -98,7 +98,7 @@ describe("Gateway Claw plugin consent", () => {
         ...acknowledgement,
         capabilityGrantsByPluginId: {
           ...review.capabilityGrantsByPluginId,
-          "lobster/child": grants,
+          "sample-runner/child": grants,
         },
       },
       { ...acknowledgement, acknowledgeRiskWarning: undefined },
