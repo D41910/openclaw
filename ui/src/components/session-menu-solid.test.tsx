@@ -50,9 +50,11 @@ it("preserves focus and owner search with the Solid application provider", async
   );
   const host = mounted.container.querySelector("openclaw-session-menu")!;
   await waitForSolid(() => expect(menuItemLabels(host)).toContain("Assign to…"));
+  await settleSessionMenu(host);
   const pin = menuItem(host, "Pin session");
   await pin.updateComplete;
   pin.focus();
+  expect(document.activeElement).toBe(pin);
   host.session = { ...host.session, label: "Fresh title" };
   await settleSessionMenu(host);
   expect(menuItem(host, "Pin session")).toBe(pin);
