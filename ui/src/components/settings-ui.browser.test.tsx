@@ -52,30 +52,28 @@ it("animates Applying before lazy settings styles load", async () => {
   let view: ReturnType<typeof mountSolid> | undefined;
   try {
     const target = root.appendChild(document.createElement("div"));
+    const indicator = Object.assign(document.createElement("openclaw-settings-save-indicator"), {
+      props: {
+        status: "idle",
+        lastError: null,
+        needsApply: true,
+        applying: true,
+        applyDisabled: false,
+        onRetry: vi.fn(),
+        onSave: vi.fn(),
+        onReload: vi.fn(),
+        onApply: vi.fn(),
+      } satisfies SettingsSaveIndicatorProps,
+    });
     view = mountSolid(
       () => (
         <>
           <style>{startupStyles}</style>
-          <openclaw-settings-save-indicator
-            prop:props={
-              {
-                status: "idle",
-                lastError: null,
-                needsApply: true,
-                applying: true,
-                applyDisabled: false,
-                onRetry: vi.fn(),
-                onSave: vi.fn(),
-                onReload: vi.fn(),
-                onApply: vi.fn(),
-              } satisfies SettingsSaveIndicatorProps
-            }
-          />
+          {indicator}
         </>
       ),
       { container: target },
     );
-    const indicator = root.querySelector("openclaw-settings-save-indicator")!;
     await waitForSolid(() =>
       expect(indicator.querySelector(".settings-save-indicator__spinner svg")).not.toBeNull(),
     );
