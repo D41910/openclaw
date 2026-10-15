@@ -173,7 +173,6 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
     );
 
     it("closes Layout before changing its contents and restores focus on selection and Escape", async () => {
-      const { userEvent } = await import("vitest/browser");
       const observations: Array<{ open: boolean; focused: boolean }> = [];
       const fixture: ReturnType<typeof mountChatPaneHeader> = mountChatPaneHeader(containers, {
         sidebarLayout: openSlot({ columns: [] }, "subagents"),
@@ -205,7 +204,9 @@ describe.skipIf(typeof HTMLElement.prototype.checkVisibility !== "function")(
       });
       expect(shown).toHaveBeenCalledOnce();
       surface.style.setProperty("--oc-overlay-hide-duration", "1s");
-      await userEvent.keyboard("{Escape}");
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
       expect(surface.dataset.phase).toBe("closing");
       expect(surface.matches(":popover-open")).toBe(true);
       expect(document.activeElement).toBe(trigger);
