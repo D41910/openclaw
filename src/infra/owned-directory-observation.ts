@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { runInDetachedAsyncContext } from "../shared/detached-async-context.js";
+import { watchDirectory, type DirectoryWatch } from "./directory-watch-host.js";
 
 type Listener = (filename?: string) => void;
 type Directory = {
@@ -9,7 +10,7 @@ type Directory = {
   nextFallback: { atMs: number; elapsedAtMs: number };
   source?: Source;
 };
-type Source = { path: string; watcher: fs.FSWatcher; directories: Set<Directory> };
+type Source = { path: string; watcher: DirectoryWatch; directories: Set<Directory> };
 
 const directories = new Map<string, Directory>();
 const sources = new Map<string, Source>();
@@ -109,17 +110,14 @@ function attach(directory: Directory) {
     }
     try {
       const watcher = runInDetachedAsyncContext(() =>
-        fs.watch(candidate, { persistent: false }, (event, filename) => {
+        watchDirectory(candidate, (event, filename) => {
           const source = sources.get(candidate);
           if (!source || source.watcher !== watcher) {
             return;
           }
           const affected = [...source.directories];
           for (const entry of affected) {
-            notify(
-              entry,
-              entry.path === candidate ? (filename?.toString() ?? undefined) : undefined,
-            );
+            notify(entry, entry.path === candidate ? filename : undefined);
           }
           // A renamed directory's watcher can remain bound to its retired inode.
           // Child-file renames do not retire the directory or its queued events.
