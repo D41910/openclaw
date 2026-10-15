@@ -1,8 +1,7 @@
 import { html } from "lit";
-import { ConnectCommand } from "../../../components/solid/connect-command.tsx";
+import { renderConnectCommand } from "../../../components/connect-command.ts";
 import "../../../components/modal-dialog.ts";
 import { t } from "../../../i18n/index.ts";
-import { solidContent } from "../../../lit/solid-content.tsx";
 
 export function renderContinueInTerminalDialog(params: { command: string; onClose: () => void }) {
   const title = t("chat.sessionHeader.continueInTerminal.title");
@@ -19,15 +18,15 @@ export function renderContinueInTerminalDialog(params: { command: string; onClos
           <h2>${title}</h2>
           <p>${description}</p>
         </header>
-        ${solidContent(ConnectCommand, { command: params.command })}
+        ${renderConnectCommand(params.command)}
         <p class="continue-in-terminal-dialog__note">
           ${t("chat.sessionHeader.continueInTerminal.authNote")}
         </p>
-        <footer class="exec-approval-actions">
+        <openclaw-modal-actions class="exec-approval-actions">
           <button type="button" class="btn primary" @click=${params.onClose}>
             ${t("common.close")}
           </button>
-        </footer>
+        </openclaw-modal-actions>
       </section>
     </openclaw-modal-dialog>
   `;
