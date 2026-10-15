@@ -225,7 +225,7 @@ TypeSafe decisions to a self-hosted System One server or HTTPS reverse proxy:
     },
   },
   agents: {
-    defaults: { decisionModel: "typesafe/nemotron-deciffusion" },
+    defaults: { decisionModel: "typesafe/kev-latest" },
   },
 }
 ```
