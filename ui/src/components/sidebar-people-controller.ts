@@ -1,11 +1,12 @@
 import { t } from "../i18n/index.ts";
 import { createPresenceActivityLifecycle } from "../lib/presence-activity-lifecycle.ts";
-import { projectPresencePayload } from "../lib/presence-users.ts";
 import { profileDirectory } from "../lib/profile-directory.ts";
 import { showToast } from "../lib/toast.ts";
 import type { SolidController } from "../lit/solid-controller-host.ts";
+import { SubscriptionsController } from "../lit/subscriptions-controller.ts";
+import { sidebarPresenceActivityViewers, sidebarPresenceScope } from "./app-sidebar-presence.ts";
 import type { AppSidebarSessionNavigationElement } from "./app-sidebar-session-navigation.ts";
-import { PersonActivityDataController } from "./person-activity-data.ts";
+import { registerPersonActivityData } from "./person-activity-data.ts";
 import type { SidebarPeopleRuntime } from "./sidebar-people.runtime.ts";
 
 export type SidebarPeopleStatusFilter = "all" | "running";
@@ -45,19 +46,31 @@ export class SidebarPeopleController implements SolidController {
 
   private runtime: SidebarPeopleRuntime | null = null;
   private readonly activityExpiry: ReturnType<typeof createPresenceActivityLifecycle>;
+  private activityScope = "";
   private loading: Promise<typeof import("./sidebar-people.runtime.ts")> | null = null;
   private generation = 0;
   private pendingTarget: HTMLElement | null = null;
 
   constructor(private readonly host: AppSidebarSessionNavigationElement) {
     this.activityExpiry = createPresenceActivityLifecycle(
-      () => (host.connected ? projectPresencePayload(host.sessionData.presencePayload).users : []),
-      () => host.requestUpdate(),
+      () => (host.connected ? sidebarPresenceActivityViewers(host) : []),
+      () => host.refreshPresencePresentation(),
     );
     host.addController(this);
-    host.addController(
-      new PersonActivityDataController(host, () => host.sessionDataContext, host.sessionData),
-    );
+    new SubscriptionsController(host)
+      .effect(
+        () => host.sessionDataContext,
+        (context) => registerPersonActivityData(context, host.sessionData),
+      )
+      .effect(
+        () => host.sessionDataContext?.gateway,
+        (gateway) =>
+          gateway.subscribeEvents((event) => {
+            if (event.event === "presence") {
+              this.activityExpiry.sync();
+            }
+          }),
+      );
   }
 
   hostConnected(): void {
@@ -82,6 +95,13 @@ export class SidebarPeopleController implements SolidController {
   }
 
   hostUpdated(): void {
+    const { online, activityProfileIds } = sidebarPresenceScope(this.host);
+    const scope = JSON.stringify([online, ...Array.from(activityProfileIds).toSorted()]);
+    if (scope !== this.activityScope) {
+      this.activityScope = scope;
+      // New headers need deadlines; unchanged commits must retain pre-render wakeups.
+      this.activityExpiry.sync();
+    }
     this.runtime?.sync();
   }
 
