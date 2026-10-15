@@ -25,6 +25,7 @@ export const SESSION_DASHBOARD_ROW_FIELDS: ReadonlySet<string> = new Set([
   "agentId",
   "label",
   "displayName",
+  "titlePending",
   "derivedTitle",
   "lastMessagePreview",
   "accountId",

@@ -310,7 +310,7 @@ export abstract class AppSidebarSessionNavigationElement extends AppSidebarBase 
     if (this.sessionSortMode === "people" && this.sessionPeopleSortCapability() === false) {
       this.setSessionSortMode("created");
     }
-    if (isSessionRouteId(this.activeRouteId)) {
+    if (isSessionRouteId(this.activeRouteId) && !this.pendingSessionCreate()) {
       void this.sessionData.loadActiveSessionLineage(this.getRouteSessionKey());
     }
     scheduleSidebarChildSessions(this.sessionData, () => this.childSessionParents());
@@ -335,11 +335,10 @@ export abstract class AppSidebarSessionNavigationElement extends AppSidebarBase 
     this.ownerOptions = result.ownerOptions;
     this.sessionOwnershipVisibility = result.ownershipVisibility;
     this.activeSessionOwnerId = result.activeOwnerId;
-    return result.rows;
-  }
-
-  public getRouteSessionKey(): string {
-    return this.sessionKey.trim() || this.context?.gateway.snapshot.sessionKey.trim() || "";
+    // A row event can precede the create response. Keep authoritative membership,
+    // but render only the non-actionable handoff until the response admits it.
+    const pendingKey = this.pendingSessionCreate()?.creation.sessionKey;
+    return pendingKey ? result.rows.filter((row) => row.key !== pendingKey) : result.rows;
   }
 
   getSessionNavigationState(): SidebarSessionNavigationState {
