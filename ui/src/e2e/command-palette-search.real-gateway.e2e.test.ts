@@ -76,6 +76,19 @@ type QueryObservation = {
   notices: string[];
 };
 
+type StartupObservation = {
+  event:
+    | "socket-created"
+    | "socket-error"
+    | "socket-close"
+    | "challenge"
+    | "connect-sent"
+    | "connect-response";
+  ok?: boolean;
+  code?: string;
+  message?: string;
+};
+
 async function seedSessions(owner: OpenClawTestInstance, config: OpenClawConfig) {
   const profile = ensureGatewayOwnerProfile("Synthetic Search Viewer", { env: owner.env });
   const now = Date.now();
@@ -275,9 +288,25 @@ const suite = createControlUiE2eSuite({
   },
 });
 
-function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
+function observeSearchTraffic(
+  page: Page,
+  rpc: RpcObservation[],
+  startup: StartupObservation[],
+  redact: (value: string) => string,
+) {
+  const recordStartup = (event: StartupObservation) => {
+    startup.push(event);
+    if (startup.length > 32) {
+      startup.shift();
+    }
+  };
   page.on("websocket", (socket) => {
+    recordStartup({ event: "socket-created" });
+    let connectId: string | undefined;
     const pending = new Map<string, RpcObservation>();
+    socket.on("socketerror", (message) => {
+      recordStartup({ event: "socket-error", message: redact(message).slice(0, 500) });
+    });
     socket.on("framesent", ({ payload }) => {
       const frame = requireRecord(JSON.parse(payload.toString()));
       if (
@@ -287,7 +316,12 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
       ) {
         return;
       }
-      // Never retain connect/auth frames or unrelated RPC payloads.
+      // Retain only handshake progress, never connect/auth payloads.
+      if (frame.method === "connect") {
+        connectId = frame.id;
+        recordStartup({ event: "connect-sent" });
+        return;
+      }
       if (
         ![
           "sessions.search",
@@ -310,6 +344,19 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
     });
     socket.on("framereceived", ({ payload }) => {
       const frame = requireRecord(JSON.parse(payload.toString()));
+      if (frame.type === "event" && frame.event === "connect.challenge") {
+        recordStartup({ event: "challenge" });
+      }
+      if (frame.type === "res" && frame.id === connectId) {
+        const error = isRecord(frame.error) ? frame.error : {};
+        recordStartup({
+          event: "connect-response",
+          ok: frame.ok === true,
+          code: typeof error.code === "string" ? redact(error.code).slice(0, 100) : undefined,
+          message:
+            typeof error.message === "string" ? redact(error.message).slice(0, 500) : undefined,
+        });
+      }
       const metric =
         frame.type === "res" && typeof frame.id === "string" ? pending.get(frame.id) : undefined;
       if (!metric) {
@@ -334,7 +381,10 @@ function observeSearchTraffic(page: Page, rpc: RpcObservation[]) {
         pending.delete(frame.id);
       }
     });
-    socket.on("close", () => pending.clear());
+    socket.on("close", () => {
+      recordStartup({ event: "socket-close" });
+      pending.clear();
+    });
   });
 }
 
@@ -344,7 +394,14 @@ suite.define(() => {
       throw new Error("Gateway fixture is not running");
     }
     const owner = instance;
+    const redact = (value: string) =>
+      value
+        .replaceAll(owner.gatewayToken, "[redacted fixture token]")
+        .replaceAll(owner.hookToken, "[redacted fixture token]")
+        .replaceAll(owner.state.root, "[fixture root]")
+        .replaceAll(process.cwd(), "[checkout]");
     const rpc: RpcObservation[] = [];
+    const startup: StartupObservation[] = [];
     const queries: QueryObservation[] = [];
     const assets: Array<{ path: string; servedSha256: string; builtSha256: string }> = [];
     const screenshots: string[] = [];
@@ -384,7 +441,7 @@ suite.define(() => {
           await page.addInitScript((key) => {
             localStorage.setItem(key, JSON.stringify({ dismissedAtMs: 1770000000000 }));
           }, COMMUNITY_INVITE_KEY);
-          observeSearchTraffic(page, rpc);
+          observeSearchTraffic(page, rpc, startup, redact);
           expect((await page.goto(url.href))?.status()).toBe(404);
           await enterControlUiSession(page);
           await waitForControlUiGatewayReady(page);
@@ -748,13 +805,12 @@ suite.define(() => {
       passed = true;
     } finally {
       if (!passed) {
-        await writeFile(
-          path.join(artifactDir, "gateway-failure.log"),
-          owner
-            .logs()
-            .replaceAll(owner.gatewayToken, "[redacted fixture token]")
-            .replaceAll(owner.hookToken, "[redacted fixture token]"),
+        const gatewayLog = redact(owner.logs());
+        console.error(
+          "[search-proof] startup diagnostics",
+          JSON.stringify({ startup, gatewayLog: gatewayLog.slice(-65_536) }),
         );
+        await writeFile(path.join(artifactDir, "gateway-failure.log"), gatewayLog);
       }
       await writeFile(
         path.join(artifactDir, "search-proof.json"),
