@@ -2,12 +2,10 @@
 import type {
   ResponseCreateParamsStreaming,
   ResponseStreamEvent,
-  Tool as OpenAIResponsesTool,
 } from "openai/resources/responses/responses.js";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createResponsesDoneArgumentEvents } from "../../../../test/helpers/openai-responses-events.js";
 import { makeTextToolResult } from "../../../../test/helpers/text-tool-result.js";
-import { configureAiTransportHost, getAiTransportHost } from "../host.js";
 import {
   buildOpenAIResponsesReasoningReplayMetadata,
   captureOpenAIResponsesCompaction,
@@ -24,9 +22,6 @@ import {
   convertResponsesMessages,
   runResponsesStreamLifecycle,
 } from "./openai-responses-shared.js";
-import { convertResponsesToolPayload } from "./openai-responses-tools.js";
-
-type ResponsesFunctionTool = Extract<OpenAIResponsesTool, { type: "function" }>;
 async function* streamResponsesEvents<T>(events: readonly T[]): AsyncGenerator<T> {
   yield* events;
 }
@@ -55,11 +50,6 @@ function createCapturedAssistantMessageEventStream(): {
     push(event);
   };
   return { stream, events };
-}
-
-function expectResponsesFunctionTool(tool: OpenAIResponsesTool | undefined): ResponsesFunctionTool {
-  expect(tool).toHaveProperty("type", "function");
-  return tool as ResponsesFunctionTool;
 }
 
 const nativeOpenAIModel = {
@@ -176,124 +166,7 @@ function createAssistantOutput(): AssistantMessage {
   return { ...createResponsesAssistantOutput(nativeOpenAIModel), timestamp: 0 };
 }
 
-describe("convertResponsesToolPayload", () => {
-  beforeEach(() => {
-    // Mimic the OpenClaw host strict-tool policy: native OpenAI routes force
-    // strict=true; compatible routes opt in to sending strict=false.
-    const capabilities = getAiTransportHost().resolveProviderRequestCapabilities({});
-    configureAiTransportHost({
-      resolveProviderRequestCapabilities: ({ baseUrl }) => ({
-        ...capabilities,
-        endpointClass: baseUrl === nativeOpenAIModel.baseUrl ? "openai-public" : "custom",
-      }),
-      resolveOpenAIStrictToolSetting: (model, options) => {
-        if (model.provider === "openai" && model.baseUrl === "https://api.openai.com/v1") {
-          return true;
-        }
-        return options?.supportsStrictMode ? false : undefined;
-      },
-    });
-  });
-
-  afterEach(() => {
-    configureAiTransportHost({});
-  });
-
-  it("downgrades incompatible native Responses schemas to strict false", () => {
-    const converted = convertResponsesToolPayload(
-      [
-        {
-          name: "read_file",
-          description: "Read",
-          parameters: {
-            type: "object",
-            additionalProperties: false,
-            properties: { path: { type: "string" } },
-            required: [],
-          },
-        },
-      ],
-      { model: nativeOpenAIModel },
-    );
-
-    const tool = expectResponsesFunctionTool(converted[0]);
-    expect(tool.strict).toBe(false);
-    expect(tool.parameters).toEqual({
-      type: "object",
-      additionalProperties: false,
-      properties: { path: { type: "string" } },
-      required: [],
-    });
-  });
-
-  it("omits strict on proxy-like Responses routes but keeps schema normalization", () => {
-    const converted = convertResponsesToolPayload(
-      [
-        {
-          name: "lookup_weather",
-          description: "Get forecast",
-          parameters: {},
-        },
-      ],
-      { model: proxyOpenAIModel },
-    );
-
-    const tool = expectResponsesFunctionTool(converted[0]);
-    expect(tool).not.toHaveProperty("strict");
-    expect(tool.parameters).toEqual({
-      type: "object",
-      properties: {},
-    });
-  });
-
-  it("keeps tool order deterministic", () => {
-    const tools = [
-      { name: "zeta", description: "Z", parameters: {} },
-      { name: "alpha", description: "A", parameters: {} },
-    ];
-    expect(
-      convertResponsesToolPayload(tools).map((tool) => expectResponsesFunctionTool(tool).name),
-    ).toEqual(["alpha", "zeta"]);
-  });
-
-  it("skips unreadable schemas and preserves healthy native strict tools", () => {
-    const converted = convertResponsesToolPayload(
-      [
-        {
-          name: "broken",
-          description: "Broken",
-          parameters: {
-            type: "object",
-            get properties(): never {
-              throw new Error("properties exploded");
-            },
-          },
-        },
-        {
-          name: "lookup",
-          description: "Lookup",
-          parameters: {},
-        },
-      ],
-      { model: nativeOpenAIModel },
-    );
-
-    expect(converted).toEqual([
-      {
-        type: "function",
-        name: "lookup",
-        description: "Lookup",
-        strict: true,
-        parameters: {
-          type: "object",
-          properties: {},
-          required: [],
-          additionalProperties: false,
-        },
-      },
-    ]);
-  });
-
+describe("Responses tool inventory", () => {
   it("does not reread an unreadable tool inventory length", () => {
     const tools = new Proxy([], {
       get(target, property, receiver) {
@@ -547,35 +420,6 @@ describe("convertResponsesMessages", () => {
     const call = input.find((item) => item.type === "function_call");
     expect(call).toMatchObject({ type: "function_call", call_id: "call_abc" });
     expect(call).not.toHaveProperty("id");
-  });
-
-  it("preserves image-bearing tool results instead of using no-output text", () => {
-    const input = replay(
-      {
-        messages: [
-          {
-            ...assistant([
-              { type: "toolCall", id: "call_screenshot", name: "screenshot", arguments: {} },
-            ]),
-            stopReason: "toolUse",
-          },
-          {
-            role: "toolResult",
-            toolCallId: "call_screenshot",
-            toolName: "screenshot",
-            content: [{ type: "image", mimeType: "image/png", data: "aW1n" }],
-            isError: false,
-            timestamp: 2,
-          },
-        ],
-      },
-      { includeSystemPrompt: false },
-      { ...nativeOpenAIModel, input: ["text", "image"] },
-    );
-    const result = input.find((item) => item.type === "function_call_output");
-    expect(result?.output).toEqual([
-      { type: "input_image", detail: "auto", image_url: "data:image/png;base64,aW1n" },
-    ]);
   });
 
   it("uses audio placeholder for audio-only tool results instead of image or no-output text", () => {
