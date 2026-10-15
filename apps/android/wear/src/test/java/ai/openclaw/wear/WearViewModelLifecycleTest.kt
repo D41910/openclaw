@@ -215,6 +215,7 @@ class WearViewModelLifecycleTest {
     fun accepts(
       state: WearUiState = current,
       routeGeneration: Long = 7L,
+      requestGeneration: Long = 11L,
     ): Boolean =
       wearAgentPulseRouteIsCurrent(
         requestedPhoneNodeId = "phone-a",
@@ -222,6 +223,8 @@ class WearViewModelLifecycleTest {
         requestedSessionKey = session.key,
         requestedRouteGeneration = 7L,
         currentRouteGeneration = routeGeneration,
+        requestedGeneration = 11L,
+        currentGeneration = requestGeneration,
         pulseVisible = true,
         state = state,
       )
@@ -231,6 +234,7 @@ class WearViewModelLifecycleTest {
     assertFalse(accepts(current.copy(activeAgentId = "secondary")))
     assertFalse(accepts(current.copy(selectedSession = session.copy(key = "agent:main:two"))))
     assertFalse(accepts(routeGeneration = 8L))
+    assertFalse(accepts(requestGeneration = 12L))
   }
 
   @Test
