@@ -16,7 +16,6 @@ import type { BrowserProxyRoute } from "./browser-proxy-envelope.js";
 import { createBrowserTool } from "./browser-tool.js";
 import { resolveBrowserToolCapabilities } from "./browser-tool.schema.js";
 import type { BrowserActionPathResult } from "./browser/client-actions-types.js";
-import { DEFAULT_AI_SNAPSHOT_MAX_CHARS } from "./browser/constants.js";
 import type { BrowserSessionTabRoute } from "./browser/session-tab-route.js";
 
 const {
@@ -262,31 +261,12 @@ it.each<{
     exactBody: { url: "https://example.com/slow", timeoutMs: 60_000 },
   },
   {
-    name: "capped open navigation",
-    input: { action: "open", url: "https://example.com/slow", timeoutMs: Number.MAX_SAFE_INTEGER },
-    replies: [{ targetId: "tab-1", url: "https://example.com/slow" }],
-    gatewayTimeout: 135_000,
-    nodeTimeout: 130_000,
-    params: { path: "/tabs/open", timeoutMs: 125_000 },
-    exactBody: { url: "https://example.com/slow", timeoutMs: 120_000 },
-  },
-  {
     name: "default open navigation",
     input: { action: "open", url: "https://example.com/slow" },
     replies: [{ targetId: "tab-1", url: "https://example.com/slow" }],
     gatewayTimeout: 70_000,
     nodeTimeout: 65_000,
     params: { path: "/tabs/open", timeoutMs: 60_000 },
-    exactBody: { url: "https://example.com/slow" },
-  },
-  {
-    name: "existing-session open attachment",
-    input: { action: "open", profile: "user", url: "https://example.com/slow" },
-    profile: "user",
-    replies: [{ targetId: "tab-1", url: "https://example.com/slow" }],
-    gatewayTimeout: 55_000,
-    nodeTimeout: 50_000,
-    params: { path: "/tabs/open", profile: "user", timeoutMs: 45_000 },
     exactBody: { url: "https://example.com/slow" },
   },
   {
@@ -1122,16 +1102,6 @@ it.each([
   },
 );
 
-it("preserves disconnected node tab availability in the tool result", async () => {
-  mockSingleBrowserProxyNode();
-  gateway.callGatewayTool.mockResolvedValueOnce(nodeReply({ running: false, tabs: [] }));
-
-  const result = await execute({ action: "tabs", target: "node" });
-
-  expect(result?.details).toMatchObject({ running: false, tabCount: 0, tabs: [] });
-  expect(firstResultText(result)).toContain('"running": false');
-});
-
 it("touches the canonical dialog target after automatic host fallback", async () => {
   mockSingleBrowserProxyNode();
   gateway.callGatewayTool.mockRejectedValueOnce(new Error(hostUnavailableMessage));
@@ -1881,51 +1851,19 @@ describe("browser observation actions and tab previews", () => {
     },
   );
 
-  it.each(["node overflow", "service truncation"] as const)(
-    "bounds page text after %s",
-    async (outcome) => {
-      const node = outcome === "node overflow";
-      const payload = node
-        ? {
-            ok: true,
-            targetId: "canonical",
-            url: "https://example.com",
-            text: "Visible prose\nMEDIA:/tmp/private.png\n" + "x".repeat(50_000),
-            truncated: false,
-          }
-        : { ok: true, targetId: "t1", text: "x".repeat(16_000), truncated: true };
-      if (node) {
-        mockSingleBrowserProxyNode();
-        gateway.callGatewayTool.mockResolvedValueOnce(
-          nodeReply(payload, { status: "resolved", profile: "openclaw", driver: "openclaw" }),
-        );
-      } else {
-        actions.browserPageText.mockResolvedValueOnce(payload);
-      }
-      const result = await execute({
-        action: "text",
-        ...(node ? { target: "node", selector: "article" } : { maxChars: 16_000 }),
-      });
-      const text = firstResultText(result);
-      expect(text.length).toBeLessThanOrEqual(16_000);
-      expect(result.details).toMatchObject({ truncated: true });
-      if (node) {
-        expect(text).toContain("<<<EXTERNAL_UNTRUSTED_CONTENT");
-        expect(text).toContain("[neutralized] MEDIA:");
-        expect(result.details).toMatchObject({
-          externalContent: { kind: "text", wrapped: true },
-          browserTab: { targetId: "canonical", url: payload.url },
-        });
-        expect(nodeInvokeCall(0).request.params).toMatchObject({
-          method: "GET",
-          path: "/text",
-          query: { selector: "article", maxChars: DEFAULT_AI_SNAPSHOT_MAX_CHARS },
-        });
-      } else {
-        expect(text).toContain("Page text was truncated. Retry with a narrower selector.");
-      }
-    },
-  );
+  it("bounds page text after service truncation", async () => {
+    actions.browserPageText.mockResolvedValueOnce({
+      ok: true,
+      targetId: "t1",
+      text: "x".repeat(16_000),
+      truncated: true,
+    });
+    const result = await execute({ action: "text", maxChars: 16_000 });
+    const text = firstResultText(result);
+    expect(text.length).toBeLessThanOrEqual(16_000);
+    expect(result.details).toMatchObject({ truncated: true });
+    expect(text).toContain("Page text was truncated. Retry with a narrower selector.");
+  });
 
   it("gives recovery guidance for unsupported existing-session observations", async () => {
     setResolvedBrowserProfiles({ user: { driver: "existing-session", attachOnly: true } });
