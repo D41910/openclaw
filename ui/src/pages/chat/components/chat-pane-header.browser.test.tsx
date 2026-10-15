@@ -1,7 +1,6 @@
 import { html } from "lit";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { installTitleTooltips } from "../../../components/tooltip-title.ts";
-import "../../../components/web-awesome.ts";
 import { i18n, t } from "../../../i18n/index.ts";
 import { KEYBOARD_SHORTCUT_COMBOS } from "../../../lib/keyboard-shortcut-contract.ts";
 import {
