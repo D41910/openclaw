@@ -1,12 +1,12 @@
-import { html, render } from "lit";
+import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { subscribeNativeOverlayOcclusion } from "../lib/native-overlay-occlusion.ts";
-import { solidTemplate } from "../pages/chat/components/chat-composer-controls.ts";
 import "@awesome.me/webawesome/dist/styles/themes/default.css";
 import { renderComposerLibraryMenuSolid } from "../pages/chat/components/chat-composer-library-menu.tsx";
-import { renderComposerMenuOption } from "../pages/chat/components/chat-composer-menu.tsx";
+import { renderComposerMenuOption as ComposerMenuOption } from "../pages/chat/components/chat-composer-menu.tsx";
 import "../pages/chat/components/browser-tab-card.tsx";
-import { renderChatComposerPlusMenu } from "../pages/chat/components/chat-composer-plus-menu.tsx";
+import { ChatComposerPlusMenu } from "../pages/chat/components/chat-composer-plus-menu.tsx";
+import { cleanupSolid, mountSolid } from "../test-helpers/mount-solid.ts";
 import "../test-helpers/load-styles.ts";
 import "./agent-select-registration.ts";
 import "./menu-surface.ts";
@@ -21,7 +21,7 @@ import "./web-awesome.ts";
 // popover top layer. Plain overlays use openclaw-menu-surface; Web Awesome
 // dropdowns already own their popup and must not nest inside that surface.
 //
-// The repo-level test shard also collects *.browser.test.ts under jsdom,
+// The repo-level test shard also collects browser tests under jsdom,
 // which has neither the Popover API nor real layout; the paint-order
 // assertions only mean anything in the Chromium lane, so skip elsewhere.
 const hasPopoverApi = typeof HTMLElement.prototype.showPopover === "function";
@@ -30,6 +30,7 @@ const originalThemeMode = document.documentElement.getAttribute("data-theme-mode
 const originalClasses = document.documentElement.className;
 
 afterEach(async () => {
+  cleanupSolid();
   document.body.replaceChildren();
   await Promise.resolve();
   vi.unstubAllGlobals();
@@ -321,35 +322,39 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
       const host = document.createElement("div");
       host.style.padding = "400px 40px 0";
       document.body.append(host);
-      render(
-        renderChatComposerPlusMenu({
-          attachments: {},
-          disabled: false,
-          open: false,
-          view: "root",
-          toolOverrides: null,
-          onOpenChange: () => {},
-          onViewChange: () => {},
-          capabilityMenu: {
-            basePath: "",
-            skills: [],
-            skillsLoading: false,
-            skillsError: false,
-            mcpServers: [],
-            toolsEffectiveResult: null,
-            toolsEffectiveLoading: false,
-            toolsEffectiveError: false,
-            toolAccessMutationBlockedReason: null,
-            webSearchBaseEnabled: true,
-            mutationBlockedReason: null,
-            canAdmin: true,
-            adminBlockedReason: null,
-            onLoadSkills: () => {},
-            onPatchToolOverrides: () => {},
-            onNavigate: () => {},
-          },
-        }),
-        host,
+      mountSolid(
+        () => (
+          <ChatComposerPlusMenu
+            menu={{
+              attachments: {},
+              disabled: false,
+              open: false,
+              view: "root",
+              toolOverrides: null,
+              onOpenChange: () => {},
+              onViewChange: () => {},
+              capabilityMenu: {
+                basePath: "",
+                skills: [],
+                skillsLoading: false,
+                skillsError: false,
+                mcpServers: [],
+                toolsEffectiveResult: null,
+                toolsEffectiveLoading: false,
+                toolsEffectiveError: false,
+                toolAccessMutationBlockedReason: null,
+                webSearchBaseEnabled: true,
+                mutationBlockedReason: null,
+                canAdmin: true,
+                adminBlockedReason: null,
+                onLoadSkills: () => {},
+                onPatchToolOverrides: () => {},
+                onNavigate: () => {},
+              },
+            }}
+          />
+        ),
+        { container: host },
       );
       const { page } = await import("vitest/browser");
       await page.elementLocator(host.querySelector<HTMLElement>('[slot="trigger"]')!).click();
@@ -369,22 +374,24 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
       const host = document.createElement("div");
       document.body.append(host);
       const { page } = await import("vitest/browser");
-      render(
-        html`<wa-dropdown>
-          <button slot="trigger">Library</button>
-          ${solidTemplate(renderComposerLibraryMenuSolid, {
-            result: null,
-            loading: false,
-            busy: false,
-            error: "Library unavailable",
-            notice: null,
-            canWrite: false,
-            onReload: () => {},
-            onRead: () => {},
-            onActivate: () => {},
-          })}
-        </wa-dropdown>`,
-        host,
+      mountSolid(
+        () => (
+          <wa-dropdown>
+            <button slot="trigger">Library</button>
+            {renderComposerLibraryMenuSolid({
+              result: null,
+              loading: false,
+              busy: false,
+              error: "Library unavailable",
+              notice: null,
+              canWrite: false,
+              onReload: () => {},
+              onRead: () => {},
+              onActivate: () => {},
+            })}
+          </wa-dropdown>
+        ),
+        { container: host },
       );
       await page.elementLocator(host.querySelector<HTMLElement>('[slot="trigger"]')!).click();
       await hoverBackground(
@@ -415,14 +422,16 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
       const item = card.querySelector<HTMLElement>('[value="copy-url"]')!;
       const reference = document.createElement("div");
       document.body.append(reference);
-      render(
-        solidTemplate(Menu, {
-          id: "browser-card-reference",
-          label: "Reference menu",
-          class: "session-menu",
-          items: [{ id: "reference", label: "Reference action", class: "session-menu__item" }],
-        }),
-        reference,
+      mountSolid(
+        () => (
+          <Menu
+            id="browser-card-reference"
+            label="Reference menu"
+            class="session-menu"
+            items={[{ id: "reference", label: "Reference action", class: "session-menu__item" }]}
+          />
+        ),
+        { container: reference },
       );
       const referenceMenu = reference.querySelector<HTMLElement>(".oc-menu")!;
       const referenceItem = reference.querySelector<HTMLElement>('[data-value="reference"]')!;
@@ -447,21 +456,23 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
       const highlight = useTheme(theme);
       const host = document.createElement("div");
       document.body.append(host);
-      const renderOption = (active: boolean) => {
-        render(
-          solidTemplate(renderComposerMenuOption, {
-            id: "hover-command",
-            active,
-            select: () => {},
-            hover: () => renderOption(true),
-            icon: "",
-            name: "/help",
-            description: "Show commands",
-          }),
-          host,
-        );
-      };
-      renderOption(false);
+      mountSolid(
+        () => {
+          const [active, setActive] = createSignal(false);
+          return (
+            <ComposerMenuOption
+              id="hover-command"
+              active={active()}
+              select={() => {}}
+              hover={() => setActive(true)}
+              icon=""
+              name="/help"
+              description="Show commands"
+            />
+          );
+        },
+        { container: host },
+      );
       const option = host.querySelector<HTMLElement>('[role="option"]')!;
       await hoverBackground(option, highlight);
       expect(option.getAttribute("aria-selected")).toBe("true");
@@ -476,14 +487,20 @@ describe.skipIf(!hasPopoverApi)("platform menu hover", () => {
       const highlight = useTheme(theme);
       const host = document.createElement("div");
       document.body.append(host);
-      render(
-        html`<wa-dropdown>
-          <button slot="trigger">Actions</button>
-          <wa-dropdown-item value="neutral">Open</wa-dropdown-item>
-          <wa-dropdown-item value="disabled" disabled>Unavailable</wa-dropdown-item>
-          <wa-dropdown-item value="danger" variant="danger">Delete</wa-dropdown-item>
-        </wa-dropdown>`,
-        host,
+      mountSolid(
+        () => (
+          <wa-dropdown>
+            <button slot="trigger">Actions</button>
+            <wa-dropdown-item value="neutral">Open</wa-dropdown-item>
+            <wa-dropdown-item value="disabled" disabled>
+              Unavailable
+            </wa-dropdown-item>
+            <wa-dropdown-item value="danger" variant="danger">
+              Delete
+            </wa-dropdown-item>
+          </wa-dropdown>
+        ),
+        { container: host },
       );
       const { page, userEvent } = await import("vitest/browser");
       const trigger = host.querySelector<HTMLElement>('[slot="trigger"]')!;
