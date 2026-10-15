@@ -3,11 +3,11 @@ import { createSignal } from "solid-js";
 import { expect, it, onTestFinished, vi } from "vitest";
 import { mountSolid } from "../../../test-helpers/mount-solid.ts";
 import { flush } from "../../../test-helpers/solid-settle.ts";
-import {
-  ChatComposerPlusMenu,
-  type ChatComposerPlusMenuProps,
-  type ChatComposerPlusMenuView,
-} from "./chat-composer-plus-menu.tsx";
+import { ChatComposerPlusMenu } from "./chat-composer-plus-menu.tsx";
+import type {
+  ChatComposerPlusMenuProps,
+  ChatComposerPlusMenuView,
+} from "./chat-composer-plus-menu.types.ts";
 
 it.each<ChatComposerPlusMenuView>([
   "root",

@@ -9,7 +9,7 @@ import { uploadsEnabled } from "../../../lib/uploads.ts";
 import type {
   ChatComposerPlusMenuContentProps,
   ChatComposerPlusMenuView,
-} from "./chat-composer-plus-menu.tsx";
+} from "./chat-composer-plus-menu.types.ts";
 
 type McpToolEntry = ToolsEffectiveEntry & { mcpServer: string; mcpToolName: string };
 export const toolsForServer = (
