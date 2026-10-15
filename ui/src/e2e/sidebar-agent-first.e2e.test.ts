@@ -314,7 +314,7 @@ suite.define(() => {
           const collapsedSlots = parent.locator(".sidebar-session-team-state");
           const collapsedBounds = (await collapsedSlots.boundingBox())!;
           const collapsedLinkBounds = (await parent
-            .locator(".sidebar-recent-session__link")
+            .locator(":scope > .sidebar-recent-session__link")
             .boundingBox())!;
           expect(collapsedBounds.x + collapsedBounds.width).toBeCloseTo(
             collapsedLinkBounds.x + collapsedLinkBounds.width - beforeFocus.rows[0]!.radius,
