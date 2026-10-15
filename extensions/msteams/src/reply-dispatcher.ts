@@ -535,6 +535,7 @@ export function createMSTeamsReplyDispatcher(params: {
       commentaryProgressEnabled: shouldSuppressDefaultToolProgressMessages,
       ...(streamController.hasStream()
         ? {
+            onAssistantMessageStart: streamController.beginAssistantMessage,
             onPartialReply: async (
               payload: Parameters<NonNullable<GetReplyOptions["onPartialReply"]>>[0],
             ) => {

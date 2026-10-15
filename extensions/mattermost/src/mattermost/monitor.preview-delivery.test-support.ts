@@ -139,6 +139,7 @@ export function registerMattermostPreviewDeliveryTests(harness: {
           expect([...posts.values()].at(-1)).toContain("The group needs no response");
 
           await params.replyOptions?.onPartialReply?.({ text: "", delta: "", replace: true });
+          expect([...posts.values()]).toEqual(mode === "block" ? ["Earlier answer"] : []);
           if (required) {
             await params.replyOptions?.onAssistantMessageStart?.();
             await preview("Retry answer");
@@ -155,9 +156,7 @@ export function registerMattermostPreviewDeliveryTests(harness: {
         ...(mode === "block" ? ["Earlier answer"] : []),
         ...(required ? ["Retry answer"] : []),
       ]);
-      expect(deleted).toEqual(
-        required && mode !== "block" ? [] : [mode === "block" ? "post-2" : "post-1"],
-      );
+      expect(deleted).toEqual([mode === "block" ? "post-2" : "post-1"]);
       expect(mockState.sendMessageMattermost).not.toHaveBeenCalled();
     },
   );

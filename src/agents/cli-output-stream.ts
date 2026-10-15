@@ -64,9 +64,6 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
   // Streamed text from this offset on is still a candidate to outrank the
   // result envelope; every non-tool boundary or interim result restarts it.
   let preserveFrom = 0;
-  // Commentary-classified text skips emitClaudeVisibleText's boundary handling;
-  // this diagnostics-only offset marks where its current message starts.
-  let flushedMessageStart = 0;
   let sawToolUseSinceText = false;
   let currentMessageHadToolUse = false;
   let previousMessageHadToolUse = false;
@@ -113,7 +110,7 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
       // A flushed assistant segment after a boundary starts a fresh
       // final-message segment; commentary routing never touches it.
       if (pendingMessageSeparator || sawToolUseSinceText) {
-        flushedMessageStart = assistantText.length;
+        currentMessageStart = assistantText.length;
       }
       pendingMessageSeparator = false;
       sawToolUseSinceText = false;
@@ -199,7 +196,7 @@ export function createCliJsonlStreamingParser(params: CliJsonlStreamingParserOpt
     finalItemText?.trim() ??
     (pendingMessageSeparator || sawToolUseSinceText
       ? ""
-      : assistantText.slice(Math.max(currentMessageStart, flushedMessageStart)).trim());
+      : assistantText.slice(currentMessageStart).trim());
 
   const handleCustomJsonlEvent = (event: CliBackendParsedJsonlEvent) => {
     const previousOutput = output;

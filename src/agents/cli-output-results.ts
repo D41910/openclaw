@@ -43,13 +43,8 @@ export function appendCliResultText(previous: CliOutput | null, nextText: string
   // a shared prefix cannot distinguish a new answer ("Hi" -> "History") from one.
   const previousParts = previous?.textParts ?? (previousText ? [previousText] : []);
   const completedText = nextText === previousParts.at(-1) ? "" : nextText;
-  const text = completedText
-    ? previousText
-      ? `${previousText}\n${completedText}`
-      : completedText
-    : previousText;
   const textParts = completedText ? [...previousParts, completedText] : previousParts;
-  return { text, textParts, completedText };
+  return { text: textParts.join("\n"), textParts, completedText };
 }
 
 /**

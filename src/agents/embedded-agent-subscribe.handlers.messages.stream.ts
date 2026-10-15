@@ -29,7 +29,6 @@ import type {
 } from "./embedded-agent-subscribe.handlers.types.js";
 import {
   extractAssistantCommentaryText,
-  extractEmbeddedAssistantText,
   stripDowngradedToolCallText,
 } from "./embedded-agent-utils.js";
 import type { AgentMessage } from "./runtime/index.js";
@@ -185,14 +184,9 @@ export function emitAssistantCommentaryStreamData(
       }
     }
   }
-  const silent =
-    finalMessage && parseReplyDirectives(extractEmbeddedAssistantText(message)).hasSilentIntent;
   for (const commentaryMessage of commentaryMessages) {
-    const text = silent ? "" : extractAssistantCommentaryText(commentaryMessage);
-    if (
-      (!text && !silent) ||
-      (!finalMessage && isResponsesCommentary && ctx.state.deltaBuffer === text)
-    ) {
+    const text = extractAssistantCommentaryText(commentaryMessage);
+    if (!text || (!finalMessage && isResponsesCommentary && ctx.state.deltaBuffer === text)) {
       continue;
     }
     const commentaryItemId = isResponsesCommentary

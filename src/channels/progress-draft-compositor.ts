@@ -113,8 +113,8 @@ export function createChannelProgressDraftCompositor(params: ChannelProgressDraf
   let preambleItemId: string | undefined;
   let preambleAt: number | undefined;
   let narrationText = "";
-  let finalReplyStarted = false;
-  const isTurnActive = () => params.active && !finalReplyStarted;
+  let replyPhase: "active" | "retracted" | "final" = "active";
+  const isTurnActive = () => params.active && replyPhase === "active";
   const canUpdateProgress = () =>
     isTurnActive() && params.mode === "progress" && !progressSuppressed;
   const diffStatTracker = createProgressDraftDiffStatTracker({
@@ -275,7 +275,7 @@ export function createChannelProgressDraftCompositor(params: ChannelProgressDraf
       !narrationText ||
       preambleAt === undefined ||
       !gate?.hasStarted ||
-      finalReplyStarted
+      replyPhase !== "active"
     ) {
       return;
     }
@@ -454,7 +454,7 @@ export function createChannelProgressDraftCompositor(params: ChannelProgressDraf
       return gate?.hasStarted ?? false;
     },
     get isVisible() {
-      return Boolean(lastRenderedText) && !finalReplyStarted;
+      return Boolean(lastRenderedText) && replyPhase === "active";
     },
     get hasStatusHeadline() {
       return Boolean(resolveStatusText().text);
@@ -465,23 +465,23 @@ export function createChannelProgressDraftCompositor(params: ChannelProgressDraf
     getSnapshot,
     getText: () => formatDraftText(),
     markFinalReplyStarted() {
-      finalReplyStarted = true;
+      replyPhase = "final";
       // Final delivery must disarm the delayed start before async delivery work.
       // Queued turns reopen the gate through beginNewTurn().
       gate?.cancel();
       clearPreambleExpiryTimer();
     },
     markFinalReplyDelivered() {
-      finalReplyStarted = true;
+      replyPhase = "final";
       clearPreambleExpiryTimer();
     },
     // Authoritative queued admission may force reset after a silent turn;
     // ordinary assistant boundaries still require a settled final.
     beginNewTurn(options?: { force?: boolean }) {
-      if (options?.force !== true && !finalReplyStarted) {
+      if (options?.force !== true && replyPhase === "active") {
         return false;
       }
-      finalReplyStarted = false;
+      replyPhase = "active";
       gate?.reset();
       clearProgressState(false);
       return true;
@@ -492,8 +492,23 @@ export function createChannelProgressDraftCompositor(params: ChannelProgressDraf
     resetActivity(options?: { suppressed?: boolean }) {
       clearActivityState(options?.suppressed === true);
     },
-    beginAssistantMessage() {
+    async retractAssistantMessage() {
+      if (replyPhase !== "active") {
+        return false;
+      }
+      const text = lastRenderedText ? formatDraftText() : undefined;
+      replyPhase = "retracted";
+      gate?.cancel();
+      clearProgressState(true);
+      await params.deleteCurrent?.({ discardPreview: true, text });
+      return true;
+    },
+    beginAssistantMessage(this: void) {
       // Model messages delimit cumulative text, not the task's card or tool history.
+      if (replyPhase === "retracted") {
+        replyPhase = "active";
+        gate?.reset();
+      }
       if (progressSuppressed) {
         clearActivityState(false);
       }

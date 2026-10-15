@@ -414,8 +414,14 @@ export function createSlackProgressRuntime(runtimeParams: {
       }
       return Boolean(draftStream.messageId() && draftStream.channelId());
     },
-    deleteCurrent: async () => {
-      if (useNativeProgressStreaming) {
+    deleteCurrent: async (options) => {
+      if (options?.discardPreview && progressCard.hasTerminalized) {
+        return;
+      }
+      if (useNativeProgressStreaming && options?.discardPreview) {
+        await cancelNativeUpdates();
+        await withNativeStreamOrder(() => delivery.retractStream());
+      } else if (useNativeProgressStreaming) {
         // Native streams append task changes; clearing a plan retires its task rows.
         nativeUpdates.update(true);
         await nativeUpdates.flush();
@@ -556,21 +562,7 @@ export function createSlackProgressRuntime(runtimeParams: {
 
   const updateDraftFromPartial = async (text?: string, options?: { replace?: boolean }) => {
     if (options?.replace && text === "") {
-      if (
-        (useNativeProgressStreaming || useDraftProgressCard) &&
-        !previewLifecycle.finalDelivered &&
-        !progressCard.hasTerminalized
-      ) {
-        progressDraft.markFinalReplyStarted();
-        progressDraft.suppress();
-        if (useNativeProgressStreaming) {
-          await cancelNativeUpdates();
-          await withNativeStreamOrder(() => delivery.retractStream());
-        } else {
-          await draftStream?.clear();
-          draftStream?.forceNewMessage();
-        }
-      }
+      await progressDraft.retractAssistantMessage();
       return false;
     }
     const trimmed = text && sanitizeAssistantVisibleText(text).trimEnd();

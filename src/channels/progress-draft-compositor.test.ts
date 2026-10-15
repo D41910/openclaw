@@ -156,6 +156,42 @@ describe("channel progress draft compositor", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])(
+    "retracts a preview (visible: %s), admits retry progress, and preserves a final",
+    async (visible) => {
+      const deletion = createDeferred();
+      const deleteCurrent = vi.fn(() => deletion.promise);
+      const { progress, update } = createProgress(
+        { commentary: true, toolProgress: true },
+        { deleteCurrent },
+      );
+      await progress.pushToolProgress("Inspecting");
+      if (visible) {
+        await vi.advanceTimersByTimeAsync(INITIAL_DELAY_MS);
+      }
+      const published = update.mock.calls.length;
+      const retracted = progress.retractAssistantMessage();
+      expect(deleteCurrent).toHaveBeenCalledWith({
+        discardPreview: true,
+        text: visible ? expect.stringContaining("Inspecting") : undefined,
+      });
+      await progress.pushCommentaryProgress("Late reasoning", { itemId: "old" });
+      await vi.advanceTimersByTimeAsync(INITIAL_DELAY_MS);
+      expect(update).toHaveBeenCalledTimes(published);
+      expect(progress.getSnapshot()).toEqual({ lines: [] });
+      deletion.resolve();
+      await expect(retracted).resolves.toBe(true);
+      progress.beginAssistantMessage();
+      await expect(
+        progress.pushCommentaryProgress("Retry answer", { itemId: "retry" }),
+      ).resolves.toBe(true);
+      expect(update.mock.lastCall?.[0]).toContain("Retry answer");
+      progress.markFinalReplyDelivered();
+      await expect(progress.retractAssistantMessage()).resolves.toBe(false);
+      expect(deleteCurrent).toHaveBeenCalledOnce();
+    },
+  );
+
   it("publishes completion metadata when the final commentary delta has identical text", async () => {
     const { progress, update } = createProgress(
       { toolProgress: false, label: false, commentary: true, maxLines: 1 },

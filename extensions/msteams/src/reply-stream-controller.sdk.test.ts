@@ -222,6 +222,7 @@ describe("Microsoft Teams SDK acknowledged stream fallback", () => {
     await controller.pushReasoningProgress(draft);
     await acknowledgedReasoning.promise;
     await controller.onPartialReply({ text: "", replace: true });
+    controller.beginAssistantMessage();
     const retry = "Required retry answer.";
     expect(controller.preparePayload({ text: retry })).toBeUndefined();
     expect(controller.claimNativeDelivery()).toBe(true);
@@ -248,6 +249,7 @@ describe("Microsoft Teams SDK acknowledged stream fallback", () => {
     await firstAcknowledgement;
     await controller.onPartialReply({ text: "", replace: true });
     await expect(controller.finalize()).resolves.toEqual({ visibleReplySent: false });
+    controller.beginAssistantMessage();
     await controller.onPartialReply({ text: retry });
     expect(controller.preparePayload({ text: retry })).toBeUndefined();
     expect(controller.claimNativeDelivery()).toBe(true);
@@ -263,22 +265,28 @@ describe("Microsoft Teams SDK acknowledged stream fallback", () => {
     expect(wire.at(-1)).toMatchObject({ type: "message", text: retry });
   });
 
-  it("keeps a claimed final native segment when a later message becomes silent", async () => {
-    const scenario = "silent-after-final";
-    const { controller, firstAcknowledgement } = createLoopbackController(scenario);
-    const text = "Earlier finalized answer.";
-    await controller.onPartialReply({ text });
-    await firstAcknowledgement;
-    expect(controller.preparePayload({ text })).toBeUndefined();
-    expect(controller.claimNativeDelivery()).toBe(true);
-    await controller.finalize();
-    await controller.onPartialReply({ text: "", replace: true });
-    const wire = requests.filter((request) => request.scenario === scenario);
-    expect(wire.some((request) => request.method === "DELETE")).toBe(false);
-    expect(wire.filter((request) => request.type === "message")).toMatchObject([
-      { method: "POST", type: "message", text },
-    ]);
-  });
+  it.each([false, true])(
+    "keeps a claimed native final (media-only: %s) after silence",
+    async (mediaOnly) => {
+      const scenario = `silent-after-final-${mediaOnly}`;
+      const { controller, firstAcknowledgement } = createLoopbackController(scenario);
+      const text = "Earlier finalized answer.";
+      await controller.onPartialReply({ text });
+      await firstAcknowledgement;
+      const mediaUrl = "https://example.test/accepted-final.png";
+      expect(controller.preparePayload(mediaOnly ? { mediaUrl } : { text })).toEqual(
+        mediaOnly ? { mediaUrl, text: undefined } : undefined,
+      );
+      expect(controller.claimNativeDelivery()).toBe(true);
+      await controller.onPartialReply({ text: "", replace: true });
+      await controller.finalize();
+      const wire = requests.filter((request) => request.scenario === scenario);
+      expect(wire.some((request) => request.method === "DELETE")).toBe(false);
+      expect(wire.filter((request) => request.type === "message")).toMatchObject([
+        { method: "POST", type: "message", text },
+      ]);
+    },
+  );
 
   it("redelivers only text not acknowledged by the real Teams SDK and HTTP provider", async () => {
     const { acknowledgements, controller, firstAcknowledgement, firstFlushFailure, logger } =

@@ -262,42 +262,36 @@ export function createSlackStreamingDeliveryRuntime(setup: SlackDispatchSetup) {
     };
   };
 
-  const finishStream = async (chunks?: AnyChunk[]) => {
+  const finishStream = async (chunks?: AnyChunk[], discardPreview = false) => {
+    if (discardPreview) {
+      await state.nativeProgressStreamStartPromise;
+    }
     state.streamBoundary?.stop();
     state.streamBoundary = null;
     const session = state.streamSession;
-    if (session && !session.stopped) {
+    if (!session || (discardPreview && session.stoppedBySlack)) {
+      return;
+    }
+    let messageId = session.streamer.ts;
+    if (!session.stopped) {
       try {
         try {
-          await stopStream(session, chunks);
-          state.observedReplyDelivery ||= session.delivered;
+          const stopped = await stopStream(session, chunks);
+          messageId = stopped.messageId ?? messageId;
+          state.observedReplyDelivery ||= !discardPreview && session.delivered;
         } catch (error) {
-          if (!(error instanceof SlackStreamNotDeliveredError)) {
+          if (discardPreview || !(error instanceof SlackStreamNotDeliveredError)) {
             throw error;
           }
           await deliverPendingStreamFallback(session, error);
         }
       } catch (error) {
-        state.streamFailed = true;
+        state.streamFailed = !discardPreview;
         runtime.error?.(danger(`slack-stream: failed to stop stream: ${formatSlackError(error)}`));
       }
     }
-  };
-
-  const retractStream = async () => {
-    await state.nativeProgressStreamStartPromise;
-    const session = state.streamSession;
-    if (!session || session.stoppedBySlack) {
+    if (!discardPreview) {
       return;
-    }
-    state.streamBoundary?.stop();
-    state.streamBoundary = null;
-    let messageId = session.streamer.ts;
-    try {
-      const stopped = await stopStream(session);
-      messageId = stopped.messageId ?? messageId;
-    } catch (error) {
-      runtime.error?.(danger(`slack-stream: preview stop failed: ${formatSlackError(error)}`));
     }
     try {
       if (messageId) {
@@ -546,7 +540,7 @@ export function createSlackStreamingDeliveryRuntime(setup: SlackDispatchSetup) {
     markPreviewPayloadDelivered,
     nativeFinalThreadTs,
     rememberDeliveredThreadTs,
-    retractStream,
+    retractStream: () => finishStream(undefined, true),
     rotateInterruptedStream,
     startStream,
     resetDeliveryTracker: () => deliveredKeys.clear(),

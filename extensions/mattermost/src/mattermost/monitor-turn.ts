@@ -126,7 +126,17 @@ export async function dispatchMattermostInboundTurn(
         await draftStream?.flush();
       }
     },
-    deleteCurrent: () => draftStream?.deleteCurrentMessage(),
+    deleteCurrent: (options) => {
+      if (options?.discardPreview) {
+        lastPartialText = "";
+        hasStreamedPreview = false;
+        blockPreviewActivity = "none";
+        blockPreviewAssistantMessagePending = false;
+        firstAssistantPreviewPrefixPending ||= currentAssistantPreviewUsesPrefix;
+        currentAssistantPreviewUsesPrefix = false;
+      }
+      return draftStream?.deleteCurrentMessage();
+    },
   });
   const enterBlockPreviewActivity = (activity: "reasoning" | "text" | "tool") => {
     if (account.streamingMode !== "block") {
@@ -446,20 +456,8 @@ export async function dispatchMattermostInboundTurn(
             ...(draftPreviewEnabled ? { suppressDefaultToolProgressMessages: true } : {}),
             onModelSelected,
             onPartialReply: (payloadResult) => {
-              if (
-                account.streamingMode === "block" &&
-                payloadResult.replace &&
-                payloadResult.text === "" &&
-                !previewLifecycle.finalStarted
-              ) {
-                lastPartialText = "";
-                hasStreamedPreview = false;
-                blockPreviewActivity = "none";
-                blockPreviewAssistantMessagePending = false;
-                firstAssistantPreviewPrefixPending ||= currentAssistantPreviewUsesPrefix;
-                currentAssistantPreviewUsesPrefix = false;
-                progressDraft.resetActivity({ suppressed: true });
-                return draftStream?.deleteCurrentMessage();
+              if (payloadResult.replace && payloadResult.text === "") {
+                return progressDraft.retractAssistantMessage();
               }
               return account.streamingMode === "progress"
                 ? false
@@ -480,6 +478,9 @@ export async function dispatchMattermostInboundTurn(
               return false;
             },
             onReasoningStream: async (payloadResult) => {
+              if (payloadResult.text === "") {
+                return await progressDraft.retractAssistantMessage();
+              }
               if (account.streamingMode === "progress") {
                 return await progressDraft.pushReasoningProgress(
                   payloadResult.text || "Thinking…",

@@ -122,15 +122,17 @@ export function handleMessageEnd(
   ctx.state.keptAnswer = undefined;
   if (suppressVisibleAssistantOutput) {
     appendRawMessage(() => extractEmbeddedAssistantText(assistantMessage));
-    emitAssistantCommentaryStreamData(ctx, assistantMessage, true);
+    const silent = parseReplyDirectives(
+      extractEmbeddedAssistantText(assistantMessage),
+    ).hasSilentIntent;
+    if (!silent) {
+      emitAssistantCommentaryStreamData(ctx, assistantMessage, true);
+    }
     // Commentary-tagged tool turns can still carry durable reasoning under /reasoning on.
     const suppressedTrimmedReasoning = ctx.state.includeReasoning
       ? extractAssistantThinking(assistantMessage)
       : "";
     emitPersistentReasoning(ctx, suppressedTrimmedReasoning);
-    const silent = parseReplyDirectives(
-      extractEmbeddedAssistantText(assistantMessage),
-    ).hasSilentIntent;
     if (silent) {
       ctx.emitAssistantStreamData(
         { text: "", delta: "", replace: true },

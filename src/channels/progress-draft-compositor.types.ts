@@ -44,7 +44,7 @@ export type ChannelProgressDraftCompositorParams = {
     text: string,
     options: ChannelProgressDraftUpdateOptions,
   ) => Promise<boolean | void> | boolean | void;
-  deleteCurrent?: () => Promise<void> | void;
+  deleteCurrent?: (options?: { discardPreview: true; text?: string }) => Promise<void> | void;
   tryNativeUpdate?: (text: string) => Promise<boolean> | boolean;
   /** Publish when structured lines change even if the rendered text does not. */
   updateOnLineChange?: boolean;
