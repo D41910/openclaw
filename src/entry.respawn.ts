@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { readNonBlankString } from "@openclaw/normalization-core/string-coerce";
+import { resolveOpenClawCliInvocation } from "../cli-invocation.mjs";
 import { resolveNodeStartupTlsEnvironment } from "./bootstrap/node-startup-env.js";
 import {
   isTerminalInteractiveRespawnArgv,
@@ -90,6 +91,13 @@ export function buildCliRespawnPlan(
   const platform = params.platform ?? process.platform;
   const normalizedArgv =
     platform === "win32" ? normalizeWindowsArgv(argv, { platform, execPath }) : argv;
+  const invocation = (runtimeArgs: string[]) =>
+    resolveOpenClawCliInvocation({
+      execPath: resolveCliRespawnCommand({ execPath, platform }),
+      entryPath: normalizedArgv[1],
+      args: normalizedArgv.slice(2),
+      execArgv: runtimeArgs,
+    });
 
   if (
     shouldSkipStartupEnvironmentRespawnForArgv(normalizedArgv, platform) ||
@@ -115,9 +123,10 @@ export function buildCliRespawnPlan(
       return null;
     }
 
+    const child = invocation(childExecArgv);
     return {
-      command: resolveCliRespawnCommand({ execPath, platform }),
-      argv: [...childExecArgv, ...normalizedArgv.slice(1)],
+      command: child.command,
+      argv: child.args,
       env: childEnv,
       detachForProcessTree: false,
     };
@@ -154,9 +163,10 @@ export function buildCliRespawnPlan(
     return null;
   }
 
+  const child = invocation(childExecArgv);
   return {
-    command: resolveCliRespawnCommand({ execPath, platform }),
-    argv: [...childExecArgv, ...argv.slice(1)],
+    command: child.command,
+    argv: child.args,
     env: childEnv,
     detachForProcessTree: !isTerminalInteractiveRespawnArgv(argv),
   };

@@ -23,6 +23,28 @@ function buildPlan(params: Parameters<typeof buildCliRespawnPlan>[0]) {
 }
 
 describe("buildCliRespawnPlan", () => {
+  it("keeps profile dispatch executable-only in a compiled startup respawn", () => {
+    vi.stubGlobal("__openclawStandaloneRootUrl", "file:///synthetic/runtime/");
+    try {
+      const plan = expectCliRespawnPlan(
+        buildPlan({
+          argv: [
+            process.execPath,
+            "/synthetic/runtime/openclaw.mjs",
+            "--profile",
+            "fixture",
+            "doctor",
+          ],
+          platform: "darwin",
+        }),
+      );
+      expect(plan.argv).toEqual(["--profile", "fixture", "doctor"]);
+      expect(plan.env.OPENCLAW_NODE_OPTIONS_READY).toBe("1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("returns null when respawn policy skips the argv", () => {
     expect(
       buildPlan({
